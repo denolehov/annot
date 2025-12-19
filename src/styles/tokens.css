@@ -1,0 +1,86 @@
+/* ===========================================
+   DESIGN TOKENS (V4)
+
+   The Spirit: annot is ephemeral, physical, keyboard-first.
+   Human thought tears open machine code. Sans-serif warmth
+   invades monospace precision. The portal is another dimension.
+
+   Color palette: Warm zinc grays with amber accents.
+   =========================================== */
+:root {
+	/* Backgrounds & Neutrals (zinc family - warmer grays) */
+	--bg-main: #fafaf9;          /* warm zinc-50 */
+	--bg-window: #fefefe;        /* warm white - subtle cream tint */
+	--bg-panel: #fafaf8;         /* warm zinc-50 */
+
+	/* Portal: A different material. */
+	--bg-portal: #fdfcfa;           /* Lighter warm cream */
+	--bg-portal-glow: rgba(253, 252, 250, 0.8);
+
+	--border-subtle: #e4e4e7;     /* zinc-200 */
+	--border-strong: #d4d4d8;     /* zinc-300 */
+	--border-active: #71717a;     /* zinc-500 */
+
+	/* Text (zinc family) */
+	--text-primary: #18181b;      /* zinc-900 */
+	--text-secondary: #52525b;    /* zinc-600 */
+	--text-muted: #71717a;        /* zinc-500 (4.51:1 contrast ratio for WCAG AA) */
+
+	/* Code Syntax (GitHub Light) */
+	--code-keyword: #d73a49;
+	--code-func: #6f42c1;
+	--code-string: #032f62;
+	--code-comment: #6a737d;
+	--code-variable: #e36209;
+	--code-constant: #005cc5;
+	--code-tag: #22863a;
+	--code-op: #d73a49;
+	--code-support: #6f42c1;
+
+	/* Selection (amber family - warm gold, whisper not scream) */
+	--selection-bg: #fefce8;       /* amber-50 - softer than amber-100 */
+	--selection-border: #fcd34d;   /* amber-300 */
+	--selection-hover: rgb(251 191 36 / 0.15);    /* amber-400/15 */
+	--selection-active: rgb(251 191 36 / 0.3);    /* amber-400/30 */
+	--selection-gutter-text: #78350f;             /* amber-900 */
+
+	/* Layout */
+	--gutter-width: 50px;
+
+	/* Fonts */
+	--font-mono: "JetBrains Mono", monospace;
+	--font-ui: "Inter", sans-serif;
+
+	/* Chip/Tag Sizing */
+	--chip-height: 20px;
+	--chip-radius: 4px;
+	--chip-font: 10px;
+	--chip-padding: 0 6px;
+	--chip-padding-tight: 0 2px;
+	--chip-gap: 3px;
+	--chip-divider-height: 10px;
+
+	/* Tag Colors (zinc family) */
+	--tag-bg: #fafafa;            /* zinc-50 */
+	--tag-border: #d4d4d8;        /* zinc-300 */
+	--tag-text: #52525b;          /* zinc-600 */
+
+	/* Error/Validation Colors */
+	--error-bg: #fef2f2;
+	--error-border: #ef4444;
+	--error-text: #b91c1c;
+
+	/* Focus - subtle, uses existing palette */
+	--focus-ring: var(--border-active);
+	--focus-glow: rgba(113, 113, 122, 0.15);    /* zinc-500/15 */
+
+	/* Accent - for interactive highlights (amber family) */
+	--accent-bg: #fef9c3;          /* amber-100, lighter for bg */
+	--accent-bg-hover: #fef08a;    /* amber-200 */
+	--accent-border: #fcd34d;      /* amber-300 */
+	--accent-text: #78350f;        /* amber-900 */
+
+	/* Action button (blue - for primary actions) */
+	--accent-blue: #3b82f6;        /* blue-500 */
+	--accent-blue-hover: #2563eb;  /* blue-600 */
+}

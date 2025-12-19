@@ -1,0 +1,14 @@
+/* annot - Design System
+ * Import order matters: fonts first, then tokens, then base, then components
+ */
+
+@import './fonts.css';
+@import './tokens.css';
+@import './base.css';
+@import './kbd.css';
+@import './syntax.css';
+@import './code-viewer.css';
+@import './status-bar.css';
+@import './chips.css';
+@import './editor.css';
+@import './command-palette.css';

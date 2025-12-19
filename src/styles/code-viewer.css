@@ -1,0 +1,234 @@
+/* ===========================================
+   CODE VIEWER - Main layout and code display
+   =========================================== */
+
+.viewer {
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+	position: relative;
+}
+
+/* Header with frosted glass effect */
+.header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 40px;
+	/* Left padding for traffic lights, slight top padding to align text */
+	padding: 2.4px 12px 0 90px;
+	flex-shrink: 0;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+	background: color-mix(in srgb, var(--bg-panel) 85%, transparent);
+	backdrop-filter: blur(20px) saturate(180%);
+	-webkit-backdrop-filter: blur(20px) saturate(180%);
+	-webkit-app-region: drag;
+	/* Soft shadow for depth */
+	box-shadow:
+		0 1px 3px rgba(0, 0, 0, 0.04),
+		0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.header-left {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.header-right {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	-webkit-app-region: no-drag;
+}
+
+/* Sticky header container */
+.sticky-header {
+	position: sticky;
+	top: 0;
+	z-index: 100;
+	background: var(--bg-main);
+}
+
+/* Session slot for global comment editor */
+.session-slot {
+	padding: 0 12px 12px 12px;
+	background: color-mix(in srgb, var(--bg-panel) 85%, transparent);
+	backdrop-filter: blur(20px) saturate(180%);
+	-webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+/* Override annotation-editor styles when in session slot */
+.session-slot .annotation-editor {
+	margin: 8px 8px 0 8px;
+	max-width: none;
+}
+
+/* Hide arrow for session editor */
+.session-slot .annotation-editor::after {
+	display: none;
+}
+
+/* Clickable filename */
+.file-name {
+	color: var(--text-primary);
+	font-weight: 600;
+	font-size: 13px;
+	letter-spacing: -0.01em;
+	cursor: pointer;
+	-webkit-app-region: no-drag;
+	transition: color 150ms ease;
+}
+
+.file-name:hover {
+	color: var(--text-secondary);
+}
+
+.file-name.has-comment {
+	text-decoration: underline;
+	text-decoration-style: dotted;
+	text-underline-offset: 3px;
+}
+
+/* Main content area */
+.content {
+	flex: 1;
+	overflow: auto;
+	padding-bottom: 1rem;
+}
+
+/* Code lines */
+.line {
+	position: relative;
+	display: flex;
+	white-space: pre;
+	tab-size: 4;
+}
+
+.line:hover {
+	background-color: var(--bg-main);
+}
+
+/* Selection (amber family - matches hl) */
+.line.selected {
+	background-color: var(--selection-bg);
+}
+
+.line.selected:hover {
+	background-color: var(--selection-bg);
+}
+
+.gutter.selected {
+	background-color: var(--selection-bg);
+	color: var(--text-secondary);
+	border-right-color: var(--selection-border);
+}
+
+/* Left accent bar on selected lines */
+.line.selected::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 3px;
+	background: var(--selection-border);
+}
+
+/* Annotated lines (subtle highlight) */
+.line.annotated {
+	background-color: var(--selection-bg);
+}
+
+.line.annotated::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 3px;
+	background: var(--selection-border);
+}
+
+/* Shift+drag cursor */
+.content.shift-held .code {
+	cursor: pointer;
+}
+
+/* Floating add button */
+.add-btn {
+	position: absolute;
+	top: 50%;
+	left: calc(var(--gutter-width) - 9px);
+	transform: translateY(-50%);
+	width: 18px;
+	height: 18px;
+	background: var(--selection-border);
+	color: white;
+	border: none;
+	border-radius: 4px;
+	font-size: 16px;
+	font-weight: 400;
+	cursor: pointer;
+	display: none;
+	align-items: center;
+	justify-content: center;
+	box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+	padding: 0;
+	padding-bottom: 2px;
+	line-height: 0;
+}
+
+.add-btn:hover {
+	transform: translateY(-50%) scale(1.1);
+	box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+}
+
+.line:not(.selected):hover .add-btn {
+	display: flex;
+}
+
+/* Gutter (line numbers) */
+.gutter {
+	width: var(--gutter-width);
+	flex-shrink: 0;
+	padding-right: 12px;
+	text-align: right;
+	color: var(--text-muted);
+	-webkit-user-select: none;
+	user-select: none;
+	cursor: pointer;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 22px;
+	font-variant-numeric: tabular-nums;
+	border-right: 1px solid var(--border-subtle);
+	/* Prevent gutter from being included in text selection */
+	pointer-events: auto;
+}
+
+.gutter:hover {
+	color: var(--text-secondary);
+}
+
+/* Code content */
+.code {
+	flex: 1;
+	padding-left: 16px;
+	-webkit-user-select: text;
+	user-select: text;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 22px;
+}
+
+/* Error and loading states */
+.error {
+	padding: 2rem;
+	color: var(--error-border);
+}
+
+.loading {
+	padding: 2rem;
+	color: var(--text-muted);
+}

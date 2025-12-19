@@ -1,0 +1,61 @@
+/* ===========================================
+   BASE STYLES
+   =========================================== */
+* { box-sizing: border-box; }
+
+body {
+	background-color: var(--bg-main);
+	color: var(--text-primary);
+	font-family: var(--font-ui);
+	min-height: 100vh;
+	margin: 0;
+	line-height: 1.5;
+}
+
+code {
+	font-family: var(--font-mono);
+	background: var(--bg-panel);
+	padding: 1px 5px;
+	border-radius: 3px;
+	font-size: 12px;
+}
+
+/* ===========================================
+   SCROLLBAR STYLING
+   =========================================== */
+::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background: #d4d4d8;
+	border: 1px solid transparent;
+	background-clip: content-box;
+	border-radius: 99px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background-color: #a1a1aa;
+}
+
+/* ===========================================
+   FOCUS-VISIBLE STATES (Keyboard Accessibility)
+   Subtle, professional focus indicators using existing palette
+   =========================================== */
+
+/* Remove default focus outlines globally */
+:focus {
+	outline: none;
+}
+
+/* Restore outline for elements that need it for accessibility */
+a:focus-visible,
+button:focus-visible:not(.copy-btn):not(.code-action) {
+	outline: 1px solid var(--focus-ring);
+	outline-offset: 2px;
+}

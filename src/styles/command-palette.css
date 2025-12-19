@@ -1,0 +1,293 @@
+/* ===========================================
+   COMMAND PALETTE - Minimalist Command Palette
+   Ported from hl poly-editor styles
+   =========================================== */
+
+/* Backdrop - subtle frosted glass effect */
+.backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(250, 250, 249, 0.4);
+	backdrop-filter: blur(2px);
+	-webkit-backdrop-filter: blur(2px);
+	z-index: 1000;
+}
+
+/* Modal container - ephemeral portal aesthetic */
+.modal {
+	position: fixed;
+	top: 20%;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 1001;
+	width: 90%;
+	max-width: 520px;
+	background: var(--bg-portal);
+	border: 2px dashed var(--border-strong);
+	border-radius: 12px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+	font-family: var(--font-ui);
+	overflow: hidden;
+	animation: fade-in 50ms ease-out;
+}
+
+@keyframes fade-in {
+	from {
+		opacity: 0;
+		transform: translateX(-50%) translateY(-8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(-50%) translateY(0);
+	}
+}
+
+.filter-view,
+.reorder-view,
+.form-view {
+	display: flex;
+	flex-direction: column;
+}
+
+/* Input row - namespace prefix + separator + input inline */
+.input-row {
+	display: flex;
+	align-items: center;
+	gap: 0;
+	padding: 14px 16px;
+	border-bottom: 1px dashed var(--border-subtle);
+	background: transparent;
+	font-size: 14px;
+}
+
+.search-icon {
+	color: var(--text-muted);
+	margin-right: 8px;
+	font-size: 14px;
+	flex-shrink: 0;
+}
+
+.ns-prefix {
+	color: var(--text-muted);
+	font-weight: 400;
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+.separator {
+	color: var(--text-muted);
+	margin: 0 6px;
+	font-size: 12px;
+	flex-shrink: 0;
+}
+
+.mode-prefix {
+	color: var(--text-muted);
+	flex-shrink: 0;
+}
+
+.inline-input {
+	flex: 1;
+	background: transparent;
+	border: none;
+	outline: none;
+	font-size: 14px;
+	color: var(--text-primary);
+	font-family: var(--font-ui);
+	min-width: 0;
+}
+
+.inline-input.navigating {
+	color: var(--text-muted);
+	caret-color: transparent;
+}
+
+.inline-input::placeholder {
+	color: var(--text-muted);
+	opacity: 0.6;
+}
+
+/* Options list */
+.item-list {
+	list-style: none;
+	margin: 0;
+	padding: 8px;
+	max-height: 280px;
+	overflow-y: auto;
+}
+
+.item-list:empty {
+	padding: 0;
+}
+
+.item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 10px 12px;
+	border-radius: 6px;
+	cursor: pointer;
+	font-size: 13px;
+	color: var(--text-primary);
+	transition: background 80ms ease;
+}
+
+.item:hover {
+	background: var(--bg-panel);
+}
+
+/* Selected state - navigating mode: solid background */
+.item.selected,
+.item.selected:hover {
+	background: #d4d8e0;
+	outline: none;
+}
+
+/* Filtering mode: border outline instead of solid background */
+.item-list.filtering .item.selected,
+.item-list.filtering .item.selected:hover {
+	background: transparent;
+	outline: 2px solid var(--border-strong);
+	outline-offset: -2px;
+}
+
+.item.pending-delete {
+	background: var(--error-bg);
+}
+
+/* Ephemeral items (agent-injected, session-scoped) */
+.item.ephemeral {
+	border: 1px dashed var(--border-strong);
+}
+
+.icon {
+	width: 18px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 13px;
+	color: var(--text-muted);
+	margin-right: 8px;
+}
+
+.label,
+.name {
+	flex: 1;
+	font-weight: 500;
+	color: var(--text-primary);
+}
+
+.ephemeral-badge {
+	font-size: 10px;
+	padding: 2px 4px;
+	color: var(--text-muted);
+}
+
+/* Create option */
+.create-item {
+	color: var(--text-muted);
+}
+
+.create-label {
+	flex: 1;
+	color: var(--text-muted);
+	font-weight: 400;
+}
+
+.drag-handle {
+	width: 20px;
+	flex-shrink: 0;
+	color: var(--text-muted);
+	text-align: center;
+}
+
+/* Form styles - invisible but there */
+.form-view form {
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	background: transparent;
+}
+
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.field.focused label {
+	color: var(--text-muted);
+}
+
+.field label {
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+/* Invisible-but-there: transparent bg, border only on focus */
+.field input,
+.field textarea,
+.field select {
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid transparent;
+	border-radius: 0;
+	padding: 8px 0;
+	font-size: 14px;
+	color: var(--text-primary);
+	font-family: var(--font-ui);
+	outline: none;
+	transition: border-color 0.15s ease;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+	border-bottom-color: var(--border-active);
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
+	color: var(--text-muted);
+	opacity: 0.6;
+}
+
+.field textarea {
+	resize: vertical;
+	min-height: 60px;
+}
+
+/* Footer - transparent, simple text hints */
+.footer {
+	padding: 10px 16px;
+	background: transparent;
+	border-top: 1px dashed var(--border-subtle);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	font-size: 11px;
+	color: var(--text-muted);
+}
+
+/* Scrollbar styling for item list */
+.item-list::-webkit-scrollbar {
+	width: 6px;
+}
+
+.item-list::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.item-list::-webkit-scrollbar-thumb {
+	background: var(--border-strong);
+	border-radius: 99px;
+}
+
+.item-list::-webkit-scrollbar-thumb:hover {
+	background: #a1a1aa;
+}

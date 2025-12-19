@@ -74,18 +74,19 @@ impl InputMode {
     /// Detect the appropriate input mode from CLI arguments and stdin state.
     ///
     /// Returns the input mode and optionally a warning message.
+    /// File argument takes priority over stdin when both are present.
     pub fn detect(file: Option<PathBuf>, label: String) -> Result<(InputMode, Option<String>), String> {
         let has_stdin = !io::stdin().is_terminal();
 
-        if has_stdin {
-            let warning = if file.is_some() {
-                Some("Warning: both stdin and file argument provided, using stdin".to_string())
+        if let Some(path) = file {
+            let warning = if has_stdin {
+                Some("Warning: both stdin and file argument provided, using file".to_string())
             } else {
                 None
             };
-            Ok((InputMode::Stdin { label }, warning))
-        } else if let Some(path) = file {
-            Ok((InputMode::File { path }, None))
+            Ok((InputMode::File { path }, warning))
+        } else if has_stdin {
+            Ok((InputMode::Stdin { label }, None))
         } else {
             Err("Error: no input provided\nUsage: annot <file> or <command> | annot\nTry: annot --help".to_string())
         }

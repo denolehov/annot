@@ -1,0 +1,576 @@
+// Pure reducer for CommandPalette state machine
+// No side effects, no DOM dependencies
+
+import type { State, Action, Command, QueryContext, ReduceResult, Namespace, Item, PendingItem } from './types';
+
+/**
+ * Clamp a number between min and max (inclusive)
+ */
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * Compute the item list for ITEM_FILTER state
+ * Returns matches, whether to show Create option, and Create's index
+ */
+export function computeItemList(
+  state: { namespace: Namespace; query: string },
+  ctx: QueryContext
+): { matches: Item[]; showCreate: boolean; createIndex: number } {
+  const matches = ctx.filterItems(state.namespace, state.query);
+  const queryTrimmed = state.query.trim();
+  const hasExactMatch = matches.some(
+    (m) => m.name.toLowerCase() === queryTrimmed.toLowerCase()
+  );
+  const showCreate = queryTrimmed !== '' && !hasExactMatch;
+  const createIndex = showCreate ? matches.length : -1;
+
+  return { matches, showCreate, createIndex };
+}
+
+/**
+ * Pure reducer function
+ * Takes current state and action, returns new state and commands to execute
+ */
+export function reduce(state: State, action: Action, ctx: QueryContext): ReduceResult {
+  const commands: Command[] = [];
+
+  switch (state.type) {
+    case 'IDLE': {
+      if (action.type === 'OPEN') {
+        commands.push({ type: 'EMIT_EVENT', event: 'commandpalette:open', payload: undefined });
+        return {
+          state: { type: 'NAMESPACE_FILTER', query: '', selectedIndex: 0, inputMode: 'filtering' },
+          commands,
+        };
+      }
+      return { state, commands };
+    }
+
+    case 'NAMESPACE_FILTER': {
+      if (action.type === 'ESCAPE' || action.type === 'CLOSE') {
+        commands.push({ type: 'EMIT_EVENT', event: 'commandpalette:close', payload: undefined });
+        return { state: { type: 'IDLE' }, commands };
+      }
+
+      if (action.type === 'INPUT') {
+        return {
+          state: { ...state, query: state.query + action.char, selectedIndex: 0, inputMode: 'filtering' },
+          commands,
+        };
+      }
+
+      if (action.type === 'BACKSPACE') {
+        return {
+          state: { ...state, query: state.query.slice(0, -1), selectedIndex: 0, inputMode: 'filtering' },
+          commands,
+        };
+      }
+
+      if (action.type === 'ARROW_DOWN' || action.type === 'ARROW_UP') {
+        // First arrow down from filtering mode: just switch to navigating (keep index)
+        if (state.inputMode === 'filtering' && action.type === 'ARROW_DOWN') {
+          return { state: { ...state, inputMode: 'navigating' }, commands };
+        }
+
+        const matches = ctx.filterNamespaces(state.query);
+        const maxIndex = Math.max(0, matches.length - 1);
+        const delta = action.type === 'ARROW_DOWN' ? 1 : -1;
+        const nextIndex = clamp(state.selectedIndex + delta, 0, maxIndex);
+
+        // Arrow up at top returns to filtering mode
+        if (action.type === 'ARROW_UP' && state.selectedIndex === 0) {
+          return { state: { ...state, inputMode: 'filtering' }, commands };
+        }
+
+        return { state: { ...state, selectedIndex: nextIndex, inputMode: 'navigating' }, commands };
+      }
+
+      if (action.type === 'ENTER') {
+        const matches = ctx.filterNamespaces(state.query);
+        const ns = matches[state.selectedIndex];
+        if (!ns) {
+          return { state, commands };
+        }
+        commands.push({
+          type: 'EMIT_EVENT',
+          event: 'commandpalette:namespace-locked',
+          payload: { namespace: ns.id },
+        });
+        return {
+          state: { type: 'ITEM_FILTER', namespace: ns, query: '', selectedIndex: 0, pendingDelete: false, inputMode: 'filtering' },
+          commands,
+        };
+      }
+
+      // SELECT: click to select and activate (behaves like setting index then ENTER)
+      if (action.type === 'SELECT') {
+        const matches = ctx.filterNamespaces(state.query);
+        const ns = matches[action.index];
+        if (!ns) {
+          return { state, commands };
+        }
+        commands.push({
+          type: 'EMIT_EVENT',
+          event: 'commandpalette:namespace-locked',
+          payload: { namespace: ns.id },
+        });
+        return {
+          state: { type: 'ITEM_FILTER', namespace: ns, query: '', selectedIndex: 0, pendingDelete: false, inputMode: 'filtering' },
+          commands,
+        };
+      }
+
+      return { state, commands };
+    }
+
+    case 'ITEM_FILTER': {
+      // Helper to clear pendingDelete when returning to this state
+      const clearPending = (s: typeof state) => ({ ...s, pendingDelete: false });
+      // ESCAPE goes back one level to NAMESPACE_FILTER
+      if (action.type === 'ESCAPE') {
+        return {
+          state: { type: 'NAMESPACE_FILTER', query: '', selectedIndex: 0, inputMode: 'filtering' },
+          commands,
+        };
+      }
+
+      // CLOSE (backdrop click) closes completely
+      if (action.type === 'CLOSE') {
+        commands.push({ type: 'EMIT_EVENT', event: 'commandpalette:close', payload: undefined });
+        return { state: { type: 'IDLE' }, commands };
+      }
+
+      if (action.type === 'BACKSPACE') {
+        if (state.query === '') {
+          // Go back to namespace filter
+          return {
+            state: { type: 'NAMESPACE_FILTER', query: '', selectedIndex: 0, inputMode: 'filtering' },
+            commands,
+          };
+        }
+        // Backspace switches to filtering mode (user is editing the filter)
+        return {
+          state: clearPending({ ...state, query: state.query.slice(0, -1), selectedIndex: 0, inputMode: 'filtering' }),
+          commands,
+        };
+      }
+
+      if (action.type === 'INPUT') {
+        // Typing switches to filtering mode
+        return {
+          state: clearPending({ ...state, query: state.query + action.char, selectedIndex: 0, inputMode: 'filtering' }),
+          commands,
+        };
+      }
+
+      if (action.type === 'ARROW_DOWN' || action.type === 'ARROW_UP') {
+        // First arrow down from filtering mode: just switch to navigating (keep index)
+        if (state.inputMode === 'filtering' && action.type === 'ARROW_DOWN') {
+          return { state: clearPending({ ...state, inputMode: 'navigating' }), commands };
+        }
+
+        const { matches, showCreate } = computeItemList(state, ctx);
+        const totalItems = matches.length + (showCreate ? 1 : 0);
+        const maxIndex = Math.max(0, totalItems - 1);
+        const delta = action.type === 'ARROW_DOWN' ? 1 : -1;
+        const nextIndex = clamp(state.selectedIndex + delta, 0, maxIndex);
+
+        // Arrow up at top returns to filtering mode
+        if (action.type === 'ARROW_UP' && state.selectedIndex === 0) {
+          return { state: clearPending({ ...state, inputMode: 'filtering' }), commands };
+        }
+
+        // Arrow navigation in navigating mode
+        return { state: clearPending({ ...state, selectedIndex: nextIndex, inputMode: 'navigating' }), commands };
+      }
+
+      if (action.type === 'ENTER') {
+        const { matches, showCreate, createIndex } = computeItemList(state, ctx);
+
+        // Selected Create option
+        if (showCreate && state.selectedIndex === createIndex) {
+          return {
+            state: {
+              type: 'CREATE_FORM',
+              namespace: state.namespace,
+              values: { name: state.query },
+              focusedField: 1, // Skip name since it's pre-filled
+            },
+            commands,
+          };
+        }
+
+        // Selected an existing item
+        const item = matches[state.selectedIndex];
+        if (item) {
+          return {
+            state: {
+              type: 'EDIT_FORM',
+              namespace: state.namespace,
+              item,
+              values: { ...item.values },
+              focusedField: 0,
+            },
+            commands,
+          };
+        }
+
+        return { state, commands };
+      }
+
+      // DELETE only works in navigating mode
+      if (action.type === 'DELETE' && state.inputMode === 'navigating') {
+        const { matches, showCreate, createIndex } = computeItemList(state, ctx);
+
+        // Don't delete if on Create option
+        if (showCreate && state.selectedIndex === createIndex) {
+          return { state, commands };
+        }
+
+        // Don't delete ephemeral items (agent-injected, session-scoped)
+        const selectedItem = matches[state.selectedIndex];
+        if (selectedItem?.isEphemeral) {
+          return { state, commands };
+        }
+
+        // Vim-style dd: first d sets pendingDelete, second d confirms
+        if (!state.pendingDelete) {
+          // First d - arm the delete
+          return { state: { ...state, pendingDelete: true }, commands };
+        }
+
+        // Second d - actually delete
+        const item = matches[state.selectedIndex];
+        if (item) {
+          commands.push({
+            type: 'DELETE_ITEM',
+            namespace: state.namespace.id,
+            itemId: item.id,
+          });
+          commands.push({
+            type: 'EMIT_EVENT',
+            event: 'commandpalette:item-deleted',
+            payload: { namespace: state.namespace.id, itemId: item.id },
+          });
+        }
+        return { state: clearPending(state), commands };
+      }
+
+      // EDIT only works in navigating mode - opens edit form for selected item
+      if (action.type === 'EDIT' && state.inputMode === 'navigating') {
+        const { matches, showCreate, createIndex } = computeItemList(state, ctx);
+
+        // Don't edit if on Create option
+        if (showCreate && state.selectedIndex === createIndex) {
+          return { state, commands };
+        }
+
+        const item = matches[state.selectedIndex];
+
+        // Don't edit ephemeral items (agent-injected, session-scoped)
+        if (item?.isEphemeral) {
+          return { state, commands };
+        }
+
+        if (item) {
+          return {
+            state: {
+              type: 'EDIT_FORM',
+              namespace: state.namespace,
+              item,
+              values: { ...item.values },
+              focusedField: 0,
+            },
+            commands,
+          };
+        }
+
+        return { state, commands };
+      }
+
+      // SET only works in navigating mode - sets the selected item as active and closes
+      if (action.type === 'SET' && state.inputMode === 'navigating') {
+        const { matches, showCreate, createIndex } = computeItemList(state, ctx);
+
+        // Don't set if on Create option
+        if (showCreate && state.selectedIndex === createIndex) {
+          return { state, commands };
+        }
+
+        const item = matches[state.selectedIndex];
+        if (item) {
+          commands.push({
+            type: 'SET_MODE',
+            namespace: state.namespace.id,
+            itemId: item.id,
+          });
+          commands.push({ type: 'EMIT_EVENT', event: 'commandpalette:close', payload: undefined });
+          return { state: { type: 'IDLE' }, commands };
+        }
+
+        return { state, commands };
+      }
+
+      // REORDER enters reorder mode (only in navigating mode with items, not for tags)
+      if (action.type === 'REORDER' && state.inputMode === 'navigating') {
+        if (state.namespace.id === 'tags') {
+          return { state, commands }; // Tags cannot be reordered
+        }
+        const items = ctx.getItems(state.namespace);
+        if (items.length < 2) {
+          return { state, commands }; // Need at least 2 items to reorder
+        }
+        return {
+          state: {
+            type: 'ITEM_REORDER',
+            namespace: state.namespace,
+            items: [...items], // Mutable copy
+            selectedIndex: state.selectedIndex,
+          },
+          commands,
+        };
+      }
+
+      // SELECT: click to select and activate (behaves like setting index then ENTER)
+      if (action.type === 'SELECT') {
+        const { matches, showCreate, createIndex } = computeItemList(state, ctx);
+
+        // Selected Create option
+        if (showCreate && action.index === createIndex) {
+          return {
+            state: {
+              type: 'CREATE_FORM',
+              namespace: state.namespace,
+              values: { name: state.query },
+              focusedField: 1, // Skip name since it's pre-filled
+            },
+            commands,
+          };
+        }
+
+        // Selected an existing item
+        const item = matches[action.index];
+        if (item) {
+          return {
+            state: {
+              type: 'EDIT_FORM',
+              namespace: state.namespace,
+              item,
+              values: { ...item.values },
+              focusedField: 0,
+            },
+            commands,
+          };
+        }
+
+        return { state, commands };
+      }
+
+      return { state, commands };
+    }
+
+    case 'ITEM_REORDER': {
+      // ESCAPE or ENTER exits reorder mode and saves the new order
+      if (action.type === 'ESCAPE' || action.type === 'ENTER') {
+        // Emit reorder command with new order
+        commands.push({
+          type: 'REORDER_ITEMS',
+          namespace: state.namespace.id,
+          orderedIds: state.items.map((item) => item.id),
+        });
+        return {
+          state: {
+            type: 'ITEM_FILTER',
+            namespace: state.namespace,
+            query: '',
+            selectedIndex: state.selectedIndex, // Preserve selection
+            pendingDelete: false,
+            inputMode: 'navigating',
+          },
+          commands,
+        };
+      }
+
+      // ARROW_UP navigates focus up (does not swap)
+      if (action.type === 'ARROW_UP') {
+        if (state.selectedIndex <= 0) {
+          return { state, commands }; // Already at top
+        }
+        return {
+          state: { ...state, selectedIndex: state.selectedIndex - 1 },
+          commands,
+        };
+      }
+
+      // ARROW_DOWN navigates focus down (does not swap)
+      if (action.type === 'ARROW_DOWN') {
+        if (state.selectedIndex >= state.items.length - 1) {
+          return { state, commands }; // Already at bottom
+        }
+        return {
+          state: { ...state, selectedIndex: state.selectedIndex + 1 },
+          commands,
+        };
+      }
+
+      // MOVE_UP swaps focused item up (triggered by Cmd+Alt+Arrow)
+      if (action.type === 'MOVE_UP') {
+        if (state.selectedIndex <= 0) {
+          return { state, commands }; // Already at top
+        }
+        const newItems = [...state.items];
+        const idx = state.selectedIndex;
+        [newItems[idx - 1], newItems[idx]] = [newItems[idx], newItems[idx - 1]];
+        return {
+          state: {
+            ...state,
+            items: newItems,
+            selectedIndex: idx - 1,
+          },
+          commands,
+        };
+      }
+
+      // MOVE_DOWN swaps focused item down (triggered by Cmd+Alt+Arrow)
+      if (action.type === 'MOVE_DOWN') {
+        if (state.selectedIndex >= state.items.length - 1) {
+          return { state, commands }; // Already at bottom
+        }
+        const newItems = [...state.items];
+        const idx = state.selectedIndex;
+        [newItems[idx], newItems[idx + 1]] = [newItems[idx + 1], newItems[idx]];
+        return {
+          state: {
+            ...state,
+            items: newItems,
+            selectedIndex: idx + 1,
+          },
+          commands,
+        };
+      }
+
+      return { state, commands };
+    }
+
+    case 'EDIT_FORM': {
+      if (action.type === 'ESCAPE') {
+        return {
+          state: {
+            type: 'ITEM_FILTER',
+            namespace: state.namespace,
+            query: '',
+            selectedIndex: 0,
+            pendingDelete: false,
+            inputMode: 'filtering',
+          },
+          commands,
+        };
+      }
+
+      if (action.type === 'SET_FIELD') {
+        return {
+          state: {
+            ...state,
+            values: { ...state.values, [action.key]: action.value },
+          },
+          commands,
+        };
+      }
+
+      if (action.type === 'TAB') {
+        const fieldCount = state.namespace.fields.length;
+        const nextField = (state.focusedField + 1) % fieldCount;
+        return { state: { ...state, focusedField: nextField }, commands };
+      }
+
+      if (action.type === 'ENTER') {
+        // Use formValues if provided (from DOM), otherwise use state values
+        const finalValues = action.formValues ?? state.values;
+        const updatedItem: Item = {
+          ...state.item,
+          name: finalValues.name || state.item.name, // Update top-level name from form
+          values: finalValues,
+        };
+        commands.push({
+          type: 'UPDATE_ITEM',
+          namespace: state.namespace.id,
+          item: updatedItem,
+        });
+        return {
+          state: {
+            type: 'ITEM_FILTER',
+            namespace: state.namespace,
+            query: '',
+            selectedIndex: 0,
+            pendingDelete: false,
+            inputMode: 'filtering',
+          },
+          commands,
+        };
+      }
+
+      return { state, commands };
+    }
+
+    case 'CREATE_FORM': {
+      if (action.type === 'ESCAPE') {
+        return {
+          state: {
+            type: 'ITEM_FILTER',
+            namespace: state.namespace,
+            query: '',
+            selectedIndex: 0,
+            pendingDelete: false,
+            inputMode: 'filtering',
+          },
+          commands,
+        };
+      }
+
+      if (action.type === 'SET_FIELD') {
+        return {
+          state: {
+            ...state,
+            values: { ...state.values, [action.key]: action.value },
+          },
+          commands,
+        };
+      }
+
+      if (action.type === 'TAB') {
+        const fieldCount = state.namespace.fields.length;
+        const nextField = (state.focusedField + 1) % fieldCount;
+        return { state: { ...state, focusedField: nextField }, commands };
+      }
+
+      if (action.type === 'ENTER') {
+        // Use formValues if provided (from DOM), otherwise use state values
+        const finalValues = action.formValues ?? state.values;
+        const pending: PendingItem = {
+          name: finalValues.name || '',
+          values: finalValues,
+        };
+        commands.push({
+          type: 'CREATE_ITEM',
+          namespace: state.namespace.id,
+          pending,
+        });
+        return {
+          state: {
+            type: 'ITEM_FILTER',
+            namespace: state.namespace,
+            query: '',
+            selectedIndex: 0,
+            pendingDelete: false,
+            inputMode: 'filtering',
+          },
+          commands,
+        };
+      }
+
+      return { state, commands };
+    }
+  }
+}

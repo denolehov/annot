@@ -1,0 +1,50 @@
+/* ===========================================
+   SYNTAX HIGHLIGHTING (syntect CSS classes)
+
+   syntect uses semantic class names like:
+     <span class="storage type function rust">fn</span>
+     <span class="string quoted double rust">"hello"</span>
+     <span class="comment line double-slash rust">// comment</span>
+
+   Reference: src-tauri/src/highlight.rs::documents_html_structure_and_classes
+   =========================================== */
+
+/* Comments */
+.comment { color: var(--code-comment); font-style: italic; }
+
+/* Storage (keywords like fn, let, const, function, var) */
+.storage { color: var(--code-keyword); }
+
+/* Keywords (control flow: return, if, else, for, while) */
+.keyword { color: var(--code-keyword); }
+
+/* Strings */
+.string { color: var(--code-string); }
+
+/* Constants (numbers, booleans, null) */
+.constant { color: var(--code-constant); }
+
+/* Entity names (function names, class names, type names) */
+.entity.name { color: var(--code-func); }
+.entity.name.function { color: var(--code-func); }
+.entity.name.type { color: var(--code-func); }
+.entity.name.class { color: var(--code-func); }
+
+/* Variables */
+.variable { color: var(--text-primary); }
+.variable.parameter { color: var(--code-variable); }
+.variable.other { color: var(--text-primary); }
+
+/* Support (macros, built-ins) */
+.support { color: var(--code-support); }
+.support.macro { color: var(--code-support); }
+.support.function { color: var(--code-support); }
+
+/* Punctuation - keep neutral */
+.punctuation { color: var(--text-primary); }
+
+/* Meta - generally inherit, but provide fallback */
+.meta { color: inherit; }
+
+/* Source - base scope, inherit color */
+.source { color: var(--text-primary); }

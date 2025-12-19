@@ -1,0 +1,206 @@
+/* ===========================================
+   COMPONENT: TAG CHIPS
+   =========================================== */
+.tag-chip {
+	display: inline-flex;
+	align-items: center;
+	height: var(--chip-height);
+	border-radius: var(--chip-radius);
+	font-size: var(--chip-font);
+	padding: var(--chip-padding);
+	user-select: none;
+	border: 1px solid transparent;
+	font-family: var(--font-ui);
+	vertical-align: middle;
+	margin: 0 2px;
+	position: relative;
+}
+
+.tag-icon {
+	font-weight: 700;
+	font-size: var(--chip-font);
+	opacity: 0.9;
+}
+
+.tag-label {
+	font-weight: 600;
+	font-size: 9px;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+	opacity: 0.85;
+	margin-left: 4px;
+}
+
+.tag-divider {
+	width: 1px;
+	height: var(--chip-divider-height);
+	background-color: currentColor;
+	opacity: 0.2;
+	margin: 0 6px;
+}
+
+.tag-content {
+	font-weight: 500;
+	white-space: nowrap;
+	max-width: 150px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	margin-left: 4px;
+}
+
+/* Color variant for tags */
+.tag-tag {
+	background: var(--tag-bg);
+	border-color: var(--tag-border);
+	color: var(--tag-text);
+}
+
+/* Selected chip (via backspace or click) */
+.tag-chip.ProseMirror-selectednode {
+	outline: 2px solid var(--selection-border);
+	outline-offset: 1px;
+	background: var(--selection-bg);
+}
+
+/* Chip within a text selection (Cmd+A) */
+.tag-chip.in-selection,
+.tag-assembly.in-selection {
+	outline: 2px solid var(--selection-border);
+	outline-offset: 1px;
+}
+
+/* Tag chips and assemblies - subtle border darken on focus */
+.tag-chip:focus-visible,
+.tag-assembly:focus-visible {
+	outline: none;
+	border-color: var(--focus-ring);
+}
+
+/* ===========================================
+   CHIP TOOLTIP (hover to reveal instruction)
+   =========================================== */
+.tag-chip .chip-tooltip {
+	position: fixed;
+	background: var(--text-primary);
+	border-radius: 4px;
+	padding: 4px 8px;
+	font-size: 11px;
+	color: white;
+	max-width: 300px;
+	word-wrap: break-word;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+	opacity: 0;
+	visibility: hidden;
+	transition: opacity 0.1s ease, visibility 0.1s ease;
+	z-index: 9999;
+	pointer-events: none;
+	left: var(--tooltip-x, 0);
+	top: var(--tooltip-y, 0);
+	transform: translateX(-25%) translateY(-100%) translateY(-8px);
+}
+
+.tag-chip .chip-tooltip::after {
+	content: "";
+	position: absolute;
+	top: 100%;
+	left: 25%;
+	transform: translateX(-50%);
+	border: 4px solid transparent;
+	border-top-color: var(--text-primary);
+}
+
+.tag-chip:hover .chip-tooltip {
+	opacity: 1;
+	visibility: visible;
+}
+
+/* ===========================================
+   KIND BADGE (in creation flow)
+   =========================================== */
+.kind-badge {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 6px;
+	border-radius: 4px;
+	font-size: 11px;
+	font-weight: 600;
+	font-family: var(--font-ui);
+	text-transform: lowercase;
+	user-select: none;
+}
+
+.kind-badge.tag {
+	background: var(--tag-bg);
+	color: var(--tag-text);
+}
+
+/* ===========================================
+   VALIDATION STYLES
+   =========================================== */
+
+/* Error state for segments */
+.assembly-segment.has-error {
+	background: var(--error-bg);
+	box-shadow: inset 0 0 0 1px var(--error-border);
+	border-radius: 3px;
+}
+
+.assembly-segment.has-error .assembly-input {
+	color: var(--error-text);
+}
+
+/* Springy shake animation for rejected input */
+@keyframes shake {
+	0% { transform: translateX(0); }
+	15% { transform: translateX(-6px); }
+	30% { transform: translateX(5px); }
+	45% { transform: translateX(-4px); }
+	60% { transform: translateX(3px); }
+	75% { transform: translateX(-2px); }
+	90% { transform: translateX(1px); }
+	100% { transform: translateX(0); }
+}
+
+.shake {
+	animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+/* Validation Error Tooltip */
+.validation-tooltip {
+	position: absolute;
+	bottom: 100%;
+	left: 0;
+	margin-bottom: 6px;
+	background: var(--error-border);
+	color: white;
+	padding: 3px 6px;
+	border-radius: 3px;
+	font-size: 10px;
+	font-weight: 600;
+	white-space: nowrap;
+	pointer-events: none;
+	z-index: 10;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	animation: tooltipFadeIn 0.1s ease;
+}
+
+/* Little arrow for the tooltip */
+.validation-tooltip::after {
+	content: "";
+	position: absolute;
+	top: 100%;
+	left: 10px;
+	border: 4px solid transparent;
+	border-top-color: var(--error-border);
+}
+
+@keyframes tooltipFadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(2px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}

@@ -1,0 +1,157 @@
+/* ===========================================
+   ANNOTATION EDITOR - Popover-style rich text editor
+   =========================================== */
+
+/* Popover container matching hl-editor appearance */
+.annotation-editor {
+	display: block;
+	position: relative;
+	background: var(--bg-portal);
+	border: 1px solid var(--border-subtle);
+	border-radius: 8px;
+	box-shadow:
+		0 1px 2px rgba(0, 0, 0, 0.04),
+		0 2px 4px rgba(0, 0, 0, 0.02);
+	z-index: 2;
+	max-width: 600px;
+	margin: 8px 8px 8px 60px;
+	padding: 10px 14px;
+	min-height: 44px;
+	font-family: var(--font-ui);
+}
+
+/* Active state - dashed border while user can type */
+.annotation-editor:not(.sealed) {
+	border-style: dashed;
+}
+
+.annotation-editor:not(.sealed)::after {
+	border-left-style: dashed;
+	border-top-style: dashed;
+}
+
+/* Arrow pointing up toward selected lines */
+.annotation-editor::after {
+	content: '';
+	position: absolute;
+	left: 24px;
+	top: -6px;
+	width: 10px;
+	height: 10px;
+	background: var(--bg-portal);
+	border-left: 1px solid var(--border-subtle);
+	border-top: 1px solid var(--border-subtle);
+	transform: rotate(45deg);
+}
+
+/* Sealed state - solid border, clickable to edit */
+.annotation-editor.sealed {
+	border-style: solid;
+	cursor: pointer;
+}
+
+.annotation-editor.sealed::after {
+	border-left-style: solid;
+	border-top-style: solid;
+}
+
+/* ===========================================
+   TIPTAP EDITOR CONTENT
+   =========================================== */
+.editor-content .tiptap {
+	outline: none;
+	font-family: var(--font-ui);
+	font-size: 14px;
+	line-height: 22px;
+	color: var(--text-secondary);
+}
+
+.editor-content .tiptap p {
+	margin: 0;
+}
+
+.editor-content .tiptap p.is-editor-empty:first-child::before {
+	content: attr(data-placeholder);
+	color: var(--text-muted);
+	pointer-events: none;
+	float: left;
+	height: 0;
+}
+
+/* Compact list styling */
+.editor-content .tiptap ul,
+.editor-content .tiptap ol {
+	margin: 0;
+	padding-left: 20px;
+}
+
+.editor-content .tiptap li {
+	margin: 0;
+}
+
+.editor-content .tiptap li p {
+	margin: 0;
+}
+
+/* ===========================================
+   EDITOR TOOLBAR
+   =========================================== */
+.toolbar {
+	display: flex;
+	gap: 12px;
+	margin-top: 10px;
+	padding-top: 10px;
+	border-top: 1px solid var(--border-subtle);
+}
+
+/* ===========================================
+   TAG SUGGESTIONS POPUP
+   =========================================== */
+.tag-suggestions {
+	position: fixed;
+	background: var(--bg-window);
+	border: 1px solid var(--border-strong);
+	border-radius: 6px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+	z-index: 100;
+	min-width: 160px;
+	max-width: 300px;
+	overflow: hidden;
+	padding: 4px;
+	font-family: var(--font-ui);
+}
+
+.tag-suggestion {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 6px 8px;
+	border: none;
+	border-radius: 4px;
+	background: none;
+	cursor: pointer;
+	text-align: left;
+}
+
+.tag-suggestion:hover,
+.tag-suggestion.selected {
+	background: var(--bg-panel);
+}
+
+.tag-name {
+	font-family: var(--font-ui);
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--text-primary);
+}
+
+.tag-instruction {
+	font-size: 11px;
+	color: var(--text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	flex: 1;
+	margin-left: auto;
+}
