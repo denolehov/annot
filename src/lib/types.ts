@@ -5,9 +5,21 @@ export interface Line {
   html: string | null;
 }
 
+export interface ExitMode {
+  id: string;
+  name: string;
+  color: string;
+  instruction: string;
+  order: number;
+  is_ephemeral: boolean;
+}
+
 export interface ContentResponse {
   label: string;
   lines: Line[];
+  exit_modes: ExitMode[];
+  selected_exit_mode_id: string | null;
+  session_comment: ContentNode[] | null;
 }
 
 // Content node types for structured annotation content (output format)

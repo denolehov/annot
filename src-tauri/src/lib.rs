@@ -7,7 +7,10 @@ pub mod highlight;
 pub mod output;
 pub mod state;
 
-use commands::{delete_annotation, finish_session, get_content, upsert_annotation};
+use commands::{
+    cycle_exit_mode, delete_annotation, finish_session, get_content, set_exit_mode,
+    set_session_comment, upsert_annotation,
+};
 use state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -19,7 +22,10 @@ pub fn run(state: AppState) {
             get_content,
             upsert_annotation,
             delete_annotation,
-            finish_session
+            finish_session,
+            set_exit_mode,
+            cycle_exit_mode,
+            set_session_comment
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

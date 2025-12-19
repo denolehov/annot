@@ -105,3 +105,33 @@ export function extractContentNodes(json: JSONContent): ContentNode[] {
 
   return [{ type: 'text', text: fullText }];
 }
+
+/**
+ * Convert ContentNode array back to TipTap JSONContent.
+ * Used to hydrate the editor with content from the backend.
+ */
+export function contentNodesToTipTap(nodes: ContentNode[] | null): JSONContent | undefined {
+  if (!nodes || nodes.length === 0) {
+    return undefined;
+  }
+
+  // For now, just handle Text nodes - split by newlines into paragraphs
+  const textContent = nodes
+    .filter((n): n is { type: 'text'; text: string } => n.type === 'text')
+    .map((n) => n.text)
+    .join('');
+
+  if (!textContent) {
+    return undefined;
+  }
+
+  const paragraphs = textContent.split('\n').map((line) => ({
+    type: 'paragraph' as const,
+    content: line ? [{ type: 'text' as const, text: line }] : [],
+  }));
+
+  return {
+    type: 'doc',
+    content: paragraphs,
+  };
+}

@@ -2,9 +2,9 @@
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
-  import type { ContentResponse, Line, JSONContent } from "$lib/types";
+  import type { ContentResponse, ContentNode, Line, JSONContent, ExitMode } from "$lib/types";
   import { rangeToKey, keyToRange, isLineInRange, type Range } from "$lib/range";
-  import { extractContentNodes, isContentEmpty } from "$lib/tiptap";
+  import { extractContentNodes, isContentEmpty, contentNodesToTipTap } from "$lib/tiptap";
   import AnnotationEditor from "$lib/AnnotationEditor.svelte";
 
   let lines: Line[] = $state([]);
@@ -21,6 +21,17 @@
   // Annotation state - Map keyed by "startLine-endLine" → TipTap JSON
   let annotations: Map<string, JSONContent> = $state(new Map());
   let sealedRanges: Set<string> = $state(new Set());
+
+  // Exit mode state (null index = neutral/no mode selected)
+  let exitModes: ExitMode[] = $state([]);
+  let selectedModeIndex: number | null = $state(null);
+  let selectedMode = $derived.by(() =>
+    selectedModeIndex !== null && exitModes.length > 0 ? exitModes[selectedModeIndex] : null
+  );
+
+  // Session comment state (global/file-level comment)
+  let sessionComment: JSONContent | undefined = $state(undefined);
+  let sessionEditorOpen = $state(false);
 
   // Derived: last line of current selection (for positioning editor)
   let lastSelectedLine = $derived.by(() => {
@@ -71,6 +82,22 @@
       annotations = new Map(annotations);
     }
     selection = null;
+  }
+
+  // Session comment handlers
+  function openSessionEditor() {
+    sessionEditorOpen = true;
+  }
+
+  function closeSessionEditor() {
+    sessionEditorOpen = false;
+  }
+
+  async function updateSessionComment(content: JSONContent | null) {
+    sessionComment = content ?? undefined;
+    // Sync to backend
+    const nodes = content ? extractContentNodes(content) : null;
+    await invoke('set_session_comment', { content: nodes });
   }
 
   // Get annotation info for a specific line (is it the last line of any annotation?)
@@ -152,10 +179,47 @@
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'Shift') {
       isShiftHeld = true;
+    } else if (e.key === 'Tab') {
+      // Always prevent default Tab behavior
+      e.preventDefault();
+      // Only cycle exit modes when editor is closed
+      if (exitModes.length > 0 && !selection) {
+        if (e.shiftKey) {
+          // Cycle backward: 0 → null → last → ... → 1 → 0
+          if (selectedModeIndex === null) {
+            selectedModeIndex = exitModes.length - 1;
+          } else if (selectedModeIndex === 0) {
+            selectedModeIndex = null;
+          } else {
+            selectedModeIndex = selectedModeIndex - 1;
+          }
+        } else {
+          // Cycle forward: null → 0 → 1 → ... → last → null
+          if (selectedModeIndex === null) {
+            selectedModeIndex = 0;
+          } else if (selectedModeIndex === exitModes.length - 1) {
+            selectedModeIndex = null;
+          } else {
+            selectedModeIndex = selectedModeIndex + 1;
+          }
+        }
+        // Sync to backend
+        const modeId = selectedModeIndex !== null ? exitModes[selectedModeIndex].id : null;
+        invoke('set_exit_mode', { modeId });
+      }
     } else if (e.key === 'c' && hoveredLine !== null && !selection) {
       // Open editor on hovered line
       e.preventDefault();
       selection = { start: hoveredLine, end: hoveredLine };
+    } else if (e.key === 'g' && !selection && !sessionEditorOpen) {
+      // Open session comment editor (when not in any editor)
+      const activeEl = document.activeElement;
+      const isInEditor = activeEl?.closest('.annotation-editor, .session-editor');
+      const isInInput = activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement;
+      if (!isInEditor && !isInInput) {
+        e.preventDefault();
+        openSessionEditor();
+      }
     }
     // Escape is now handled by the editor's blur handler
   }
@@ -179,6 +243,18 @@
       const res = await invoke<ContentResponse>("get_content");
       label = res.label;
       lines = res.lines;
+      exitModes = res.exit_modes;
+
+      // Find index of initially selected mode (if any)
+      if (res.selected_exit_mode_id) {
+        const idx = exitModes.findIndex(m => m.id === res.selected_exit_mode_id);
+        if (idx >= 0) selectedModeIndex = idx;
+      }
+
+      // Hydrate session comment from backend
+      if (res.session_comment) {
+        sessionComment = contentNodesToTipTap(res.session_comment);
+      }
 
       // Listen for window close - this triggers output and exit
       await window.onCloseRequested(async (event) => {
@@ -195,13 +271,32 @@
 
 <svelte:window onkeydown={handleKeyDown} onkeyup={handleKeyUp} />
 
-<main class="viewer">
-  <header class="header" data-tauri-drag-region>
-    <div class="header-left">
-      <span class="file-name">{label}</span>
-    </div>
-    <div class="header-right"></div>
-  </header>
+<main class="viewer" style:--mode-color={selectedMode?.color ?? 'transparent'}>
+  <div class="sticky-header">
+    <header class="header" data-tauri-drag-region>
+      <div class="header-left">
+        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+        <span
+          class="file-name"
+          class:has-comment={sessionComment !== undefined}
+          onclick={openSessionEditor}
+        >{label}</span>
+      </div>
+      <div class="header-right"></div>
+    </header>
+    <!-- Session editor slot -->
+    {#if sessionEditorOpen || sessionComment}
+      <div class="session-slot">
+        <AnnotationEditor
+          content={sessionComment}
+          sealed={!sessionEditorOpen}
+          onUpdate={updateSessionComment}
+          onUnseal={openSessionEditor}
+          onDismiss={closeSessionEditor}
+        />
+      </div>
+    {/if}
+  </div>
 
   {#if error}
     <div class="error">{error}</div>
@@ -271,6 +366,44 @@
       {/each}
     </div>
   {/if}
+
+  <!-- Footer / Status Bar -->
+  <footer class="status-bar" style:--mode-color={selectedMode?.color ?? 'transparent'}>
+    <div class="status-bar-left">
+      <button
+        class="exit-mode-btn"
+        class:neutral={!selectedMode}
+        onclick={() => {
+          if (exitModes.length > 0) {
+            // Cycle forward including neutral: null → 0 → 1 → ... → last → null
+            if (selectedModeIndex === null) {
+              selectedModeIndex = 0;
+            } else if (selectedModeIndex === exitModes.length - 1) {
+              selectedModeIndex = null;
+            } else {
+              selectedModeIndex = selectedModeIndex + 1;
+            }
+            const modeId = selectedModeIndex !== null ? exitModes[selectedModeIndex].id : null;
+            invoke('set_exit_mode', { modeId });
+          }
+        }}
+      >
+        <kbd>Tab</kbd>
+        <span class="exit-mode-label">
+          {#if selectedMode}
+            {selectedMode.name}
+            <span class="exit-mode-instruction">({selectedMode.instruction})</span>
+          {:else}
+            set exit mode
+          {/if}
+        </span>
+      </button>
+    </div>
+    <div class="status-bar-right">
+      <span class="kbd-hint"><kbd>g</kbd> global note</span>
+      <span class="kbd-hint"><kbd>⌘W</kbd> close</span>
+    </div>
+  </footer>
 </main>
 
 <style>
@@ -293,6 +426,7 @@
     height: 100vh;
     display: flex;
     flex-direction: column;
+    position: relative;
   }
 
   /* Header with frosted glass effect */
@@ -321,18 +455,59 @@
     gap: 12px;
   }
 
-  .file-name {
-    color: #18181b;
-    font-weight: 600;
-    font-size: 13px;
-    letter-spacing: -0.01em;
-  }
-
   .header-right {
     display: flex;
     align-items: center;
     gap: 8px;
     -webkit-app-region: no-drag;
+  }
+
+  /* Sticky header container */
+  .sticky-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: #fafaf9;
+  }
+
+  /* Session slot for global comment editor */
+  .session-slot {
+    padding: 0 12px 12px 12px;
+    background: color-mix(in srgb, #fafaf8 85%, transparent);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+  }
+
+  /* Override annotation-editor styles when in session slot */
+  .session-slot :global(.annotation-editor) {
+    margin: 8px 8px 0 8px;
+    max-width: none;
+  }
+
+  /* Hide arrow for session editor */
+  .session-slot :global(.annotation-editor::after) {
+    display: none;
+  }
+
+  /* Clickable filename */
+  .file-name {
+    color: #18181b;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    -webkit-app-region: no-drag;
+    transition: color 150ms ease;
+  }
+
+  .file-name:hover {
+    color: #52525b;
+  }
+
+  .file-name.has-comment {
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 3px;
   }
 
   .content {
@@ -467,6 +642,106 @@
     color: #71717a;
   }
 
+  /* Status Bar / Footer */
+  .status-bar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 16px;
+    background: color-mix(in srgb, var(--mode-color, #fafaf9) 15%, #fafaf9);
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    border-top: 1px solid color-mix(in srgb, var(--mode-color, transparent) 20%, rgba(0, 0, 0, 0.06));
+    font-size: 12px;
+    z-index: 10;
+    position: relative;
+    transition: background 400ms ease, border-top-color 400ms ease;
+  }
+
+  .status-bar-left,
+  .status-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .exit-mode-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    margin: -4px -8px;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    color: #18181b;
+    transition: background 150ms ease;
+  }
+
+  .exit-mode-btn:hover {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  .exit-mode-btn.neutral {
+    color: #a1a1aa;
+  }
+
+  .exit-mode-label {
+    font-weight: 500;
+  }
+
+  .exit-mode-instruction {
+    font-weight: 400;
+    opacity: 0.7;
+  }
+
+  /* Global kbd styling */
+  :global(kbd) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-window);
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-weight: 500;
+    font-size: 9px;
+    color: var(--text-secondary);
+    box-shadow:
+      0 1px 0 rgba(0, 0, 0, 0.1),
+      0 2px 4px rgba(0, 0, 0, 0.05),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    font-family: var(--font-ui);
+    min-height: 16px;
+    line-height: 1;
+  }
+
+  /* Hint wrapper for kbd + label combinations */
+  :global(.kbd-hint) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-variant: small-caps;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    line-height: 1;
+  }
+
+  /* Status bar variant - subtler kbd background */
+  .status-bar kbd {
+    background: var(--bg-main);
+    border-color: var(--border-subtle);
+  }
+
+  .exit-mode-label {
+    font-variant-caps: all-small-caps;
+  }
+
   /* Scrollbar styling */
   .content::-webkit-scrollbar {
     width: 6px;
@@ -490,8 +765,24 @@
      Design Tokens (GitHub Light theme)
      =========================================== */
   :global(:root) {
-    --text-primary: #18181b;
-    --text-secondary: #71717a;
+    /* Backgrounds & Neutrals (zinc family - warmer grays) */
+    --bg-main: #fafaf9;          /* warm zinc-50 */
+    --bg-window: #fefefe;        /* warm white - subtle cream tint */
+    --bg-panel: #fafaf8;         /* warm zinc-50 */
+
+    /* Borders */
+    --border-subtle: #e4e4e7;    /* zinc-200 */
+    --border-strong: #d4d4d8;    /* zinc-300 */
+
+    /* Text (zinc family) */
+    --text-primary: #18181b;     /* zinc-900 */
+    --text-secondary: #52525b;   /* zinc-600 */
+    --text-muted: #71717a;       /* zinc-500 */
+
+    /* Fonts */
+    --font-ui: "Inter", sans-serif;
+
+    /* Code Syntax (GitHub Light) */
     --code-keyword: #d73a49;
     --code-func: #6f42c1;
     --code-string: #032f62;

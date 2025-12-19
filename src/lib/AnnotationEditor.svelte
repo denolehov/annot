@@ -101,9 +101,9 @@
   <div bind:this={element} class="editor-content"></div>
   {#if !sealed}
     <div class="toolbar">
-      <span class="hint"><kbd>/</kbd> <span class="label">TAGS</span></span>
-      <span class="hint"><kbd>⌘↵</kbd> <span class="label">DONE</span></span>
-      <span class="hint"><kbd>Esc</kbd> <span class="label">CANCEL</span></span>
+      <span class="kbd-hint"><kbd>/</kbd> tags</span>
+      <span class="kbd-hint"><kbd>⌘↵</kbd> done</span>
+      <span class="kbd-hint"><kbd>Esc</kbd> cancel</span>
     </div>
   {/if}
 </div>
@@ -195,38 +195,6 @@
     gap: 12px;
     margin-top: 10px;
     padding-top: 8px;
-    border-top: 1px solid #e4e4e7;
-  }
-
-  .hint {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  kbd {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 16px;
-    height: 16px;
-    padding: 0 4px;
-    font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 10px;
-    font-weight: 500;
-    color: #71717a;
-    background: white;
-    border: 1px solid #d4d4d8;
-    border-radius: 3px;
-    box-shadow: 0 1px 0 #e4e4e7;
-  }
-
-  .label {
-    font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 10px;
-    font-weight: 500;
-    color: #a1a1aa;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
+    border-top: 1px solid var(--border-subtle, #e4e4e7);
   }
 </style>

@@ -2,7 +2,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, State};
 
 use crate::output::format_output;
-use crate::state::{AppState, ContentNode, ContentResponse};
+use crate::state::{AppState, ContentNode, ContentResponse, ExitMode};
 
 #[tauri::command]
 pub fn get_content(state: State<Mutex<AppState>>) -> ContentResponse {
@@ -46,4 +46,38 @@ pub fn finish_session(state: State<Mutex<AppState>>, app: AppHandle) -> String {
     app.exit(0);
 
     output
+}
+
+#[tauri::command]
+pub fn set_exit_mode(state: State<Mutex<AppState>>, mode_id: Option<String>) {
+    state.lock().unwrap().selected_exit_mode_id = mode_id;
+}
+
+#[tauri::command]
+pub fn cycle_exit_mode(state: State<Mutex<AppState>>, direction: i32) -> Option<ExitMode> {
+    let mut state = state.lock().unwrap();
+    if state.exit_modes.is_empty() {
+        return None;
+    }
+
+    // Find current index
+    let current_index = state
+        .selected_exit_mode_id
+        .as_ref()
+        .and_then(|id| state.exit_modes.iter().position(|m| &m.id == id))
+        .unwrap_or(0);
+
+    // Calculate new index with wrapping
+    let len = state.exit_modes.len() as i32;
+    let new_index = ((current_index as i32 + direction) % len + len) % len;
+
+    let new_mode = state.exit_modes[new_index as usize].clone();
+    state.selected_exit_mode_id = Some(new_mode.id.clone());
+
+    Some(new_mode)
+}
+
+#[tauri::command]
+pub fn set_session_comment(state: State<Mutex<AppState>>, content: Option<Vec<ContentNode>>) {
+    state.lock().unwrap().session_comment = content;
 }

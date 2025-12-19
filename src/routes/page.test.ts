@@ -11,6 +11,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: vi.fn(() => ({
     onCloseRequested: vi.fn(() => Promise.resolve()),
+    show: vi.fn(() => Promise.resolve()),
   })),
 }));
 
@@ -29,6 +30,8 @@ describe("+page.svelte", () => {
         { number: 2, content: '    println!("hello");' },
         { number: 3, content: "}" },
       ],
+      exit_modes: [],
+      selected_exit_mode_id: null,
     });
 
     render(Page);
@@ -46,6 +49,8 @@ describe("+page.svelte", () => {
     vi.mocked(invoke).mockResolvedValue({
       label: "my_module.rs",
       lines: [{ number: 1, content: "// comment" }],
+      exit_modes: [],
+      selected_exit_mode_id: null,
     });
 
     render(Page);

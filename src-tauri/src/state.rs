@@ -30,12 +30,61 @@ pub struct Annotation {
     pub content: Vec<ContentNode>,
 }
 
+/// An exit mode representing a user decision (Apply, Reject, Revise, etc.).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ExitMode {
+    pub id: String,
+    pub name: String,
+    /// CSS hex color (e.g., "#22c55e")
+    pub color: String,
+    /// LLM-facing instruction text
+    pub instruction: String,
+    pub order: u32,
+    pub is_ephemeral: bool,
+}
+
+/// Default exit modes (hardcoded for now, persistence comes later).
+pub fn default_exit_modes() -> Vec<ExitMode> {
+    vec![
+        ExitMode {
+            id: "apply".into(),
+            name: "Apply".into(),
+            color: "#22c55e".into(),
+            instruction: "Apply the suggested changes".into(),
+            order: 0,
+            is_ephemeral: false,
+        },
+        ExitMode {
+            id: "revise".into(),
+            name: "Revise".into(),
+            color: "#eab308".into(),
+            instruction: "Revise based on feedback".into(),
+            order: 1,
+            is_ephemeral: false,
+        },
+        ExitMode {
+            id: "reject".into(),
+            name: "Reject".into(),
+            color: "#ef4444".into(),
+            instruction: "Do not apply these changes".into(),
+            order: 2,
+            is_ephemeral: false,
+        },
+    ]
+}
+
 /// Application state initialized at startup, before the window opens.
 pub struct AppState {
     pub label: String,
     pub lines: Vec<Line>,
     /// Annotations keyed by "start-end" range string (e.g., "10-15").
     pub annotations: HashMap<String, Annotation>,
+    /// Available exit modes for this session.
+    pub exit_modes: Vec<ExitMode>,
+    /// Currently selected exit mode ID (None if no mode selected).
+    pub selected_exit_mode_id: Option<String>,
+    /// Session-level comment (not tied to specific lines).
+    pub session_comment: Option<Vec<ContentNode>>,
 }
 
 /// Response sent to the frontend via the get_content command.
@@ -43,6 +92,9 @@ pub struct AppState {
 pub struct ContentResponse {
     pub label: String,
     pub lines: Vec<Line>,
+    pub exit_modes: Vec<ExitMode>,
+    pub selected_exit_mode_id: Option<String>,
+    pub session_comment: Option<Vec<ContentNode>>,
 }
 
 impl AppState {
@@ -73,6 +125,9 @@ impl AppState {
             label,
             lines,
             annotations: HashMap::new(),
+            exit_modes: default_exit_modes(),
+            selected_exit_mode_id: None,
+            session_comment: None,
         }
     }
 
@@ -81,6 +136,9 @@ impl AppState {
         ContentResponse {
             label: self.label.clone(),
             lines: self.lines.clone(),
+            exit_modes: self.exit_modes.clone(),
+            selected_exit_mode_id: self.selected_exit_mode_id.clone(),
+            session_comment: self.session_comment.clone(),
         }
     }
 
