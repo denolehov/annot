@@ -524,22 +524,22 @@
   }
 
   .line:hover {
-    background-color: #f4f4f5;
+    background-color: var(--bg-main, #fafaf9);
   }
 
   /* Selection (amber family - matches hl) */
   .line.selected {
-    background-color: #fefce8;  /* amber-50 */
+    background-color: var(--selection-bg, #fefce8);
   }
 
   .line.selected:hover {
-    background-color: #fefce8;
+    background-color: var(--selection-bg, #fefce8);
   }
 
   .gutter.selected {
-    background-color: #fefce8;
+    background-color: var(--selection-bg, #fefce8);
     color: var(--text-secondary);
-    border-right-color: #fcd34d;  /* amber-300 */
+    border-right-color: var(--selection-border, #fcd34d);
   }
 
   /* Left accent bar on selected lines */
@@ -550,12 +550,12 @@
     top: 0;
     bottom: 0;
     width: 3px;
-    background: #fcd34d;  /* amber-300 */
+    background: var(--selection-border, #fcd34d);
   }
 
   /* Annotated lines (subtle highlight) */
   .line.annotated {
-    background-color: #fefce8;  /* amber-50 */
+    background-color: var(--selection-bg, #fefce8);
   }
 
   .line.annotated::before {
@@ -565,7 +565,7 @@
     top: 0;
     bottom: 0;
     width: 3px;
-    background: #fcd34d;  /* amber-300 */
+    background: var(--selection-border, #fcd34d);
   }
 
   /* Shift+drag cursor */
@@ -577,11 +577,11 @@
   .add-btn {
     position: absolute;
     top: 50%;
-    left: 41px;
+    left: calc(var(--gutter-width, 50px) - 9px);
     transform: translateY(-50%);
     width: 18px;
     height: 18px;
-    background: #fcd34d;  /* amber-300 */
+    background: var(--selection-border, #fcd34d);
     color: white;
     border: none;
     border-radius: 4px;
@@ -607,22 +607,22 @@
   }
 
   .gutter {
-    width: 50px;
+    width: var(--gutter-width, 50px);
     flex-shrink: 0;
     padding-right: 12px;
     text-align: right;
-    color: #71717a;
+    color: var(--text-muted, #71717a);
     -webkit-user-select: none;
     user-select: none;
     cursor: pointer;
     font-variant-numeric: tabular-nums;
-    border-right: 1px solid #e4e4e7;
+    border-right: 1px solid var(--border-subtle, #e4e4e7);
     /* Prevent gutter from being included in text selection */
     pointer-events: auto;
   }
 
   .gutter:hover {
-    color: #52525b;
+    color: var(--text-secondary, #52525b);
   }
 
   .code {
@@ -667,18 +667,21 @@
   }
 
   .exit-mode-btn {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
     padding: 4px 8px;
     margin: -4px -8px;
     border: none;
     background: transparent;
     border-radius: 4px;
     cursor: pointer;
-    font-family: inherit;
-    font-size: inherit;
-    color: #18181b;
+    font-family: var(--font-ui, "Inter", sans-serif);
+    font-size: 11px;
+    font-variant: small-caps;
+    text-transform: lowercase;
+    color: var(--text-muted, #71717a);
+    line-height: 1;
     transition: background 150ms ease;
   }
 
@@ -687,7 +690,7 @@
   }
 
   .exit-mode-btn.neutral {
-    color: #a1a1aa;
+    color: var(--text-muted, #a1a1aa);
   }
 
   .exit-mode-label {
@@ -738,10 +741,6 @@
     border-color: var(--border-subtle);
   }
 
-  .exit-mode-label {
-    font-variant-caps: all-small-caps;
-  }
-
   /* Scrollbar styling */
   .content::-webkit-scrollbar {
     width: 6px;
@@ -762,25 +761,46 @@
   }
 
   /* ===========================================
-     Design Tokens (GitHub Light theme)
+     Design Tokens (matching hl)
      =========================================== */
   :global(:root) {
     /* Backgrounds & Neutrals (zinc family - warmer grays) */
     --bg-main: #fafaf9;          /* warm zinc-50 */
     --bg-window: #fefefe;        /* warm white - subtle cream tint */
     --bg-panel: #fafaf8;         /* warm zinc-50 */
+    --bg-portal: #fdfcfa;        /* lighter warm cream for editors */
 
     /* Borders */
     --border-subtle: #e4e4e7;    /* zinc-200 */
     --border-strong: #d4d4d8;    /* zinc-300 */
+    --border-active: #71717a;    /* zinc-500 */
 
     /* Text (zinc family) */
     --text-primary: #18181b;     /* zinc-900 */
     --text-secondary: #52525b;   /* zinc-600 */
     --text-muted: #71717a;       /* zinc-500 */
 
+    /* Selection (amber family) */
+    --selection-bg: #fefce8;     /* amber-50 */
+    --selection-border: #fcd34d; /* amber-300 */
+
+    /* Tag colors (zinc family) */
+    --tag-bg: #fafafa;           /* zinc-50 */
+    --tag-border: #d4d4d8;       /* zinc-300 */
+    --tag-text: #52525b;         /* zinc-600 */
+
+    /* Chip sizing */
+    --chip-height: 20px;
+    --chip-radius: 4px;
+    --chip-font: 10px;
+    --chip-padding: 0 6px;
+
     /* Fonts */
+    --font-mono: "JetBrains Mono", monospace;
     --font-ui: "Inter", sans-serif;
+
+    /* Layout */
+    --gutter-width: 50px;
 
     /* Code Syntax (GitHub Light) */
     --code-keyword: #d73a49;

@@ -22,12 +22,26 @@ export interface ContentResponse {
   session_comment: ContentNode[] | null;
 }
 
+// Tag definition (composable mini-prompts)
+export interface Tag {
+  id: string;
+  name: string;
+  instruction: string;
+}
+
 // Content node types for structured annotation content (output format)
-export type ContentNode = TextNode;
+export type ContentNode = TextNode | TagNode;
 
 export interface TextNode {
   type: 'text';
   text: string;
+}
+
+export interface TagNode {
+  type: 'tag';
+  id: string;
+  name: string;
+  instruction: string;
 }
 
 // TipTap JSON content type for internal storage

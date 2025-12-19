@@ -2,7 +2,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, State};
 
 use crate::output::format_output;
-use crate::state::{AppState, ContentNode, ContentResponse, ExitMode};
+use crate::state::{default_tags, AppState, ContentNode, ContentResponse, ExitMode, Tag};
 
 #[tauri::command]
 pub fn get_content(state: State<Mutex<AppState>>) -> ContentResponse {
@@ -80,4 +80,9 @@ pub fn cycle_exit_mode(state: State<Mutex<AppState>>, direction: i32) -> Option<
 #[tauri::command]
 pub fn set_session_comment(state: State<Mutex<AppState>>, content: Option<Vec<ContentNode>>) {
     state.lock().unwrap().session_comment = content;
+}
+
+#[tauri::command]
+pub fn get_tags() -> Vec<Tag> {
+    default_tags()
 }

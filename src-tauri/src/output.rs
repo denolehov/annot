@@ -1,4 +1,38 @@
+use std::collections::BTreeMap;
+
 use crate::state::{Annotation, AppState, ContentNode};
+
+/// Collect unique tags from all content nodes (session comment + annotations).
+/// Returns a BTreeMap for alphabetical ordering by tag name.
+fn collect_unique_tags(state: &AppState) -> BTreeMap<String, String> {
+    let mut tags: BTreeMap<String, String> = BTreeMap::new();
+
+    // Collect from session comment
+    if let Some(ref comment) = state.session_comment {
+        for node in comment {
+            if let ContentNode::Tag {
+                name, instruction, ..
+            } = node
+            {
+                tags.insert(name.clone(), instruction.clone());
+            }
+        }
+    }
+
+    // Collect from all annotations
+    for annotation in state.annotations.values() {
+        for node in &annotation.content {
+            if let ContentNode::Tag {
+                name, instruction, ..
+            } = node
+            {
+                tags.insert(name.clone(), instruction.clone());
+            }
+        }
+    }
+
+    tags
+}
 
 /// Format all annotations as structured output for LLM consumption.
 pub fn format_output(state: &AppState) -> String {
@@ -15,6 +49,16 @@ pub fn format_output(state: &AppState) -> String {
     }
 
     let mut output = String::new();
+
+    // LEGEND block (if any tags are used)
+    let unique_tags = collect_unique_tags(state);
+    if !unique_tags.is_empty() {
+        output.push_str("LEGEND:\n");
+        for (name, instruction) in &unique_tags {
+            output.push_str(&format!("  [# {}] {}\n", name, instruction));
+        }
+        output.push('\n');
+    }
 
     // SESSION block (if exit mode selected or session comment exists)
     if has_exit_mode || has_session_comment {
@@ -135,6 +179,7 @@ fn render_content(nodes: &[ContentNode]) -> String {
         .iter()
         .map(|node| match node {
             ContentNode::Text { text } => text.clone(),
+            ContentNode::Tag { name, .. } => format!("[# {}]", name),
         })
         .collect::<Vec<_>>()
         .join("")
@@ -466,5 +511,118 @@ mod tests {
 
         // Empty session comment should result in no output
         assert!(output.is_empty());
+    }
+
+    #[test]
+    fn legend_block_with_tags() {
+        let mut annotations = HashMap::new();
+        annotations.insert(
+            "5-5".to_string(),
+            Annotation {
+                start_line: 5,
+                end_line: 5,
+                content: vec![
+                    ContentNode::Tag {
+                        id: "sec001".to_string(),
+                        name: "SECURITY".to_string(),
+                        instruction: "Review for vulnerabilities".to_string(),
+                    },
+                    ContentNode::Text {
+                        text: " Use constant-time comparison".to_string(),
+                    },
+                ],
+            },
+        );
+
+        let lines: Vec<Line> = (1..=10)
+            .map(|n| make_line(n, &format!("line {}", n)))
+            .collect();
+
+        let state = make_state("test.rs", lines, annotations);
+        let output = format_output(&state);
+
+        // LEGEND block should appear at the top
+        assert!(output.starts_with("LEGEND:\n"));
+        assert!(output.contains("[# SECURITY] Review for vulnerabilities"));
+
+        // Tag should render in annotation content
+        assert!(output.contains("[# SECURITY] Use constant-time comparison"));
+    }
+
+    #[test]
+    fn legend_alphabetically_sorted() {
+        let mut annotations = HashMap::new();
+        annotations.insert(
+            "5-5".to_string(),
+            Annotation {
+                start_line: 5,
+                end_line: 5,
+                content: vec![
+                    ContentNode::Tag {
+                        id: "sec001".to_string(),
+                        name: "SECURITY".to_string(),
+                        instruction: "Security check".to_string(),
+                    },
+                    ContentNode::Tag {
+                        id: "bug001".to_string(),
+                        name: "BUG".to_string(),
+                        instruction: "Bug fix".to_string(),
+                    },
+                ],
+            },
+        );
+
+        let lines: Vec<Line> = (1..=10)
+            .map(|n| make_line(n, &format!("line {}", n)))
+            .collect();
+
+        let state = make_state("test.rs", lines, annotations);
+        let output = format_output(&state);
+
+        // BUG should come before SECURITY (alphabetical)
+        let bug_pos = output.find("[# BUG]").unwrap();
+        let sec_pos = output.find("[# SECURITY]").unwrap();
+        assert!(bug_pos < sec_pos);
+    }
+
+    #[test]
+    fn tag_deduplication_in_legend() {
+        let mut annotations = HashMap::new();
+        annotations.insert(
+            "5-5".to_string(),
+            Annotation {
+                start_line: 5,
+                end_line: 5,
+                content: vec![ContentNode::Tag {
+                    id: "sec001".to_string(),
+                    name: "SECURITY".to_string(),
+                    instruction: "Security check".to_string(),
+                }],
+            },
+        );
+        annotations.insert(
+            "10-10".to_string(),
+            Annotation {
+                start_line: 10,
+                end_line: 10,
+                content: vec![ContentNode::Tag {
+                    id: "sec001".to_string(),
+                    name: "SECURITY".to_string(),
+                    instruction: "Security check".to_string(),
+                }],
+            },
+        );
+
+        let lines: Vec<Line> = (1..=15)
+            .map(|n| make_line(n, &format!("line {}", n)))
+            .collect();
+
+        let state = make_state("test.rs", lines, annotations);
+        let output = format_output(&state);
+
+        // SECURITY should only appear once in LEGEND
+        let legend_end = output.find("\n\n").unwrap();
+        let legend = &output[..legend_end];
+        assert_eq!(legend.matches("[# SECURITY]").count(), 1);
     }
 }

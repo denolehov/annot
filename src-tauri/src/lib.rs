@@ -8,7 +8,7 @@ pub mod output;
 pub mod state;
 
 use commands::{
-    cycle_exit_mode, delete_annotation, finish_session, get_content, set_exit_mode,
+    cycle_exit_mode, delete_annotation, finish_session, get_content, get_tags, set_exit_mode,
     set_session_comment, upsert_annotation,
 };
 use state::AppState;
@@ -25,7 +25,8 @@ pub fn run(state: AppState) {
             finish_session,
             set_exit_mode,
             cycle_exit_mode,
-            set_session_comment
+            set_session_comment,
+            get_tags
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

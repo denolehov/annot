@@ -14,12 +14,46 @@ pub struct Line {
     pub html: Option<String>,
 }
 
+/// A tag is a composable mini-prompt that can be embedded in annotations.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Tag {
+    pub id: String,
+    pub name: String,
+    pub instruction: String,
+}
+
+/// Default tags (hardcoded for now, persistence comes later).
+pub fn default_tags() -> Vec<Tag> {
+    vec![
+        Tag {
+            id: "sec000000001".into(),
+            name: "SECURITY".into(),
+            instruction: "Review for security vulnerabilities".into(),
+        },
+        Tag {
+            id: "ref000000002".into(),
+            name: "REFACTOR".into(),
+            instruction: "Consider cleaner abstraction".into(),
+        },
+        Tag {
+            id: "bug000000003".into(),
+            name: "BUG".into(),
+            instruction: "This is a bug that needs fixing".into(),
+        },
+        Tag {
+            id: "per000000004".into(),
+            name: "PERF".into(),
+            instruction: "Performance concern".into(),
+        },
+    ]
+}
+
 /// Content node for structured annotation content.
-/// Currently only Text is supported; Tag, Media, Excalidraw to be added later.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum ContentNode {
     Text { text: String },
+    Tag { id: String, name: String, instruction: String },
 }
 
 /// An annotation attached to a line range.
