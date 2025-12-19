@@ -174,13 +174,13 @@
   }
 
   onMount(async () => {
+    const window = getCurrentWindow();
     try {
       const res = await invoke<ContentResponse>("get_content");
       label = res.label;
       lines = res.lines;
 
       // Listen for window close - this triggers output and exit
-      const window = getCurrentWindow();
       await window.onCloseRequested(async (event) => {
         event.preventDefault();
         await invoke('finish_session');
@@ -188,6 +188,8 @@
     } catch (e) {
       error = String(e);
     }
+    // Show window after content is ready (started hidden to avoid flash)
+    await window.show();
   });
 </script>
 
@@ -296,10 +298,11 @@
   /* Header with frosted glass effect */
   .header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    /* Left padding for traffic lights, top padding to align with them */
-    padding: 10px 12px 10px 90px;
+    height: 40px;
+    /* Left padding for traffic lights, slight top padding to align text */
+    padding: 2.4px 12px 0 90px;
     flex-shrink: 0;
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     background: color-mix(in srgb, #fafaf8 85%, transparent);
@@ -323,8 +326,6 @@
     font-weight: 600;
     font-size: 13px;
     letter-spacing: -0.01em;
-    position: relative;
-    top: -1px;
   }
 
   .header-right {

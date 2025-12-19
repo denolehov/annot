@@ -15,6 +15,7 @@
         "title": "annot",
         "width": 1000,
         "height": 700,
+        "visible": false,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "trafficLightPosition": { "x": 12, "y": 22 }
