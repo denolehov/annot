@@ -1,0 +1,31 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+.pnpm-debug.log*
+
+# SvelteKit
+/build
+/.svelte-kit
+/package
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Tauri build outputs (in addition to src-tauri/.gitignore)
+src-tauri/target/
+src-tauri/gen/schemas
