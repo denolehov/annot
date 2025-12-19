@@ -1,7 +1,9 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
-  import type { ContentResponse, Line } from "$lib/types";
+  import type { ContentResponse, Line, JSONContent } from "$lib/types";
+  import { rangeToKey, keyToRange, isLineInRange, type Range } from "$lib/range";
+  import AnnotationEditor from "$lib/AnnotationEditor.svelte";
 
   let lines: Line[] = $state([]);
   let label = $state("");
@@ -12,12 +14,73 @@
   let isDragging = $state(false);
   let isShiftHeld = $state(false);
   let mouseDownHandled = false;  // Prevents click from undoing mousedown
+  let hoveredLine: number | null = $state(null);
+
+  // Annotation state - Map keyed by "startLine-endLine" → TipTap JSON
+  let annotations: Map<string, JSONContent> = $state(new Map());
+  let sealedRanges: Set<string> = $state(new Set());
+
+  // Derived: last line of current selection (for positioning editor)
+  let lastSelectedLine = $derived.by(() => {
+    if (!selection) return null;
+    return Math.max(selection.start, selection.end);
+  });
+
+  function getAnnotation(sel: Range): JSONContent | undefined {
+    return annotations.get(rangeToKey(sel));
+  }
+
+  function updateAnnotation(content: JSONContent | null) {
+    if (!selection) return;
+    const key = rangeToKey(selection);
+    if (content) {
+      annotations.set(key, content);
+    } else {
+      annotations.delete(key);
+    }
+    annotations = new Map(annotations); // trigger reactivity
+  }
+
+  function sealCurrentAnnotation() {
+    if (!selection) return;
+    const key = rangeToKey(selection);
+    const content = annotations.get(key);
+    if (content) {
+      sealedRanges.add(key);
+      sealedRanges = new Set(sealedRanges);
+    } else {
+      // Remove empty annotation
+      annotations.delete(key);
+      annotations = new Map(annotations);
+    }
+    selection = null;
+  }
+
+  // Get annotation info for a specific line (is it the last line of any annotation?)
+  function getAnnotationAtLine(lineNum: number): { key: string; content: JSONContent } | null {
+    for (const [key, content] of annotations) {
+      const range = keyToRange(key);
+      if (range.end === lineNum) {
+        return { key, content };
+      }
+    }
+    return null;
+  }
 
   function isSelected(lineNum: number): boolean {
     if (!selection) return false;
     const min = Math.min(selection.start, selection.end);
     const max = Math.max(selection.start, selection.end);
     return lineNum >= min && lineNum <= max;
+  }
+
+  function hasAnnotation(lineNum: number): boolean {
+    for (const key of annotations.keys()) {
+      if (isLineInRange(lineNum, keyToRange(key))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   function getLineFromEvent(e: MouseEvent): number | null {
@@ -72,9 +135,12 @@
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'Shift') {
       isShiftHeld = true;
-    } else if (e.key === 'Escape') {
-      selection = null;
+    } else if (e.key === 'c' && hoveredLine !== null && !selection) {
+      // Open editor on hovered line
+      e.preventDefault();
+      selection = { start: hoveredLine, end: hoveredLine };
     }
+    // Escape is now handled by the editor's blur handler
   }
 
   function handleKeyUp(e: KeyboardEvent) {
@@ -83,8 +149,10 @@
     }
   }
 
-  function handleAddClick(lineNum: number) {
-    // Select the line when clicking the + button
+  function handleAddMouseDown(lineNum: number, e: MouseEvent) {
+    e.preventDefault();
+    isDragging = true;
+    mouseDownHandled = true;
     selection = { start: lineNum, end: lineNum };
   }
 
@@ -125,12 +193,20 @@
       role="presentation"
     >
       {#each lines as line}
-        <div class="line" class:selected={isSelected(line.number)} data-line={line.number}>
+        <div
+          class="line"
+          class:selected={isSelected(line.number)}
+          class:annotated={hasAnnotation(line.number)}
+          data-line={line.number}
+          onmouseenter={() => hoveredLine = line.number}
+          onmouseleave={() => hoveredLine = null}
+        >
           <button
             class="add-btn"
-            onclick={() => handleAddClick(line.number)}
+            onmousedown={(e) => handleAddMouseDown(line.number, e)}
             aria-label="Add annotation"
           >+</button>
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
           <span
             class="gutter"
             class:selected={isSelected(line.number)}
@@ -149,6 +225,24 @@
             {/if}
           </span>
         </div>
+        {@const annotationAtLine = getAnnotationAtLine(line.number)}
+        {@const isLastSelectedLine = line.number === lastSelectedLine && selection && !isDragging}
+        {@const rangeKey = annotationAtLine?.key ?? (isLastSelectedLine && selection ? rangeToKey(selection) : null)}
+        {#if rangeKey}
+          {#key rangeKey}
+            <AnnotationEditor
+              content={annotations.get(rangeKey)}
+              sealed={sealedRanges.has(rangeKey)}
+              onUpdate={updateAnnotation}
+              onUnseal={() => {
+                selection = keyToRange(rangeKey);
+                sealedRanges.delete(rangeKey);
+                sealedRanges = new Set(sealedRanges);
+              }}
+              onDismiss={sealCurrentAnnotation}
+            />
+          {/key}
+        {/if}
       {/each}
     </div>
   {/if}
@@ -206,6 +300,8 @@
     font-weight: 600;
     font-size: 13px;
     letter-spacing: -0.01em;
+    position: relative;
+    top: -1px;
   }
 
   .header-right {
@@ -249,6 +345,21 @@
 
   /* Left accent bar on selected lines */
   .line.selected::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: #fcd34d;  /* amber-300 */
+  }
+
+  /* Annotated lines (subtle highlight) */
+  .line.annotated {
+    background-color: #fefce8;  /* amber-50 */
+  }
+
+  .line.annotated::before {
     content: "";
     position: absolute;
     left: 0;
