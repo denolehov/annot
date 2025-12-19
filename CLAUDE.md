@@ -17,21 +17,28 @@ annot interrupts LLM workflows to get human feedback, then resumes. It's designe
 
 ```bash
 # Development (runs both Vite dev server and Tauri)
-pnpm tauri dev
+pnpm demo         # Opens lib.rs as demo file
+pnpm tauri dev -- -- <file>  # Open specific file
 
 # Build for production
-pnpm tauri build
+pnpm tauri build           # Release build
+pnpm tauri build --debug   # Debug build with embedded frontend
 
-# Frontend only (SvelteKit)
-pnpm dev          # Dev server on :1420
-pnpm build        # Production build
-pnpm check        # TypeScript + Svelte type checking
+# Testing
+pnpm test         # Frontend tests (Vitest)
+pnpm test:watch   # Watch mode
+cargo test        # Rust tests (from src-tauri/)
 
-# Rust only (from src-tauri/)
-cargo build
-cargo test
-cargo clippy
+# Type checking
+pnpm check        # TypeScript + Svelte
 ```
+
+### Important: Dev vs Build modes
+
+- `pnpm tauri dev` / `cargo build` → Uses Vite dev server at localhost:1420
+- `pnpm tauri build` → Embeds frontend assets into binary
+
+**Gotcha**: Running `./target/debug/annot` directly after `cargo build` shows white screen because it tries to load from localhost:1420. Must use `pnpm tauri build --debug` for standalone binary.
 
 ## Architecture
 
@@ -131,8 +138,23 @@ Tauri IPC commands replace the HTTP API from the Go version:
 
 ## Tech Stack
 
-- **Backend**: Rust + Tauri v2
+- **Backend**: Rust + Tauri v2 + clap (CLI parsing)
 - **Frontend**: Svelte 5 + SvelteKit + TypeScript
+- **Testing**: Vitest + @testing-library/svelte (frontend), cargo test (Rust)
 - **Syntax highlighting**: TBD (tree-sitter or syntect)
 - **Diff parsing**: TBD (similar-diff or custom)
 - **Rich editor**: TBD (TipTap port or Svelte alternative)
+
+## Tauri Configuration Notes
+
+### Window (tauri.conf.json)
+- `titleBarStyle: "Overlay"` — Traffic lights overlay content
+- `hiddenTitle: true` — No title text
+- `trafficLightPosition: { x: 12, y: 22 }` — Vertically centered in header
+
+### Permissions (capabilities/default.json)
+- `core:window:allow-start-dragging` — Required for `data-tauri-drag-region` to work
+
+## Testing Patterns
+- **Rust**: Behavior-focused tests on public API (ContentResponse format)
+- **Frontend**: Mock IPC with `vi.mock("@tauri-apps/api/core")`, test rendered output
