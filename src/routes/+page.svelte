@@ -37,7 +37,13 @@
       {#each lines as line}
         <div class="line">
           <span class="gutter">{line.number}</span>
-          <span class="code">{line.content}</span>
+          <span class="code">
+            {#if line.html}
+              {@html line.html}
+            {:else}
+              {line.content}
+            {/if}
+          </span>
         </div>
       {/each}
     </div>
@@ -74,11 +80,15 @@
     /* Left padding for traffic lights, top padding to align with them */
     padding: 10px 12px 10px 90px;
     flex-shrink: 0;
-    border-bottom: 1px solid #e4e4e7;
-    background: color-mix(in srgb, #fafaf8 70%, transparent);
-    backdrop-filter: blur(16px) saturate(150%);
-    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    background: color-mix(in srgb, #fafaf8 85%, transparent);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
     -webkit-app-region: drag;
+    /* Soft shadow for depth */
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.04),
+      0 4px 12px rgba(0, 0, 0, 0.03);
   }
 
   .header-left {
@@ -123,10 +133,13 @@
     padding-right: 12px;
     text-align: right;
     color: #71717a;
+    -webkit-user-select: none;
     user-select: none;
     cursor: pointer;
     font-variant-numeric: tabular-nums;
     border-right: 1px solid #e4e4e7;
+    /* Prevent gutter from being included in text selection */
+    pointer-events: auto;
   }
 
   .gutter:hover {
@@ -136,6 +149,8 @@
   .code {
     flex: 1;
     padding-left: 16px;
+    -webkit-user-select: text;
+    user-select: text;
   }
 
   .error {
@@ -166,4 +181,72 @@
   .content::-webkit-scrollbar-track {
     background: transparent;
   }
+
+  /* ===========================================
+     Design Tokens (GitHub Light theme)
+     =========================================== */
+  :global(:root) {
+    --text-primary: #18181b;
+    --text-secondary: #71717a;
+    --code-keyword: #d73a49;
+    --code-func: #6f42c1;
+    --code-string: #032f62;
+    --code-comment: #6a737d;
+    --code-constant: #005cc5;
+    --code-variable: #e36209;
+    --code-tag: #22863a;
+    --code-op: #d73a49;
+    --code-support: #6f42c1;
+  }
+
+  /* ===========================================
+     Syntax Highlighting (syntect CSS classes)
+
+     syntect uses semantic class names like:
+       <span class="storage type function rust">fn</span>
+       <span class="string quoted double rust">"hello"</span>
+       <span class="comment line double-slash rust">// comment</span>
+
+     Reference: src-tauri/src/highlight.rs::documents_html_structure_and_classes
+     =========================================== */
+
+  /* Comments */
+  :global(.comment) { color: var(--code-comment); font-style: italic; }
+
+  /* Storage (keywords like fn, let, const, function, var) */
+  :global(.storage) { color: var(--code-keyword); }
+
+  /* Keywords (control flow: return, if, else, for, while) */
+  :global(.keyword) { color: var(--code-keyword); }
+
+  /* Strings */
+  :global(.string) { color: var(--code-string); }
+
+  /* Constants (numbers, booleans, null) */
+  :global(.constant) { color: var(--code-constant); }
+
+  /* Entity names (function names, class names, type names) */
+  :global(.entity.name) { color: var(--code-func); }
+  :global(.entity.name.function) { color: var(--code-func); }
+  :global(.entity.name.type) { color: var(--code-func); }
+  :global(.entity.name.class) { color: var(--code-func); }
+
+  /* Variables */
+  :global(.variable) { color: var(--text-primary); }
+  :global(.variable.parameter) { color: var(--code-variable); }
+  :global(.variable.other) { color: var(--text-primary); }
+
+  /* Support (macros, built-ins) */
+  :global(.support) { color: var(--code-support); }
+  :global(.support.macro) { color: var(--code-support); }
+  :global(.support.function) { color: var(--code-support); }
+
+  /* Punctuation - keep neutral */
+  :global(.punctuation) { color: var(--text-primary); }
+
+  /* Meta - generally inherit, but provide fallback */
+  :global(.meta) { color: inherit; }
+
+  /* Source - base scope, inherit color */
+  :global(.source) { color: var(--text-primary); }
 </style>

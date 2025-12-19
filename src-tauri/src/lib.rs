@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use tauri::Manager;
 
 pub mod commands;
+pub mod highlight;
 pub mod state;
 
 use commands::get_content;

@@ -34,6 +34,7 @@ fn main() {
         .unwrap_or_else(|| cli.file.display().to_string());
 
     // Create state and run Tauri
-    let state = annot_lib::state::AppState::from_file(label, &content);
+    let path = cli.file.to_string_lossy().to_string();
+    let state = annot_lib::state::AppState::from_file(label, &content, &path);
     annot_lib::run(state);
 }
