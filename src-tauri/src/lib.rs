@@ -4,6 +4,7 @@ use tauri::Manager;
 
 pub mod commands;
 pub mod highlight;
+pub mod input;
 pub mod output;
 pub mod state;
 
