@@ -7,6 +7,13 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
+// Mock @tauri-apps/api/window
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: vi.fn(() => ({
+    onCloseRequested: vi.fn(() => Promise.resolve()),
+  })),
+}));
+
 import { invoke } from "@tauri-apps/api/core";
 
 describe("+page.svelte", () => {

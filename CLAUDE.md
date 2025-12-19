@@ -125,16 +125,13 @@ Tauri IPC commands replace the HTTP API from the Go version:
 
 ## Reference Materials
 
-**Original Go implementation**: `/Users/denolehov/_p/golang/hl`
-- `internal/store/store.go` — Annotation storage model
-- `internal/exitmode/exitmode.go` — Exit mode state
-- `internal/output/output.go` — Output formatting
-- `mcp.go` — MCP protocol integration
-- `src/` — TypeScript frontend (Alpine + HTMX + TipTap)
+**Primary reference**: `HL_REFERENCE.md` in this repo — comprehensive documentation of the original hl feature set, data models, API routes, output format, and architecture patterns. **Read this first** instead of exploring the Go codebase.
+
+**Original Go implementation** (for edge cases only): `/Users/denolehov/_p/golang/hl`
 
 **Tauri documentation**: `/Users/denolehov/_p/docs/tauri-docs`
 
-**Important**: Use dedicated sub-agents (Task tool with Explore or general-purpose type) when exploring the original hl implementation or Tauri docs. This preserves context tokens in the main conversation.
+**Important**: Use `HL_REFERENCE.md` for understanding hl behavior. Only explore the original Go codebase when you need implementation details not covered in the reference doc.
 
 ## Tech Stack
 

@@ -1,8 +1,10 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import type { ContentResponse, Line, JSONContent } from "$lib/types";
   import { rangeToKey, keyToRange, isLineInRange, type Range } from "$lib/range";
+  import { extractContentNodes, isContentEmpty } from "$lib/tiptap";
   import AnnotationEditor from "$lib/AnnotationEditor.svelte";
 
   let lines: Line[] = $state([]);
@@ -30,13 +32,28 @@
     return annotations.get(rangeToKey(sel));
   }
 
-  function updateAnnotation(content: JSONContent | null) {
+  async function updateAnnotation(content: JSONContent | null) {
     if (!selection) return;
     const key = rangeToKey(selection);
-    if (content) {
+    const min = Math.min(selection.start, selection.end);
+    const max = Math.max(selection.start, selection.end);
+
+    if (content && !isContentEmpty(content)) {
       annotations.set(key, content);
+      // Sync to backend
+      const nodes = extractContentNodes(content);
+      await invoke('upsert_annotation', {
+        startLine: min,
+        endLine: max,
+        content: nodes
+      });
     } else {
       annotations.delete(key);
+      // Delete from backend
+      await invoke('delete_annotation', {
+        startLine: min,
+        endLine: max
+      });
     }
     annotations = new Map(annotations); // trigger reactivity
   }
@@ -161,6 +178,13 @@
       const res = await invoke<ContentResponse>("get_content");
       label = res.label;
       lines = res.lines;
+
+      // Listen for window close - this triggers output and exit
+      const window = getCurrentWindow();
+      await window.onCloseRequested(async (event) => {
+        event.preventDefault();
+        await invoke('finish_session');
+      });
     } catch (e) {
       error = String(e);
     }
@@ -174,9 +198,7 @@
     <div class="header-left">
       <span class="file-name">{label}</span>
     </div>
-    <div class="header-right">
-      <!-- Action buttons will go here -->
-    </div>
+    <div class="header-right"></div>
   </header>
 
   {#if error}
@@ -200,6 +222,7 @@
           data-line={line.number}
           onmouseenter={() => hoveredLine = line.number}
           onmouseleave={() => hoveredLine = null}
+          role="presentation"
         >
           <button
             class="add-btn"
@@ -307,7 +330,7 @@
   .header-right {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 8px;
     -webkit-app-region: no-drag;
   }
 

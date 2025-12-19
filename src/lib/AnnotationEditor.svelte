@@ -32,7 +32,7 @@
       editable: !sealed,
       autofocus: sealed ? false : 'end',
       onUpdate: ({ editor }) => {
-        const json = editor.getJSON();
+        const json = trimContent(editor.getJSON());
         onUpdate(isContentEmpty(json) ? null : json);
       },
       onBlur: ({ editor }) => {

@@ -4,9 +4,10 @@ use tauri::Manager;
 
 pub mod commands;
 pub mod highlight;
+pub mod output;
 pub mod state;
 
-use commands::get_content;
+use commands::{delete_annotation, finish_session, get_content, upsert_annotation};
 use state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -14,7 +15,12 @@ pub fn run(state: AppState) {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(Mutex::new(state))
-        .invoke_handler(tauri::generate_handler![get_content])
+        .invoke_handler(tauri::generate_handler![
+            get_content,
+            upsert_annotation,
+            delete_annotation,
+            finish_session
+        ])
         .setup(|app| {
             #[cfg(debug_assertions)]
             if let Some(window) = app.get_webview_window("main") {

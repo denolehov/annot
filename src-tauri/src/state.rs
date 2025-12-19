@@ -1,4 +1,6 @@
-use serde::Serialize;
+use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
 
 use crate::highlight::Highlighter;
 
@@ -12,10 +14,28 @@ pub struct Line {
     pub html: Option<String>,
 }
 
+/// Content node for structured annotation content.
+/// Currently only Text is supported; Tag, Media, Excalidraw to be added later.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum ContentNode {
+    Text { text: String },
+}
+
+/// An annotation attached to a line range.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Annotation {
+    pub start_line: u32,
+    pub end_line: u32,
+    pub content: Vec<ContentNode>,
+}
+
 /// Application state initialized at startup, before the window opens.
 pub struct AppState {
     pub label: String,
     pub lines: Vec<Line>,
+    /// Annotations keyed by "start-end" range string (e.g., "10-15").
+    pub annotations: HashMap<String, Annotation>,
 }
 
 /// Response sent to the frontend via the get_content command.
@@ -49,7 +69,11 @@ impl AppState {
             })
             .collect();
 
-        Self { label, lines }
+        Self {
+            label,
+            lines,
+            annotations: HashMap::new(),
+        }
     }
 
     /// Convert to response for frontend.
@@ -58,6 +82,40 @@ impl AppState {
             label: self.label.clone(),
             lines: self.lines.clone(),
         }
+    }
+
+    /// Create a normalized range key (smaller line first).
+    pub fn range_key(start_line: u32, end_line: u32) -> String {
+        let (min, max) = if start_line <= end_line {
+            (start_line, end_line)
+        } else {
+            (end_line, start_line)
+        };
+        format!("{}-{}", min, max)
+    }
+
+    /// Insert or update an annotation.
+    pub fn upsert_annotation(&mut self, start_line: u32, end_line: u32, content: Vec<ContentNode>) {
+        let key = Self::range_key(start_line, end_line);
+        let (min, max) = if start_line <= end_line {
+            (start_line, end_line)
+        } else {
+            (end_line, start_line)
+        };
+        self.annotations.insert(
+            key,
+            Annotation {
+                start_line: min,
+                end_line: max,
+                content,
+            },
+        );
+    }
+
+    /// Delete an annotation by range.
+    pub fn delete_annotation(&mut self, start_line: u32, end_line: u32) {
+        let key = Self::range_key(start_line, end_line);
+        self.annotations.remove(&key);
     }
 }
 
