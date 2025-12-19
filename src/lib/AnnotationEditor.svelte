@@ -114,7 +114,7 @@
     display: block;
     position: relative;
     background: #fafaf9;
-    border: 1.5px dashed #d4d4d8;
+    border: 1px dashed #e4e4e7;
     border-radius: 8px;
     box-shadow:
       0 1px 1px -1px rgba(0, 0, 0, 0.12),
@@ -138,8 +138,8 @@
     width: 10px;
     height: 10px;
     background: #fafaf9;
-    border-left: 1.5px dashed #d4d4d8;
-    border-top: 1.5px dashed #d4d4d8;
+    border-left: 1px dashed #e4e4e7;
+    border-top: 1px dashed #e4e4e7;
     transform: rotate(45deg);
   }
 
