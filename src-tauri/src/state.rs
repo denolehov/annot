@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
+use crate::diff::{self, DiffMetadata};
 use crate::highlight::Highlighter;
 
 /// A single line of content with its line number.
@@ -107,6 +108,8 @@ pub struct AppState {
     pub selected_exit_mode_id: Option<String>,
     /// Session-level comment (not tied to specific lines).
     pub session_comment: Option<Vec<ContentNode>>,
+    /// Diff metadata (Some if content is a unified diff).
+    pub diff_metadata: Option<DiffMetadata>,
 }
 
 /// Response sent to the frontend via the get_content command.
@@ -118,6 +121,8 @@ pub struct ContentResponse {
     pub exit_modes: Vec<ExitMode>,
     pub selected_exit_mode_id: Option<String>,
     pub session_comment: Option<Vec<ContentNode>>,
+    /// Diff metadata (Some if content is a unified diff).
+    pub diff_metadata: Option<DiffMetadata>,
 }
 
 impl AppState {
@@ -133,6 +138,7 @@ impl AppState {
             deleted_exit_mode_ids: HashSet::new(),
             selected_exit_mode_id: None,
             session_comment: None,
+            diff_metadata: None,
         }
     }
 
@@ -177,7 +183,86 @@ impl AppState {
             deleted_exit_mode_ids: HashSet::new(),
             selected_exit_mode_id: None,
             session_comment: None,
+            diff_metadata: None,
         }
+    }
+
+    /// Parse diff content into structured lines with diff metadata.
+    ///
+    /// # Arguments
+    /// * `label` - Display name
+    /// * `content` - Raw diff content
+    /// * `tags` - Available tags (loaded from config)
+    /// * `exit_modes` - Available exit modes (loaded from config)
+    pub fn from_diff(
+        label: String,
+        content: &str,
+        tags: Vec<Tag>,
+        exit_modes: Vec<ExitMode>,
+    ) -> Result<Self, String> {
+        let diff_metadata = diff::parse_diff(content)?;
+        let highlighter = Highlighter::new();
+
+        // For diffs, we create lines from the raw content
+        // Each line gets its display number (1-indexed)
+        let lines: Vec<Line> = content
+            .lines()
+            .enumerate()
+            .map(|(i, line_content)| {
+                let line_num = (i + 1) as u32;
+
+                // Get file language for this line from diff metadata
+                let language = diff_metadata
+                    .lines
+                    .get(&line_num)
+                    .and_then(|info| diff_metadata.files.get(info.file_index))
+                    .map(|f| f.language.as_str())
+                    .unwrap_or("");
+
+                // Only highlight non-header lines with actual code
+                let html = if !language.is_empty() && !line_content.starts_with("diff ")
+                    && !line_content.starts_with("---")
+                    && !line_content.starts_with("+++")
+                    && !line_content.starts_with("@@")
+                    && !line_content.starts_with("index ")
+                {
+                    // Strip the +/- prefix for highlighting, then add it back
+                    let (prefix, code) = if line_content.starts_with('+')
+                        || line_content.starts_with('-')
+                        || line_content.starts_with(' ')
+                    {
+                        (&line_content[..1], &line_content[1..])
+                    } else {
+                        ("", line_content)
+                    };
+
+                    let fake_path = format!("file.{}", language);
+                    let highlighted = highlighter.highlight_lines(code, &fake_path);
+                    highlighted.first().map(|h| format!("{}{}", prefix, h))
+                } else {
+                    None
+                };
+
+                Line {
+                    number: line_num,
+                    content: line_content.to_string(),
+                    html,
+                }
+            })
+            .collect();
+
+        Ok(Self {
+            label,
+            lines,
+            annotations: HashMap::new(),
+            tags,
+            deleted_tag_ids: HashSet::new(),
+            exit_modes,
+            deleted_exit_mode_ids: HashSet::new(),
+            selected_exit_mode_id: None,
+            session_comment: None,
+            diff_metadata: Some(diff_metadata),
+        })
     }
 
     /// Convert to response for frontend.
@@ -189,6 +274,7 @@ impl AppState {
             exit_modes: self.exit_modes.clone(),
             selected_exit_mode_id: self.selected_exit_mode_id.clone(),
             session_comment: self.session_comment.clone(),
+            diff_metadata: self.diff_metadata.clone(),
         }
     }
 
@@ -311,5 +397,169 @@ mod tests {
         assert_eq!(mode.id.len(), 12);
         assert!(mode.id.chars().all(|c| c.is_ascii_alphanumeric()));
         assert!(!mode.is_ephemeral);
+    }
+
+    // === Diff tests ===
+
+    const SIMPLE_DIFF: &str = r#"diff --git a/file.rs b/file.rs
+--- a/file.rs
++++ b/file.rs
+@@ -1,3 +1,4 @@
+ fn main() {
+-    old_code();
++    new_code();
++    more_code();
+ }
+"#;
+
+    #[test]
+    fn from_diff_creates_state_with_metadata() {
+        let state = AppState::from_diff(
+            "changes.diff".into(),
+            SIMPLE_DIFF,
+            vec![],
+            vec![],
+        )
+        .unwrap();
+
+        assert!(state.diff_metadata.is_some());
+        let meta = state.diff_metadata.as_ref().unwrap();
+        assert_eq!(meta.files.len(), 1);
+        assert_eq!(meta.files[0].new_name, Some("file.rs".to_string()));
+    }
+
+    #[test]
+    fn from_diff_creates_lines_from_content() {
+        let state = AppState::from_diff(
+            "changes.diff".into(),
+            SIMPLE_DIFF,
+            vec![],
+            vec![],
+        )
+        .unwrap();
+
+        // Should have lines matching the diff content
+        assert!(!state.lines.is_empty());
+
+        // First line should be the diff header
+        assert!(state.lines[0].content.starts_with("diff --git"));
+
+        // Check that +/- lines are preserved
+        let has_added = state.lines.iter().any(|l| l.content.starts_with('+'));
+        let has_deleted = state.lines.iter().any(|l| l.content.starts_with('-'));
+        assert!(has_added, "Should have added lines");
+        assert!(has_deleted, "Should have deleted lines");
+    }
+
+    #[test]
+    fn from_diff_line_numbers_are_1_indexed() {
+        let state = AppState::from_diff(
+            "changes.diff".into(),
+            SIMPLE_DIFF,
+            vec![],
+            vec![],
+        )
+        .unwrap();
+
+        assert_eq!(state.lines[0].number, 1);
+        assert_eq!(state.lines[1].number, 2);
+    }
+
+    #[test]
+    fn from_diff_response_includes_metadata() {
+        let state = AppState::from_diff(
+            "changes.diff".into(),
+            SIMPLE_DIFF,
+            vec![],
+            vec![],
+        )
+        .unwrap();
+
+        let response = state.to_response();
+        assert!(response.diff_metadata.is_some());
+    }
+
+    #[test]
+    fn from_diff_error_on_invalid_content() {
+        let result = AppState::from_diff(
+            "not-a-diff.txt".into(),
+            "just regular text",
+            vec![],
+            vec![],
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn from_file_has_no_diff_metadata() {
+        let state = test_state("test.rs", "fn main() {}", "test.rs");
+        assert!(state.diff_metadata.is_none());
+
+        let response = state.to_response();
+        assert!(response.diff_metadata.is_none());
+    }
+
+    #[test]
+    fn from_diff_includes_tags_and_exit_modes() {
+        let tags = vec![Tag::new("TEST".into(), "instruction".into())];
+        let modes = vec![ExitMode::new("Apply".into(), "#22c55e".into(), "Apply it".into(), 0)];
+
+        let state = AppState::from_diff(
+            "changes.diff".into(),
+            SIMPLE_DIFF,
+            tags,
+            modes,
+        )
+        .unwrap();
+
+        assert_eq!(state.tags.len(), 1);
+        assert_eq!(state.exit_modes.len(), 1);
+    }
+
+    /// Test that diff lines with doc comments produce single-line HTML
+    #[test]
+    fn from_diff_doc_comment_line_html_is_single_line() {
+        let diff_with_doc_comment = r#"diff --git a/lib.rs b/lib.rs
+--- a/lib.rs
++++ b/lib.rs
+@@ -1,3 +1,4 @@
+-/// Old doc comment
++/// New doc comment
+ fn main() {
+ }
+"#;
+
+        let state = AppState::from_diff(
+            "changes.diff".into(),
+            diff_with_doc_comment,
+            vec![],
+            vec![],
+        )
+        .unwrap();
+
+        println!("\n=== DIFF DOC COMMENT LINES ===");
+        for line in &state.lines {
+            println!("Line {}: content={:?}", line.number, line.content);
+            if let Some(ref html) = line.html {
+                println!("        html={:?}", html);
+                // Check for newlines
+                if html.contains('\n') {
+                    println!("        WARNING: HTML contains newline!");
+                }
+            }
+        }
+        println!("=== END ===\n");
+
+        // Find the deleted doc comment line
+        let deleted_line = state.lines.iter().find(|l| l.content.starts_with("-///")).unwrap();
+        assert!(deleted_line.html.is_some(), "Deleted doc comment should have HTML");
+        let html = deleted_line.html.as_ref().unwrap();
+
+        // HTML should not contain newlines
+        assert!(!html.contains('\n'), "HTML should not contain newline. Got: {:?}", html);
+
+        // HTML should start with the prefix
+        assert!(html.starts_with('-'), "HTML should start with '-' prefix. Got: {:?}", html);
     }
 }

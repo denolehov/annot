@@ -6,6 +6,7 @@ use tauri::WebviewWindowBuilder;
 
 pub mod commands;
 pub mod config;
+pub mod diff;
 pub mod highlight;
 pub mod input;
 pub mod mcp;
@@ -27,7 +28,7 @@ pub type ResultSender = Mutex<Option<Sender<String>>>;
 
 /// Run in CLI mode (file/stdin input, prints result, exits).
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run(state: AppState) {
+pub fn run(state: AppState, context: tauri::Context) {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(Mutex::new(state))
@@ -74,12 +75,12 @@ pub fn run(state: AppState) {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
 }
 
 /// Run in MCP server mode (no initial window, handles tool calls).
-pub fn run_mcp() {
+pub fn run_mcp(context: tauri::Context) {
     // Create empty initial state (will be replaced per-session)
     let initial_state = AppState::empty();
     let should_exit = Arc::new(AtomicBool::new(false));
@@ -120,7 +121,7 @@ pub fn run_mcp() {
 
             Ok(())
         })
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building tauri application")
         .run(move |_app, event| {
             if let tauri::RunEvent::ExitRequested { api, .. } = event {

@@ -180,6 +180,31 @@ fn main() {
         );
     }
 
+    /// Test single-line doc comment (simulates diff line highlighting)
+    #[test]
+    fn single_line_doc_comment_output() {
+        let hl = Highlighter::new();
+
+        // This simulates what happens in diff mode:
+        // We strip the prefix and highlight just the code portion
+        let code = "    /// This is a doc comment";
+        let lines = hl.highlight_lines(code, "file.rs");
+
+        println!("\n=== SINGLE LINE DOC COMMENT ===");
+        println!("Input: {:?}", code);
+        println!("Output lines count: {}", lines.len());
+        for (i, line) in lines.iter().enumerate() {
+            println!("Line {}: {:?}", i, line);
+        }
+        println!("=== END ===\n");
+
+        // Should produce exactly 1 line of output
+        assert_eq!(lines.len(), 1, "Single line input should produce single line output");
+
+        // The output should not contain literal newlines
+        assert!(!lines[0].contains('\n'), "Output should not contain newline characters");
+    }
+
     /// Documents HTML output for JavaScript to show class naming patterns
     #[test]
     fn documents_javascript_html_classes() {

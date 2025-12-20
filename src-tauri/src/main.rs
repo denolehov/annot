@@ -39,9 +39,12 @@ enum Command {
 fn main() {
     let cli = Cli::parse();
 
+    // Generate context once (avoids duplicate symbol errors)
+    let context = tauri::generate_context!();
+
     // Handle MCP subcommand
     if let Some(Command::Mcp) = cli.command {
-        annot_lib::run_mcp();
+        annot_lib::run_mcp(context);
         return;
     }
 
@@ -72,13 +75,29 @@ fn main() {
     let tags = annot_lib::config::load_tags();
     let exit_modes = annot_lib::config::load_exit_modes();
 
-    // Create state and run Tauri
-    let state = annot_lib::state::AppState::from_file(
-        input.label,
-        &input.content,
-        &input.path_hint,
-        tags,
-        exit_modes,
-    );
-    annot_lib::run(state);
+    // Create state based on content type
+    let state = if input.is_diff {
+        match annot_lib::state::AppState::from_diff(
+            input.label,
+            &input.content,
+            tags,
+            exit_modes,
+        ) {
+            Ok(state) => state,
+            Err(e) => {
+                eprintln!("Error parsing diff: {}", e);
+                process::exit(1);
+            }
+        }
+    } else {
+        annot_lib::state::AppState::from_file(
+            input.label,
+            &input.content,
+            &input.path_hint,
+            tags,
+            exit_modes,
+        )
+    };
+
+    annot_lib::run(state, context);
 }

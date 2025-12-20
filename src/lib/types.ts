@@ -21,7 +21,31 @@ export interface ContentResponse {
   exit_modes: ExitMode[];
   selected_exit_mode_id: string | null;
   session_comment: ContentNode[] | null;
+  diff_metadata: DiffMetadata | null;
 }
+
+// Diff types
+export interface DiffMetadata {
+  files: DiffFileInfo[];
+  lines: Record<number, DiffLineInfo>;
+}
+
+export interface DiffFileInfo {
+  old_name: string | null;
+  new_name: string | null;
+  language: string;
+  start_line: number;
+  end_line: number;
+}
+
+export interface DiffLineInfo {
+  kind: DiffLineKind;
+  old_line_num: number | null;
+  new_line_num: number | null;
+  file_index: number;
+}
+
+export type DiffLineKind = 'context' | 'added' | 'deleted' | 'header';
 
 // Tag definition (composable mini-prompts)
 export interface Tag {

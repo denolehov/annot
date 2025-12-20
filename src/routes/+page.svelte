@@ -2,7 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
-  import type { ContentResponse, ContentNode, Line, JSONContent, ExitMode, Tag } from "$lib/types";
+  import type { ContentResponse, ContentNode, Line, JSONContent, ExitMode, Tag, DiffMetadata, DiffLineInfo } from "$lib/types";
   import { rangeToKey, keyToRange, isLineInRange, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap } from "$lib/tiptap";
   import AnnotationEditor from "$lib/AnnotationEditor.svelte";
@@ -11,6 +11,13 @@
   let lines: Line[] = $state([]);
   let label = $state("");
   let error = $state("");
+  let diffMetadata: DiffMetadata | null = $state(null);
+
+  // Helper to get diff line info
+  function getDiffLineInfo(lineNum: number): DiffLineInfo | null {
+    if (!diffMetadata) return null;
+    return diffMetadata.lines[lineNum] ?? null;
+  }
 
   // Selection state
   let selection: { start: number; end: number } | null = $state(null);
@@ -324,6 +331,7 @@
       lines = res.lines;
       tags = res.tags;
       exitModes = res.exit_modes;
+      diffMetadata = res.diff_metadata;
 
       // Find index of initially selected mode (if any)
       if (res.selected_exit_mode_id) {
@@ -388,16 +396,22 @@
     <div
       class="content"
       class:shift-held={isShiftHeld}
+      class:diff-mode={diffMetadata !== null}
       onmousedown={handleContentMouseDown}
       onmousemove={handleMouseMove}
       onmouseup={handleMouseUp}
       role="presentation"
     >
       {#each lines as line}
+        {@const diffLine = getDiffLineInfo(line.number)}
         <div
           class="line"
           class:selected={isSelected(line.number)}
           class:annotated={hasAnnotation(line.number)}
+          class:diff-added={diffLine?.kind === 'added'}
+          class:diff-deleted={diffLine?.kind === 'deleted'}
+          class:diff-context={diffLine?.kind === 'context'}
+          class:diff-header={diffLine?.kind === 'header'}
           data-line={line.number}
           onmouseenter={() => hoveredLine = line.number}
           onmouseleave={() => hoveredLine = null}
@@ -417,15 +431,14 @@
             role="button"
             tabindex="-1"
           >
-            {line.number}
-          </span>
-          <span class="code">
-            {#if line.html}
-              {@html line.html}
+            {#if diffMetadata}
+              <span class="diff-gutter-old">{diffLine?.old_line_num ?? ''}</span>
+              <span class="diff-gutter-new">{diffLine?.new_line_num ?? ''}</span>
             {:else}
-              {line.content}
+              {line.number}
             {/if}
           </span>
+          <span class="code">{#if line.html}{@html line.html}{:else}{line.content}{/if}</span>
         </div>
         {@const annotationAtLine = getAnnotationAtLine(line.number)}
         {@const isLastSelectedLine = line.number === lastSelectedLine && selection && !isDragging}

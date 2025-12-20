@@ -119,8 +119,13 @@ fn format_annotation_block(
     ann: &Annotation,
     line_num_width: usize,
 ) {
+    let is_diff = state.diff_metadata.is_some();
+
     // File header: "file.rs:10-15" or "file.rs:10"
-    if ann.start_line == ann.end_line {
+    // For diffs, include old/new line numbers if available
+    if is_diff {
+        format_diff_header(out, state, ann);
+    } else if ann.start_line == ann.end_line {
         out.push_str(&format!("{}:{}\n", state.label, ann.start_line));
     } else {
         out.push_str(&format!(
@@ -135,12 +140,16 @@ fn format_annotation_block(
         if let Some(line) = state.lines.get((context_line_num - 1) as usize) {
             if !line.content.trim().is_empty() {
                 // Format: "    N | content" (3 extra spaces for ">" prefix alignment)
-                out.push_str(&format!(
-                    "{:>width$} | {}\n",
-                    context_line_num,
-                    line.content,
-                    width = line_num_width + 3
-                ));
+                if is_diff {
+                    format_diff_line(out, state, context_line_num, &line.content, false, line_num_width);
+                } else {
+                    out.push_str(&format!(
+                        "{:>width$} | {}\n",
+                        context_line_num,
+                        line.content,
+                        width = line_num_width + 3
+                    ));
+                }
             }
         }
     }
@@ -148,18 +157,26 @@ fn format_annotation_block(
     // Selected lines with ">" prefix
     for line_num in ann.start_line..=ann.end_line {
         if let Some(line) = state.lines.get((line_num - 1) as usize) {
-            // Format: ">  N | content"
-            out.push_str(&format!(
-                "> {:>width$} | {}\n",
-                line_num,
-                line.content,
-                width = line_num_width + 1
-            ));
+            if is_diff {
+                format_diff_line(out, state, line_num, &line.content, true, line_num_width);
+            } else {
+                // Format: ">  N | content"
+                out.push_str(&format!(
+                    "> {:>width$} | {}\n",
+                    line_num,
+                    line.content,
+                    width = line_num_width + 1
+                ));
+            }
         }
     }
 
     // Annotation content with arrow
-    let arrow_indent = " ".repeat(line_num_width + 4); // +4 for "> " and " | "
+    let arrow_indent = if is_diff {
+        " ".repeat(line_num_width + 12) // Extra space for old:new format
+    } else {
+        " ".repeat(line_num_width + 4) // +4 for "> " and " | "
+    };
     let content_text = render_content(&ann.content);
 
     for (i, content_line) in content_text.lines().enumerate() {
@@ -171,6 +188,100 @@ fn format_annotation_block(
             out.push_str(&format!("{}{}\n", continuation_indent, content_line));
         }
     }
+}
+
+/// Format diff header with file info from annotation range.
+fn format_diff_header(out: &mut String, state: &AppState, ann: &Annotation) {
+    let diff_meta = state.diff_metadata.as_ref().unwrap();
+
+    // Get the file name from the diff metadata for the annotated range
+    let file_name = diff_meta
+        .lines
+        .get(&ann.start_line)
+        .and_then(|info| diff_meta.files.get(info.file_index))
+        .and_then(|f| f.new_name.as_ref().or(f.old_name.as_ref()))
+        .map(|s| s.as_str())
+        .unwrap_or(&state.label);
+
+    // Collect old/new line ranges from the annotated lines
+    let mut old_lines: Vec<u32> = Vec::new();
+    let mut new_lines: Vec<u32> = Vec::new();
+
+    for line_num in ann.start_line..=ann.end_line {
+        if let Some(info) = diff_meta.lines.get(&line_num) {
+            if let Some(old) = info.old_line_num {
+                old_lines.push(old);
+            }
+            if let Some(new) = info.new_line_num {
+                new_lines.push(new);
+            }
+        }
+    }
+
+    // Format header with available line info
+    let old_range = format_line_range(&old_lines);
+    let new_range = format_line_range(&new_lines);
+
+    match (old_range.as_str(), new_range.as_str()) {
+        ("", "") => out.push_str(&format!("{}:\n", file_name)),
+        (old, "") => out.push_str(&format!("{} (old:{}):\n", file_name, old)),
+        ("", new) => out.push_str(&format!("{} (new:{}):\n", file_name, new)),
+        (old, new) => out.push_str(&format!("{} (old:{} new:{}):\n", file_name, old, new)),
+    }
+}
+
+/// Format a line range like "10" or "10-15".
+fn format_line_range(lines: &[u32]) -> String {
+    if lines.is_empty() {
+        return String::new();
+    }
+    let min = *lines.iter().min().unwrap();
+    let max = *lines.iter().max().unwrap();
+    if min == max {
+        min.to_string()
+    } else {
+        format!("{}-{}", min, max)
+    }
+}
+
+/// Format a single diff line with old:new line numbers.
+fn format_diff_line(
+    out: &mut String,
+    state: &AppState,
+    line_num: u32,
+    content: &str,
+    is_selected: bool,
+    line_num_width: usize,
+) {
+    let diff_meta = state.diff_metadata.as_ref().unwrap();
+    let info = diff_meta.lines.get(&line_num);
+
+    let prefix = if is_selected { "> " } else { "  " };
+
+    let (old_str, new_str) = match info {
+        Some(i) => {
+            let old = i
+                .old_line_num
+                .map(|n| n.to_string())
+                .unwrap_or_default();
+            let new = i
+                .new_line_num
+                .map(|n| n.to_string())
+                .unwrap_or_default();
+            (old, new)
+        }
+        None => (String::new(), String::new()),
+    };
+
+    // Format: "> old:new | content" or "  old:new | content"
+    out.push_str(&format!(
+        "{}{:>w$}:{:<w$} | {}\n",
+        prefix,
+        old_str,
+        new_str,
+        content,
+        w = line_num_width
+    ));
 }
 
 /// Render content nodes to plain text.
@@ -210,6 +321,7 @@ mod tests {
             deleted_exit_mode_ids: HashSet::new(),
             selected_exit_mode_id: None,
             session_comment: None,
+            diff_metadata: None,
         }
     }
 
@@ -394,6 +506,7 @@ mod tests {
             deleted_exit_mode_ids: HashSet::new(),
             selected_exit_mode_id: Some("apply".to_string()),
             session_comment: None,
+            diff_metadata: None,
         };
 
         let output = format_output(&state);
@@ -441,6 +554,7 @@ mod tests {
             deleted_exit_mode_ids: HashSet::new(),
             selected_exit_mode_id: Some("reject".to_string()),
             session_comment: None,
+            diff_metadata: None,
         };
 
         let output = format_output(&state);
@@ -468,6 +582,7 @@ mod tests {
             session_comment: Some(vec![ContentNode::Text {
                 text: "This is a session comment".to_string(),
             }]),
+            diff_metadata: None,
         };
 
         let output = format_output(&state);
@@ -501,6 +616,7 @@ mod tests {
             session_comment: Some(vec![ContentNode::Text {
                 text: "Overall looks good!".to_string(),
             }]),
+            diff_metadata: None,
         };
 
         let output = format_output(&state);
@@ -523,6 +639,7 @@ mod tests {
             deleted_exit_mode_ids: HashSet::new(),
             selected_exit_mode_id: None,
             session_comment: Some(vec![]),
+            diff_metadata: None,
         };
 
         let output = format_output(&state);

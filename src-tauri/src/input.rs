@@ -5,6 +5,8 @@
 use std::io::{self, IsTerminal, Read};
 use std::path::PathBuf;
 
+use crate::diff;
+
 /// The source of input content.
 pub enum InputMode {
     /// Read content from a file path.
@@ -23,6 +25,8 @@ pub struct ResolvedInput {
     pub content: String,
     /// Path hint for language detection (uses extension).
     pub path_hint: String,
+    /// Whether the content is a unified diff (auto-detected).
+    pub is_diff: bool,
 }
 
 impl InputMode {
@@ -42,11 +46,13 @@ impl InputMode {
                     .unwrap_or_else(|| path.display().to_string());
 
                 let path_hint = path.to_string_lossy().to_string();
+                let is_diff = diff::is_diff(&content);
 
                 Ok(ResolvedInput {
                     label,
                     content,
                     path_hint,
+                    is_diff,
                 })
             }
             InputMode::Stdin { label } => {
@@ -61,11 +67,13 @@ impl InputMode {
 
                 // Use label for both display and language detection
                 let path_hint = label.clone();
+                let is_diff = diff::is_diff(&content);
 
                 Ok(ResolvedInput {
                     label,
                     content,
                     path_hint,
+                    is_diff,
                 })
             }
         }
@@ -137,4 +145,40 @@ mod tests {
 
     // Note: Stdin mode tests require subprocess spawning or mock injection,
     // which is complex. Manual testing covers stdin scenarios.
+
+    #[test]
+    fn file_mode_detects_non_diff_content() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("test.rs");
+        std::fs::write(&file_path, "fn main() {}").unwrap();
+
+        let mode = InputMode::File { path: file_path };
+        let resolved = mode.resolve().unwrap();
+
+        assert!(!resolved.is_diff);
+    }
+
+    #[test]
+    fn file_mode_detects_diff_content() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("changes.diff");
+        std::fs::write(
+            &file_path,
+            r#"diff --git a/file.rs b/file.rs
+--- a/file.rs
++++ b/file.rs
+@@ -1,3 +1,3 @@
+ fn main() {
+-    old();
++    new();
+ }
+"#,
+        )
+        .unwrap();
+
+        let mode = InputMode::File { path: file_path };
+        let resolved = mode.resolve().unwrap();
+
+        assert!(resolved.is_diff);
+    }
 }
