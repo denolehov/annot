@@ -23,7 +23,7 @@
 	width: 90%;
 	max-width: 520px;
 	background: var(--bg-portal);
-	border: 2px dashed var(--border-strong);
+	border: 1px solid var(--border-strong);
 	border-radius: 12px;
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 	font-family: var(--font-ui);
@@ -55,7 +55,7 @@
 	align-items: center;
 	gap: 0;
 	padding: 14px 16px;
-	border-bottom: 1px dashed var(--border-subtle);
+	border-bottom: 1px solid var(--border-subtle);
 	background: transparent;
 	font-size: 14px;
 }
@@ -265,7 +265,7 @@
 .footer {
 	padding: 10px 16px;
 	background: transparent;
-	border-top: 1px dashed var(--border-subtle);
+	border-top: 1px solid var(--border-subtle);
 	display: flex;
 	align-items: center;
 	justify-content: center;

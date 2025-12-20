@@ -431,7 +431,7 @@
     </div>
     <div class="status-bar-right">
       <span class="kbd-hint"><kbd>g</kbd> global note</span>
-      <span class="kbd-hint"><kbd>⌘W</kbd> close</span>
+      <span class="kbd-hint"><kbd>⌘w</kbd> save and close</span>
     </div>
   </footer>
 </main>

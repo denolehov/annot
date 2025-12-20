@@ -8,6 +8,16 @@
   import { trimContent, isContentEmpty, TagChip } from './tiptap';
   import type { Tag } from './types';
 
+  // Portal action: moves element to body so it's not clipped by scroll containers
+  function portal(node: HTMLElement) {
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        node.remove();
+      },
+    };
+  }
+
   interface Props {
     content?: JSONContent;
     onUpdate: (content: JSONContent | null) => void;
@@ -36,6 +46,62 @@
     selectedIndex: 0,
     clientRect: null,
   });
+
+  // Force position recalculation on scroll (clientRect is a function, but Svelte needs a state change to re-render)
+  let positionTick = $state(0);
+  let suggestionsEl: HTMLDivElement | undefined = $state();
+
+  $effect(() => {
+    if (!suggestionState.active) return;
+
+    let rafId: number | null = null;
+    const handleScroll = () => {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        positionTick++; // Trigger re-render to recalculate position
+      });
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true, capture: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll, { capture: true });
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  });
+
+  // Calculate optimal popup position (above or below cursor)
+  // _tick parameter creates reactive dependency for scroll updates
+  function getSuggestionPosition(_tick: number): { left: number; top: number } {
+    const rect = suggestionState.clientRect?.();
+    if (!rect) return { left: 0, top: 0 };
+
+    const menuHeight = suggestionsEl?.offsetHeight ?? 150; // Estimate if not yet measured
+    const padding = 8;
+    const gap = 4;
+
+    const spaceBelow = window.innerHeight - rect.bottom - padding;
+    const spaceAbove = rect.top - padding;
+
+    let top: number;
+    if (spaceBelow >= menuHeight) {
+      // Fits below
+      top = rect.bottom + gap;
+    } else if (spaceAbove >= menuHeight) {
+      // Fits above
+      top = rect.top - menuHeight - gap;
+    } else {
+      // Neither fits fully - pick the larger space
+      top = spaceAbove > spaceBelow
+        ? rect.top - menuHeight - gap
+        : rect.bottom + gap;
+    }
+
+    // Clamp to viewport
+    if (top < padding) top = padding;
+
+    return { left: rect.left, top };
+  }
 
   // Load tags on mount
   onMount(async () => {
@@ -199,30 +265,6 @@
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div bind:this={container} class="annotation-editor" class:sealed onclick={() => sealed && onUnseal?.()}>
   <div bind:this={element} class="editor-content"></div>
-  {#if suggestionState.active && suggestionState.items.length > 0}
-    <div
-      class="tag-suggestions"
-      style:left={suggestionState.clientRect?.()?.left ?? 0}
-      style:top={(suggestionState.clientRect?.()?.bottom ?? 0) + 4}
-    >
-      {#each suggestionState.items as tag, i}
-        <button
-          type="button"
-          class="tag-suggestion"
-          class:selected={i === suggestionState.selectedIndex}
-          onmousedown={(e) => {
-            e.preventDefault();
-            if (suggestionCommand) {
-              suggestionCommand(tag);
-            }
-          }}
-        >
-          <span class="tag-name">{tag.name}</span>
-          <span class="tag-instruction">{tag.instruction}</span>
-        </button>
-      {/each}
-    </div>
-  {/if}
   {#if !sealed}
     <div class="toolbar">
       <span class="kbd-hint"><kbd>#</kbd> tags</span>
@@ -231,6 +273,35 @@
     </div>
   {/if}
 </div>
+
+<!-- Portal tag suggestions to body so they're not clipped by scroll containers -->
+{#if suggestionState.active && suggestionState.items.length > 0}
+  {@const pos = getSuggestionPosition(positionTick)}
+  <div
+    bind:this={suggestionsEl}
+    use:portal
+    class="tag-suggestions"
+    style:left="{pos.left}px"
+    style:top="{pos.top}px"
+  >
+    {#each suggestionState.items as tag, i}
+      <button
+        type="button"
+        class="tag-suggestion"
+        class:selected={i === suggestionState.selectedIndex}
+        onmousedown={(e) => {
+          e.preventDefault();
+          if (suggestionCommand) {
+            suggestionCommand(tag);
+          }
+        }}
+      >
+        <span class="tag-name">{tag.name}</span>
+        <span class="tag-instruction">{tag.instruction}</span>
+      </button>
+    {/each}
+  </div>
+{/if}
 
 <style>
   /* Component styles - see src/styles/editor.css and src/styles/chips.css for shared styles */

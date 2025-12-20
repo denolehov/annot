@@ -284,10 +284,16 @@
     dispatch({ type: 'OPEN' });
   });
 
-  // Focus input when entering filter states
+  // Focus management for filter states
   $effect(() => {
-    if ((machineState.type === 'NAMESPACE_FILTER' || machineState.type === 'ITEM_FILTER') && machineState.inputMode === 'filtering') {
-      inputEl?.focus();
+    if (machineState.type === 'NAMESPACE_FILTER' || machineState.type === 'ITEM_FILTER') {
+      if (machineState.inputMode === 'filtering') {
+        inputEl?.focus();
+      } else {
+        // In navigating mode: blur input, focus modal for key capture
+        inputEl?.blur();
+        modalEl?.focus();
+      }
     }
   });
 
@@ -303,6 +309,15 @@
           el?.focus();
         });
       }
+    }
+  });
+
+  // Focus modal in reorder mode for key capture
+  $effect(() => {
+    if (machineState.type === 'ITEM_REORDER') {
+      requestAnimationFrame(() => {
+        modalEl?.focus();
+      });
     }
   });
 
@@ -333,31 +348,37 @@
     return false;
   });
 
-  // Get footer hints
+  // Get footer hints (matching hl poly editor style with Unicode symbols)
   let footerHints = $derived.by(() => {
     if (machineState.type === 'NAMESPACE_FILTER') {
-      return [{ key: 'Enter', label: 'select' }, { key: 'Esc', label: 'close' }];
+      return [
+        { key: '↑↓', label: 'navigate' },
+        { key: '↵', label: 'select' },
+        { key: 'Esc', label: 'close' },
+      ];
     }
     if (machineState.type === 'ITEM_FILTER') {
-      const hints = [{ key: 'Enter', label: 'open' }, { key: 'Esc', label: 'back' }];
+      const hints: Array<{ key: string; label: string }> = [{ key: '↑↓', label: 'navigate' }];
       if (machineState.inputMode === 'navigating' && machineState.namespace.hotkeys) {
         for (const hk of machineState.namespace.hotkeys) {
           hints.push({ key: hk.display || hk.key, label: hk.label });
         }
       }
+      hints.push({ key: '↵', label: 'select' });
+      hints.push({ key: 'Esc', label: 'back' });
       return hints;
     }
     if (machineState.type === 'ITEM_REORDER') {
       return [
-        { key: 'Cmd+Alt+Arrow', label: 'move' },
-        { key: 'Enter', label: 'save' },
-        { key: 'Esc', label: 'cancel' },
+        { key: '↑↓', label: 'nav' },
+        { key: '⌘⌥↑↓', label: 'move' },
+        { key: '↵', label: 'save' },
       ];
     }
     if (machineState.type === 'EDIT_FORM' || machineState.type === 'CREATE_FORM') {
       return [
+        { key: '⌘↵', label: 'save' },
         { key: 'Tab', label: 'next field' },
-        { key: 'Cmd+Enter', label: 'save' },
         { key: 'Esc', label: 'cancel' },
       ];
     }
@@ -467,7 +488,7 @@
         <span class="search-icon">↕️</span>
         <span class="ns-prefix">{machineState.namespace.icon} {machineState.namespace.label}</span>
         <span class="separator">›</span>
-        <span class="mode-prefix">reorder</span>
+        <span class="mode-prefix">Reorder</span>
       </div>
       <ul class="item-list">
         {#each machineState.items as item, i}
@@ -488,7 +509,7 @@
         <span class="search-icon">{machineState.type === 'CREATE_FORM' ? '➕' : '✏️'}</span>
         <span class="ns-prefix">{machineState.namespace.icon} {machineState.namespace.label}</span>
         <span class="separator">›</span>
-        <span class="mode-prefix">{machineState.type === 'CREATE_FORM' ? 'new' : 'edit'}</span>
+        <span class="mode-prefix">{machineState.type === 'CREATE_FORM' ? 'New' : 'Edit'}</span>
       </div>
       <form>
         {#each machineState.namespace.fields as field, i}
