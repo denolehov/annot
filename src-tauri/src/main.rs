@@ -15,8 +15,12 @@ use annot_lib::input::InputMode;
 Examples:\n  \
 annot document.md              # Open file for annotation\n  \
 cat file.go | annot            # Pipe content from stdin\n  \
-cat file.go | annot -l main.go # Pipe with label (for syntax highlighting)")]
+cat file.go | annot -l main.go # Pipe with label (for syntax highlighting)\n  \
+annot mcp                      # Run as MCP server")]
 struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+
     /// File to open for annotation
     #[arg(value_name = "FILE")]
     file: Option<PathBuf>,
@@ -26,8 +30,20 @@ struct Cli {
     label: String,
 }
 
+#[derive(clap::Subcommand)]
+enum Command {
+    /// Run as MCP server (Model Context Protocol)
+    Mcp,
+}
+
 fn main() {
     let cli = Cli::parse();
+
+    // Handle MCP subcommand
+    if let Some(Command::Mcp) = cli.command {
+        annot_lib::run_mcp();
+        return;
+    }
 
     // Detect input mode from CLI args and stdin state
     let (mode, warning) = match InputMode::detect(cli.file, cli.label) {

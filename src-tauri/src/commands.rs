@@ -1,9 +1,10 @@
 use std::sync::Mutex;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, State, WebviewWindow};
 
 use crate::config;
 use crate::output::format_output;
 use crate::state::{AppState, ContentNode, ContentResponse, ExitMode, Tag};
+use crate::{ResultSender, ShouldExit};
 
 #[tauri::command]
 pub fn get_content(state: State<Mutex<AppState>>) -> ContentResponse {
@@ -32,19 +33,35 @@ pub fn delete_annotation(state: State<Mutex<AppState>>, start_line: u32, end_lin
 }
 
 #[tauri::command]
-pub fn finish_session(state: State<Mutex<AppState>>, app: AppHandle) -> String {
+pub fn finish_session(
+    state: State<Mutex<AppState>>,
+    result_sender: State<ResultSender>,
+    should_exit: State<ShouldExit>,
+    _window: WebviewWindow,
+    app: AppHandle,
+) -> String {
     let output = {
         let state = state.lock().unwrap();
         format_output(&state)
     };
 
-    // Print to stdout
-    if !output.is_empty() {
-        print!("{}", output);
-    }
+    // Check if we're in MCP mode (has a result sender)
+    let sender = {
+        let mut guard = result_sender.lock().unwrap();
+        guard.take()
+    };
 
-    // Close the app
-    app.exit(0);
+    if let Some(tx) = sender {
+        // MCP mode: send result via channel (frontend will close window)
+        let _ = tx.send(output.clone());
+    } else {
+        // CLI mode: print to stdout and exit app
+        if !output.is_empty() {
+            print!("{}", output);
+        }
+        should_exit.store(true, std::sync::atomic::Ordering::SeqCst);
+        app.exit(0);
+    }
 
     output
 }

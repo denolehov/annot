@@ -337,9 +337,11 @@
       }
 
       // Listen for window close - this triggers output and exit
-      await window.onCloseRequested(async (event) => {
+      const unlisten = await window.onCloseRequested(async (event) => {
         event.preventDefault();
+        unlisten();  // Remove listener before closing to prevent re-entry
         await invoke('finish_session');
+        await window.destroy();
       });
     } catch (e) {
       error = String(e);

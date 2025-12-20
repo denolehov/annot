@@ -121,6 +121,21 @@ pub struct ContentResponse {
 }
 
 impl AppState {
+    /// Create an empty state (used as placeholder in MCP mode before first session).
+    pub fn empty() -> Self {
+        Self {
+            label: String::new(),
+            lines: Vec::new(),
+            annotations: HashMap::new(),
+            tags: Vec::new(),
+            deleted_tag_ids: HashSet::new(),
+            exit_modes: Vec::new(),
+            deleted_exit_mode_ids: HashSet::new(),
+            selected_exit_mode_id: None,
+            session_comment: None,
+        }
+    }
+
     /// Parse file content into structured lines with syntax highlighting.
     ///
     /// # Arguments
