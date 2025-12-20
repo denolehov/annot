@@ -26,6 +26,15 @@ impl Highlighter {
             .map(|s| s.name.as_str())
     }
 
+    /// Highlight a single-line code snippet and return HTML.
+    ///
+    /// Returns HTML with spans containing CSS classes for syntax highlighting.
+    /// Falls back to plain text (HTML-escaped) if language is unknown.
+    pub fn highlight_snippet(&self, snippet: &str, path: &str) -> String {
+        let lines = self.highlight_lines(snippet, path);
+        lines.into_iter().next().unwrap_or_default()
+    }
+
     /// Highlight file content and return HTML for each line.
     ///
     /// Each line contains HTML spans with CSS classes (e.g., `<span class="k">fn</span>`).

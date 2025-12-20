@@ -2,7 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
-  import type { ContentResponse, ContentNode, Line, JSONContent, ExitMode, Tag, DiffMetadata, DiffLineInfo } from "$lib/types";
+  import type { ContentResponse, ContentNode, Line, JSONContent, ExitMode, Tag, DiffMetadata, DiffLineInfo, HunkInfo } from "$lib/types";
   import { rangeToKey, keyToRange, isLineInRange, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap } from "$lib/tiptap";
   import AnnotationEditor from "$lib/AnnotationEditor.svelte";
@@ -13,10 +13,141 @@
   let error = $state("");
   let diffMetadata: DiffMetadata | null = $state(null);
 
+  // Smart header state for diff view
+  interface HunkBoundary {
+    startLine: number;
+    fileIndex: number;
+    hunkIndex: number;
+  }
+
+  let hunkBoundaries: HunkBoundary[] = $state([]);
+  let currentFileIndex = $state(0);
+  let currentHunkIndex = $state(0);
+  let contentEl: HTMLDivElement | null = $state(null);
+  let scrollRafId: number | null = null;
+
+  // Current file/hunk derived from indices
+  let currentFile = $derived.by(() => {
+    if (!diffMetadata || diffMetadata.files.length === 0) return null;
+    return diffMetadata.files[currentFileIndex] ?? null;
+  });
+
+  let currentHunk = $derived.by(() => {
+    if (!currentFile || currentFile.hunks.length === 0) return null;
+    return currentFile.hunks[currentHunkIndex] ?? null;
+  });
+
+  // Build sorted hunk boundaries for O(log n) lookup
+  function buildHunkBoundaries(meta: DiffMetadata): HunkBoundary[] {
+    const boundaries: HunkBoundary[] = [];
+    for (let fi = 0; fi < meta.files.length; fi++) {
+      const file = meta.files[fi];
+      for (let hi = 0; hi < file.hunks.length; hi++) {
+        boundaries.push({
+          startLine: file.hunks[hi].display_line,
+          fileIndex: fi,
+          hunkIndex: hi,
+        });
+      }
+    }
+    return boundaries.sort((a, b) => a.startLine - b.startLine);
+  }
+
+  // Binary search for largest startLine <= line
+  function findCurrentHunk(line: number, boundaries: HunkBoundary[]): HunkBoundary | null {
+    if (boundaries.length === 0) return null;
+    let lo = 0, hi = boundaries.length - 1, result: HunkBoundary | null = null;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (boundaries[mid].startLine <= line) {
+        result = boundaries[mid];
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return result;
+  }
+
+  function updateCurrentPosition() {
+    if (!contentEl || !diffMetadata) return;
+
+    const lineEls = contentEl.querySelectorAll('.line');
+    const scrollTop = contentEl.scrollTop;
+
+    for (const el of lineEls) {
+      const htmlEl = el as HTMLElement;
+      if (htmlEl.offsetTop >= scrollTop) {
+        const lineNum = parseInt(htmlEl.dataset.line ?? '1', 10);
+        const boundary = findCurrentHunk(lineNum, hunkBoundaries);
+        if (boundary) {
+          currentFileIndex = boundary.fileIndex;
+          currentHunkIndex = boundary.hunkIndex;
+        }
+        break;
+      }
+    }
+  }
+
+  function handleContentScroll() {
+    if (scrollRafId) return;
+    scrollRafId = requestAnimationFrame(() => {
+      scrollRafId = null;
+      updateCurrentPosition();
+    });
+  }
+
   // Helper to get diff line info
   function getDiffLineInfo(lineNum: number): DiffLineInfo | null {
     if (!diffMetadata) return null;
     return diffMetadata.lines[lineNum] ?? null;
+  }
+
+  // Check if a line is selectable (not a header in diff mode)
+  function isLineSelectable(lineNum: number): boolean {
+    if (!diffMetadata) return true; // Non-diff mode: all lines selectable
+    const info = getDiffLineInfo(lineNum);
+    return info ? info.kind !== 'header' : true;
+  }
+
+  // Get hunk bounds for a line (returns null if line is a header or not in diff mode)
+  function getHunkBounds(lineNum: number): { start: number; end: number } | null {
+    if (!diffMetadata || hunkBoundaries.length === 0) return null;
+
+    const boundary = findCurrentHunk(lineNum, hunkBoundaries);
+    if (!boundary) return null;
+
+    // Find this boundary's index
+    const boundaryIdx = hunkBoundaries.findIndex(
+      b => b.fileIndex === boundary.fileIndex && b.hunkIndex === boundary.hunkIndex
+    );
+
+    // The hunk starts at the @@ line (header), but selectable content starts on next line
+    const hunkStart = boundary.startLine + 1;
+
+    // Find end: next hunk in SAME file, or file's end
+    let hunkEnd: number;
+    const nextBoundary = hunkBoundaries[boundaryIdx + 1];
+
+    if (nextBoundary && nextBoundary.fileIndex === boundary.fileIndex) {
+      // Next hunk in same file - end before its header line
+      hunkEnd = nextBoundary.startLine - 1;
+    } else {
+      // Last hunk in this file - end at file's end_line
+      const file = diffMetadata.files[boundary.fileIndex];
+      hunkEnd = file?.end_line ?? lines.length;
+    }
+
+    return { start: hunkStart, end: hunkEnd };
+  }
+
+  // Constrain a line number to valid hunk bounds
+  function constrainToHunkBounds(lineNum: number, anchorLine: number): number {
+    const bounds = getHunkBounds(anchorLine);
+    if (!bounds) return lineNum; // No bounds in non-diff mode
+
+    // Clamp to hunk bounds
+    return Math.max(bounds.start, Math.min(bounds.end, lineNum));
   }
 
   // Selection state
@@ -212,6 +343,9 @@
 
   // Mouse handlers for selection
   function handleGutterMouseDown(lineNum: number, e: MouseEvent) {
+    // Skip header lines in diff mode
+    if (!isLineSelectable(lineNum)) return;
+
     e.preventDefault();
     isDragging = true;
     mouseDownHandled = true;
@@ -222,6 +356,9 @@
     if (!e.shiftKey) return;
     const lineNum = getLineFromEvent(e);
     if (lineNum === null) return;
+    // Skip header lines in diff mode
+    if (!isLineSelectable(lineNum)) return;
+
     e.preventDefault();
     isDragging = true;
     selection = { start: lineNum, end: lineNum };
@@ -231,7 +368,9 @@
     if (!isDragging || !selection) return;
     const lineNum = getLineFromEvent(e);
     if (lineNum !== null) {
-      selection = { start: selection.start, end: lineNum };
+      // Constrain to hunk bounds and skip header lines
+      const constrainedLine = constrainToHunkBounds(lineNum, selection.start);
+      selection = { start: selection.start, end: constrainedLine };
     }
   }
 
@@ -245,6 +384,9 @@
       mouseDownHandled = false;
       return;
     }
+    // Skip header lines in diff mode
+    if (!isLineSelectable(lineNum)) return;
+
     // Toggle off if clicking same single-line selection
     if (selection?.start === lineNum && selection?.end === lineNum) {
       selection = null;
@@ -285,7 +427,8 @@
         invoke('set_exit_mode', { modeId });
       }
     } else if (e.key === 'c' && hoveredLine !== null && !selection) {
-      // Open editor on hovered line
+      // Open editor on hovered line (skip header lines)
+      if (!isLineSelectable(hoveredLine)) return;
       e.preventDefault();
       selection = { start: hoveredLine, end: hoveredLine };
     } else if (e.key === 'g' && !selection && !sessionEditorOpen) {
@@ -317,6 +460,9 @@
   }
 
   function handleAddMouseDown(lineNum: number, e: MouseEvent) {
+    // Skip header lines in diff mode
+    if (!isLineSelectable(lineNum)) return;
+
     e.preventDefault();
     isDragging = true;
     mouseDownHandled = true;
@@ -332,6 +478,11 @@
       tags = res.tags;
       exitModes = res.exit_modes;
       diffMetadata = res.diff_metadata;
+
+      // Build hunk boundaries for smart header scroll tracking
+      if (res.diff_metadata) {
+        hunkBoundaries = buildHunkBoundaries(res.diff_metadata);
+      }
 
       // Find index of initially selected mode (if any)
       if (res.selected_exit_mode_id) {
@@ -365,12 +516,43 @@
   <div class="sticky-header">
     <header class="header" data-tauri-drag-region>
       <div class="header-left">
-        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-        <span
-          class="file-name"
-          class:has-comment={sessionComment !== undefined}
-          onclick={openSessionEditor}
-        >{label}</span>
+        {#if diffMetadata && currentFile}
+          <!-- Diff mode: show hunk metadata -->
+          {@const fileName = currentFile.new_name ?? currentFile.old_name ?? 'unknown'}
+          {@const fileCount = diffMetadata.files.length}
+          <span class="diff-header-info">
+            <span class="diff-header-file">
+              {fileName}
+              {#if fileCount > 1}
+                <span class="diff-header-counter">({currentFileIndex + 1}/{fileCount})</span>
+              {/if}
+            </span>
+            {#if currentHunk}
+              <span class="diff-header-sep">·</span>
+              <span class="diff-header-range">
+                <span class="diff-header-old">-{currentHunk.old_start},{currentHunk.old_count}</span>
+                <span class="diff-header-new">+{currentHunk.new_start},{currentHunk.new_count}</span>
+              </span>
+              {#if currentHunk.function_context}
+                <span class="diff-header-fn">
+                  {#if currentHunk.function_context_html}
+                    {@html currentHunk.function_context_html}
+                  {:else}
+                    {currentHunk.function_context}
+                  {/if}
+                </span>
+              {/if}
+            {/if}
+          </span>
+        {:else}
+          <!-- Normal mode: show filename -->
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+          <span
+            class="file-name"
+            class:has-comment={sessionComment !== undefined}
+            onclick={openSessionEditor}
+          >{label}</span>
+        {/if}
       </div>
       <div class="header-right"></div>
     </header>
@@ -397,6 +579,8 @@
       class="content"
       class:shift-held={isShiftHeld}
       class:diff-mode={diffMetadata !== null}
+      bind:this={contentEl}
+      onscroll={handleContentScroll}
       onmousedown={handleContentMouseDown}
       onmousemove={handleMouseMove}
       onmouseup={handleMouseUp}

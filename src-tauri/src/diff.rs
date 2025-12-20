@@ -15,6 +15,25 @@ pub enum DiffLineKind {
     Header,
 }
 
+/// Metadata for a hunk within a file.
+#[derive(Clone, Debug, Serialize)]
+pub struct HunkInfo {
+    /// Display line number of the @@ header (1-indexed).
+    pub display_line: u32,
+    /// Starting line in old file.
+    pub old_start: u32,
+    /// Number of lines from old file.
+    pub old_count: u32,
+    /// Starting line in new file.
+    pub new_start: u32,
+    /// Number of lines in new file.
+    pub new_count: u32,
+    /// Function/context from hunk header (e.g., "fn process()").
+    pub function_context: Option<String>,
+    /// Syntax-highlighted HTML of function context.
+    pub function_context_html: Option<String>,
+}
+
 /// Metadata for a single line in the flattened diff view.
 #[derive(Clone, Debug, Serialize)]
 pub struct DiffLineInfo {
@@ -38,6 +57,8 @@ pub struct DiffFileInfo {
     pub start_line: u32,
     /// 1-indexed end line in flattened view.
     pub end_line: u32,
+    /// Hunks within this file, ordered by display line.
+    pub hunks: Vec<HunkInfo>,
 }
 
 /// Parsed diff metadata for rendering.
@@ -111,6 +132,7 @@ pub fn parse_diff(content: &str) -> Result<DiffMetadata, String> {
             language,
             start_line: 0, // Will be updated
             end_line: 0,   // Will be updated
+            hunks: Vec::new(),
         });
     }
 
@@ -147,11 +169,15 @@ pub fn parse_diff(content: &str) -> Result<DiffMetadata, String> {
         {
             (DiffLineKind::Header, None, None)
         } else if line_content.starts_with("@@ ") {
-            // Hunk header - parse line numbers
+            // Hunk header - parse line numbers and function context
             in_hunk = true;
-            if let Some((old_start, new_start)) = parse_hunk_header(line_content) {
-                current_old_line = old_start;
-                current_new_line = new_start;
+            if let Some(hunk_info) = parse_hunk_header(line_content, line_num) {
+                current_old_line = hunk_info.old_start;
+                current_new_line = hunk_info.new_start;
+                // Add hunk to current file
+                if let Some(f) = metadata.files.get_mut(current_file_idx) {
+                    f.hunks.push(hunk_info);
+                }
             }
             (DiffLineKind::Header, None, None)
         } else if in_hunk {
@@ -203,9 +229,9 @@ pub fn parse_diff(content: &str) -> Result<DiffMetadata, String> {
     Ok(metadata)
 }
 
-/// Parse hunk header like "@@ -1,10 +1,12 @@" to extract start line numbers.
-fn parse_hunk_header(header: &str) -> Option<(u32, u32)> {
-    // Format: @@ -old_start,old_count +new_start,new_count @@
+/// Parse hunk header like "@@ -1,10 +1,12 @@ fn example()" to extract metadata.
+fn parse_hunk_header(header: &str, display_line: u32) -> Option<HunkInfo> {
+    // Format: @@ -old_start,old_count +new_start,new_count @@ [function_context]
     let parts: Vec<&str> = header.split_whitespace().collect();
     if parts.len() < 3 {
         return None;
@@ -214,21 +240,36 @@ fn parse_hunk_header(header: &str) -> Option<(u32, u32)> {
     let old_part = parts.get(1)?; // "-1,10"
     let new_part = parts.get(2)?; // "+1,12"
 
-    let old_start = old_part
-        .trim_start_matches('-')
-        .split(',')
-        .next()?
-        .parse::<u32>()
-        .ok()?;
+    // Parse old range: -start,count or -start (count defaults to 1)
+    let old_trimmed = old_part.trim_start_matches('-');
+    let old_parts: Vec<&str> = old_trimmed.split(',').collect();
+    let old_start = old_parts.first()?.parse::<u32>().ok()?;
+    let old_count = old_parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(1);
 
-    let new_start = new_part
-        .trim_start_matches('+')
-        .split(',')
-        .next()?
-        .parse::<u32>()
-        .ok()?;
+    // Parse new range: +start,count or +start (count defaults to 1)
+    let new_trimmed = new_part.trim_start_matches('+');
+    let new_parts: Vec<&str> = new_trimmed.split(',').collect();
+    let new_start = new_parts.first()?.parse::<u32>().ok()?;
+    let new_count = new_parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(1);
 
-    Some((old_start, new_start))
+    // Extract function context: everything after the closing @@
+    // Header format: "@@ -1,10 +1,12 @@ fn example()"
+    let function_context = header
+        .find(" @@ ")
+        .or_else(|| header.find(" @@\t"))
+        .map(|pos| header[pos + 4..].trim())
+        .filter(|s| !s.is_empty())
+        .map(String::from);
+
+    Some(HunkInfo {
+        display_line,
+        old_start,
+        old_count,
+        new_start,
+        new_count,
+        function_context,
+        function_context_html: None, // Filled in by state.rs with syntax highlighting
+    })
 }
 
 #[cfg(test)]
@@ -540,5 +581,111 @@ index abcdef..0000000
 
         let json = serde_json::to_string(&DiffLineKind::Header).unwrap();
         assert_eq!(json, "\"header\"");
+    }
+
+    #[test]
+    fn parse_hunk_header_extracts_ranges() {
+        let hunk = parse_hunk_header("@@ -1,10 +1,12 @@", 5).unwrap();
+        assert_eq!(hunk.display_line, 5);
+        assert_eq!(hunk.old_start, 1);
+        assert_eq!(hunk.old_count, 10);
+        assert_eq!(hunk.new_start, 1);
+        assert_eq!(hunk.new_count, 12);
+        assert_eq!(hunk.function_context, None);
+    }
+
+    #[test]
+    fn parse_hunk_header_extracts_function_context() {
+        let hunk = parse_hunk_header("@@ -50,10 +52,12 @@ fn process_data()", 10).unwrap();
+        assert_eq!(hunk.old_start, 50);
+        assert_eq!(hunk.old_count, 10);
+        assert_eq!(hunk.new_start, 52);
+        assert_eq!(hunk.new_count, 12);
+        assert_eq!(hunk.function_context, Some("fn process_data()".to_string()));
+    }
+
+    #[test]
+    fn parse_hunk_header_handles_single_line_count() {
+        // When count is omitted, it defaults to 1
+        let hunk = parse_hunk_header("@@ -1 +1 @@", 1).unwrap();
+        assert_eq!(hunk.old_count, 1);
+        assert_eq!(hunk.new_count, 1);
+    }
+
+    #[test]
+    fn parse_hunk_header_handles_zero_lines() {
+        // New file: @@ -0,0 +1,5 @@
+        let hunk = parse_hunk_header("@@ -0,0 +1,5 @@", 1).unwrap();
+        assert_eq!(hunk.old_start, 0);
+        assert_eq!(hunk.old_count, 0);
+        assert_eq!(hunk.new_start, 1);
+        assert_eq!(hunk.new_count, 5);
+    }
+
+    const DIFF_WITH_FUNCTION_CONTEXT: &str = r#"diff --git a/lib.rs b/lib.rs
+--- a/lib.rs
++++ b/lib.rs
+@@ -10,5 +10,6 @@ fn calculate_total()
+ fn calculate_total() {
+     let sum = 0;
+-    return sum;
++    let tax = sum * 0.1;
++    return sum + tax;
+ }
+"#;
+
+    #[test]
+    fn parse_diff_extracts_hunks_with_function_context() {
+        let meta = parse_diff(DIFF_WITH_FUNCTION_CONTEXT).unwrap();
+
+        assert_eq!(meta.files.len(), 1);
+        assert_eq!(meta.files[0].hunks.len(), 1);
+
+        let hunk = &meta.files[0].hunks[0];
+        assert_eq!(hunk.old_start, 10);
+        assert_eq!(hunk.old_count, 5);
+        assert_eq!(hunk.new_start, 10);
+        assert_eq!(hunk.new_count, 6);
+        assert_eq!(hunk.function_context, Some("fn calculate_total()".to_string()));
+    }
+
+    #[test]
+    fn parse_multiple_hunks_extracts_all_hunks() {
+        let meta = parse_diff(MULTIPLE_HUNKS_DIFF).unwrap();
+
+        assert_eq!(meta.files[0].hunks.len(), 2, "Should have 2 hunks");
+
+        let hunk1 = &meta.files[0].hunks[0];
+        assert_eq!(hunk1.old_start, 1);
+        assert_eq!(hunk1.old_count, 3);
+
+        let hunk2 = &meta.files[0].hunks[1];
+        assert_eq!(hunk2.old_start, 10);
+        assert_eq!(hunk2.old_count, 3);
+    }
+
+    #[test]
+    fn parse_multi_file_diff_extracts_hunks_per_file() {
+        let meta = parse_diff(MULTI_FILE_DIFF).unwrap();
+
+        assert_eq!(meta.files[0].hunks.len(), 1, "First file should have 1 hunk");
+        assert_eq!(meta.files[1].hunks.len(), 1, "Second file should have 1 hunk");
+    }
+
+    #[test]
+    fn hunk_info_serializes_correctly() {
+        let hunk = HunkInfo {
+            display_line: 5,
+            old_start: 10,
+            old_count: 5,
+            new_start: 12,
+            new_count: 7,
+            function_context: Some("fn example()".to_string()),
+            function_context_html: Some("<span class=\"k\">fn</span> example()".to_string()),
+        };
+
+        let json = serde_json::to_string(&hunk).unwrap();
+        assert!(json.contains("\"display_line\":5"));
+        assert!(json.contains("\"function_context\":\"fn example()\""));
     }
 }

@@ -30,12 +30,23 @@ export interface DiffMetadata {
   lines: Record<number, DiffLineInfo>;
 }
 
+export interface HunkInfo {
+  display_line: number;
+  old_start: number;
+  old_count: number;
+  new_start: number;
+  new_count: number;
+  function_context: string | null;
+  function_context_html: string | null;
+}
+
 export interface DiffFileInfo {
   old_name: string | null;
   new_name: string | null;
   language: string;
   start_line: number;
   end_line: number;
+  hunks: HunkInfo[];
 }
 
 export interface DiffLineInfo {

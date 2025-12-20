@@ -200,8 +200,21 @@ impl AppState {
         tags: Vec<Tag>,
         exit_modes: Vec<ExitMode>,
     ) -> Result<Self, String> {
-        let diff_metadata = diff::parse_diff(content)?;
+        let mut diff_metadata = diff::parse_diff(content)?;
         let highlighter = Highlighter::new();
+
+        // Highlight function contexts in hunk headers
+        for file in &mut diff_metadata.files {
+            let fake_path = format!("file.{}", file.language);
+            for hunk in &mut file.hunks {
+                if let Some(ref ctx) = hunk.function_context {
+                    let html = highlighter.highlight_snippet(ctx, &fake_path);
+                    if !html.is_empty() {
+                        hunk.function_context_html = Some(html);
+                    }
+                }
+            }
+        }
 
         // For diffs, we create lines from the raw content
         // Each line gets its display number (1-indexed)

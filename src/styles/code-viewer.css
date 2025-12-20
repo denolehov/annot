@@ -298,18 +298,30 @@ div.line.diff-deleted .diff-gutter-old {
 	color: rgb(239, 68, 68);
 }
 
-/* Header lines (dimmed) */
+/* Header lines (dimmed, non-selectable) */
 div.line.diff-header {
 	background-color: var(--bg-panel);
 	color: var(--text-muted);
 }
 
+div.line.diff-header:hover {
+	/* No hover highlight for non-selectable lines */
+	background-color: var(--bg-panel);
+}
+
 div.line.diff-header .gutter {
 	color: var(--text-muted);
+	cursor: default;
+	pointer-events: none;
 }
 
 div.line.diff-header .code {
 	font-weight: 500;
+}
+
+/* Hide add button for non-selectable header lines */
+div.line.diff-header .add-btn {
+	display: none !important;
 }
 
 /* Context lines - no special styling, inherit defaults */
@@ -317,25 +329,74 @@ div.line.diff-context {
 	/* Default styling */
 }
 
-/* Selection on diff lines - amber takes priority */
+/* Selection on diff lines - amber takes priority (header lines are non-selectable) */
 div.line.diff-added.selected,
 div.line.diff-deleted.selected,
-div.line.diff-context.selected,
-div.line.diff-header.selected {
+div.line.diff-context.selected {
 	background-color: var(--selection-bg);
 }
 
 div.line.diff-added.selected:hover,
 div.line.diff-deleted.selected:hover,
-div.line.diff-context.selected:hover,
-div.line.diff-header.selected:hover {
+div.line.diff-context.selected:hover {
 	background-color: var(--selection-bg);
 }
 
-/* Annotated diff lines */
+/* Annotated diff lines (header lines cannot be annotated) */
 div.line.diff-added.annotated,
 div.line.diff-deleted.annotated,
-div.line.diff-context.annotated,
-div.line.diff-header.annotated {
+div.line.diff-context.annotated {
 	background-color: var(--selection-bg);
+}
+
+/* ===========================================
+   DIFF HEADER - Hunk metadata in window header
+   =========================================== */
+
+.diff-header-info {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	-webkit-app-region: no-drag;
+}
+
+.diff-header-file {
+	color: var(--text-primary);
+	font-weight: 600;
+}
+
+.diff-header-counter {
+	color: var(--text-muted);
+	font-weight: 400;
+}
+
+.diff-header-sep {
+	color: var(--text-muted);
+}
+
+.diff-header-range {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.diff-header-old {
+	color: rgb(239, 68, 68);
+}
+
+.diff-header-new {
+	color: rgb(34, 197, 94);
+}
+
+.diff-header-fn {
+	color: var(--accent);
+	font-weight: 500;
+	max-width: 250px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	padding: 1px 6px;
+	background: color-mix(in srgb, var(--accent) 12%, transparent);
+	border-radius: 4px;
 }
