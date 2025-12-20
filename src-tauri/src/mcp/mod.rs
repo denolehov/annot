@@ -12,8 +12,9 @@ use rmcp::{tool, tool_handler, tool_router, ErrorData as McpError, ServerHandler
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 
 use crate::config;
+use crate::output::FormatResult;
 use crate::state::AppState;
-use tools::{ReviewContentInput, ReviewFileInput, SessionOutput};
+use tools::{ReviewContentInput, ReviewDiffInput, ReviewFileInput, SessionImage, SessionOutput};
 
 /// MCP server that exposes annotation tools.
 #[derive(Clone)]
@@ -66,6 +67,24 @@ impl AnnotServer {
 
         Ok(build_mcp_response(output))
     }
+
+    #[tool(description = "Opens a unified diff in hl for annotation. Supports git-aware generation (preferred) or raw diff content. Blocks until browser closes.")]
+    async fn review_diff(
+        &self,
+        params: Parameters<ReviewDiffInput>,
+    ) -> Result<CallToolResult, McpError> {
+        let app_handle = self.app_handle.clone();
+        let input = params.0;
+
+        let output = tokio::task::spawn_blocking(move || {
+            run_diff_session(&app_handle, input)
+        })
+        .await
+        .map_err(|e| McpError::internal_error(format!("Task join error: {}", e), None))?
+        .map_err(|e| McpError::internal_error(e, None))?;
+
+        Ok(build_mcp_response(output))
+    }
 }
 
 #[tool_handler]
@@ -77,7 +96,7 @@ impl ServerHandler for AnnotServer {
                 .enable_tools()
                 .build(),
             server_info: Implementation::from_build_env(),
-            instructions: Some("Annotation tool for human-in-the-loop AI workflows. Tools: review_file (opens a file for annotation), review_content (opens ephemeral content for annotation).".into()),
+            instructions: Some("Annotation tool for human-in-the-loop AI workflows. Tools: review_file (opens a file for annotation), review_content (opens ephemeral content for annotation), review_diff (opens a unified diff for annotation).".into()),
         }
     }
 }
@@ -94,7 +113,7 @@ fn run_file_session(app_handle: &AppHandle, params: ReviewFileInput) -> Result<S
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| params.file_path.clone());
 
-    run_session(app_handle, label, content, &params.file_path, params.exit_modes)
+    run_session(app_handle, label, content, &params.file_path, params.exit_modes, false)
 }
 
 /// Run a content review session.
@@ -108,37 +127,114 @@ fn run_content_session(
         params.content,
         &params.label,
         params.exit_modes,
+        true, // Content review is ephemeral (enables image paste)
     )
 }
 
-/// Run a review session with the given content.
+/// Run a diff review session.
+fn run_diff_session(
+    app_handle: &AppHandle,
+    params: ReviewDiffInput,
+) -> Result<SessionOutput, String> {
+    use std::process::Command;
+
+    // Get diff content and derive label based on which source was provided
+    let (diff_text, derived_label) = match (&params.git_diff_args, &params.diff_content) {
+        (Some(args), None) => {
+            // Git diff mode
+            let output = Command::new("git")
+                .arg("diff")
+                .args(args)
+                .output()
+                .map_err(|e| format!("Failed to run git: {}", e))?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(format!("git diff failed: {}", stderr));
+            }
+
+            let diff = String::from_utf8_lossy(&output.stdout).to_string();
+            let label = args
+                .first()
+                .map(|s| s.trim_start_matches('-').to_string())
+                .unwrap_or_else(|| "diff".to_string());
+            (diff, label)
+        }
+        (None, Some(content)) => {
+            // Raw diff mode
+            (content.clone(), "diff".to_string())
+        }
+        (Some(_), Some(_)) => {
+            return Err("Provide either git_diff_args or diff_content, not both".to_string());
+        }
+        (None, None) => {
+            return Err("Provide either git_diff_args or diff_content".to_string());
+        }
+    };
+
+    let label = params.label.unwrap_or(derived_label);
+
+    // Load config
+    let tags = config::load_tags();
+    let mut exit_modes = config::load_exit_modes();
+
+    // Prepend ephemeral exit modes
+    if let Some(inputs) = params.exit_modes {
+        let ephemeral: Vec<_> = inputs
+            .into_iter()
+            .enumerate()
+            .map(|(i, m)| m.to_exit_mode(i))
+            .collect();
+        exit_modes.splice(0..0, ephemeral);
+    }
+
+    // Create state using from_diff
+    let state = AppState::from_diff(label, &diff_text, tags, exit_modes)
+        .map_err(|e| format!("Invalid diff: {}", e))?;
+
+    run_session_with_state(app_handle, state)
+}
+
+/// Run a review session with the given content (for file/content modes).
 fn run_session(
     app_handle: &AppHandle,
     label: String,
     content: String,
     path_hint: &str,
     exit_modes_input: Option<Vec<tools::ExitModeInput>>,
+    ephemeral: bool,
 ) -> Result<SessionOutput, String> {
-    // Create channel for receiving result
-    let (tx, rx) = mpsc::channel::<String>();
-
     // Load config
     let tags = config::load_tags();
     let mut exit_modes = config::load_exit_modes();
 
     // Prepend ephemeral exit modes from MCP input
     if let Some(inputs) = exit_modes_input {
-        let ephemeral: Vec<_> = inputs
+        let ephemeral_modes: Vec<_> = inputs
             .into_iter()
             .enumerate()
             .map(|(i, m)| m.to_exit_mode(i))
             .collect();
-        // Insert at beginning
-        exit_modes.splice(0..0, ephemeral);
+        exit_modes.splice(0..0, ephemeral_modes);
     }
 
-    // Create state
-    let state = AppState::from_file(label, &content, path_hint, tags, exit_modes);
+    // Create state (check for markdown by extension)
+    let state = if crate::markdown::is_markdown(path_hint) {
+        AppState::from_markdown(label, &content, path_hint, tags, exit_modes, ephemeral)
+    } else {
+        AppState::from_file(label, &content, path_hint, tags, exit_modes)
+    };
+
+    run_session_with_state(app_handle, state)
+}
+
+/// Run a review session with a pre-built AppState.
+fn run_session_with_state(
+    app_handle: &AppHandle,
+    state: AppState,
+) -> Result<SessionOutput, String> {
+    // Create channel for receiving result
+    let (tx, rx) = mpsc::channel::<FormatResult>();
 
     // Store state and sender
     {
@@ -180,9 +276,16 @@ fn run_session(
         .map_err(|e| format!("Failed to create window: {}", e))?;
 
     // Block until result received
-    let output_text = rx.recv().map_err(|e| format!("Failed to receive result: {}", e))?;
+    let result = rx.recv().map_err(|e| format!("Failed to receive result: {}", e))?;
 
-    Ok(SessionOutput { text: output_text })
+    Ok(SessionOutput {
+        text: result.text,
+        images: result.images.into_iter().map(|img| SessionImage {
+            figure: img.figure,
+            data: img.data,
+            mime_type: img.mime_type,
+        }).collect(),
+    })
 }
 
 /// Build MCP response from session output.
@@ -196,7 +299,14 @@ fn build_mcp_response(output: SessionOutput) -> CallToolResult {
         )
     };
 
-    CallToolResult::success(vec![Content::text(text)])
+    let mut contents = vec![Content::text(text)];
+
+    // Add images as separate content items (data is already base64-encoded)
+    for img in output.images {
+        contents.push(Content::image(img.data, img.mime_type));
+    }
+
+    CallToolResult::success(contents)
 }
 
 /// Run the MCP server on stdio.

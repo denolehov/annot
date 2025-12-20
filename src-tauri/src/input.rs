@@ -6,6 +6,7 @@ use std::io::{self, IsTerminal, Read};
 use std::path::PathBuf;
 
 use crate::diff;
+use crate::markdown;
 
 /// The source of input content.
 pub enum InputMode {
@@ -27,6 +28,8 @@ pub struct ResolvedInput {
     pub path_hint: String,
     /// Whether the content is a unified diff (auto-detected).
     pub is_diff: bool,
+    /// Whether the file is markdown (detected by extension).
+    pub is_markdown: bool,
 }
 
 impl InputMode {
@@ -47,12 +50,14 @@ impl InputMode {
 
                 let path_hint = path.to_string_lossy().to_string();
                 let is_diff = diff::is_diff(&content);
+                let is_markdown = markdown::is_markdown(&path_hint);
 
                 Ok(ResolvedInput {
                     label,
                     content,
                     path_hint,
                     is_diff,
+                    is_markdown,
                 })
             }
             InputMode::Stdin { label } => {
@@ -68,12 +73,14 @@ impl InputMode {
                 // Use label for both display and language detection
                 let path_hint = label.clone();
                 let is_diff = diff::is_diff(&content);
+                let is_markdown = markdown::is_markdown(&path_hint);
 
                 Ok(ResolvedInput {
                     label,
                     content,
                     path_hint,
                     is_diff,
+                    is_markdown,
                 })
             }
         }

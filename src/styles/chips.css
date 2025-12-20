@@ -55,6 +55,33 @@
 	color: var(--tag-text);
 }
 
+/* Color variant for media (pasted images) */
+.media-chip {
+	background: var(--tag-bg);
+	border-color: var(--border-strong);
+	color: var(--text-secondary);
+}
+
+/* Color variant for Excalidraw diagrams */
+.excalidraw-chip {
+	background: var(--bg-panel);
+	border-color: var(--border-strong);
+	color: var(--text-secondary);
+	cursor: pointer;
+}
+
+.excalidraw-chip:hover {
+	background: var(--bg-hover);
+	border-color: var(--accent-primary, #3b82f6);
+}
+
+/* Placeholder style (transient, dashed border) */
+.excalidraw-placeholder {
+	background: var(--bg-panel);
+	border: 1px dashed var(--border-active);
+	color: var(--text-muted);
+}
+
 /* Selected chip (via backspace or click) */
 .tag-chip.ProseMirror-selectednode {
 	outline: 2px solid var(--selection-border);

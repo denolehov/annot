@@ -2,6 +2,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 
+use output::FormatResult;
+
 use tauri::WebviewWindowBuilder;
 
 pub mod commands;
@@ -9,14 +11,15 @@ pub mod config;
 pub mod diff;
 pub mod highlight;
 pub mod input;
+pub mod markdown;
 pub mod mcp;
 pub mod output;
 pub mod state;
 
 use commands::{
-    cycle_exit_mode, delete_annotation, delete_exit_mode, delete_tag, finish_session, get_content,
-    get_exit_modes, get_tags, reorder_exit_modes, set_exit_mode, set_session_comment,
-    upsert_annotation, upsert_exit_mode, upsert_tag,
+    copy_to_clipboard, cycle_exit_mode, delete_annotation, delete_exit_mode, delete_tag,
+    finish_session, get_content, get_exit_modes, get_tags, reorder_exit_modes, set_exit_mode,
+    set_session_comment, upsert_annotation, upsert_exit_mode, upsert_tag,
 };
 use state::AppState;
 
@@ -24,7 +27,7 @@ use state::AppState;
 pub type ShouldExit = Arc<AtomicBool>;
 
 /// Sender for MCP session results.
-pub type ResultSender = Mutex<Option<Sender<String>>>;
+pub type ResultSender = Mutex<Option<Sender<FormatResult>>>;
 
 /// Run in CLI mode (file/stdin input, prints result, exits).
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -48,7 +51,8 @@ pub fn run(state: AppState, context: tauri::Context) {
             get_exit_modes,
             upsert_exit_mode,
             delete_exit_mode,
-            reorder_exit_modes
+            reorder_exit_modes,
+            copy_to_clipboard
         ])
         .setup(|app| {
             // Create window programmatically (not from config, for MCP compatibility)
@@ -105,7 +109,8 @@ pub fn run_mcp(context: tauri::Context) {
             get_exit_modes,
             upsert_exit_mode,
             delete_exit_mode,
-            reorder_exit_modes
+            reorder_exit_modes,
+            copy_to_clipboard
         ])
         .setup(|app| {
             // Set accessory mode on macOS (hide dock icon)

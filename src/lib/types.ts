@@ -22,6 +22,9 @@ export interface ContentResponse {
   selected_exit_mode_id: string | null;
   session_comment: ContentNode[] | null;
   diff_metadata: DiffMetadata | null;
+  markdown_metadata: MarkdownMetadata | null;
+  /** Whether this is an ephemeral session (enables image paste). */
+  ephemeral: boolean;
 }
 
 // Diff types
@@ -58,6 +61,32 @@ export interface DiffLineInfo {
 
 export type DiffLineKind = 'context' | 'added' | 'deleted' | 'header';
 
+// Markdown types
+export interface MarkdownMetadata {
+  sections: SectionInfo[];
+  code_blocks: CodeBlockInfo[];
+  tables: TableInfo[];
+}
+
+export interface SectionInfo {
+  source_line: number;
+  level: number;
+  title: string;
+  parent_index: number | null;
+}
+
+export interface CodeBlockInfo {
+  start_line: number;
+  end_line: number;
+  language: string | null;
+}
+
+export interface TableInfo {
+  start_line: number;
+  end_line: number;
+  formatted_lines: string[];
+}
+
 // Tag definition (composable mini-prompts)
 export interface Tag {
   id: string;
@@ -66,7 +95,7 @@ export interface Tag {
 }
 
 // Content node types for structured annotation content (output format)
-export type ContentNode = TextNode | TagNode;
+export type ContentNode = TextNode | TagNode | MediaNode | ExcalidrawNode;
 
 export interface TextNode {
   type: 'text';
@@ -78,6 +107,18 @@ export interface TagNode {
   id: string;
   name: string;
   instruction: string;
+}
+
+export interface MediaNode {
+  type: 'media';
+  image: string; // data URL: "data:image/png;base64,..."
+  mime_type: string; // e.g., "image/png"
+}
+
+export interface ExcalidrawNode {
+  type: 'excalidraw';
+  elements: string; // JSON string of Excalidraw elements
+  image?: string; // base64 PNG data URL for MCP export
 }
 
 // TipTap JSON content type for internal storage

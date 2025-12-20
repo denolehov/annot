@@ -2,31 +2,50 @@
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
-  import type { ContentResponse, ContentNode, Line, JSONContent, ExitMode, Tag, DiffMetadata, DiffLineInfo, HunkInfo } from "$lib/types";
+  import type { ContentResponse, ContentNode, Line, JSONContent, ExitMode, Tag, DiffMetadata, DiffLineInfo, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
   import { rangeToKey, keyToRange, isLineInRange, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap } from "$lib/tiptap";
+  import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
   import AnnotationEditor from "$lib/AnnotationEditor.svelte";
+  import CopyDropdown from "$lib/CopyDropdown.svelte";
   import { CommandPalette } from "$lib/CommandPalette";
 
   let lines: Line[] = $state([]);
   let label = $state("");
   let error = $state("");
   let diffMetadata: DiffMetadata | null = $state(null);
+  let markdownMetadata: MarkdownMetadata | null = $state(null);
+  let ephemeral = $state(false);
 
-  // Smart header state for diff view
-  interface HunkBoundary {
-    startLine: number;
-    fileIndex: number;
-    hunkIndex: number;
+  // Toast state
+  let toastMessage = $state<string | null>(null);
+  let toastExiting = $state(false);
+  let toastTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  function showToast(message: string, duration = 3000) {
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastMessage = message;
+    toastExiting = false;
+    toastTimeout = setTimeout(() => {
+      toastExiting = true;
+      // Wait for exit animation to complete
+      setTimeout(() => {
+        toastMessage = null;
+        toastExiting = false;
+      }, 200);
+    }, duration);
   }
 
-  let hunkBoundaries: HunkBoundary[] = $state([]);
+  // Content tracking (generalized for diff/markdown/future modes)
+  let hunkTracker: ContentTracker<HunkPayload> | null = $state(null);
+  let sectionTracker: ContentTracker<SectionPayload> | null = $state(null);
   let currentFileIndex = $state(0);
   let currentHunkIndex = $state(0);
+  let currentSectionIndex = $state(0);
   let contentEl: HTMLDivElement | null = $state(null);
   let scrollRafId: number | null = null;
 
-  // Current file/hunk derived from indices
+  // Current file/hunk derived from indices (diff mode)
   let currentFile = $derived.by(() => {
     if (!diffMetadata || diffMetadata.files.length === 0) return null;
     return diffMetadata.files[currentFileIndex] ?? null;
@@ -37,40 +56,59 @@
     return currentFile.hunks[currentHunkIndex] ?? null;
   });
 
-  // Build sorted hunk boundaries for O(log n) lookup
-  function buildHunkBoundaries(meta: DiffMetadata): HunkBoundary[] {
-    const boundaries: HunkBoundary[] = [];
+  // Current section derived from index (markdown mode)
+  let currentSection = $derived.by(() => {
+    if (!markdownMetadata || markdownMetadata.sections.length === 0) return null;
+    return markdownMetadata.sections[currentSectionIndex] ?? null;
+  });
+
+  // Build breadcrumb for markdown sections
+  let sectionBreadcrumb = $derived.by(() => {
+    if (!markdownMetadata || currentSectionIndex < 0) return [];
+    const sections = markdownMetadata.sections;
+    const breadcrumb: SectionInfo[] = [];
+
+    let idx: number | null = currentSectionIndex;
+    while (idx !== null && idx >= 0 && idx < sections.length) {
+      breadcrumb.unshift(sections[idx]);
+      idx = sections[idx].parent_index;
+    }
+
+    return breadcrumb;
+  });
+
+  // Depth-based header display: H1 always, H2 only at depth 2, else ellipsis + current
+  let headerRootSection = $derived(sectionBreadcrumb.find(s => s.level === 1) ?? null);
+  let headerH2Section = $derived(sectionBreadcrumb.find(s => s.level === 2) ?? null);
+  let headerCurrentSection = $derived(sectionBreadcrumb.at(-1) ?? null);
+  let headerCurrentDepth = $derived(headerCurrentSection?.level ?? 0);
+
+  // Build ContentTracker for diff mode
+  function buildHunkTracker(meta: DiffMetadata): ContentTracker<HunkPayload> {
+    const boundaries: { line: number; data: HunkPayload }[] = [];
     for (let fi = 0; fi < meta.files.length; fi++) {
       const file = meta.files[fi];
       for (let hi = 0; hi < file.hunks.length; hi++) {
         boundaries.push({
-          startLine: file.hunks[hi].display_line,
-          fileIndex: fi,
-          hunkIndex: hi,
+          line: file.hunks[hi].display_line,
+          data: { fileIndex: fi, hunkIndex: hi },
         });
       }
     }
-    return boundaries.sort((a, b) => a.startLine - b.startLine);
+    return new ContentTracker(boundaries);
   }
 
-  // Binary search for largest startLine <= line
-  function findCurrentHunk(line: number, boundaries: HunkBoundary[]): HunkBoundary | null {
-    if (boundaries.length === 0) return null;
-    let lo = 0, hi = boundaries.length - 1, result: HunkBoundary | null = null;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (boundaries[mid].startLine <= line) {
-        result = boundaries[mid];
-        lo = mid + 1;
-      } else {
-        hi = mid - 1;
-      }
-    }
-    return result;
+  // Build ContentTracker for markdown mode
+  function buildSectionTracker(meta: MarkdownMetadata): ContentTracker<SectionPayload> {
+    const boundaries = meta.sections.map((section, i) => ({
+      line: section.source_line,
+      data: { sectionIndex: i },
+    }));
+    return new ContentTracker(boundaries);
   }
 
   function updateCurrentPosition() {
-    if (!contentEl || !diffMetadata) return;
+    if (!contentEl) return;
 
     const lineEls = contentEl.querySelectorAll('.line');
     const scrollTop = contentEl.scrollTop;
@@ -79,11 +117,24 @@
       const htmlEl = el as HTMLElement;
       if (htmlEl.offsetTop >= scrollTop) {
         const lineNum = parseInt(htmlEl.dataset.line ?? '1', 10);
-        const boundary = findCurrentHunk(lineNum, hunkBoundaries);
-        if (boundary) {
-          currentFileIndex = boundary.fileIndex;
-          currentHunkIndex = boundary.hunkIndex;
+
+        // Update diff tracking
+        if (hunkTracker) {
+          const boundary = hunkTracker.findAt(lineNum);
+          if (boundary) {
+            currentFileIndex = boundary.data.fileIndex;
+            currentHunkIndex = boundary.data.hunkIndex;
+          }
         }
+
+        // Update markdown tracking
+        if (sectionTracker) {
+          const boundary = sectionTracker.findAt(lineNum);
+          if (boundary) {
+            currentSectionIndex = boundary.data.sectionIndex;
+          }
+        }
+
         break;
       }
     }
@@ -112,29 +163,31 @@
 
   // Get hunk bounds for a line (returns null if line is a header or not in diff mode)
   function getHunkBounds(lineNum: number): { start: number; end: number } | null {
-    if (!diffMetadata || hunkBoundaries.length === 0) return null;
+    if (!diffMetadata || !hunkTracker || hunkTracker.length === 0) return null;
 
-    const boundary = findCurrentHunk(lineNum, hunkBoundaries);
+    const boundary = hunkTracker.findAt(lineNum);
     if (!boundary) return null;
 
+    const boundaries = hunkTracker.all();
+
     // Find this boundary's index
-    const boundaryIdx = hunkBoundaries.findIndex(
-      b => b.fileIndex === boundary.fileIndex && b.hunkIndex === boundary.hunkIndex
+    const boundaryIdx = boundaries.findIndex(
+      b => b.data.fileIndex === boundary.data.fileIndex && b.data.hunkIndex === boundary.data.hunkIndex
     );
 
     // The hunk starts at the @@ line (header), but selectable content starts on next line
-    const hunkStart = boundary.startLine + 1;
+    const hunkStart = boundary.line + 1;
 
     // Find end: next hunk in SAME file, or file's end
     let hunkEnd: number;
-    const nextBoundary = hunkBoundaries[boundaryIdx + 1];
+    const nextBoundary = boundaries[boundaryIdx + 1];
 
-    if (nextBoundary && nextBoundary.fileIndex === boundary.fileIndex) {
+    if (nextBoundary && nextBoundary.data.fileIndex === boundary.data.fileIndex) {
       // Next hunk in same file - end before its header line
-      hunkEnd = nextBoundary.startLine - 1;
+      hunkEnd = nextBoundary.line - 1;
     } else {
       // Last hunk in this file - end at file's end_line
-      const file = diffMetadata.files[boundary.fileIndex];
+      const file = diffMetadata.files[boundary.data.fileIndex];
       hunkEnd = file?.end_line ?? lines.length;
     }
 
@@ -277,6 +330,10 @@
     }
 
     tags = newTags;
+  }
+
+  function handleImagePasteBlocked() {
+    showToast('Image paste is only supported in MCP mode');
   }
 
   async function handleExitModesChange(newModes: ExitMode[]) {
@@ -478,10 +535,15 @@
       tags = res.tags;
       exitModes = res.exit_modes;
       diffMetadata = res.diff_metadata;
+      markdownMetadata = res.markdown_metadata;
+      ephemeral = res.ephemeral;
 
-      // Build hunk boundaries for smart header scroll tracking
+      // Build content trackers for scroll tracking
       if (res.diff_metadata) {
-        hunkBoundaries = buildHunkBoundaries(res.diff_metadata);
+        hunkTracker = buildHunkTracker(res.diff_metadata);
+      }
+      if (res.markdown_metadata) {
+        sectionTracker = buildSectionTracker(res.markdown_metadata);
       }
 
       // Find index of initially selected mode (if any)
@@ -520,8 +582,13 @@
           <!-- Diff mode: show hunk metadata -->
           {@const fileName = currentFile.new_name ?? currentFile.old_name ?? 'unknown'}
           {@const fileCount = diffMetadata.files.length}
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
           <span class="diff-header-info">
-            <span class="diff-header-file">
+            <span
+              class="diff-header-file"
+              class:has-comment={sessionComment !== undefined}
+              onclick={openSessionEditor}
+            >
               {fileName}
               {#if fileCount > 1}
                 <span class="diff-header-counter">({currentFileIndex + 1}/{fileCount})</span>
@@ -544,6 +611,46 @@
               {/if}
             {/if}
           </span>
+        {:else if markdownMetadata && sectionBreadcrumb.length > 0}
+          <!-- Markdown mode: depth-based breadcrumb -->
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+          <span class="md-header-info">
+            <!-- Filename -->
+            <span
+              class="md-header-file"
+              class:has-comment={sessionComment !== undefined}
+              onclick={openSessionEditor}
+            ><span class="md-header-title">{label}</span></span>
+
+            <!-- H1 (root) - always shown -->
+            {#if headerRootSection}
+              <span class="md-header-sep">·</span>
+              <span class="md-header-section md-header-root">
+                <span class="md-header-level">#</span>
+                <span class="md-header-title">{headerRootSection.title}</span>
+              </span>
+            {/if}
+
+            <!-- H2 shown only when current depth is exactly 2 -->
+            {#if headerCurrentDepth === 2 && headerH2Section}
+              <span class="md-header-sep">·</span>
+              <span class="md-header-section md-header-current">
+                <span class="md-header-level">##</span>
+                <span class="md-header-title">{headerH2Section.title}</span>
+              </span>
+            {/if}
+
+            <!-- Ellipsis + current section when depth >= 3 -->
+            {#if headerCurrentDepth >= 3 && headerCurrentSection}
+              <span class="md-header-sep">·</span>
+              <span class="md-header-ellipsis">…</span>
+              <span class="md-header-sep">·</span>
+              <span class="md-header-section md-header-current">
+                <span class="md-header-level">{'#'.repeat(headerCurrentSection.level)}</span>
+                <span class="md-header-title">{headerCurrentSection.title}</span>
+              </span>
+            {/if}
+          </span>
         {:else}
           <!-- Normal mode: show filename -->
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -554,7 +661,9 @@
           >{label}</span>
         {/if}
       </div>
-      <div class="header-right"></div>
+      <div class="header-right">
+        <CopyDropdown {showToast} />
+      </div>
     </header>
     <!-- Session editor slot -->
     {#if sessionEditorOpen || sessionComment}
@@ -565,6 +674,9 @@
           onUpdate={updateSessionComment}
           onUnseal={openSessionEditor}
           onDismiss={closeSessionEditor}
+          {tags}
+          {ephemeral}
+          onImagePasteBlocked={handleImagePasteBlocked}
         />
       </div>
     {/if}
@@ -639,6 +751,9 @@
                 sealedRanges = new Set(sealedRanges);
               }}
               onDismiss={sealCurrentAnnotation}
+              {tags}
+              {ephemeral}
+              onImagePasteBlocked={handleImagePasteBlocked}
             />
           {/key}
         {/if}
@@ -696,10 +811,56 @@
   />
 {/if}
 
+{#if toastMessage}
+  <div class="toast" class:exiting={toastExiting}>{toastMessage}</div>
+{/if}
+
 <style>
   /* Page-specific styles only - see src/styles/ for the design system */
 
   :global(body) {
     overflow: hidden;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 48px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--text-primary);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: var(--font-ui);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 9999;
+    animation: toast-in 0.2s ease forwards;
+  }
+
+  .toast.exiting {
+    animation: toast-out 0.2s ease forwards;
+  }
+
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
+
+  @keyframes toast-out {
+    from {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(-50%) translateY(-8px);
+    }
   }
 </style>

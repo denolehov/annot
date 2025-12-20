@@ -24,6 +24,22 @@ pub struct ReviewContentInput {
     pub exit_modes: Option<Vec<ExitModeInput>>,
 }
 
+/// Input for the review_diff tool.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ReviewDiffInput {
+    #[schemars(description = "git diff arguments (e.g. [\"--staged\"])")]
+    pub git_diff_args: Option<Vec<String>>,
+
+    #[schemars(description = "raw unified diff content")]
+    pub diff_content: Option<String>,
+
+    #[schemars(description = "display name (default: diff)")]
+    pub label: Option<String>,
+
+    #[schemars(description = "optional exit modes for the review session")]
+    pub exit_modes: Option<Vec<ExitModeInput>>,
+}
+
 /// An exit mode provided by the MCP caller.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ExitModeInput {
@@ -37,10 +53,22 @@ pub struct ExitModeInput {
     pub color: Option<String>,
 }
 
+/// An image collected from annotations.
+#[derive(Debug, Clone)]
+pub struct SessionImage {
+    /// Figure number (1-indexed)
+    pub figure: usize,
+    /// Base64-encoded image data (without data URL prefix)
+    pub data: String,
+    /// MIME type (e.g., "image/png")
+    pub mime_type: String,
+}
+
 /// Output from a review session.
 #[derive(Debug, Clone)]
 pub struct SessionOutput {
     pub text: String,
+    pub images: Vec<SessionImage>,
 }
 
 /// Convert ExitModeInput to internal ExitMode format.

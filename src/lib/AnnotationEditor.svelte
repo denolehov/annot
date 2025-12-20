@@ -1,12 +1,23 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack } from 'svelte';
-  import { invoke } from '@tauri-apps/api/core';
   import { Editor, type JSONContent, type Range } from '@tiptap/core';
   import StarterKit from '@tiptap/starter-kit';
   import Placeholder from '@tiptap/extension-placeholder';
   import type { SuggestionProps, SuggestionKeyDownProps } from '@tiptap/suggestion';
-  import { trimContent, isContentEmpty, TagChip } from './tiptap';
+  import {
+    trimContent,
+    isContentEmpty,
+    TagChip,
+    MediaChip,
+    ImagePasteHandler,
+    ExcalidrawChip,
+    ExcalidrawPlaceholder,
+    SlashCommands,
+    createSlashSuggestion,
+    type SlashCommand,
+  } from './tiptap';
   import type { Tag } from './types';
+  import ExcalidrawModal from './ExcalidrawModal.svelte';
 
   // Portal action: moves element to body so it's not clipped by scroll containers
   function portal(node: HTMLElement) {
@@ -24,16 +35,18 @@
     sealed?: boolean;
     onUnseal?: () => void;
     onDismiss?: () => void;
+    tags?: Tag[];
+    ephemeral?: boolean;
+    onImagePasteBlocked?: () => void;
   }
 
-  let { content, onUpdate, sealed = false, onUnseal, onDismiss }: Props = $props();
+  let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], ephemeral = false, onImagePasteBlocked }: Props = $props();
 
   let container: HTMLDivElement | undefined = $state();
   let element: HTMLDivElement | undefined = $state();
   let editorState: { editor: Editor | null } = $state({ editor: null });
 
   // Tag suggestion state
-  let tags: Tag[] = $state([]);
   let suggestionCommand: ((item: Tag) => void) | null = $state(null);
   let suggestionState = $state<{
     active: boolean;
@@ -47,12 +60,32 @@
     clientRect: null,
   });
 
+  // Slash command suggestion state
+  let slashCommand: ((item: SlashCommand) => void) | null = $state(null);
+  let slashState = $state<{
+    active: boolean;
+    items: SlashCommand[];
+    selectedIndex: number;
+    clientRect: (() => DOMRect | null) | null;
+  }>({
+    active: false,
+    items: [],
+    selectedIndex: 0,
+    clientRect: null,
+  });
+
+  // Excalidraw modal state
+  let excalidrawModalOpen = $state(false);
+  let excalidrawEditPos: number | null = $state(null);
+  let excalidrawEditElements = $state('[]');
+
   // Force position recalculation on scroll (clientRect is a function, but Svelte needs a state change to re-render)
   let positionTick = $state(0);
   let suggestionsEl: HTMLDivElement | undefined = $state();
+  let slashSuggestionsEl: HTMLDivElement | undefined = $state();
 
   $effect(() => {
-    if (!suggestionState.active) return;
+    if (!suggestionState.active && !slashState.active) return;
 
     let rafId: number | null = null;
     const handleScroll = () => {
@@ -72,11 +105,11 @@
 
   // Calculate optimal popup position (above or below cursor)
   // _tick parameter creates reactive dependency for scroll updates
-  function getSuggestionPosition(_tick: number): { left: number; top: number } {
-    const rect = suggestionState.clientRect?.();
+  function getSuggestionPosition(_tick: number, clientRect: (() => DOMRect | null) | null, menuEl?: HTMLDivElement): { left: number; top: number } {
+    const rect = clientRect?.();
     if (!rect) return { left: 0, top: 0 };
 
-    const menuHeight = suggestionsEl?.offsetHeight ?? 150; // Estimate if not yet measured
+    const menuHeight = menuEl?.offsetHeight ?? 60; // Small default for single-item menus
     const padding = 8;
     const gap = 4;
 
@@ -102,11 +135,6 @@
 
     return { left: rect.left, top };
   }
-
-  // Load tags on mount
-  onMount(async () => {
-    tags = await invoke<Tag[]>('get_tags');
-  });
 
   onMount(() => {
     editorState.editor = new Editor({
@@ -193,6 +221,68 @@
             },
           },
         }),
+        MediaChip,
+        ExcalidrawChip,
+        ExcalidrawPlaceholder,
+        ImagePasteHandler.configure({
+          ephemeral,
+          onPasteBlocked: onImagePasteBlocked,
+        }),
+        SlashCommands.configure({
+          suggestion: {
+            ...createSlashSuggestion(),
+            render: () => {
+              return {
+                onStart: (props: SuggestionProps<SlashCommand>) => {
+                  slashCommand = props.command;
+                  slashState = {
+                    active: true,
+                    items: props.items,
+                    selectedIndex: 0,
+                    clientRect: props.clientRect ?? null,
+                  };
+                },
+                onUpdate: (props: SuggestionProps<SlashCommand>) => {
+                  slashCommand = props.command;
+                  slashState = {
+                    ...slashState,
+                    items: props.items,
+                    clientRect: props.clientRect ?? null,
+                  };
+                },
+                onKeyDown: (props: SuggestionKeyDownProps) => {
+                  if (props.event.key === 'ArrowUp') {
+                    slashState.selectedIndex =
+                      (slashState.selectedIndex - 1 + slashState.items.length) %
+                      slashState.items.length;
+                    return true;
+                  }
+                  if (props.event.key === 'ArrowDown') {
+                    slashState.selectedIndex =
+                      (slashState.selectedIndex + 1) % slashState.items.length;
+                    return true;
+                  }
+                  if (props.event.key === 'Enter') {
+                    const item = slashState.items[slashState.selectedIndex];
+                    if (item && slashCommand) {
+                      slashCommand(item);
+                    }
+                    return true;
+                  }
+                  if (props.event.key === 'Escape') {
+                    slashState.active = false;
+                    return true;
+                  }
+                  return false;
+                },
+                onExit: () => {
+                  slashState.active = false;
+                  slashCommand = null;
+                },
+              };
+            },
+          },
+        }),
       ],
       content: content, // TipTap accepts JSONContent directly
       editable: !sealed,
@@ -202,7 +292,8 @@
         onUpdate(isContentEmpty(json) ? null : json);
       },
       onBlur: ({ editor }) => {
-        if (!sealed && !suggestionState.active) {
+        // Don't dismiss while Excalidraw modal is open - it will handle cleanup on close
+        if (!sealed && !suggestionState.active && !excalidrawModalOpen) {
           // Trim trailing empty paragraphs before sealing
           const trimmed = trimContent(editor.getJSON());
           editor.commands.setContent(trimmed);
@@ -224,6 +315,24 @@
     };
     element?.addEventListener('keydown', handleKeyDown);
 
+    // Handle Excalidraw create/edit events
+    const handleExcalidrawCreate = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      excalidrawEditPos = detail.pos;
+      excalidrawEditElements = '[]';
+      excalidrawModalOpen = true;
+    };
+
+    const handleExcalidrawEdit = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      excalidrawEditPos = detail.pos;
+      excalidrawEditElements = detail.elements || '[]';
+      excalidrawModalOpen = true;
+    };
+
+    element?.addEventListener('excalidraw-create', handleExcalidrawCreate);
+    element?.addEventListener('excalidraw-edit', handleExcalidrawEdit);
+
     // Scroll entire editor (including toolbar) into view after layout completes
     // Use setTimeout to run after TipTap's autofocus scroll
     setTimeout(() => {
@@ -241,7 +350,11 @@
       }
     }, 50);
 
-    return () => element?.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      element?.removeEventListener('keydown', handleKeyDown);
+      element?.removeEventListener('excalidraw-create', handleExcalidrawCreate);
+      element?.removeEventListener('excalidraw-edit', handleExcalidrawEdit);
+    };
   });
 
   onDestroy(() => {
@@ -260,6 +373,77 @@
       }
     });
   });
+
+  // Excalidraw save handler
+  function handleExcalidrawSave(elements: string, png: string) {
+    if (excalidrawEditPos === null || !editorState.editor) return;
+
+    const editor = editorState.editor;
+    const pos = excalidrawEditPos;
+
+    // Find the node at position
+    const nodeAtPos = editor.state.doc.nodeAt(pos);
+
+    if (nodeAtPos?.type.name === 'excalidrawPlaceholder') {
+      // Replace placeholder with chip
+      editor
+        .chain()
+        .focus()
+        .deleteRange({ from: pos, to: pos + nodeAtPos.nodeSize })
+        .insertContentAt(pos, [
+          { type: 'excalidrawChip', attrs: { elements, image: png } },
+          { type: 'text', text: ' ' },
+        ])
+        .run();
+    } else if (nodeAtPos?.type.name === 'excalidrawChip') {
+      // Update existing chip - need to replace the node
+      editor
+        .chain()
+        .focus()
+        .deleteRange({ from: pos, to: pos + nodeAtPos.nodeSize })
+        .insertContentAt(pos, [
+          { type: 'excalidrawChip', attrs: { elements, image: png } },
+        ])
+        .run();
+    }
+
+    excalidrawModalOpen = false;
+    excalidrawEditPos = null;
+  }
+
+  // Excalidraw cancel handler
+  function handleExcalidrawCancel() {
+    if (excalidrawEditPos !== null && editorState.editor) {
+      const editor = editorState.editor;
+      const nodeAtPos = editor.state.doc.nodeAt(excalidrawEditPos);
+
+      // If canceling from placeholder, delete it and the trailing space we inserted
+      if (nodeAtPos?.type.name === 'excalidrawPlaceholder') {
+        const from = excalidrawEditPos;
+        let to = from + nodeAtPos.nodeSize;
+
+        // Check if there's a trailing space after the placeholder that we should also delete
+        const afterPlaceholder = editor.state.doc.textBetween(to, Math.min(to + 1, editor.state.doc.content.size), '', '');
+        if (afterPlaceholder === ' ') {
+          to += 1;
+        }
+
+        editor.chain().deleteRange({ from, to }).run();
+
+        // If editor is now empty, dismiss it; otherwise refocus for continued editing
+        const content = trimContent(editor.getJSON());
+        if (isContentEmpty(content)) {
+          onUpdate(null);
+          onDismiss?.();
+        } else {
+          editor.commands.focus();
+        }
+      }
+    }
+
+    excalidrawModalOpen = false;
+    excalidrawEditPos = null;
+  }
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -268,6 +452,7 @@
   {#if !sealed}
     <div class="toolbar">
       <span class="kbd-hint"><kbd>#</kbd> tags</span>
+      <span class="kbd-hint"><kbd>/</kbd> commands</span>
       <span class="kbd-hint"><kbd>⌘↵</kbd> done</span>
       <span class="kbd-hint"><kbd>Esc</kbd> cancel</span>
     </div>
@@ -276,7 +461,7 @@
 
 <!-- Portal tag suggestions to body so they're not clipped by scroll containers -->
 {#if suggestionState.active && suggestionState.items.length > 0}
-  {@const pos = getSuggestionPosition(positionTick)}
+  {@const pos = getSuggestionPosition(positionTick, suggestionState.clientRect, suggestionsEl)}
   <div
     bind:this={suggestionsEl}
     use:portal
@@ -301,6 +486,47 @@
       </button>
     {/each}
   </div>
+{/if}
+
+<!-- Portal slash command suggestions to body -->
+{#if slashState.active && slashState.items.length > 0}
+  {@const pos = getSuggestionPosition(positionTick, slashState.clientRect, slashSuggestionsEl)}
+  <div
+    bind:this={slashSuggestionsEl}
+    use:portal
+    class="slash-suggestions"
+    style:left="{pos.left}px"
+    style:top="{pos.top}px"
+  >
+    {#each slashState.items as cmd, i}
+      <button
+        type="button"
+        class="slash-suggestion"
+        class:selected={i === slashState.selectedIndex}
+        onmousedown={(e) => {
+          e.preventDefault();
+          if (slashCommand) {
+            slashCommand(cmd);
+          }
+        }}
+      >
+        <span class="slash-icon">{cmd.icon}</span>
+        <div class="slash-info">
+          <span class="slash-name">{cmd.name}</span>
+          <span class="slash-description">{cmd.description}</span>
+        </div>
+      </button>
+    {/each}
+  </div>
+{/if}
+
+<!-- Excalidraw modal -->
+{#if excalidrawModalOpen}
+  <ExcalidrawModal
+    initialElements={excalidrawEditElements}
+    onSave={handleExcalidrawSave}
+    onCancel={handleExcalidrawCancel}
+  />
 {/if}
 
 <style>

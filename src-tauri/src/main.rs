@@ -75,7 +75,7 @@ fn main() {
     let tags = annot_lib::config::load_tags();
     let exit_modes = annot_lib::config::load_exit_modes();
 
-    // Create state based on content type
+    // Create state based on content type (priority: diff > markdown > file)
     let state = if input.is_diff {
         match annot_lib::state::AppState::from_diff(
             input.label,
@@ -89,6 +89,15 @@ fn main() {
                 process::exit(1);
             }
         }
+    } else if input.is_markdown {
+        annot_lib::state::AppState::from_markdown(
+            input.label,
+            &input.content,
+            &input.path_hint,
+            tags,
+            exit_modes,
+            false, // CLI mode: not ephemeral
+        )
     } else {
         annot_lib::state::AppState::from_file(
             input.label,

@@ -1,6 +1,11 @@
-import { Node, mergeAttributes, type JSONContent } from '@tiptap/core';
-import Suggestion, { type SuggestionOptions } from '@tiptap/suggestion';
+import { Node, Extension, mergeAttributes, type JSONContent } from '@tiptap/core';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
+import Suggestion, { type SuggestionOptions, type SuggestionProps } from '@tiptap/suggestion';
 import type { ContentNode, Tag } from './types';
+
+// Unique plugin keys for each suggestion type
+const TagSuggestionPluginKey = new PluginKey('tagSuggestion');
+const SlashSuggestionPluginKey = new PluginKey('slashSuggestion');
 
 /**
  * TagChip node - an inline, atomic node representing a tag.
@@ -117,6 +122,7 @@ export const TagChip = Node.create({
     return [
       Suggestion({
         editor: this.editor,
+        pluginKey: TagSuggestionPluginKey,
         ...this.options.suggestion,
       }),
     ];
@@ -124,8 +130,323 @@ export const TagChip = Node.create({
 });
 
 export type TagChipOptions = {
-  suggestion: Omit<SuggestionOptions<Tag>, 'editor'>;
+  suggestion: Omit<SuggestionOptions<Tag>, 'editor' | 'pluginKey'>;
 };
+
+/**
+ * MediaChip node - an inline, atomic node representing a pasted image.
+ * Rendered as [🖼️ Image] in the editor.
+ */
+export const MediaChip = Node.create({
+  name: 'mediaChip',
+  group: 'inline',
+  inline: true,
+  atom: true, // Non-editable, treated as single unit
+
+  addAttributes() {
+    return {
+      image: { default: '' }, // base64 data URL
+      mimeType: { default: 'image/png' },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-media-chip]',
+        getAttrs: (dom) => {
+          const element = dom as HTMLElement;
+          return {
+            image: element.getAttribute('data-image') || '',
+            mimeType: element.getAttribute('data-mime-type') || 'image/png',
+          };
+        },
+      },
+    ];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    return [
+      'span',
+      mergeAttributes(HTMLAttributes, {
+        'data-media-chip': '',
+        'data-image': node.attrs.image,
+        'data-mime-type': node.attrs.mimeType,
+        class: 'tag-chip media-chip',
+      }),
+      '[🖼️ Image]',
+    ];
+  },
+
+  addNodeView() {
+    return () => {
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip media-chip';
+      chip.setAttribute('data-media-chip', '');
+      chip.innerHTML = `
+        <span class="tag-icon">🖼️</span>
+        <span class="tag-content">Image</span>
+      `;
+      return { dom: chip };
+    };
+  },
+
+  addKeyboardShortcuts() {
+    return {
+      Backspace: () =>
+        this.editor.commands.command(({ tr, state }) => {
+          let isMediaChip = false;
+          const { selection } = state;
+          const { empty, anchor } = selection;
+
+          if (!empty) return false;
+
+          state.doc.nodesBetween(anchor - 1, anchor, (node, pos) => {
+            if (node.type.name === this.name) {
+              isMediaChip = true;
+              tr.insertText('', pos, pos + node.nodeSize);
+              return false;
+            }
+          });
+
+          return isMediaChip;
+        }),
+    };
+  },
+});
+
+/**
+ * ExcalidrawChip node - an inline, atomic node representing an Excalidraw diagram.
+ * Rendered as [📐 Diagram] in the editor. Click to edit.
+ */
+export const ExcalidrawChip = Node.create({
+  name: 'excalidrawChip',
+  group: 'inline',
+  inline: true,
+  atom: true,
+
+  addAttributes() {
+    return {
+      elements: { default: '[]' }, // JSON string of Excalidraw elements
+      image: { default: null }, // base64 PNG for preview/export
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-excalidraw-chip]',
+        getAttrs: (dom) => {
+          const element = dom as HTMLElement;
+          return {
+            elements: element.getAttribute('data-elements') || '[]',
+            image: element.getAttribute('data-image') || null,
+          };
+        },
+      },
+    ];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    return [
+      'span',
+      mergeAttributes(HTMLAttributes, {
+        'data-excalidraw-chip': '',
+        'data-elements': node.attrs.elements,
+        'data-image': node.attrs.image || '',
+        class: 'tag-chip excalidraw-chip',
+      }),
+      '[📐 Diagram]',
+    ];
+  },
+
+  addNodeView() {
+    return ({ node, getPos }) => {
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip excalidraw-chip';
+      chip.setAttribute('data-excalidraw-chip', '');
+      chip.innerHTML = `
+        <span class="tag-icon">📐</span>
+        <span class="tag-content">Diagram</span>
+      `;
+
+      // Click to edit - dispatch custom event
+      chip.addEventListener('click', () => {
+        const pos = typeof getPos === 'function' ? getPos() : null;
+        if (pos !== null) {
+          const event = new CustomEvent('excalidraw-edit', {
+            bubbles: true,
+            detail: { pos, elements: node.attrs.elements },
+          });
+          chip.dispatchEvent(event);
+        }
+      });
+
+      return { dom: chip };
+    };
+  },
+
+  addKeyboardShortcuts() {
+    return {
+      Backspace: () =>
+        this.editor.commands.command(({ tr, state }) => {
+          let isChip = false;
+          const { selection } = state;
+          const { empty, anchor } = selection;
+
+          if (!empty) return false;
+
+          state.doc.nodesBetween(anchor - 1, anchor, (node, pos) => {
+            if (node.type.name === this.name) {
+              isChip = true;
+              tr.insertText('', pos, pos + node.nodeSize);
+              return false;
+            }
+          });
+
+          return isChip;
+        }),
+    };
+  },
+});
+
+/**
+ * ExcalidrawPlaceholder node - transient node that auto-triggers modal.
+ * Inserted by slash command, deleted if user cancels.
+ */
+export const ExcalidrawPlaceholder = Node.create({
+  name: 'excalidrawPlaceholder',
+  group: 'inline',
+  inline: true,
+  atom: true,
+
+  parseHTML() {
+    return [{ tag: 'span[data-excalidraw-placeholder]' }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      'span',
+      mergeAttributes(HTMLAttributes, {
+        'data-excalidraw-placeholder': '',
+        class: 'tag-chip excalidraw-placeholder',
+      }),
+      '[📐 Drawing...]',
+    ];
+  },
+
+  addNodeView() {
+    return ({ getPos }) => {
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip excalidraw-placeholder';
+      chip.innerHTML = `
+        <span class="tag-icon">📐</span>
+        <span class="tag-content">Drawing...</span>
+      `;
+
+      // Dispatch event to open modal immediately
+      requestAnimationFrame(() => {
+        const pos = typeof getPos === 'function' ? getPos() : null;
+        if (pos !== null) {
+          const event = new CustomEvent('excalidraw-create', {
+            bubbles: true,
+            detail: { pos },
+          });
+          chip.dispatchEvent(event);
+        }
+      });
+
+      return { dom: chip };
+    };
+  },
+});
+
+/**
+ * ImagePasteHandler extension - intercepts paste events and inserts MediaChip nodes for images.
+ * Only active in ephemeral mode.
+ */
+export interface ImagePasteHandlerOptions {
+  ephemeral: boolean;
+  onPasteBlocked?: () => void;
+}
+
+export const ImagePasteHandler = Extension.create<ImagePasteHandlerOptions>({
+  name: 'imagePasteHandler',
+
+  addOptions() {
+    return {
+      ephemeral: false,
+      onPasteBlocked: undefined,
+    };
+  },
+
+  addStorage() {
+    return {
+      ephemeral: this.options.ephemeral,
+    };
+  },
+
+  addProseMirrorPlugins() {
+    const extension = this;
+    const editor = this.editor;
+
+    return [
+      new Plugin({
+        key: new PluginKey('imagePasteHandler'),
+        props: {
+          handlePaste(view, event) {
+            const items = event.clipboardData?.items;
+            if (!items) return false;
+
+            // Find image in clipboard
+            let imageFile: File | null = null;
+            for (const item of Array.from(items)) {
+              if (item.type.startsWith('image/')) {
+                imageFile = item.getAsFile();
+                break;
+              }
+            }
+
+            if (!imageFile) return false;
+
+            // Check ephemeral from storage
+            const { ephemeral } = extension.storage;
+            const { onPasteBlocked } = extension.options;
+
+            // Block paste if not in ephemeral mode
+            if (!ephemeral) {
+              onPasteBlocked?.();
+              return true; // Consume the event
+            }
+
+            // Convert to base64 and insert MediaChip
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const dataUrl = reader.result as string;
+              editor
+                .chain()
+                .focus()
+                .insertContent([
+                  {
+                    type: 'mediaChip',
+                    attrs: {
+                      image: dataUrl,
+                      mimeType: imageFile!.type,
+                    },
+                  },
+                  { type: 'text', text: ' ' },
+                ])
+                .run();
+            };
+            reader.readAsDataURL(imageFile);
+
+            return true; // Consume the event
+          },
+        },
+      }),
+    ];
+  },
+});
 
 /**
  * Create the suggestion configuration for tag autocomplete.
@@ -159,6 +480,86 @@ export function createTagSuggestion(
         ])
         .run();
       onSelect(props);
+    },
+  };
+}
+
+/**
+ * SlashCommand interface for extensible slash commands.
+ */
+export interface SlashCommand {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  action: (editor: import('@tiptap/core').Editor, range: import('@tiptap/core').Range) => void;
+}
+
+/**
+ * SlashCommands extension - provides `/` triggered command menu.
+ */
+export interface SlashCommandsOptions {
+  suggestion: Omit<SuggestionOptions<SlashCommand>, 'editor' | 'pluginKey'>;
+}
+
+export const SlashCommands = Extension.create<SlashCommandsOptions>({
+  name: 'slashCommands',
+
+  addOptions() {
+    return {
+      suggestion: {
+        char: '/',
+        items: () => [],
+        command: ({ editor, range, props }) => {
+          props.action(editor, range);
+        },
+      },
+    };
+  },
+
+  addProseMirrorPlugins() {
+    return [
+      Suggestion({
+        editor: this.editor,
+        pluginKey: SlashSuggestionPluginKey,
+        ...this.options.suggestion,
+      }),
+    ];
+  },
+});
+
+/**
+ * Create the suggestion configuration for slash commands.
+ */
+export function createSlashSuggestion(): Omit<SuggestionOptions<SlashCommand>, 'editor'> {
+  const commands: SlashCommand[] = [
+    {
+      id: 'excalidraw',
+      name: 'excalidraw',
+      description: 'Draw a diagram',
+      icon: '📐',
+      action: (editor, range) => {
+        editor
+          .chain()
+          .focus()
+          .insertContentAt(range, [
+            { type: 'excalidrawPlaceholder' },
+            { type: 'text', text: ' ' },
+          ])
+          .run();
+      },
+    },
+  ];
+
+  return {
+    char: '/',
+    items: ({ query }) => {
+      return commands.filter((cmd) =>
+        cmd.name.toLowerCase().includes(query.toLowerCase())
+      );
+    },
+    command: ({ editor, range, props }) => {
+      props.action(editor, range);
     },
   };
 }
@@ -232,7 +633,7 @@ export function isContentEmpty(json: JSONContent): boolean {
 
 /**
  * Extract ContentNode array from TipTap JSON.
- * Handles text and tagChip nodes.
+ * Handles text, tagChip, and mediaChip nodes.
  */
 export function extractContentNodes(json: JSONContent): ContentNode[] {
   if (!json.content || json.content.length === 0) {
@@ -259,6 +660,20 @@ export function extractContentNodes(json: JSONContent): ContentNode[] {
         id: node.attrs.id,
         name: node.attrs.name,
         instruction: node.attrs.instruction,
+      });
+    } else if (node.type === 'mediaChip' && node.attrs) {
+      flushText();
+      nodes.push({
+        type: 'media',
+        image: node.attrs.image,
+        mime_type: node.attrs.mimeType,
+      });
+    } else if (node.type === 'excalidrawChip' && node.attrs) {
+      flushText();
+      nodes.push({
+        type: 'excalidraw',
+        elements: node.attrs.elements,
+        image: node.attrs.image,
       });
     } else if (node.type === 'paragraph') {
       // Add newline between paragraphs (except first)
@@ -293,7 +708,7 @@ export function extractContentNodes(json: JSONContent): ContentNode[] {
 /**
  * Convert ContentNode array back to TipTap JSONContent.
  * Used to hydrate the editor with content from the backend.
- * Handles text nodes (with newlines as paragraph breaks) and tag nodes.
+ * Handles text nodes (with newlines as paragraph breaks), tag nodes, and media nodes.
  */
 export function contentNodesToTipTap(nodes: ContentNode[] | null): JSONContent | undefined {
   if (!nodes || nodes.length === 0) {
@@ -332,6 +747,24 @@ export function contentNodesToTipTap(nodes: ContentNode[] | null): JSONContent |
           id: node.id,
           name: node.name,
           instruction: node.instruction,
+        },
+      });
+    } else if (node.type === 'media') {
+      // Insert media chip inline
+      currentParagraph.push({
+        type: 'mediaChip',
+        attrs: {
+          image: node.image,
+          mimeType: node.mime_type,
+        },
+      });
+    } else if (node.type === 'excalidraw') {
+      // Insert excalidraw chip inline
+      currentParagraph.push({
+        type: 'excalidrawChip',
+        attrs: {
+          elements: node.elements,
+          image: node.image,
         },
       });
     }

@@ -10,13 +10,14 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri",
-    "demo": "tauri dev -- -- $PWD/src-tauri/src/lib.rs",
+    "demo": "tauri dev -- -- $PWD/test-fixtures/sample.md",
     "demo:diff": "tauri dev -- -- $PWD/test-fixtures/sample.diff",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "license": "MIT",
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.0",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@tauri-apps/api": "^2",
@@ -25,7 +26,9 @@
     "@tiptap/extension-placeholder": "^3.14.0",
     "@tiptap/pm": "^3.14.0",
     "@tiptap/starter-kit": "^3.14.0",
-    "@tiptap/suggestion": "^3"
+    "@tiptap/suggestion": "^3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.6",
@@ -34,6 +37,8 @@
     "@tauri-apps/cli": "^2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/svelte": "^5.2.9",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
     "jsdom": "^27.3.0",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",

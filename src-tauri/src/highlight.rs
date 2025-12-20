@@ -17,6 +17,64 @@ impl Highlighter {
         }
     }
 
+    /// Map markdown code fence language names to file extensions.
+    /// Many languages use their full name in code fences but syntect needs the extension.
+    pub fn language_to_extension(lang: &str) -> String {
+        let lower = lang.to_lowercase();
+        match lower.as_str() {
+            // Common languages with different fence names vs extensions
+            // TypeScript falls back to JavaScript (syntect default doesn't include TS)
+            "typescript" | "ts" | "tsx" => "js".to_string(),
+            "javascript" | "js" | "jsx" => "js".to_string(),
+            "python" | "py" => "py".to_string(),
+            "ruby" | "rb" => "rb".to_string(),
+            "rust" | "rs" => "rs".to_string(),
+            "golang" | "go" => "go".to_string(),
+            "haskell" | "hs" => "hs".to_string(),
+            "csharp" | "c#" => "cs".to_string(),
+            "fsharp" | "f#" => "fs".to_string(),
+            "cpp" | "c++" => "cpp".to_string(),
+            "objectivec" | "objc" | "objective-c" => "m".to_string(),
+            "kotlin" | "kt" => "kt".to_string(),
+            "scala" => "scala".to_string(),
+            "swift" => "swift".to_string(),
+            "bash" | "shell" | "sh" | "zsh" => "sh".to_string(),
+            "powershell" | "ps1" => "ps1".to_string(),
+            "dockerfile" => "Dockerfile".to_string(),
+            "makefile" | "make" => "Makefile".to_string(),
+            "yaml" | "yml" => "yaml".to_string(),
+            "json" => "json".to_string(),
+            "xml" => "xml".to_string(),
+            "html" => "html".to_string(),
+            "css" => "css".to_string(),
+            "scss" => "scss".to_string(),
+            "less" => "less".to_string(),
+            "sql" => "sql".to_string(),
+            "graphql" | "gql" => "graphql".to_string(),
+            "markdown" | "md" => "md".to_string(),
+            "toml" => "toml".to_string(),
+            "ini" | "conf" => "ini".to_string(),
+            "java" => "java".to_string(),
+            "php" => "php".to_string(),
+            "perl" | "pl" => "pl".to_string(),
+            "lua" => "lua".to_string(),
+            "r" => "r".to_string(),
+            "julia" | "jl" => "jl".to_string(),
+            "elixir" | "ex" => "ex".to_string(),
+            "erlang" | "erl" => "erl".to_string(),
+            "clojure" | "clj" => "clj".to_string(),
+            "lisp" | "cl" => "lisp".to_string(),
+            "scheme" | "scm" => "scm".to_string(),
+            "ocaml" | "ml" => "ml".to_string(),
+            "elm" => "elm".to_string(),
+            "vim" | "vimscript" => "vim".to_string(),
+            "diff" | "patch" => "diff".to_string(),
+            "tex" | "latex" => "tex".to_string(),
+            // Default: use the language name as-is (might work for some)
+            _ => lower,
+        }
+    }
+
     /// Detect language from file extension.
     /// Returns the syntax name if found, None otherwise.
     pub fn detect_language(&self, path: &str) -> Option<&str> {
@@ -91,6 +149,30 @@ mod tests {
     fn detects_javascript_from_extension() {
         let hl = Highlighter::new();
         assert_eq!(hl.detect_language("app.js"), Some("JavaScript"));
+    }
+
+    #[test]
+    fn detects_typescript_from_extension() {
+        let hl = Highlighter::new();
+        // Check if syntect supports TypeScript
+        let ts_lang = hl.detect_language("app.ts");
+        let tsx_lang = hl.detect_language("app.tsx");
+        println!("TypeScript (.ts) detected as: {:?}", ts_lang);
+        println!("TSX (.tsx) detected as: {:?}", tsx_lang);
+        // This test will show us what syntect returns for TypeScript
+        // If None, syntect doesn't have TypeScript built-in
+    }
+
+    #[test]
+    fn list_all_syntaxes_with_extensions() {
+        let hl = Highlighter::new();
+        println!("\n=== ALL SYNTAXES ===");
+        for syntax in hl.syntax_set.syntaxes() {
+            if !syntax.file_extensions.is_empty() {
+                println!("{}: {:?}", syntax.name, syntax.file_extensions);
+            }
+        }
+        println!("=== END ===\n");
     }
 
     #[test]

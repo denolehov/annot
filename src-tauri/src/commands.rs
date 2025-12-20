@@ -2,9 +2,19 @@ use std::sync::Mutex;
 use tauri::{AppHandle, State, WebviewWindow};
 
 use crate::config;
-use crate::output::format_output;
+use crate::output::{format_output, OutputMode};
 use crate::state::{AppState, ContentNode, ContentResponse, ExitMode, Tag};
 use crate::{ResultSender, ShouldExit};
+
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CopyMode {
+    Content,
+    Annotations,
+    All,
+}
 
 #[tauri::command]
 pub fn get_content(state: State<Mutex<AppState>>) -> ContentResponse {
@@ -40,30 +50,34 @@ pub fn finish_session(
     _window: WebviewWindow,
     app: AppHandle,
 ) -> String {
-    let output = {
-        let state = state.lock().unwrap();
-        format_output(&state)
-    };
-
     // Check if we're in MCP mode (has a result sender)
     let sender = {
         let mut guard = result_sender.lock().unwrap();
         guard.take()
     };
 
+    let mode = if sender.is_some() { OutputMode::Mcp } else { OutputMode::Cli };
+
+    let result = {
+        let state = state.lock().unwrap();
+        format_output(&state, mode)
+    };
+
+    let output_text = result.text.clone();
+
     if let Some(tx) = sender {
-        // MCP mode: send result via channel (frontend will close window)
-        let _ = tx.send(output.clone());
+        // MCP mode: send full result via channel (includes images)
+        let _ = tx.send(result);
     } else {
-        // CLI mode: print to stdout and exit app
-        if !output.is_empty() {
-            print!("{}", output);
+        // CLI mode: print text to stdout and exit app
+        if !output_text.is_empty() {
+            print!("{}", output_text);
         }
         should_exit.store(true, std::sync::atomic::Ordering::SeqCst);
         app.exit(0);
     }
 
-    output
+    output_text
 }
 
 #[tauri::command]
@@ -203,4 +217,38 @@ pub fn reorder_exit_modes(state: State<Mutex<AppState>>, ids: Vec<String>) -> Ve
     }
 
     state.exit_modes.clone()
+}
+
+#[tauri::command]
+pub fn copy_to_clipboard(state: State<Mutex<AppState>>, mode: CopyMode) -> Result<(), String> {
+    let state = state.lock().unwrap();
+
+    // Reconstruct raw content from lines
+    let raw_content: String = state
+        .lines
+        .iter()
+        .map(|l| l.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let text = match mode {
+        CopyMode::Content => raw_content,
+        CopyMode::Annotations => format_output(&state, OutputMode::Clipboard).text,
+        CopyMode::All => {
+            let annotations = format_output(&state, OutputMode::Clipboard).text;
+            if annotations.is_empty() {
+                raw_content
+            } else {
+                format!("{}\n\n---\n\n{}", raw_content, annotations)
+            }
+        }
+    };
+
+    if text.is_empty() {
+        return Err("Nothing to copy".to_string());
+    }
+
+    arboard::Clipboard::new()
+        .and_then(|mut cb| cb.set_text(text))
+        .map_err(|e| e.to_string())
 }

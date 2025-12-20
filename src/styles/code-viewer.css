@@ -11,6 +11,8 @@
 
 /* Header with frosted glass effect */
 .header {
+	position: relative;
+	z-index: 10; /* Above session-slot so dropdown renders on top */
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -365,6 +367,13 @@ div.line.diff-context.annotated {
 .diff-header-file {
 	color: var(--text-primary);
 	font-weight: 600;
+	cursor: pointer;
+}
+
+.diff-header-file.has-comment {
+	text-decoration: underline;
+	text-decoration-style: dotted;
+	text-underline-offset: 3px;
 }
 
 .diff-header-counter {
@@ -399,4 +408,154 @@ div.line.diff-context.annotated {
 	padding: 1px 6px;
 	background: color-mix(in srgb, var(--accent) 12%, transparent);
 	border-radius: 4px;
+}
+
+/* ===========================================
+   MARKDOWN HEADER - Section breadcrumb
+   =========================================== */
+
+.md-header-info {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	-webkit-app-region: no-drag;
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.md-header-file {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	color: var(--text-primary);
+	font-weight: 600;
+	cursor: pointer;
+	flex-shrink: 1;
+}
+
+.md-header-file.has-comment {
+	text-decoration: underline;
+	text-decoration-style: dotted;
+	text-underline-offset: 3px;
+}
+
+.md-header-sep {
+	color: var(--text-muted);
+	flex-shrink: 0;
+}
+
+.md-header-section {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	min-width: 0;
+	color: var(--text-secondary);
+	flex-shrink: 1;
+}
+
+.md-header-section.md-header-root {
+	flex-shrink: 1;
+}
+
+.md-header-section.md-header-current {
+	color: var(--text-primary);
+	font-weight: 500;
+	flex-shrink: 0.5; /* Prefers not to shrink, but can if needed */
+}
+
+.md-header-level {
+	color: var(--accent);
+	font-weight: 600;
+	flex-shrink: 0;
+}
+
+.md-header-title {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	min-width: 0;
+}
+
+.md-header-ellipsis {
+	color: var(--text-muted);
+	flex-shrink: 0;
+}
+
+/* ===========================================
+   MARKDOWN CONTENT - Namespaced under .md
+   All markdown-rendered content is wrapped in <span class="md">
+   =========================================== */
+
+/* Reset block elements that comrak may emit */
+.md ol, .md ul, .md li, .md p, .md blockquote,
+.md h1, .md h2, .md h3, .md h4, .md h5, .md h6 {
+	all: unset;
+	display: inline;
+}
+
+/* Headers - mono-height with weight/color distinction */
+.md.md-h1, .md.md-h2, .md.md-h3, .md.md-h4, .md.md-h5, .md.md-h6 {
+	font-weight: 600;
+}
+
+.md.md-h1, .md.md-h2 {
+	color: var(--text-primary);
+}
+
+.md.md-h3, .md.md-h4, .md.md-h5, .md.md-h6 {
+	color: var(--text-secondary);
+}
+
+/* List items */
+.md.md-list {
+	color: var(--text-primary);
+}
+
+/* Blockquotes */
+.md.md-blockquote {
+	color: var(--text-secondary);
+	font-style: italic;
+}
+
+/* Horizontal rules */
+.md.md-hr {
+	color: var(--text-muted);
+}
+
+/* Inline code */
+.md code {
+	background: color-mix(in srgb, var(--accent) 10%, transparent);
+	padding: 1px 4px;
+	border-radius: 3px;
+	font-family: var(--font-mono);
+}
+
+/* Links */
+.md a {
+	color: var(--accent);
+	text-decoration: none;
+}
+
+.md a:hover {
+	text-decoration: underline;
+}
+
+/* Bold/strong */
+.md strong {
+	font-weight: 600;
+	color: var(--text-primary);
+}
+
+/* Italic/em */
+.md em {
+	font-style: italic;
+}
+
+/* Strikethrough */
+.md del {
+	text-decoration: line-through;
+	color: var(--text-muted);
 }

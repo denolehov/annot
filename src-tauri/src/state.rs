@@ -4,15 +4,43 @@ use serde::{Deserialize, Serialize};
 
 use crate::diff::{self, DiffMetadata};
 use crate::highlight::Highlighter;
+use crate::markdown::{self, MarkdownMetadata};
+
+/// Type of line in markdown content for structural styling and UI features.
+#[derive(Clone, Debug, Serialize, Default)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum LineType {
+    #[default]
+    Plain,
+    Header {
+        level: u8,
+    },
+    CodeBlockStart {
+        language: Option<String>,
+    },
+    CodeBlockContent,
+    CodeBlockEnd,
+    TableRow,
+    ListItem {
+        ordered: bool,
+    },
+    BlockQuote,
+    HorizontalRule,
+}
 
 /// A single line of content with its line number.
 #[derive(Clone, Serialize)]
 pub struct Line {
     pub number: u32,
     pub content: String,
-    /// Syntax-highlighted HTML (spans with CSS classes).
-    /// None if highlighting failed or language is unknown.
+    /// Rendered HTML for display:
+    /// - For code blocks: syntect-highlighted spans
+    /// - For markdown: inline formatting (bold, italic, etc.)
+    /// - None if no rendering needed
     pub html: Option<String>,
+    /// Type of line for structural styling and UI features.
+    #[serde(flatten)]
+    pub line_type: LineType,
 }
 
 /// A tag is a composable mini-prompt that can be embedded in annotations.
@@ -53,6 +81,8 @@ fn generate_id() -> String {
 pub enum ContentNode {
     Text { text: String },
     Tag { id: String, name: String, instruction: String },
+    Media { image: String, mime_type: String },
+    Excalidraw { elements: String, image: Option<String> },
 }
 
 /// An annotation attached to a line range.
@@ -110,6 +140,11 @@ pub struct AppState {
     pub session_comment: Option<Vec<ContentNode>>,
     /// Diff metadata (Some if content is a unified diff).
     pub diff_metadata: Option<DiffMetadata>,
+    /// Markdown metadata (Some if content is markdown).
+    pub markdown_metadata: Option<MarkdownMetadata>,
+    /// Whether this is an ephemeral session (MCP/review_content mode).
+    /// When true, image paste is enabled.
+    pub ephemeral: bool,
 }
 
 /// Response sent to the frontend via the get_content command.
@@ -123,6 +158,250 @@ pub struct ContentResponse {
     pub session_comment: Option<Vec<ContentNode>>,
     /// Diff metadata (Some if content is a unified diff).
     pub diff_metadata: Option<DiffMetadata>,
+    /// Markdown metadata (Some if content is markdown).
+    pub markdown_metadata: Option<MarkdownMetadata>,
+    /// Whether this is an ephemeral session (enables image paste).
+    pub ephemeral: bool,
+}
+
+/// HTML-escape a string for safe display.
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#x27;")
+}
+
+/// Render a markdown line while preserving structural markers.
+/// Returns (html, line_type) tuple.
+///
+/// Structural markers (`#`, `-`, `>`, etc.) are preserved as escaped text.
+/// Only inline content (bold, italic, links, code) is rendered as HTML.
+fn render_markdown_line(line: &str, options: &comrak::Options) -> (String, LineType) {
+    let trimmed = line.trim_start();
+    let indent = line.len() - trimmed.len();
+    let indent_str = &line[..indent];
+
+    // Headers: # Title -> "# " + inline_render("Title")
+    if let Some(level) = detect_header_level(trimmed) {
+        let marker_len = level as usize + 1; // "## " = 3 chars for h2
+        let marker = &trimmed[..marker_len];
+        let content = &trimmed[marker_len..];
+        let html = format!(
+            "<span class=\"md md-h{}\">{}{}{}</span>",
+            level,
+            html_escape(indent_str),
+            html_escape(marker),
+            render_inline(content, options)
+        );
+        return (html, LineType::Header { level });
+    }
+
+    // Blockquotes: > text -> "> " + inline_render("text")
+    if trimmed.starts_with('>') {
+        // Handle "> text" or ">text"
+        let content = if trimmed.starts_with("> ") {
+            &trimmed[2..]
+        } else {
+            &trimmed[1..]
+        };
+        let marker = &trimmed[..trimmed.len() - content.len()];
+        let html = format!(
+            "<span class=\"md md-blockquote\">{}{}{}</span>",
+            html_escape(indent_str),
+            html_escape(marker),
+            render_inline(content, options)
+        );
+        return (html, LineType::BlockQuote);
+    }
+
+    // Unordered list: - item or * item
+    if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
+        let marker = &trimmed[..2];
+        let content = &trimmed[2..];
+        let html = format!(
+            "<span class=\"md md-list\">{}{}{}</span>",
+            html_escape(indent_str),
+            html_escape(marker),
+            render_inline(content, options)
+        );
+        return (html, LineType::ListItem { ordered: false });
+    }
+
+    // Ordered list: 1. item, 2. item, etc.
+    if let Some(marker_len) = detect_ordered_list_marker_len(trimmed) {
+        let marker = &trimmed[..marker_len];
+        let content = &trimmed[marker_len..];
+        let html = format!(
+            "<span class=\"md md-list\">{}{}{}</span>",
+            html_escape(indent_str),
+            html_escape(marker),
+            render_inline(content, options)
+        );
+        return (html, LineType::ListItem { ordered: true });
+    }
+
+    // Horizontal rule: ---, ***, ___
+    if is_horizontal_rule(trimmed) {
+        let html = format!("<span class=\"md md-hr\">{}</span>", html_escape(line));
+        return (html, LineType::HorizontalRule);
+    }
+
+    // Regular text: render inline markdown
+    let html = format!("<span class=\"md\">{}</span>", render_inline(line, options));
+    (html, LineType::Plain)
+}
+
+/// Get the length of an ordered list marker (e.g., "1. " = 3, "12. " = 4)
+fn detect_ordered_list_marker_len(line: &str) -> Option<usize> {
+    let mut chars = line.chars().peekable();
+    let mut len = 0;
+
+    // Must start with digit
+    if !chars.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+        return None;
+    }
+
+    // Consume digits
+    while chars.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+        chars.next();
+        len += 1;
+    }
+
+    // Must be followed by ". "
+    if chars.next() == Some('.') && chars.next() == Some(' ') {
+        Some(len + 2) // digits + ". "
+    } else {
+        None
+    }
+}
+
+/// Detect header level (1-6) from line, or None if not a header.
+fn detect_header_level(line: &str) -> Option<u8> {
+    let mut level = 0u8;
+    for c in line.chars() {
+        if c == '#' {
+            level += 1;
+            if level > 6 {
+                return None;
+            }
+        } else if c == ' ' && level > 0 {
+            return Some(level);
+        } else {
+            return None;
+        }
+    }
+    None
+}
+
+/// Check if line is a horizontal rule (---, ***, ___)
+fn is_horizontal_rule(line: &str) -> bool {
+    let trimmed = line.trim();
+    if trimmed.len() < 3 {
+        return false;
+    }
+    let first = trimmed.chars().next().unwrap();
+    if first != '-' && first != '*' && first != '_' {
+        return false;
+    }
+    trimmed.chars().all(|c| c == first || c == ' ')
+}
+
+/// Render only inline markdown (bold, italic, links, inline code) using AST.
+/// This preserves the source text and only renders inline formatting as HTML.
+fn render_inline(text: &str, options: &comrak::Options) -> String {
+    use comrak::{parse_document, Arena};
+
+    if text.is_empty() {
+        return String::new();
+    }
+
+    let arena = Arena::new();
+    let root = parse_document(&arena, text, options);
+
+    let mut output = String::new();
+    render_node_inline(root, &mut output);
+    output
+}
+
+/// Recursively render AST nodes, emitting HTML only for inline elements.
+fn render_node_inline<'a>(node: &'a comrak::nodes::AstNode<'a>, output: &mut String) {
+    use comrak::nodes::NodeValue;
+
+    let data = node.data.borrow();
+
+    match &data.value {
+        // Block elements: skip wrapper, recurse into children
+        NodeValue::Document
+        | NodeValue::Paragraph
+        | NodeValue::BlockQuote
+        | NodeValue::List(_)
+        | NodeValue::Item(_)
+        | NodeValue::Heading(_) => {
+            for child in node.children() {
+                render_node_inline(child, output);
+            }
+        }
+
+        // Text: escape and emit
+        NodeValue::Text(t) => {
+            output.push_str(&html_escape(t));
+        }
+
+        // Strong (bold): **text**
+        NodeValue::Strong => {
+            output.push_str("<strong>");
+            for child in node.children() {
+                render_node_inline(child, output);
+            }
+            output.push_str("</strong>");
+        }
+
+        // Emphasis (italic): *text*
+        NodeValue::Emph => {
+            output.push_str("<em>");
+            for child in node.children() {
+                render_node_inline(child, output);
+            }
+            output.push_str("</em>");
+        }
+
+        // Inline code: `code`
+        NodeValue::Code(c) => {
+            output.push_str("<code>");
+            output.push_str(&html_escape(&c.literal));
+            output.push_str("</code>");
+        }
+
+        // Links: [text](url)
+        NodeValue::Link(link) => {
+            output.push_str("<a href=\"");
+            output.push_str(&html_escape(&link.url));
+            output.push_str("\">");
+            for child in node.children() {
+                render_node_inline(child, output);
+            }
+            output.push_str("</a>");
+        }
+
+        // Strikethrough: ~~text~~
+        NodeValue::Strikethrough => {
+            output.push_str("<del>");
+            for child in node.children() {
+                render_node_inline(child, output);
+            }
+            output.push_str("</del>");
+        }
+
+        // Soft/hard breaks
+        NodeValue::SoftBreak | NodeValue::LineBreak => {
+            output.push(' ');
+        }
+
+        // Skip other node types (code blocks, tables, etc.)
+        _ => {}
+    }
 }
 
 impl AppState {
@@ -139,6 +418,8 @@ impl AppState {
             selected_exit_mode_id: None,
             session_comment: None,
             diff_metadata: None,
+            markdown_metadata: None,
+            ephemeral: false,
         }
     }
 
@@ -169,6 +450,7 @@ impl AppState {
                     number: (i + 1) as u32,
                     content: line.to_string(),
                     html,
+                    line_type: LineType::default(),
                 }
             })
             .collect();
@@ -184,6 +466,8 @@ impl AppState {
             selected_exit_mode_id: None,
             session_comment: None,
             diff_metadata: None,
+            markdown_metadata: None,
+            ephemeral: false,
         }
     }
 
@@ -260,6 +544,7 @@ impl AppState {
                     number: line_num,
                     content: line_content.to_string(),
                     html,
+                    line_type: LineType::default(),
                 }
             })
             .collect();
@@ -275,7 +560,151 @@ impl AppState {
             selected_exit_mode_id: None,
             session_comment: None,
             diff_metadata: Some(diff_metadata),
+            markdown_metadata: None,
+            ephemeral: false,
         })
+    }
+
+    /// Parse markdown content with inline rendering and code block highlighting.
+    ///
+    /// # Arguments
+    /// * `label` - Display name
+    /// * `content` - Raw markdown content
+    /// * `path` - File path (used for markdown detection)
+    /// * `tags` - Available tags (loaded from config)
+    /// * `exit_modes` - Available exit modes (loaded from config)
+    /// * `ephemeral` - Whether this is ephemeral content (MCP/review_content mode)
+    pub fn from_markdown(
+        label: String,
+        content: &str,
+        _path: &str,
+        tags: Vec<Tag>,
+        exit_modes: Vec<ExitMode>,
+        ephemeral: bool,
+    ) -> Self {
+        use comrak::Options;
+
+        let md_metadata = markdown::parse_markdown(content);
+        let highlighter = Highlighter::new();
+
+        // Build map of code block info by line: (language, is_fence_start, is_fence_end)
+        #[derive(Clone)]
+        struct CodeBlockLineInfo {
+            language: Option<String>,
+            is_start: bool,
+            is_end: bool,
+        }
+        let mut code_block_lines: HashMap<u32, CodeBlockLineInfo> = HashMap::new();
+        for block in &md_metadata.code_blocks {
+            for line_num in block.start_line..=block.end_line {
+                code_block_lines.insert(
+                    line_num,
+                    CodeBlockLineInfo {
+                        language: block.language.clone(),
+                        is_start: line_num == block.start_line,
+                        is_end: line_num == block.end_line,
+                    },
+                );
+            }
+        }
+
+        // Build set of table lines
+        let mut table_lines: HashSet<u32> = HashSet::new();
+        let mut table_replacements: HashMap<u32, String> = HashMap::new();
+        for table in &md_metadata.tables {
+            for (i, formatted) in table.formatted_lines.iter().enumerate() {
+                let line_num = table.start_line + i as u32;
+                table_lines.insert(line_num);
+                table_replacements.insert(line_num, formatted.clone());
+            }
+        }
+
+        // Create comrak options for inline rendering
+        let mut options = Options::default();
+        options.extension.strikethrough = true;
+        options.extension.autolink = true;
+        options.render.unsafe_ = true; // Allow raw HTML passthrough
+
+        let lines: Vec<Line> = content
+            .lines()
+            .enumerate()
+            .map(|(i, line_content)| {
+                let line_num = (i + 1) as u32;
+
+                // Use table replacement if available
+                let display_content = table_replacements
+                    .get(&line_num)
+                    .cloned()
+                    .unwrap_or_else(|| line_content.to_string());
+
+                // Determine HTML rendering strategy and line type
+                if let Some(info) = code_block_lines.get(&line_num) {
+                    // Inside a code block
+                    let line_type = if info.is_start {
+                        LineType::CodeBlockStart {
+                            language: info.language.clone(),
+                        }
+                    } else if info.is_end {
+                        LineType::CodeBlockEnd
+                    } else {
+                        LineType::CodeBlockContent
+                    };
+
+                    let html = if info.is_start || info.is_end {
+                        // Fence line: render as-is (escaped)
+                        Some(html_escape(&display_content))
+                    } else if let Some(ref language) = info.language {
+                        // Code content: highlight with syntect
+                        let ext = Highlighter::language_to_extension(language);
+                        let fake_path = format!("file.{ext}");
+                        let highlighted = highlighter.highlight_lines(line_content, &fake_path);
+                        highlighted.first().cloned()
+                    } else {
+                        // No language specified: just escape
+                        Some(html_escape(&display_content))
+                    };
+
+                    Line {
+                        number: line_num,
+                        content: display_content,
+                        html,
+                        line_type,
+                    }
+                } else if table_lines.contains(&line_num) {
+                    // Table row
+                    Line {
+                        number: line_num,
+                        content: display_content.clone(),
+                        html: Some(html_escape(&display_content)),
+                        line_type: LineType::TableRow,
+                    }
+                } else {
+                    // Regular markdown: render with structural markers preserved
+                    let (html, line_type) = render_markdown_line(line_content, &options);
+                    Line {
+                        number: line_num,
+                        content: display_content,
+                        html: Some(html),
+                        line_type,
+                    }
+                }
+            })
+            .collect();
+
+        Self {
+            label,
+            lines,
+            annotations: HashMap::new(),
+            tags,
+            deleted_tag_ids: HashSet::new(),
+            exit_modes,
+            deleted_exit_mode_ids: HashSet::new(),
+            selected_exit_mode_id: None,
+            session_comment: None,
+            diff_metadata: None,
+            markdown_metadata: Some(md_metadata),
+            ephemeral,
+        }
     }
 
     /// Convert to response for frontend.
@@ -288,6 +717,8 @@ impl AppState {
             selected_exit_mode_id: self.selected_exit_mode_id.clone(),
             session_comment: self.session_comment.clone(),
             diff_metadata: self.diff_metadata.clone(),
+            markdown_metadata: self.markdown_metadata.clone(),
+            ephemeral: self.ephemeral,
         }
     }
 

@@ -1,6 +1,25 @@
 use std::collections::BTreeMap;
 
+use crate::mcp::tools::SessionImage;
 use crate::state::{Annotation, AppState, ContentNode};
+
+/// Output mode determines how content is formatted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OutputMode {
+    /// CLI mode - all data inline in text (images as base64, diagrams as JSON)
+    #[default]
+    Cli,
+    /// MCP mode - images returned separately, omit inline data
+    Mcp,
+    /// Clipboard mode - [Figure N] placeholders only, no base64 or JSON
+    Clipboard,
+}
+
+/// Result of formatting output, including text and collected images.
+pub struct FormatResult {
+    pub text: String,
+    pub images: Vec<SessionImage>,
+}
 
 /// Collect unique tags from all content nodes (session comment + annotations).
 /// Returns a BTreeMap for alphabetical ordering by tag name.
@@ -35,7 +54,7 @@ fn collect_unique_tags(state: &AppState) -> BTreeMap<String, String> {
 }
 
 /// Format all annotations as structured output for LLM consumption.
-pub fn format_output(state: &AppState) -> String {
+pub fn format_output(state: &AppState, mode: OutputMode) -> FormatResult {
     let has_exit_mode = state.selected_exit_mode_id.is_some();
     let has_annotations = !state.annotations.is_empty();
     let has_session_comment = state
@@ -45,10 +64,15 @@ pub fn format_output(state: &AppState) -> String {
         .unwrap_or(false);
 
     if !has_exit_mode && !has_annotations && !has_session_comment {
-        return String::new();
+        return FormatResult {
+            text: String::new(),
+            images: Vec::new(),
+        };
     }
 
     let mut output = String::new();
+    let mut images = Vec::new();
+    let mut figure_counter = 0usize;
 
     // LEGEND block (if any tags are used)
     let unique_tags = collect_unique_tags(state);
@@ -67,7 +91,7 @@ pub fn format_output(state: &AppState) -> String {
         // Session comment (no prefix, directly indented)
         if let Some(ref comment) = state.session_comment {
             if !comment.is_empty() {
-                let comment_text = render_content(comment);
+                let comment_text = render_content(comment, &mut images, &mut figure_counter, mode);
                 for line in comment_text.lines() {
                     output.push_str(&format!("  {}\n", line));
                 }
@@ -87,7 +111,10 @@ pub fn format_output(state: &AppState) -> String {
     }
 
     if !has_annotations {
-        return output;
+        return FormatResult {
+            text: output,
+            images,
+        };
     }
 
     // Collect and sort annotations by start line
@@ -106,10 +133,13 @@ pub fn format_output(state: &AppState) -> String {
         if i > 0 {
             output.push_str("\n---\n\n");
         }
-        format_annotation_block(&mut output, state, ann, line_num_width);
+        format_annotation_block(&mut output, state, ann, line_num_width, &mut images, &mut figure_counter, mode);
     }
 
-    output
+    FormatResult {
+        text: output,
+        images,
+    }
 }
 
 /// Format a single annotation block with context and content.
@@ -118,6 +148,9 @@ fn format_annotation_block(
     state: &AppState,
     ann: &Annotation,
     line_num_width: usize,
+    images: &mut Vec<SessionImage>,
+    figure_counter: &mut usize,
+    mode: OutputMode,
 ) {
     let is_diff = state.diff_metadata.is_some();
 
@@ -171,13 +204,15 @@ fn format_annotation_block(
         }
     }
 
-    // Annotation content with arrow
+    // Annotation content with arrow (aligned with the pipe "|")
+    // For non-diff: "> {:>width$} | " - pipe at position 2 + (line_num_width+1) + 1
+    // For diff: "{}{:>w$}:{:<w$} | " - pipe at position 2 + w + 1 + w + 1
     let arrow_indent = if is_diff {
-        " ".repeat(line_num_width + 12) // Extra space for old:new format
+        " ".repeat(2 * line_num_width + 4)
     } else {
-        " ".repeat(line_num_width + 4) // +4 for "> " and " | "
+        " ".repeat(line_num_width + 4)
     };
-    let content_text = render_content(&ann.content);
+    let content_text = render_content(&ann.content, images, figure_counter, mode);
 
     for (i, content_line) in content_text.lines().enumerate() {
         if i == 0 {
@@ -284,13 +319,64 @@ fn format_diff_line(
     ));
 }
 
-/// Render content nodes to plain text.
-fn render_content(nodes: &[ContentNode]) -> String {
+/// Render content nodes to plain text, collecting images with figure numbers.
+fn render_content(
+    nodes: &[ContentNode],
+    images: &mut Vec<SessionImage>,
+    figure_counter: &mut usize,
+    mode: OutputMode,
+) -> String {
     nodes
         .iter()
         .map(|node| match node {
             ContentNode::Text { text } => text.clone(),
             ContentNode::Tag { name, .. } => format!("[# {}]", name),
+            ContentNode::Media { image, mime_type } => {
+                *figure_counter += 1;
+                let figure_num = *figure_counter;
+
+                // Extract base64 data from data URL (strip "data:image/png;base64," prefix)
+                let data = if let Some(idx) = image.find(",") {
+                    image[idx + 1..].to_string()
+                } else {
+                    image.clone()
+                };
+
+                images.push(SessionImage {
+                    figure: figure_num,
+                    data,
+                    mime_type: mime_type.clone(),
+                });
+
+                format!("[Figure {}]", figure_num)
+            }
+            ContentNode::Excalidraw { elements, image } => {
+                *figure_counter += 1;
+                let figure_num = *figure_counter;
+
+                // If PNG is available, include it for MCP
+                if let Some(ref png_data) = image {
+                    let data = if let Some(idx) = png_data.find(",") {
+                        png_data[idx + 1..].to_string()
+                    } else {
+                        png_data.clone()
+                    };
+                    images.push(SessionImage {
+                        figure: figure_num,
+                        data,
+                        mime_type: "image/png".to_string(),
+                    });
+                }
+
+                match mode {
+                    // CLI: include JSON so diagram data is preserved in stdout
+                    OutputMode::Cli => format!("[EXCALIDRAW Figure {}]\n{}", figure_num, elements),
+                    // MCP/Clipboard: just figure reference, no JSON blob
+                    OutputMode::Mcp | OutputMode::Clipboard => {
+                        format!("[EXCALIDRAW Figure {}]", figure_num)
+                    }
+                }
+            }
         })
         .collect::<Vec<_>>()
         .join("")
@@ -307,6 +393,7 @@ mod tests {
             number,
             content: content.to_string(),
             html: None,
+            line_type: crate::state::LineType::default(),
         }
     }
 
@@ -322,13 +409,15 @@ mod tests {
             selected_exit_mode_id: None,
             session_comment: None,
             diff_metadata: None,
+            markdown_metadata: None,
+            ephemeral: false,
         }
     }
 
     #[test]
     fn empty_annotations_returns_empty_string() {
         let state = make_state("test.rs", vec![], HashMap::new());
-        assert_eq!(format_output(&state), "");
+        assert_eq!(format_output(&state, OutputMode::Cli).text, "");
     }
 
     #[test]
@@ -350,7 +439,7 @@ mod tests {
             .collect();
 
         let state = make_state("test.rs", lines, annotations);
-        let output = format_output(&state);
+        let output = format_output(&state, OutputMode::Cli).text;
 
         assert!(output.contains("test.rs:5\n"));
         assert!(output.contains("> "));
@@ -377,7 +466,7 @@ mod tests {
             .collect();
 
         let state = make_state("test.rs", lines, annotations);
-        let output = format_output(&state);
+        let output = format_output(&state, OutputMode::Cli).text;
 
         assert!(output.contains("test.rs:10-15\n"));
         // Check context line
@@ -417,7 +506,7 @@ mod tests {
             .collect();
 
         let state = make_state("test.rs", lines, annotations);
-        let output = format_output(&state);
+        let output = format_output(&state, OutputMode::Cli).text;
 
         // First annotation should come before second
         let first_pos = output.find("First").unwrap();
@@ -449,7 +538,7 @@ mod tests {
         ];
 
         let state = make_state("test.rs", lines, annotations);
-        let output = format_output(&state);
+        let output = format_output(&state, OutputMode::Cli).text;
 
         // Line 2 is whitespace, shouldn't appear as context
         assert!(!output.contains("   \n"));
@@ -474,7 +563,7 @@ mod tests {
             .collect();
 
         let state = make_state("test.rs", lines, annotations);
-        let output = format_output(&state);
+        let output = format_output(&state, OutputMode::Cli).text;
 
         // First line has arrow
         assert!(output.contains("└──> Line one"));
@@ -507,9 +596,11 @@ mod tests {
             selected_exit_mode_id: Some("apply".to_string()),
             session_comment: None,
             diff_metadata: None,
+            markdown_metadata: None,
+            ephemeral: false,
         };
 
-        let output = format_output(&state);
+        let output = format_output(&state, OutputMode::Cli).text;
 
         assert!(output.contains("SESSION:"));
         assert!(output.contains("Apply (Apply the suggested changes)"));
@@ -555,9 +646,11 @@ mod tests {
             selected_exit_mode_id: Some("reject".to_string()),
             session_comment: None,
             diff_metadata: None,
+            markdown_metadata: None,
+            ephemeral: false,
         };
 
-        let output = format_output(&state);
+        let output = format_output(&state, OutputMode::Cli).text;
 
         // SESSION block comes first
         let session_pos = output.find("SESSION:").unwrap();
@@ -583,9 +676,11 @@ mod tests {
                 text: "This is a session comment".to_string(),
             }]),
             diff_metadata: None,
+            markdown_metadata: None,
+            ephemeral: false,
         };
 
-        let output = format_output(&state);
+        let output = format_output(&state, OutputMode::Cli).text;
 
         assert!(output.contains("SESSION:"));
         assert!(output.contains("  This is a session comment"));
@@ -617,9 +712,11 @@ mod tests {
                 text: "Overall looks good!".to_string(),
             }]),
             diff_metadata: None,
+            markdown_metadata: None,
+            ephemeral: false,
         };
 
-        let output = format_output(&state);
+        let output = format_output(&state, OutputMode::Cli).text;
 
         // Session comment comes before exit mode
         let comment_pos = output.find("Overall looks good!").unwrap();
@@ -640,9 +737,11 @@ mod tests {
             selected_exit_mode_id: None,
             session_comment: Some(vec![]),
             diff_metadata: None,
+            markdown_metadata: None,
+            ephemeral: false,
         };
 
-        let output = format_output(&state);
+        let output = format_output(&state, OutputMode::Cli).text;
 
         // Empty session comment should result in no output
         assert!(output.is_empty());
@@ -674,7 +773,7 @@ mod tests {
             .collect();
 
         let state = make_state("test.rs", lines, annotations);
-        let output = format_output(&state);
+        let output = format_output(&state, OutputMode::Cli).text;
 
         // LEGEND block should appear at the top
         assert!(output.starts_with("LEGEND:\n"));
@@ -712,7 +811,7 @@ mod tests {
             .collect();
 
         let state = make_state("test.rs", lines, annotations);
-        let output = format_output(&state);
+        let output = format_output(&state, OutputMode::Cli).text;
 
         // BUG should come before SECURITY (alphabetical)
         let bug_pos = output.find("[# BUG]").unwrap();
@@ -753,7 +852,7 @@ mod tests {
             .collect();
 
         let state = make_state("test.rs", lines, annotations);
-        let output = format_output(&state);
+        let output = format_output(&state, OutputMode::Cli).text;
 
         // SECURITY should only appear once in LEGEND
         let legend_end = output.find("\n\n").unwrap();

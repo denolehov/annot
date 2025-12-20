@@ -328,8 +328,10 @@
   });
 
   let itemListData = $derived.by(() => {
-    if (machineState.type !== 'ITEM_FILTER') return { matches: [], showCreate: false, createIndex: -1 };
-    return computeItemList(machineState, ctx);
+    if (machineState.type !== 'ITEM_FILTER') return { matches: [], showCreate: false, createIndex: -1, totalItems: 0 };
+    const result = computeItemList(machineState, ctx);
+    const totalItems = ctx.getItems(machineState.namespace).length;
+    return { ...result, totalItems };
   });
 
   // Get current query for display
@@ -346,6 +348,19 @@
       return machineState.inputMode === 'navigating';
     }
     return false;
+  });
+
+  // Example placeholders for CREATE_FORM (pick random example from namespace)
+  let examplePlaceholders: Record<string, string> = $state({});
+  $effect(() => {
+    if (machineState.type === 'CREATE_FORM') {
+      const examples = machineState.namespace.examples;
+      if (examples && examples.length > 0) {
+        examplePlaceholders = examples[Math.floor(Math.random() * examples.length)];
+      } else {
+        examplePlaceholders = {};
+      }
+    }
   });
 
   // Get footer hints (matching hl poly editor style with Unicode symbols)
@@ -443,30 +458,31 @@
           type="text"
           class="inline-input"
           class:navigating={isNavigating}
-          placeholder={itemListData.matches.length === 0 && !currentQuery ? 'Type to create...' : 'Filter or create...'}
+          placeholder={itemListData.totalItems === 0 ? 'Type to create...' : 'Filter or create...'}
           value={currentQuery}
           oninput={handleInput}
         />
       </div>
-      <ul class="item-list" class:filtering={!isNavigating} role="listbox">
-        {#each itemListData.matches as item, i}
-          <li
-            class="item"
-            class:selected={machineState.selectedIndex === i}
-            class:pending-delete={machineState.pendingDelete && machineState.selectedIndex === i}
-            class:ephemeral={item.isEphemeral}
-            role="option"
-            aria-selected={machineState.selectedIndex === i}
-            onclick={() => dispatch({ type: 'SELECT', index: i })}
-            onkeydown={() => {}}
-          >
-            <span class="name">{item.name}</span>
-            {#if item.isEphemeral}
-              <span class="ephemeral-badge">session</span>
-            {/if}
-          </li>
-        {/each}
-        {#if itemListData.showCreate}
+      {#if itemListData.matches.length > 0 || itemListData.showCreate}
+        <ul class="item-list" class:filtering={!isNavigating} role="listbox">
+          {#each itemListData.matches as item, i}
+            <li
+              class="item"
+              class:selected={machineState.selectedIndex === i}
+              class:pending-delete={machineState.pendingDelete && machineState.selectedIndex === i}
+              class:ephemeral={item.isEphemeral}
+              role="option"
+              aria-selected={machineState.selectedIndex === i}
+              onclick={() => dispatch({ type: 'SELECT', index: i })}
+              onkeydown={() => {}}
+            >
+              <span class="name">{item.name}</span>
+              {#if item.isEphemeral}
+                <span class="ephemeral-badge">session</span>
+              {/if}
+            </li>
+          {/each}
+          {#if itemListData.showCreate}
           <li
             class="item create-item"
             class:selected={machineState.selectedIndex === itemListData.createIndex}
@@ -478,8 +494,9 @@
             <span class="icon">+</span>
             <span class="create-label">Create "{machineState.query}"</span>
           </li>
-        {/if}
-      </ul>
+          {/if}
+        </ul>
+      {/if}
     </div>
 
   {:else if machineState.type === 'ITEM_REORDER'}
@@ -516,19 +533,21 @@
           <div class="field" class:focused={machineState.focusedField === i}>
             <label for={field.key}>{field.label}</label>
             {#if field.type === 'text'}
+              {@const placeholder = machineState.type === 'CREATE_FORM' ? examplePlaceholders[field.key] || field.placeholder : field.placeholder}
               <input
                 type="text"
                 id={field.key}
                 name={field.key}
                 value={machineState.values[field.key] || ''}
-                placeholder={field.placeholder}
+                {placeholder}
                 readonly={machineState.type === 'EDIT_FORM' && field.readOnlyInEdit}
               />
             {:else if field.type === 'textarea'}
+              {@const placeholder = machineState.type === 'CREATE_FORM' ? examplePlaceholders[field.key] || field.placeholder : field.placeholder}
               <textarea
                 id={field.key}
                 name={field.key}
-                placeholder={field.placeholder}
+                {placeholder}
                 readonly={machineState.type === 'EDIT_FORM' && field.readOnlyInEdit}
               >{machineState.values[field.key] || ''}</textarea>
             {:else if field.type === 'select'}
