@@ -189,7 +189,7 @@ fn render_content(nodes: &[ContentNode]) -> String {
 mod tests {
     use super::*;
     use crate::state::Line;
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
 
     fn make_line(number: u32, content: &str) -> Line {
         Line {
@@ -204,7 +204,10 @@ mod tests {
             label: label.to_string(),
             lines,
             annotations,
+            tags: vec![],
+            deleted_tag_ids: HashSet::new(),
             exit_modes: vec![],
+            deleted_exit_mode_ids: HashSet::new(),
             selected_exit_mode_id: None,
             session_comment: None,
         }
@@ -385,7 +388,10 @@ mod tests {
             label: "test.rs".to_string(),
             lines: vec![],
             annotations: HashMap::new(),
+            tags: vec![],
+            deleted_tag_ids: HashSet::new(),
             exit_modes,
+            deleted_exit_mode_ids: HashSet::new(),
             selected_exit_mode_id: Some("apply".to_string()),
             session_comment: None,
         };
@@ -429,7 +435,10 @@ mod tests {
             label: "test.rs".to_string(),
             lines,
             annotations,
+            tags: vec![],
+            deleted_tag_ids: HashSet::new(),
             exit_modes,
+            deleted_exit_mode_ids: HashSet::new(),
             selected_exit_mode_id: Some("reject".to_string()),
             session_comment: None,
         };
@@ -451,7 +460,10 @@ mod tests {
             label: "test.rs".to_string(),
             lines: vec![],
             annotations: HashMap::new(),
+            tags: vec![],
+            deleted_tag_ids: HashSet::new(),
             exit_modes: vec![],
+            deleted_exit_mode_ids: HashSet::new(),
             selected_exit_mode_id: None,
             session_comment: Some(vec![ContentNode::Text {
                 text: "This is a session comment".to_string(),
@@ -481,7 +493,10 @@ mod tests {
             label: "test.rs".to_string(),
             lines: vec![],
             annotations: HashMap::new(),
+            tags: vec![],
+            deleted_tag_ids: HashSet::new(),
             exit_modes,
+            deleted_exit_mode_ids: HashSet::new(),
             selected_exit_mode_id: Some("apply".to_string()),
             session_comment: Some(vec![ContentNode::Text {
                 text: "Overall looks good!".to_string(),
@@ -502,7 +517,10 @@ mod tests {
             label: "test.rs".to_string(),
             lines: vec![],
             annotations: HashMap::new(),
+            tags: vec![],
+            deleted_tag_ids: HashSet::new(),
             exit_modes: vec![],
+            deleted_exit_mode_ids: HashSet::new(),
             selected_exit_mode_id: None,
             session_comment: Some(vec![]),
         };

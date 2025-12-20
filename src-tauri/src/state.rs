@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -22,30 +22,28 @@ pub struct Tag {
     pub instruction: String,
 }
 
-/// Default tags (hardcoded for now, persistence comes later).
-pub fn default_tags() -> Vec<Tag> {
-    vec![
-        Tag {
-            id: "sec000000001".into(),
-            name: "SECURITY".into(),
-            instruction: "Review for security vulnerabilities".into(),
-        },
-        Tag {
-            id: "ref000000002".into(),
-            name: "REFACTOR".into(),
-            instruction: "Consider cleaner abstraction".into(),
-        },
-        Tag {
-            id: "bug000000003".into(),
-            name: "BUG".into(),
-            instruction: "This is a bug that needs fixing".into(),
-        },
-        Tag {
-            id: "per000000004".into(),
-            name: "PERF".into(),
-            instruction: "Performance concern".into(),
-        },
-    ]
+impl Tag {
+    /// Creates a new tag with a generated 12-character alphanumeric ID.
+    pub fn new(name: String, instruction: String) -> Self {
+        Self {
+            id: generate_id(),
+            name,
+            instruction,
+        }
+    }
+}
+
+/// Generates a 12-character alphanumeric ID.
+fn generate_id() -> String {
+    use rand::Rng;
+    const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
+    let mut rng = rand::thread_rng();
+    (0..12)
+        .map(|_| {
+            let idx = rng.gen_range(0..CHARSET.len());
+            CHARSET[idx] as char
+        })
+        .collect()
 }
 
 /// Content node for structured annotation content.
@@ -77,34 +75,18 @@ pub struct ExitMode {
     pub is_ephemeral: bool,
 }
 
-/// Default exit modes (hardcoded for now, persistence comes later).
-pub fn default_exit_modes() -> Vec<ExitMode> {
-    vec![
-        ExitMode {
-            id: "apply".into(),
-            name: "Apply".into(),
-            color: "#22c55e".into(),
-            instruction: "Apply the suggested changes".into(),
-            order: 0,
+impl ExitMode {
+    /// Creates a new exit mode with a generated 12-character alphanumeric ID.
+    pub fn new(name: String, color: String, instruction: String, order: u32) -> Self {
+        Self {
+            id: generate_id(),
+            name,
+            color,
+            instruction,
+            order,
             is_ephemeral: false,
-        },
-        ExitMode {
-            id: "revise".into(),
-            name: "Revise".into(),
-            color: "#eab308".into(),
-            instruction: "Revise based on feedback".into(),
-            order: 1,
-            is_ephemeral: false,
-        },
-        ExitMode {
-            id: "reject".into(),
-            name: "Reject".into(),
-            color: "#ef4444".into(),
-            instruction: "Do not apply these changes".into(),
-            order: 2,
-            is_ephemeral: false,
-        },
-    ]
+        }
+    }
 }
 
 /// Application state initialized at startup, before the window opens.
@@ -113,8 +95,14 @@ pub struct AppState {
     pub lines: Vec<Line>,
     /// Annotations keyed by "start-end" range string (e.g., "10-15").
     pub annotations: HashMap<String, Annotation>,
+    /// Available tags for annotation.
+    pub tags: Vec<Tag>,
+    /// IDs of tags deleted this session (for merge-on-save).
+    pub deleted_tag_ids: HashSet<String>,
     /// Available exit modes for this session.
     pub exit_modes: Vec<ExitMode>,
+    /// IDs of exit modes deleted this session (for merge-on-save).
+    pub deleted_exit_mode_ids: HashSet<String>,
     /// Currently selected exit mode ID (None if no mode selected).
     pub selected_exit_mode_id: Option<String>,
     /// Session-level comment (not tied to specific lines).
@@ -126,6 +114,7 @@ pub struct AppState {
 pub struct ContentResponse {
     pub label: String,
     pub lines: Vec<Line>,
+    pub tags: Vec<Tag>,
     pub exit_modes: Vec<ExitMode>,
     pub selected_exit_mode_id: Option<String>,
     pub session_comment: Option<Vec<ContentNode>>,
@@ -138,7 +127,15 @@ impl AppState {
     /// * `label` - Display name (usually the filename)
     /// * `content` - Raw file content
     /// * `path` - File path (used for language detection via extension)
-    pub fn from_file(label: String, content: &str, path: &str) -> Self {
+    /// * `tags` - Available tags (loaded from config)
+    /// * `exit_modes` - Available exit modes (loaded from config)
+    pub fn from_file(
+        label: String,
+        content: &str,
+        path: &str,
+        tags: Vec<Tag>,
+        exit_modes: Vec<ExitMode>,
+    ) -> Self {
         let highlighter = Highlighter::new();
         let html_lines = highlighter.highlight_lines(content, path);
 
@@ -159,7 +156,10 @@ impl AppState {
             label,
             lines,
             annotations: HashMap::new(),
-            exit_modes: default_exit_modes(),
+            tags,
+            deleted_tag_ids: HashSet::new(),
+            exit_modes,
+            deleted_exit_mode_ids: HashSet::new(),
             selected_exit_mode_id: None,
             session_comment: None,
         }
@@ -170,6 +170,7 @@ impl AppState {
         ContentResponse {
             label: self.label.clone(),
             lines: self.lines.clone(),
+            tags: self.tags.clone(),
             exit_modes: self.exit_modes.clone(),
             selected_exit_mode_id: self.selected_exit_mode_id.clone(),
             session_comment: self.session_comment.clone(),
@@ -215,9 +216,13 @@ impl AppState {
 mod tests {
     use super::*;
 
+    fn test_state(label: &str, content: &str, path: &str) -> AppState {
+        AppState::from_file(label.to_string(), content, path, vec![], vec![])
+    }
+
     #[test]
     fn content_response_has_1_indexed_line_numbers() {
-        let state = AppState::from_file("test.rs".to_string(), "a\nb\nc", "test.rs");
+        let state = test_state("test.rs", "a\nb\nc", "test.rs");
         let response = state.to_response();
 
         assert_eq!(response.lines[0].number, 1);
@@ -227,7 +232,7 @@ mod tests {
 
     #[test]
     fn content_response_includes_label() {
-        let state = AppState::from_file("my_file.rs".to_string(), "content", "my_file.rs");
+        let state = test_state("my_file.rs", "content", "my_file.rs");
         let response = state.to_response();
 
         assert_eq!(response.label, "my_file.rs");
@@ -235,7 +240,7 @@ mod tests {
 
     #[test]
     fn content_response_preserves_whitespace() {
-        let state = AppState::from_file("test.rs".to_string(), "  indented\n\ttabbed", "test.rs");
+        let state = test_state("test.rs", "  indented\n\ttabbed", "test.rs");
         let response = state.to_response();
 
         assert_eq!(response.lines[0].content, "  indented");
@@ -244,7 +249,7 @@ mod tests {
 
     #[test]
     fn content_response_includes_highlighted_html() {
-        let state = AppState::from_file("test.rs".to_string(), "fn main() {}", "test.rs");
+        let state = test_state("test.rs", "fn main() {}", "test.rs");
         let response = state.to_response();
 
         // Should have HTML highlighting for Rust
@@ -257,10 +262,39 @@ mod tests {
     fn content_response_html_is_none_for_empty_lines_mismatch() {
         // If the highlighter returns fewer lines than content (edge case),
         // html should be None for missing lines
-        let state = AppState::from_file("test.txt".to_string(), "line1\nline2", "test.txt");
+        let state = test_state("test.txt", "line1\nline2", "test.txt");
         let response = state.to_response();
 
         // Plain text should still have html (just escaped text)
         assert_eq!(response.lines.len(), 2);
+    }
+
+    #[test]
+    fn content_response_includes_tags() {
+        let tags = vec![Tag {
+            id: "test123".into(),
+            name: "TEST".into(),
+            instruction: "Test tag".into(),
+        }];
+        let state = AppState::from_file("test.rs".into(), "code", "test.rs", tags, vec![]);
+        let response = state.to_response();
+
+        assert_eq!(response.tags.len(), 1);
+        assert_eq!(response.tags[0].name, "TEST");
+    }
+
+    #[test]
+    fn tag_new_generates_12_char_id() {
+        let tag = Tag::new("TEST".into(), "instruction".into());
+        assert_eq!(tag.id.len(), 12);
+        assert!(tag.id.chars().all(|c| c.is_ascii_alphanumeric()));
+    }
+
+    #[test]
+    fn exit_mode_new_generates_12_char_id() {
+        let mode = ExitMode::new("Test".into(), "#ff0000".into(), "instruction".into(), 0);
+        assert_eq!(mode.id.len(), 12);
+        assert!(mode.id.chars().all(|c| c.is_ascii_alphanumeric()));
+        assert!(!mode.is_ephemeral);
     }
 }

@@ -52,7 +52,17 @@ fn main() {
         }
     };
 
+    // Load config
+    let tags = annot_lib::config::load_tags();
+    let exit_modes = annot_lib::config::load_exit_modes();
+
     // Create state and run Tauri
-    let state = annot_lib::state::AppState::from_file(input.label, &input.content, &input.path_hint);
+    let state = annot_lib::state::AppState::from_file(
+        input.label,
+        &input.content,
+        &input.path_hint,
+        tags,
+        exit_modes,
+    );
     annot_lib::run(state);
 }

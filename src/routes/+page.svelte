@@ -118,6 +118,58 @@
     }
   }
 
+  async function handleTagsChange(newTags: Tag[]) {
+    // Find changed tag by comparing with current state
+    const currentIds = new Set(tags.map(t => t.id));
+    const newIds = new Set(newTags.map(t => t.id));
+
+    // Check for deleted tags
+    for (const tag of tags) {
+      if (!newIds.has(tag.id)) {
+        await invoke('delete_tag', { id: tag.id });
+      }
+    }
+
+    // Check for added/updated tags
+    for (const tag of newTags) {
+      const existing = tags.find(t => t.id === tag.id);
+      if (!existing || existing.name !== tag.name || existing.instruction !== tag.instruction) {
+        await invoke('upsert_tag', { tag });
+      }
+    }
+
+    tags = newTags;
+  }
+
+  async function handleExitModesChange(newModes: ExitMode[]) {
+    // Find changed modes by comparing with current state
+    const currentIds = new Set(exitModes.map(m => m.id));
+    const newIds = new Set(newModes.map(m => m.id));
+
+    // Check for deleted modes
+    for (const mode of exitModes) {
+      if (!newIds.has(mode.id)) {
+        await invoke('delete_exit_mode', { id: mode.id });
+      }
+    }
+
+    // Check for added/updated modes
+    for (const mode of newModes) {
+      const existing = exitModes.find(m => m.id === mode.id);
+      if (!existing || existing.name !== mode.name || existing.instruction !== mode.instruction ||
+          existing.color !== mode.color || existing.order !== mode.order) {
+        await invoke('upsert_exit_mode', { mode });
+      }
+    }
+
+    exitModes = newModes;
+
+    // Update selectedModeIndex if mode was deleted
+    if (selectedModeIndex !== null && selectedModeIndex >= exitModes.length) {
+      selectedModeIndex = exitModes.length > 0 ? exitModes.length - 1 : null;
+    }
+  }
+
   // Get annotation info for a specific line (is it the last line of any annotation?)
   function getAnnotationAtLine(lineNum: number): { key: string; content: JSONContent } | null {
     for (const [key, content] of annotations) {
@@ -270,6 +322,7 @@
       const res = await invoke<ContentResponse>("get_content");
       label = res.label;
       lines = res.lines;
+      tags = res.tags;
       exitModes = res.exit_modes;
 
       // Find index of initially selected mode (if any)
@@ -282,9 +335,6 @@
       if (res.session_comment) {
         sessionComment = contentNodesToTipTap(res.session_comment);
       }
-
-      // Fetch tags for CommandPalette
-      tags = await invoke<Tag[]>('get_tags');
 
       // Listen for window close - this triggers output and exit
       await window.onCloseRequested(async (event) => {
@@ -442,6 +492,8 @@
     {exitModes}
     onClose={handleCommandPaletteClose}
     onSetExitMode={handleSetExitModeFromPalette}
+    onTagsChange={handleTagsChange}
+    onExitModesChange={handleExitModesChange}
   />
 {/if}
 

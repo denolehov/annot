@@ -17,6 +17,7 @@ export interface ExitMode {
 export interface ContentResponse {
   label: string;
   lines: Line[];
+  tags: Tag[];
   exit_modes: ExitMode[];
   selected_exit_mode_id: string | null;
   session_comment: ContentNode[] | null;
