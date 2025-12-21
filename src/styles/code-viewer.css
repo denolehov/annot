@@ -536,10 +536,6 @@ div.line.diff-context.annotated {
 /* Links */
 .md a {
 	color: var(--accent);
-	text-decoration: none;
-}
-
-.md a:hover {
 	text-decoration: underline;
 }
 

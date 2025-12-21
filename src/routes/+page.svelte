@@ -801,7 +801,7 @@
               {line.number}
             {/if}
           </span>
-          <span class="code">{#if line.html}{@html line.html}{:else}{line.content}{/if}</span>
+          <span class="code" class:md={markdownMetadata}>{#if line.html}{@html line.html}{:else}{line.content}{/if}</span>
           {#if mermaidBlock}
             <button
               class="mermaid-view-btn"

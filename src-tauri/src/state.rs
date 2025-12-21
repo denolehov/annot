@@ -183,16 +183,15 @@ fn render_markdown_line(line: &str, options: &comrak::Options) -> (String, LineT
     let indent = line.len() - trimmed.len();
     let indent_str = &line[..indent];
 
-    // Headers: # Title -> "# " + inline_render("Title")
+    // Headers: # Title -> styled "# " + inline_render("Title")
     if let Some(level) = detect_header_level(trimmed) {
-        let marker_len = level as usize + 1; // "## " = 3 chars for h2
-        let marker = &trimmed[..marker_len];
-        let content = &trimmed[marker_len..];
+        let hashes = &trimmed[..level as usize]; // Just the "#" characters
+        let content = &trimmed[level as usize..].trim_start(); // Title after space
         let html = format!(
-            "<span class=\"md md-h{}\">{}{}{}</span>",
+            "<span class=\"md md-h{}\">{}<span class=\"md-header-level\">{}</span> {}</span>",
             level,
             html_escape(indent_str),
-            html_escape(marker),
+            html_escape(hashes),
             render_inline(content, options)
         );
         return (html, LineType::Header { level });

@@ -75,6 +75,7 @@
 	--focus-glow: rgba(113, 113, 122, 0.15);    /* zinc-500/15 */
 
 	/* Accent - for interactive highlights (amber family) */
+	--accent: #b45309;             /* amber-700 - readable on light backgrounds */
 	--accent-bg: #fef9c3;          /* amber-100, lighter for bg */
 	--accent-bg-hover: #fef08a;    /* amber-200 */
 	--accent-border: #fcd34d;      /* amber-300 */
