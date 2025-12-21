@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { trimContent, isContentEmpty } from './tiptap';
-import type { JSONContent } from '@tiptap/core';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { trimContent, isContentEmpty, EditorShortcuts } from './tiptap';
+import { Editor, type JSONContent } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
 
 describe('trimContent', () => {
   it('removes trailing empty paragraphs', () => {
@@ -113,5 +114,99 @@ describe('isContentEmpty', () => {
       content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }],
     };
     expect(isContentEmpty(input)).toBe(false);
+  });
+});
+
+describe('EditorShortcuts', () => {
+  let editor: Editor;
+  let container: HTMLDivElement;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+  });
+
+  afterEach(() => {
+    editor?.destroy();
+    container?.remove();
+  });
+
+  it('calls onSubmit on Ctrl-Enter and prevents newline insertion', () => {
+    // Note: TipTap's "Mod-Enter" maps to Ctrl+Enter in JSDOM (non-macOS environment).
+    // On real macOS, Mod maps to Cmd. This test verifies the core behavior works.
+    const onSubmit = vi.fn();
+
+    editor = new Editor({
+      element: container,
+      extensions: [
+        StarterKit,
+        EditorShortcuts.configure({ onSubmit }),
+      ],
+      content: '<p>Hello</p>',
+    });
+
+    editor.commands.focus();
+
+    const contentBefore = editor.getText();
+
+    // Simulate Ctrl-Enter
+    const event = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      ctrlKey: true,
+      bubbles: true,
+    });
+    container.querySelector('.ProseMirror')?.dispatchEvent(event);
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(editor.getText()).toBe(contentBefore);
+  });
+
+  it('calls onDismiss on Escape', () => {
+    const onDismiss = vi.fn();
+
+    editor = new Editor({
+      element: container,
+      extensions: [
+        StarterKit,
+        EditorShortcuts.configure({ onDismiss }),
+      ],
+      content: '<p>Hello</p>',
+    });
+
+    editor.commands.focus();
+
+    // Simulate Escape keydown
+    const event = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+    });
+    container.querySelector('.ProseMirror')?.dispatchEvent(event);
+
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call callbacks when Enter is pressed without modifier', () => {
+    const onSubmit = vi.fn();
+
+    editor = new Editor({
+      element: container,
+      extensions: [
+        StarterKit,
+        EditorShortcuts.configure({ onSubmit }),
+      ],
+      content: '<p>Hello</p>',
+    });
+
+    editor.commands.focus();
+
+    // Simulate plain Enter
+    const event = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+    });
+    container.querySelector('.ProseMirror')?.dispatchEvent(event);
+
+    // onSubmit should NOT be called for plain Enter
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });

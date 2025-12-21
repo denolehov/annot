@@ -14,6 +14,7 @@
     ExcalidrawPlaceholder,
     SlashCommands,
     createSlashSuggestion,
+    EditorShortcuts,
     type SlashCommand,
   } from './tiptap';
   import type { Tag } from './types';
@@ -283,6 +284,17 @@
             },
           },
         }),
+        EditorShortcuts.configure({
+          onSubmit: () => {
+            editorState.editor?.commands.blur();
+          },
+          onDismiss: () => {
+            // Only dismiss if no suggestion menu is active
+            if (!suggestionState.active && !slashState.active) {
+              editorState.editor?.commands.blur();
+            }
+          },
+        }),
       ],
       content: content, // TipTap accepts JSONContent directly
       editable: !sealed,
@@ -302,18 +314,6 @@
         }
       },
     });
-
-    // Handle Escape and Cmd+Enter to dismiss editor
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!editorState.editor?.isFocused) return;
-
-      if (e.key === 'Escape' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
-        e.preventDefault();
-        e.stopPropagation();
-        editorState.editor.commands.blur();
-      }
-    };
-    element?.addEventListener('keydown', handleKeyDown);
 
     // Handle Excalidraw create/edit events
     const handleExcalidrawCreate = (e: Event) => {
@@ -351,7 +351,6 @@
     }, 50);
 
     return () => {
-      element?.removeEventListener('keydown', handleKeyDown);
       element?.removeEventListener('excalidraw-create', handleExcalidrawCreate);
       element?.removeEventListener('excalidraw-edit', handleExcalidrawEdit);
     };
