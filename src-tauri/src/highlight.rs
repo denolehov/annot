@@ -7,6 +7,7 @@ use syntect::util::LinesWithEndings;
 /// Embedded mermaid grammar for syntax highlighting mermaid code blocks.
 const MERMAID_GRAMMAR: &str = include_str!("../grammars/mermaid.sublime-syntax");
 
+
 /// Syntax highlighter using syntect with embedded grammars.
 pub struct Highlighter {
     syntax_set: SyntaxSet,
@@ -115,6 +116,8 @@ impl Highlighter {
             "ts" | "tsx" | "mts" | "cts" => "js",
             // JSX also uses JavaScript
             "jsx" | "mjs" | "cjs" => "js",
+            // Svelte → HTML (syntect default doesn't include Svelte)
+            "svelte" => "html",
             _ => ext,
         }
     }
@@ -203,6 +206,28 @@ mod tests {
                 ext
             );
         }
+    }
+
+    #[test]
+    fn svelte_falls_back_to_html_highlighting() {
+        let hl = Highlighter::new();
+
+        // syntect doesn't have Svelte, but we should get HTML highlighting
+        let svelte_code = "<script>\n  let count = 0;\n</script>\n\n<button on:click={() => count++}>\n  Clicked {count} times\n</button>";
+        let lines = hl.highlight_lines(svelte_code, "App.svelte");
+
+        // Should have highlighting classes (not plain text)
+        assert!(
+            lines[0].contains("class="),
+            "Svelte should be highlighted as HTML. Actual: {}",
+            lines[0]
+        );
+        // The <script> tag should be recognized
+        assert!(
+            lines[0].contains("script"),
+            "Should recognize script tag. Actual: {}",
+            lines[0]
+        );
     }
 
     #[test]
@@ -710,6 +735,44 @@ function greet(name) {
             lines[3].contains("keyword"),
             "end should be highlighted. Actual: {}",
             lines[3]
+        );
+    }
+
+    /// Documents CSS classes produced for markdown tables inside code blocks.
+    /// This is a regression test for the bug where `.header` CSS selector
+    /// was matching `span.meta.table.header.markdown` from syntect.
+    #[test]
+    fn documents_markdown_table_in_code_block_classes() {
+        let hl = Highlighter::new();
+
+        // Markdown table syntax - this is what appears inside a ```md code block
+        let table_md = r#"| Col1 | Col2 | Col3 |
+|:------------|:-------:|------------:|
+| Left-aligned | Centered | Right-aligned |
+| blah | blah | blah |"#;
+
+        let lines = hl.highlight_lines(table_md, "file.md");
+
+        println!("\n=== MARKDOWN TABLE CLASSES ===");
+        for (i, line) in lines.iter().enumerate() {
+            println!("Line {}: {}", i + 1, line);
+        }
+        println!("=== END ===\n");
+
+        // The header row should produce spans with classes like "meta table header markdown"
+        // IMPORTANT: This test documents that syntect produces a "header" class
+        // which can conflict with CSS selectors like `.header { display: flex; }`
+        assert!(
+            lines[0].contains("header"),
+            "Table header row should have 'header' class. Actual: {}",
+            lines[0]
+        );
+
+        // Specifically look for the meta.table.header scope
+        assert!(
+            lines[0].contains("meta") && lines[0].contains("table"),
+            "Should have meta and table classes. Actual: {}",
+            lines[0]
         );
     }
 

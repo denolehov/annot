@@ -9,8 +9,10 @@
 	position: relative;
 }
 
-/* Header with frosted glass effect */
-.header {
+/* Header with frosted glass effect
+   Use header.header to avoid matching syntect's span.header class
+   (e.g., span.meta.table.header.markdown for markdown tables in code blocks) */
+header.header {
 	position: relative;
 	z-index: 10; /* Above session-slot so dropdown renders on top */
 	display: flex;
@@ -35,12 +37,16 @@
 	display: flex;
 	align-items: center;
 	gap: 12px;
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
 }
 
 .header-right {
 	display: flex;
 	align-items: center;
 	gap: 4px;
+	flex-shrink: 0;
 	-webkit-app-region: no-drag;
 }
 
@@ -80,6 +86,10 @@
 	cursor: pointer;
 	-webkit-app-region: no-drag;
 	transition: color 150ms ease;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	min-width: 0;
 }
 
 .file-name:hover {
@@ -431,11 +441,11 @@ div.line.diff-context.annotated {
 .md-header-file {
 	display: flex;
 	align-items: center;
-	min-width: 0;
 	color: var(--text-primary);
 	font-weight: 600;
 	cursor: pointer;
-	flex-shrink: 1;
+	flex-shrink: 0.3; /* Very reluctant to shrink */
+	min-width: 0; /* But can if needed */
 }
 
 .md-header-file.has-comment {
@@ -459,13 +469,13 @@ div.line.diff-context.annotated {
 }
 
 .md-header-section.md-header-root {
-	flex-shrink: 1;
+	flex-shrink: 2; /* Shrinks more readily */
 }
 
 .md-header-section.md-header-current {
 	color: var(--text-primary);
 	font-weight: 500;
-	flex-shrink: 0.5; /* Prefers not to shrink, but can if needed */
+	flex-shrink: 1; /* Shrinks less than root */
 }
 
 .md-header-level {

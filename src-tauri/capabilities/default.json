@@ -16,7 +16,9 @@
     {
       "identifier": "opener:allow-open-url",
       "allow": [
-        { "url": "obsidian://*" }
+        { "url": "obsidian://*" },
+        { "url": "https://*" },
+        { "url": "http://*" }
       ]
     }
   ]
