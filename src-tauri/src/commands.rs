@@ -352,8 +352,14 @@ pub fn export_to_obsidian(
         .and_then(|mut cb| cb.set_text(&content))
         .map_err(|e| format!("Failed to copy to clipboard: {}", e))?;
 
-    // Use the label as the note name
-    let note_name = &state.label;
+    // Use H1 title as note name if present, otherwise fall back to label
+    let note_name = state
+        .lines
+        .iter()
+        .find(|l| l.content.starts_with("# "))
+        .map(|l| l.content.trim_start_matches("# ").trim())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(&state.label);
 
     // Build Obsidian URI with clipboard parameter
     let url = format!(

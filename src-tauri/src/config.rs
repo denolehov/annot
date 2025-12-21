@@ -9,11 +9,30 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::state::{ExitMode, Tag};
 
+/// Current config version. Bump when making breaking changes.
+pub const CONFIG_VERSION: u32 = 1;
+
 /// Application configuration stored in config.json.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    /// Schema version for forward compatibility.
+    #[serde(default = "default_version")]
+    pub version: u32,
     #[serde(default)]
     pub obsidian: ObsidianConfig,
+}
+
+fn default_version() -> u32 {
+    CONFIG_VERSION
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            version: CONFIG_VERSION,
+            obsidian: ObsidianConfig::default(),
+        }
+    }
 }
 
 /// Obsidian-related configuration.
@@ -177,20 +196,39 @@ pub fn load_config() -> Config {
 
     let path = dir.join("config.json");
     match fs::read_to_string(&path) {
-        Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+        Ok(content) => {
+            let mut config: Config = serde_json::from_str(&content).unwrap_or_default();
+            // Ensure version is set (for configs created before versioning)
+            if config.version == 0 {
+                config.version = CONFIG_VERSION;
+            }
+            config
+        }
         Err(_) => Config::default(),
     }
 }
 
-/// Saves config to ~/.config/annot/config.json with atomic write.
+/// Saves config to ~/.config/annot/config.json with locking and atomic write.
 pub fn save_config(config: &Config) -> io::Result<()> {
     let dir = ensure_config_dir()?;
-    let path = dir.join("config.json");
+    let data_path = dir.join("config.json");
+    let lock_path = dir.join("config.json.lock");
 
-    let content = serde_json::to_string_pretty(config)
+    // Create lock file and acquire exclusive lock
+    let lock_file = File::create(&lock_path)?;
+    lock_file.lock_exclusive()?;
+
+    // Ensure version is current
+    let mut config = config.clone();
+    config.version = CONFIG_VERSION;
+
+    let content = serde_json::to_string_pretty(&config)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-    atomic_write(&path, &content)
+    atomic_write(&data_path, &content)?;
+
+    FileExt::unlock(&lock_file)?;
+    Ok(())
 }
 
 // Internal functions that accept explicit paths, used by tests
@@ -294,11 +332,18 @@ mod tests {
     }
 
     #[test]
+    fn config_default_has_current_version() {
+        let config = Config::default();
+        assert_eq!(config.version, CONFIG_VERSION);
+    }
+
+    #[test]
     fn config_deserializes_with_missing_fields() {
         // Should handle partial JSON gracefully
         let json = r#"{"obsidian": {}}"#;
         let config: Config = serde_json::from_str(json).unwrap();
         assert!(config.obsidian.vaults.is_empty());
+        assert_eq!(config.version, CONFIG_VERSION); // default version applied
 
         // Should handle empty JSON
         let json = "{}";
@@ -307,8 +352,17 @@ mod tests {
     }
 
     #[test]
+    fn config_deserializes_with_explicit_version() {
+        let json = r#"{"version": 1, "obsidian": {"vaults": ["test"]}}"#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(config.version, 1);
+        assert_eq!(config.obsidian.vaults.len(), 1);
+    }
+
+    #[test]
     fn config_roundtrip() {
         let config = Config {
+            version: CONFIG_VERSION,
             obsidian: ObsidianConfig {
                 vaults: vec!["Work Notes".into(), "Personal".into()],
             },
@@ -317,8 +371,17 @@ mod tests {
         let json = serde_json::to_string(&config).unwrap();
         let loaded: Config = serde_json::from_str(&json).unwrap();
 
+        assert_eq!(loaded.version, CONFIG_VERSION);
         assert_eq!(loaded.obsidian.vaults.len(), 2);
         assert_eq!(loaded.obsidian.vaults[0], "Work Notes");
         assert_eq!(loaded.obsidian.vaults[1], "Personal");
+    }
+
+    #[test]
+    fn config_serializes_with_version() {
+        let config = Config::default();
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(json.contains("\"version\""));
+        assert!(json.contains(&format!("{}", CONFIG_VERSION)));
     }
 }

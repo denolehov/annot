@@ -255,9 +255,13 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
           return { state, commands };
         }
 
-        // Don't delete ephemeral or action items
+        // Don't delete ephemeral items (but allow obsidian items with actions)
         const selectedItem = matches[state.selectedIndex];
-        if (selectedItem?.isEphemeral || selectedItem?.action) {
+        if (selectedItem?.isEphemeral) {
+          return { state, commands };
+        }
+        // For non-obsidian namespaces, also block items with actions
+        if (selectedItem?.action && state.namespace.id !== 'obsidian') {
           return { state, commands };
         }
 
@@ -295,8 +299,12 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
 
         const item = matches[state.selectedIndex];
 
-        // Don't edit ephemeral or action items
-        if (item?.isEphemeral || item?.action) {
+        // Don't edit ephemeral items (but allow obsidian items with actions)
+        if (item?.isEphemeral) {
+          return { state, commands };
+        }
+        // For non-obsidian namespaces, also block items with actions
+        if (item?.action && state.namespace.id !== 'obsidian') {
           return { state, commands };
         }
 

@@ -227,6 +227,141 @@ describe('computeItemList', () => {
   });
 });
 
+describe('reducer: obsidian namespace special handling', () => {
+  // Obsidian namespace has fields (for vault CRUD) AND items with actions (for export)
+  const obsidianNamespace: Namespace = {
+    id: 'obsidian',
+    label: 'Obsidian',
+    icon: 'obsidian',
+    fields: [{ key: 'name', label: 'Vault Name', type: 'text', required: true }],
+    hotkeys: [
+      { key: 'd', display: 'dd', label: 'delete', action: 'DELETE' },
+      { key: 'e', label: 'edit', action: 'EDIT' },
+    ],
+  };
+
+  // Obsidian vault items have both values (for CRUD) and action (for export)
+  const obsidianItems: Item[] = [
+    {
+      id: 'vault-1',
+      name: 'Export to: Work Notes',
+      values: { name: 'Work Notes' },
+      action: { type: 'EXPORT_TO_OBSIDIAN', vault: 'Work Notes' },
+    },
+    {
+      id: 'vault-2',
+      name: 'Export to: Personal',
+      values: { name: 'Personal' },
+      action: { type: 'EXPORT_TO_OBSIDIAN', vault: 'Personal' },
+    },
+  ];
+
+  const ctx = createMockContext(
+    [obsidianNamespace, copyNamespace],
+    { obsidian: obsidianItems, copy: actionItems }
+  );
+
+  describe('DELETE on obsidian item with action', () => {
+    it('arms pendingDelete on first delete (unlike other action items)', () => {
+      const state: State = {
+        type: 'ITEM_FILTER',
+        namespace: obsidianNamespace,
+        query: '',
+        selectedIndex: 0,
+        pendingDelete: false,
+        inputMode: 'navigating',
+      };
+
+      const result = reduce(state, { type: 'DELETE' }, ctx);
+
+      expect(result.state.type).toBe('ITEM_FILTER');
+      if (result.state.type === 'ITEM_FILTER') {
+        expect(result.state.pendingDelete).toBe(true);
+      }
+    });
+
+    it('emits DELETE_ITEM command on second delete', () => {
+      const state: State = {
+        type: 'ITEM_FILTER',
+        namespace: obsidianNamespace,
+        query: '',
+        selectedIndex: 0,
+        pendingDelete: true, // Already armed
+        inputMode: 'navigating',
+      };
+
+      const result = reduce(state, { type: 'DELETE' }, ctx);
+
+      expect(result.commands).toContainEqual({
+        type: 'DELETE_ITEM',
+        namespace: 'obsidian',
+        itemId: 'vault-1',
+      });
+    });
+  });
+
+  describe('EDIT on obsidian item with action', () => {
+    it('opens edit form (unlike other action items)', () => {
+      const state: State = {
+        type: 'ITEM_FILTER',
+        namespace: obsidianNamespace,
+        query: '',
+        selectedIndex: 0,
+        pendingDelete: false,
+        inputMode: 'navigating',
+      };
+
+      const result = reduce(state, { type: 'EDIT' }, ctx);
+
+      expect(result.state.type).toBe('EDIT_FORM');
+      if (result.state.type === 'EDIT_FORM') {
+        expect(result.state.item.id).toBe('vault-1');
+        expect(result.state.values.name).toBe('Work Notes');
+      }
+    });
+  });
+
+  describe('ENTER on obsidian item with action', () => {
+    it('executes the export action and closes', () => {
+      const state: State = {
+        type: 'ITEM_FILTER',
+        namespace: obsidianNamespace,
+        query: '',
+        selectedIndex: 0,
+        pendingDelete: false,
+        inputMode: 'navigating',
+      };
+
+      const result = reduce(state, { type: 'ENTER' }, ctx);
+
+      expect(result.state.type).toBe('IDLE');
+      expect(result.commands).toContainEqual({
+        type: 'EXPORT_TO_OBSIDIAN',
+        vault: 'Work Notes',
+      });
+    });
+  });
+
+  describe('DELETE on copy namespace (non-obsidian) with action', () => {
+    it('still blocks delete for action items', () => {
+      const state: State = {
+        type: 'ITEM_FILTER',
+        namespace: copyNamespace,
+        query: '',
+        selectedIndex: 0,
+        pendingDelete: false,
+        inputMode: 'navigating',
+      };
+
+      const result = reduce(state, { type: 'DELETE' }, ctx);
+
+      // Should not arm pendingDelete
+      expect(result.state).toEqual(state);
+      expect(result.commands).toHaveLength(0);
+    });
+  });
+});
+
 describe('reducer: single-action namespace auto-execute', () => {
   // Context with save namespace (single action item, no fields)
   const ctx = createMockContext(
