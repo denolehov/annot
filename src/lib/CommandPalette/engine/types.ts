@@ -33,6 +33,7 @@ export interface Item {
   name: string;
   values: Record<string, string>;
   isEphemeral?: boolean; // True if injected by agent (session-scoped, not editable)
+  action?: Command; // If present: execute on ENTER instead of edit form
 }
 
 // Pending item — being created, no ID yet
@@ -98,7 +99,8 @@ export type Command =
   | { type: 'DELETE_ITEM'; namespace: string; itemId: string }
   | { type: 'SET_MODE'; namespace: string; itemId: string }
   | { type: 'REORDER_ITEMS'; namespace: string; orderedIds: string[] }
-  | { type: 'EMIT_EVENT'; event: string; payload: unknown };
+  | { type: 'EMIT_EVENT'; event: string; payload: unknown }
+  | { type: 'COPY_TO_CLIPBOARD'; mode: 'content' | 'annotations' | 'all' };
 
 // === Query Context ===
 

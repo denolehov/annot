@@ -23,7 +23,9 @@ export function computeItemList(
   const hasExactMatch = matches.some(
     (m) => m.name.toLowerCase() === queryTrimmed.toLowerCase()
   );
-  const showCreate = queryTrimmed !== '' && !hasExactMatch;
+  // Show Create only if: namespace has fields, query is non-empty, and no exact match
+  const hasFields = state.namespace.fields.length > 0;
+  const showCreate = hasFields && queryTrimmed !== '' && !hasExactMatch;
   const createIndex = showCreate ? matches.length : -1;
 
   return { matches, showCreate, createIndex };
@@ -205,6 +207,16 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
         // Selected an existing item
         const item = matches[state.selectedIndex];
         if (item) {
+          // Executable item — run action, close palette
+          if (item.action) {
+            commands.push(item.action);
+            return {
+              state: { type: 'IDLE' },
+              commands,
+            };
+          }
+
+          // Regular item — open edit form
           return {
             state: {
               type: 'EDIT_FORM',
@@ -229,9 +241,9 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
           return { state, commands };
         }
 
-        // Don't delete ephemeral items (agent-injected, session-scoped)
+        // Don't delete ephemeral or action items
         const selectedItem = matches[state.selectedIndex];
-        if (selectedItem?.isEphemeral) {
+        if (selectedItem?.isEphemeral || selectedItem?.action) {
           return { state, commands };
         }
 
@@ -269,8 +281,8 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
 
         const item = matches[state.selectedIndex];
 
-        // Don't edit ephemeral items (agent-injected, session-scoped)
-        if (item?.isEphemeral) {
+        // Don't edit ephemeral or action items
+        if (item?.isEphemeral || item?.action) {
           return { state, commands };
         }
 

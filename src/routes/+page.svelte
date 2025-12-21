@@ -808,6 +808,7 @@
     onSetExitMode={handleSetExitModeFromPalette}
     onTagsChange={handleTagsChange}
     onExitModesChange={handleExitModesChange}
+    {showToast}
   />
 {/if}
 

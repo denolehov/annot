@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { invoke } from '@tauri-apps/api/core';
   import { reduce, computeItemList } from './engine/reducer';
   import { createQueryContext, setTagItems, setExitModeItems, saveTagItem, deleteTagItem, saveExitModeItem, deleteExitModeItem, reorderExitModeItems, generateTagId, generateExitModeId } from './namespaces';
   import type { State, Action, Command, Item, Namespace } from './engine/types';
@@ -12,9 +13,10 @@
     onSetExitMode: (modeId: string) => void;
     onTagsChange?: (tags: Tag[]) => void;
     onExitModesChange?: (modes: ExitMode[]) => void;
+    showToast?: (message: string) => void;
   }
 
-  let { tags, exitModes, onClose, onSetExitMode, onTagsChange, onExitModesChange }: Props = $props();
+  let { tags, exitModes, onClose, onSetExitMode, onTagsChange, onExitModesChange, showToast }: Props = $props();
 
   // Convert domain types to Item format
   function tagToItem(tag: Tag): Item {
@@ -138,6 +140,18 @@
             return itemToExitMode(i, orig);
           }));
         }
+        break;
+      }
+
+      case 'COPY_TO_CLIPBOARD': {
+        const labels: Record<string, string> = {
+          content: 'Content',
+          annotations: 'Annotations',
+          all: 'Content + Annotations',
+        };
+        invoke('copy_to_clipboard', { mode: cmd.mode })
+          .then(() => showToast?.(`${labels[cmd.mode]} copied!`))
+          .catch((e) => showToast?.(`Failed to copy: ${e}`));
         break;
       }
 
