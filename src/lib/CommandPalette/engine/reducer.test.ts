@@ -6,7 +6,7 @@ import type { State, Action, QueryContext, Namespace, Item, Command } from './ty
 const tagsNamespace: Namespace = {
   id: 'tags',
   label: 'Tags',
-  icon: '#',
+  icon: 'hashtag',
   fields: [{ key: 'name', label: 'Name', type: 'text', required: true }],
   hotkeys: [
     { key: 'd', display: 'dd', label: 'delete', action: 'DELETE' },
@@ -18,7 +18,7 @@ const tagsNamespace: Namespace = {
 const copyNamespace: Namespace = {
   id: 'copy',
   label: 'Copy',
-  icon: '📋',
+  icon: 'copy',
   fields: [],
   hotkeys: [],
 };
@@ -27,7 +27,7 @@ const copyNamespace: Namespace = {
 const saveNamespace: Namespace = {
   id: 'save',
   label: 'Save',
-  icon: '💾',
+  icon: 'save',
   fields: [],
   hotkeys: [],
 };

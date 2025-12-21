@@ -6,7 +6,7 @@ import type { Namespace, Item } from '../engine/types';
 export const exitModesNamespace: Namespace = {
   id: 'exit-modes',
   label: 'Exit Modes',
-  icon: '📤',
+  icon: 'exit',
   fields: [
     { key: 'name', label: 'Name', type: 'text', required: true },
     { key: 'instruction', label: 'Instruction', type: 'textarea', required: true },

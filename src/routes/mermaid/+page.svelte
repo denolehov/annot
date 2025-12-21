@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { invoke } from '@tauri-apps/api/core';
-	import { getCurrentWindow } from '@tauri-apps/api/window';
+	import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 	import { renderMermaid } from '$lib/mermaid-loader';
 	import panzoom from 'panzoom';
 	import type { PanZoom } from 'panzoom';
@@ -72,7 +72,26 @@
 		svgEl.style.width = `${diagramWidth}px`;
 		svgEl.style.height = `${diagramHeight}px`;
 
-		// Initialize panzoom at 1:1, then apply smart fit
+		// Resize window to fit diagram content
+		const win = getCurrentWindow();
+		const padding = 40; // Margin around diagram
+		const toolbarHeight = 60; // Space for zoom toolbar at bottom
+		const titleBarHeight = 44; // macOS title bar overlay
+
+		// Calculate window size to fit diagram at 100%
+		const windowWidth = Math.max(300, diagramWidth + padding);
+		const windowHeight = Math.max(200, diagramHeight + padding + toolbarHeight + titleBarHeight);
+
+		// Cap to screen size
+		const maxWidth = window.screen.availWidth * 0.9;
+		const maxHeight = window.screen.availHeight * 0.9;
+		const finalWidth = Math.min(windowWidth, maxWidth);
+		const finalHeight = Math.min(windowHeight, maxHeight);
+
+		await win.setSize(new LogicalSize(finalWidth, finalHeight));
+		await win.center();
+
+		// Initialize panzoom at 1:1
 		panzoomInstance = panzoom(svgEl, {
 			maxZoom: 5,
 			minZoom: 0.1,
@@ -82,34 +101,14 @@
 			smoothScroll: false,
 		});
 
-		// Apply smart fit on initial load
-		const padding = 40;
-		const availWidth = window.innerWidth - padding;
-		const availHeight = window.innerHeight - padding;
-		const diagramAspect = diagramWidth / diagramHeight;
-		const windowAspect = availWidth / availHeight;
-
-		let fitScale: number;
-		let offsetX: number;
-		let offsetY: number;
-
-		if (diagramAspect > windowAspect) {
-			// Diagram is wider → fit to width
-			fitScale = availWidth / diagramWidth;
-			offsetX = padding / 2;
-			offsetY = (window.innerHeight - diagramHeight * fitScale) / 2;
-		} else {
-			// Diagram is taller → fit to height
-			fitScale = availHeight / diagramHeight;
-			offsetX = (window.innerWidth - diagramWidth * fitScale) / 2;
-			offsetY = padding / 2;
-		}
-
-		panzoomInstance.zoomAbs(0, 0, fitScale);
+		// Center diagram in window (account for title bar)
+		const offsetX = (finalWidth - diagramWidth) / 2;
+		const offsetY = titleBarHeight + (finalHeight - titleBarHeight - toolbarHeight - diagramHeight) / 2;
+		panzoomInstance.zoomAbs(0, 0, 1);
 		panzoomInstance.moveTo(offsetX, offsetY);
 
 		// Track scale changes
-		currentScale = fitScale;
+		currentScale = 1;
 		panzoomInstance.on('zoom', () => {
 			if (panzoomInstance) {
 				currentScale = panzoomInstance.getTransform().scale;
@@ -117,7 +116,6 @@
 		});
 
 		// Show the window
-		const win = getCurrentWindow();
 		await win.show();
 	}
 

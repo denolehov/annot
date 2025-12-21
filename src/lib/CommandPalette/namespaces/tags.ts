@@ -6,7 +6,7 @@ import type { Namespace, Item } from '../engine/types';
 export const tagsNamespace: Namespace = {
   id: 'tags',
   label: 'Tags',
-  icon: '#',  // Text icon, not emoji
+  icon: 'hashtag',
   fields: [
     { key: 'name', label: 'Name', type: 'text', required: true },
     { key: 'instruction', label: 'Instruction', type: 'textarea', required: false },

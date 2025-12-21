@@ -6,7 +6,7 @@ import type { Namespace, Item } from '../engine/types';
 export const copyNamespace: Namespace = {
   id: 'copy',
   label: 'Copy',
-  icon: '📋',
+  icon: 'copy',
   fields: [], // No fields — not editable
   hotkeys: [], // No hotkeys for action namespaces
 };

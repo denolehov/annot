@@ -5,6 +5,7 @@
   import { createQueryContext, setTagItems, setExitModeItems, saveTagItem, deleteTagItem, saveExitModeItem, deleteExitModeItem, reorderExitModeItems, generateTagId, generateExitModeId } from './namespaces';
   import type { State, Action, Command, Item, Namespace } from './engine/types';
   import type { Tag, ExitMode } from '$lib/types';
+  import Icon from './Icon.svelte';
 
   interface Props {
     tags: Tag[];
@@ -438,7 +439,7 @@
   {#if machineState.type === 'NAMESPACE_FILTER'}
     <div class="filter-view">
       <div class="input-row">
-        <span class="search-icon">🔍</span>
+        <span class="search-icon"><Icon name="search" /></span>
         <input
           bind:this={inputEl}
           type="text"
@@ -459,7 +460,7 @@
             onclick={() => dispatch({ type: 'SELECT', index: i })}
             onkeydown={() => {}}
           >
-            <span class="icon">{ns.icon}</span>
+            <span class="icon"><Icon name={ns.icon} /></span>
             <span class="label">{ns.label}</span>
           </li>
         {/each}
@@ -469,8 +470,8 @@
   {:else if machineState.type === 'ITEM_FILTER'}
     <div class="filter-view">
       <div class="input-row">
-        <span class="search-icon">🔍</span>
-        <span class="ns-prefix">{machineState.namespace.icon} {machineState.namespace.label}</span>
+        <span class="search-icon"><Icon name="search" /></span>
+        <span class="ns-prefix"><Icon name={machineState.namespace.icon} /> {machineState.namespace.label}</span>
         <span class="separator">›</span>
         <input
           bind:this={inputEl}
@@ -521,8 +522,8 @@
   {:else if machineState.type === 'ITEM_REORDER'}
     <div class="reorder-view">
       <div class="input-row">
-        <span class="search-icon">↕️</span>
-        <span class="ns-prefix">{machineState.namespace.icon} {machineState.namespace.label}</span>
+        <span class="search-icon"><Icon name="reorder" /></span>
+        <span class="ns-prefix"><Icon name={machineState.namespace.icon} /> {machineState.namespace.label}</span>
         <span class="separator">›</span>
         <span class="mode-prefix">Reorder</span>
       </div>
@@ -542,8 +543,8 @@
   {:else if machineState.type === 'EDIT_FORM' || machineState.type === 'CREATE_FORM'}
     <div class="form-view">
       <div class="input-row">
-        <span class="search-icon">{machineState.type === 'CREATE_FORM' ? '➕' : '✏️'}</span>
-        <span class="ns-prefix">{machineState.namespace.icon} {machineState.namespace.label}</span>
+        <span class="search-icon"><Icon name={machineState.type === 'CREATE_FORM' ? 'plus' : 'edit'} /></span>
+        <span class="ns-prefix"><Icon name={machineState.namespace.icon} /> {machineState.namespace.label}</span>
         <span class="separator">›</span>
         <span class="mode-prefix">{machineState.type === 'CREATE_FORM' ? 'New' : 'Edit'}</span>
       </div>

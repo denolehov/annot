@@ -6,7 +6,7 @@ import type { Namespace, Item } from '../engine/types';
 export const saveNamespace: Namespace = {
   id: 'save',
   label: 'Save',
-  icon: '💾',
+  icon: 'save',
   fields: [], // No fields — not editable
   hotkeys: [], // No hotkeys for action namespaces
 };
