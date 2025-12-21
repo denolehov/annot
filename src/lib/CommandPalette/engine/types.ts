@@ -101,7 +101,8 @@ export type Command =
   | { type: 'REORDER_ITEMS'; namespace: string; orderedIds: string[] }
   | { type: 'EMIT_EVENT'; event: string; payload: unknown }
   | { type: 'COPY_TO_CLIPBOARD'; mode: 'content' | 'annotations' | 'all' }
-  | { type: 'OPEN_SAVE_MODAL' };
+  | { type: 'OPEN_SAVE_MODAL' }
+  | { type: 'EXPORT_TO_OBSIDIAN'; vault: string };
 
 // === Query Context ===
 

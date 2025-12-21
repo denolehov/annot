@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{AppHandle, State, WebviewWindow};
 
-use crate::config;
+use crate::config::{self, Config};
 use crate::output::{format_output, OutputMode};
 use crate::state::{AppState, ContentNode, ContentResponse, ExitMode, Tag};
 use serde::Serialize;
@@ -309,4 +309,58 @@ pub fn save_content(
         saved_path: path.display().to_string(),
         new_label,
     })
+}
+
+// --- Config commands ---
+
+#[tauri::command]
+pub fn get_config() -> Config {
+    config::load_config()
+}
+
+#[tauri::command]
+pub fn save_config(config: Config) -> Result<(), String> {
+    config::save_config(&config).map_err(|e| e.to_string())
+}
+
+// --- Obsidian export ---
+
+/// Response from export_to_obsidian command.
+#[derive(Serialize)]
+pub struct ObsidianExportResponse {
+    /// The obsidian:// URI to open.
+    pub url: String,
+}
+
+#[tauri::command]
+pub fn export_to_obsidian(
+    state: State<Mutex<AppState>>,
+    vault_name: String,
+) -> Result<ObsidianExportResponse, String> {
+    let state = state.lock().unwrap();
+
+    // Reconstruct raw content from lines
+    let content: String = state
+        .lines
+        .iter()
+        .map(|l| l.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // Copy content to clipboard (Rust-side to avoid permission issues)
+    arboard::Clipboard::new()
+        .and_then(|mut cb| cb.set_text(&content))
+        .map_err(|e| format!("Failed to copy to clipboard: {}", e))?;
+
+    // Use the label as the note name
+    let note_name = &state.label;
+
+    // Build Obsidian URI with clipboard parameter
+    let url = format!(
+        "obsidian://new?vault={}&name={}&clipboard=true",
+        urlencoding::encode(&vault_name),
+        urlencoding::encode(note_name)
+    );
+
+    Ok(ObsidianExportResponse { url })
 }

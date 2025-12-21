@@ -1,11 +1,19 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import { openUrl } from '@tauri-apps/plugin-opener';
   import { reduce, computeItemList } from './engine/reducer';
-  import { createQueryContext, setTagItems, setExitModeItems, saveTagItem, deleteTagItem, saveExitModeItem, deleteExitModeItem, reorderExitModeItems, generateTagId, generateExitModeId } from './namespaces';
+  import { createQueryContext, setTagItems, setExitModeItems, saveTagItem, deleteTagItem, saveExitModeItem, deleteExitModeItem, reorderExitModeItems, generateTagId, generateExitModeId, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId } from './namespaces';
   import type { State, Action, Command, Item, Namespace } from './engine/types';
   import type { Tag, ExitMode } from '$lib/types';
   import Icon from './Icon.svelte';
+
+  // Config type matching Rust
+  interface Config {
+    obsidian: {
+      vaults: string[];
+    };
+  }
 
   interface Props {
     tags: Tag[];
@@ -161,9 +169,53 @@
         onOpenSaveModal?.();
         break;
 
+      case 'EXPORT_TO_OBSIDIAN': {
+        invoke<{ url: string }>('export_to_obsidian', { vaultName: cmd.vault })
+          .then(async (result) => {
+            // Content already copied to clipboard by Rust
+            // Open Obsidian via plugin opener (handles custom protocols)
+            await openUrl(result.url);
+            showToast?.('Opening in Obsidian...');
+          })
+          .catch((e) => showToast?.(`Export failed: ${e}`));
+        break;
+      }
+
       case 'EMIT_EVENT':
         // Events are for external listeners (not implemented yet)
         break;
+    }
+
+    // Handle obsidian namespace CRUD
+    if (cmd.type === 'CREATE_ITEM' && cmd.namespace === 'obsidian') {
+      const newItem: Item = {
+        id: generateVaultId(),
+        name: cmd.pending.values.name || cmd.pending.name,
+        values: cmd.pending.values,
+      };
+      saveObsidianVault(newItem);
+      persistObsidianConfig();
+    } else if (cmd.type === 'UPDATE_ITEM' && cmd.namespace === 'obsidian') {
+      saveObsidianVault(cmd.item);
+      persistObsidianConfig();
+    } else if (cmd.type === 'DELETE_ITEM' && cmd.namespace === 'obsidian') {
+      deleteObsidianVault(cmd.itemId);
+      persistObsidianConfig();
+    }
+  }
+
+  // Persist obsidian vaults to config file
+  async function persistObsidianConfig() {
+    try {
+      const config: Config = {
+        obsidian: {
+          vaults: getVaultNames(),
+        },
+      };
+      await invoke('save_config', { config });
+    } catch (e) {
+      console.error('Failed to save config:', e);
+      showToast?.(`Failed to save config: ${e}`);
     }
   }
 
@@ -299,8 +351,16 @@
     return values;
   }
 
-  // Open on mount
-  onMount(() => {
+  // Load config and open on mount
+  onMount(async () => {
+    // Load obsidian vaults from config
+    try {
+      const config = await invoke<Config>('get_config');
+      setObsidianVaults(config.obsidian?.vaults || []);
+    } catch (e) {
+      console.error('Failed to load config:', e);
+      setObsidianVaults([]);
+    }
     dispatch({ type: 'OPEN' });
   });
 

@@ -5,9 +5,24 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use fs4::fs_std::FileExt;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::state::{ExitMode, Tag};
+
+/// Application configuration stored in config.json.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Config {
+    #[serde(default)]
+    pub obsidian: ObsidianConfig,
+}
+
+/// Obsidian-related configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ObsidianConfig {
+    /// List of Obsidian vault names.
+    #[serde(default)]
+    pub vaults: Vec<String>,
+}
 
 /// Trait for types that can be merged during concurrent writes.
 pub trait Mergeable: Clone {
@@ -154,6 +169,30 @@ pub fn save_exit_modes(modes: &[ExitMode], deleted_ids: &HashSet<String>) -> io:
     save_merged("exit-modes.json", modes, deleted_ids)
 }
 
+/// Loads config from ~/.config/annot/config.json. Returns default if file doesn't exist.
+pub fn load_config() -> Config {
+    let Some(dir) = config_dir() else {
+        return Config::default();
+    };
+
+    let path = dir.join("config.json");
+    match fs::read_to_string(&path) {
+        Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+        Err(_) => Config::default(),
+    }
+}
+
+/// Saves config to ~/.config/annot/config.json with atomic write.
+pub fn save_config(config: &Config) -> io::Result<()> {
+    let dir = ensure_config_dir()?;
+    let path = dir.join("config.json");
+
+    let content = serde_json::to_string_pretty(config)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    atomic_write(&path, &content)
+}
+
 // Internal functions that accept explicit paths, used by tests
 #[cfg(test)]
 fn load_tags_from(path: &std::path::Path) -> Vec<Tag> {
@@ -246,5 +285,40 @@ mod tests {
         let dir = config_dir();
         assert!(dir.is_some());
         assert!(dir.unwrap().ends_with("annot"));
+    }
+
+    #[test]
+    fn config_default_has_empty_vaults() {
+        let config = Config::default();
+        assert!(config.obsidian.vaults.is_empty());
+    }
+
+    #[test]
+    fn config_deserializes_with_missing_fields() {
+        // Should handle partial JSON gracefully
+        let json = r#"{"obsidian": {}}"#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert!(config.obsidian.vaults.is_empty());
+
+        // Should handle empty JSON
+        let json = "{}";
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert!(config.obsidian.vaults.is_empty());
+    }
+
+    #[test]
+    fn config_roundtrip() {
+        let config = Config {
+            obsidian: ObsidianConfig {
+                vaults: vec!["Work Notes".into(), "Personal".into()],
+            },
+        };
+
+        let json = serde_json::to_string(&config).unwrap();
+        let loaded: Config = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(loaded.obsidian.vaults.len(), 2);
+        assert_eq!(loaded.obsidian.vaults[0], "Work Notes");
+        assert_eq!(loaded.obsidian.vaults[1], "Personal");
     }
 }

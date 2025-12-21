@@ -39,6 +39,14 @@
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="cp-icon {className}">
     <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
   </svg>
+{:else if name === 'obsidian'}
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="70 30 370 460" class="cp-icon {className}" aria-hidden="true">
+    <path d="M359.9 434.3c-2.6 19.1-21.3 34-40 28.9-26.4-7.3-57-18.7-84.7-20.8l-42.3-3.2a27.9 27.9 0 0 1-18-8.4l-73-75a27.9 27.9 0 0 1-5.4-31s45.1-99 46.8-104.2c1.7-5.1 7.8-50 11.4-74.2a28 28 0 0 1 9-16.6l86.2-77.5a28 28 0 0 1 40.6 3.5l72.5 92a29.7 29.7 0 0 1 6.2 18.3c0 17.4 1.5 53.2 11.1 76.3a303 303 0 0 0 35.6 58.5 14 14 0 0 1 1.1 15.7c-6.4 10.8-18.9 31.4-36.7 57.9a143.3 143.3 0 0 0-20.4 59.8Z" fill="currentColor"/>
+    <path d="M144 218 L270 297" stroke="var(--bg-canvas, #1e1e1e)" stroke-width="12" stroke-linecap="round"/>
+    <path d="M270 297 L183 437" stroke="var(--bg-canvas, #1e1e1e)" stroke-width="12" stroke-linecap="round"/>
+    <path d="M270 297 L375 382" stroke="var(--bg-canvas, #1e1e1e)" stroke-width="12" stroke-linecap="round"/>
+    <path d="M290 56 L270 297" stroke="var(--bg-canvas, #1e1e1e)" stroke-width="12" stroke-linecap="round"/>
+  </svg>
 {:else}
   <span class="icon-fallback">{name}</span>
 {/if}
