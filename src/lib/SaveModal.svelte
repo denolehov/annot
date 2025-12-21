@@ -9,13 +9,13 @@
 
   let { defaultPath, onSave, onCancel }: Props = $props();
 
-  let path = $state(defaultPath);
+  let path = $state('');
   let saving = $state(false);
   let error = $state<string | null>(null);
   let inputEl: HTMLInputElement | undefined = $state();
 
   onMount(() => {
-    // Focus and select input on mount
+    path = defaultPath;
     inputEl?.focus();
     inputEl?.select();
   });

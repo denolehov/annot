@@ -9,7 +9,6 @@
   import AnnotationEditor from "$lib/AnnotationEditor.svelte";
   import CopyDropdown from "$lib/CopyDropdown.svelte";
   import { CommandPalette } from "$lib/CommandPalette";
-  import MermaidModal from "$lib/MermaidModal.svelte";
   import SaveModal from "$lib/SaveModal.svelte";
   import type { SaveContentResponse } from "$lib/types";
 
@@ -232,10 +231,6 @@
   let commandPaletteOpen = $state(false);
   let tags: Tag[] = $state([]);
 
-  // Mermaid modal state
-  let mermaidModalOpen = $state(false);
-  let mermaidSource = $state('');
-
   // Save modal state
   let saveModalOpen = $state(false);
 
@@ -425,11 +420,6 @@
       .join('\n');
   }
 
-  function openMermaidModal(block: { start_line: number; end_line: number }) {
-    mermaidSource = getMermaidContent(block.start_line, block.end_line);
-    mermaidModalOpen = true;
-  }
-
   async function openMermaidWindow(block: { start_line: number; end_line: number }) {
     const source = getMermaidContent(block.start_line, block.end_line);
     try {
@@ -546,6 +536,12 @@
       }
     } else if (e.key === 'c' && hoveredLine !== null && !selection) {
       // Open editor on hovered line (skip header lines)
+      // Skip if user is focused in an editor/input
+      const activeEl = document.activeElement;
+      const isInEditor = activeEl?.closest('.annotation-editor, .session-editor');
+      const isInInput = activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement;
+      const isContentEditable = activeEl instanceof HTMLElement && activeEl.isContentEditable;
+      if (isInEditor || isInInput || isContentEditable) return;
       if (!isLineSelectable(hoveredLine)) return;
       e.preventDefault();
       selection = { start: hoveredLine, end: hoveredLine };
@@ -809,20 +805,11 @@
           {#if mermaidBlock}
             <button
               class="mermaid-view-btn"
-              onclick={() => openMermaidModal(mermaidBlock)}
+              onclick={() => openMermaidWindow(mermaidBlock)}
               title="View diagram"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="14" height="14">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z" />
-              </svg>
-            </button>
-            <button
-              class="mermaid-view-btn"
-              onclick={() => openMermaidWindow(mermaidBlock)}
-              title="Open in window"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="14" height="14">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.75H6A2.25 2.25 0 0 0 3.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0 1 20.25 6v1.5m0 9V18A2.25 2.25 0 0 1 18 20.25h-1.5m-9 0H6A2.25 2.25 0 0 1 3.75 18v-1.5M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
               </svg>
             </button>
           {/if}
@@ -906,10 +893,6 @@
 
 {#if toastMessage}
   <div class="toast" class:exiting={toastExiting}>{toastMessage}</div>
-{/if}
-
-{#if mermaidModalOpen}
-  <MermaidModal source={mermaidSource} onClose={() => mermaidModalOpen = false} />
 {/if}
 
 {#if saveModalOpen}

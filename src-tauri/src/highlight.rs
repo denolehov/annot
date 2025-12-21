@@ -1,8 +1,11 @@
 use std::path::Path;
 
 use syntect::html::{ClassStyle, ClassedHTMLGenerator};
-use syntect::parsing::SyntaxSet;
+use syntect::parsing::{SyntaxDefinition, SyntaxSet};
 use syntect::util::LinesWithEndings;
+
+/// Embedded mermaid grammar for syntax highlighting mermaid code blocks.
+const MERMAID_GRAMMAR: &str = include_str!("../grammars/mermaid.sublime-syntax");
 
 /// Syntax highlighter using syntect with embedded grammars.
 pub struct Highlighter {
@@ -10,10 +13,20 @@ pub struct Highlighter {
 }
 
 impl Highlighter {
-    /// Create a new highlighter with default syntaxes.
+    /// Create a new highlighter with default syntaxes plus custom grammars.
     pub fn new() -> Self {
+        // Start with defaults and convert to builder to add custom grammars
+        let mut builder = SyntaxSet::load_defaults_newlines().into_builder();
+
+        // Load custom mermaid grammar
+        if let Ok(mermaid_syntax) =
+            SyntaxDefinition::load_from_str(MERMAID_GRAMMAR, true, None)
+        {
+            builder.add(mermaid_syntax);
+        }
+
         Self {
-            syntax_set: SyntaxSet::load_defaults_newlines(),
+            syntax_set: builder.build(),
         }
     }
 
@@ -70,6 +83,8 @@ impl Highlighter {
             "vim" | "vimscript" => "vim".to_string(),
             "diff" | "patch" => "diff".to_string(),
             "tex" | "latex" => "tex".to_string(),
+            // Mermaid diagrams
+            "mermaid" | "mmd" => "mermaid".to_string(),
             // Default: use the language name as-is (might work for some)
             _ => lower,
         }
@@ -344,5 +359,385 @@ function greet(name) {
 
         // Verify we get highlighted output
         assert!(lines[1].contains("class="), "Function should be highlighted");
+    }
+
+    // ========== MERMAID SYNTAX HIGHLIGHTING TESTS ==========
+
+    #[test]
+    fn mermaid_grammar_is_loaded() {
+        let hl = Highlighter::new();
+        let syntax = hl.syntax_set.find_syntax_by_extension("mermaid");
+        assert!(syntax.is_some(), "Mermaid syntax should be loaded");
+        assert_eq!(syntax.unwrap().name, "Mermaid");
+    }
+
+    #[test]
+    fn mermaid_detects_from_extension() {
+        let hl = Highlighter::new();
+        assert_eq!(hl.detect_language("diagram.mermaid"), Some("Mermaid"));
+        assert_eq!(hl.detect_language("diagram.mmd"), Some("Mermaid"));
+    }
+
+    #[test]
+    fn mermaid_language_to_extension_mapping() {
+        assert_eq!(Highlighter::language_to_extension("mermaid"), "mermaid");
+        assert_eq!(Highlighter::language_to_extension("mmd"), "mermaid");
+        assert_eq!(Highlighter::language_to_extension("MERMAID"), "mermaid");
+    }
+
+    #[test]
+    fn mermaid_highlights_comments() {
+        let hl = Highlighter::new();
+        let code = "%% This is a comment";
+        let lines = hl.highlight_lines(code, "diagram.mermaid");
+
+        println!("\n=== MERMAID COMMENT ===");
+        println!("Input: {:?}", code);
+        println!("Output: {:?}", lines[0]);
+        println!("=== END ===\n");
+
+        assert!(
+            lines[0].contains("comment"),
+            "Comment should have comment class. Actual: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn mermaid_highlights_flowchart() {
+        let hl = Highlighter::new();
+        let code = r#"graph TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[OK]
+    B -->|No| D[Cancel]"#;
+
+        let lines = hl.highlight_lines(code, "diagram.mermaid");
+
+        println!("\n=== MERMAID FLOWCHART ===");
+        for (i, line) in lines.iter().enumerate() {
+            println!("Line {}: {}", i + 1, line);
+        }
+        println!("=== END ===\n");
+
+        // Line 1: "graph TD" - should have diagram keyword and direction
+        assert!(
+            lines[0].contains("keyword"),
+            "graph should be highlighted as keyword. Actual: {}",
+            lines[0]
+        );
+        assert!(
+            lines[0].contains("constant"),
+            "TD should be highlighted as constant. Actual: {}",
+            lines[0]
+        );
+
+        // Lines should have arrow operators
+        assert!(
+            lines[1].contains("keyword") || lines[1].contains("operator"),
+            "Arrow --> should be highlighted. Actual: {}",
+            lines[1]
+        );
+    }
+
+    #[test]
+    fn mermaid_highlights_sequence_diagram() {
+        let hl = Highlighter::new();
+        let code = r#"sequenceDiagram
+    participant Alice
+    participant Bob
+    Alice->>Bob: Hello Bob
+    Bob-->>Alice: Hi Alice"#;
+
+        let lines = hl.highlight_lines(code, "diagram.mermaid");
+
+        println!("\n=== MERMAID SEQUENCE DIAGRAM ===");
+        for (i, line) in lines.iter().enumerate() {
+            println!("Line {}: {}", i + 1, line);
+        }
+        println!("=== END ===\n");
+
+        // Line 1: sequenceDiagram keyword
+        assert!(
+            lines[0].contains("keyword"),
+            "sequenceDiagram should be highlighted. Actual: {}",
+            lines[0]
+        );
+
+        // participant keyword
+        assert!(
+            lines[1].contains("keyword"),
+            "participant should be highlighted. Actual: {}",
+            lines[1]
+        );
+    }
+
+    #[test]
+    fn mermaid_highlights_class_diagram() {
+        let hl = Highlighter::new();
+        let code = r#"classDiagram
+    class Animal {
+        +String name
+        +makeSound()
+    }
+    Animal <|-- Dog"#;
+
+        let lines = hl.highlight_lines(code, "diagram.mermaid");
+
+        println!("\n=== MERMAID CLASS DIAGRAM ===");
+        for (i, line) in lines.iter().enumerate() {
+            println!("Line {}: {}", i + 1, line);
+        }
+        println!("=== END ===\n");
+
+        // classDiagram keyword
+        assert!(
+            lines[0].contains("keyword"),
+            "classDiagram should be highlighted. Actual: {}",
+            lines[0]
+        );
+
+        // class keyword
+        assert!(
+            lines[1].contains("storage") || lines[1].contains("keyword"),
+            "class should be highlighted. Actual: {}",
+            lines[1]
+        );
+    }
+
+    #[test]
+    fn mermaid_highlights_strings() {
+        let hl = Highlighter::new();
+        let code = r#"graph TD
+    A["Node with quoted text"]"#;
+
+        let lines = hl.highlight_lines(code, "diagram.mermaid");
+
+        println!("\n=== MERMAID STRINGS ===");
+        for (i, line) in lines.iter().enumerate() {
+            println!("Line {}: {}", i + 1, line);
+        }
+        println!("=== END ===\n");
+
+        // Should have string class
+        assert!(
+            lines[1].contains("string"),
+            "Quoted text should be highlighted as string. Actual: {}",
+            lines[1]
+        );
+    }
+
+    #[test]
+    fn mermaid_highlights_gantt() {
+        let hl = Highlighter::new();
+        let code = r#"gantt
+    title A Gantt Diagram
+    dateFormat YYYY-MM-DD
+    section Section
+    Task1 :done, a1, 2024-01-01, 30d"#;
+
+        let lines = hl.highlight_lines(code, "diagram.mermaid");
+
+        println!("\n=== MERMAID GANTT ===");
+        for (i, line) in lines.iter().enumerate() {
+            println!("Line {}: {}", i + 1, line);
+        }
+        println!("=== END ===\n");
+
+        // gantt keyword
+        assert!(
+            lines[0].contains("keyword"),
+            "gantt should be highlighted. Actual: {}",
+            lines[0]
+        );
+
+        // title keyword
+        assert!(
+            lines[1].contains("keyword"),
+            "title should be highlighted. Actual: {}",
+            lines[1]
+        );
+
+        // dateFormat keyword
+        assert!(
+            lines[2].contains("keyword"),
+            "dateFormat should be highlighted. Actual: {}",
+            lines[2]
+        );
+    }
+
+    #[test]
+    fn mermaid_highlights_state_diagram() {
+        let hl = Highlighter::new();
+        let code = r#"stateDiagram-v2
+    [*] --> Still
+    Still --> Moving
+    Moving --> [*]"#;
+
+        let lines = hl.highlight_lines(code, "diagram.mermaid");
+
+        println!("\n=== MERMAID STATE DIAGRAM ===");
+        for (i, line) in lines.iter().enumerate() {
+            println!("Line {}: {}", i + 1, line);
+        }
+        println!("=== END ===\n");
+
+        // stateDiagram-v2 keyword
+        assert!(
+            lines[0].contains("keyword"),
+            "stateDiagram-v2 should be highlighted. Actual: {}",
+            lines[0]
+        );
+
+        // [*] special state marker
+        assert!(
+            lines[1].contains("constant") || lines[1].contains("class="),
+            "[*] should be highlighted. Actual: {}",
+            lines[1]
+        );
+    }
+
+    #[test]
+    fn mermaid_highlights_er_diagram() {
+        let hl = Highlighter::new();
+        let code = r#"erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ LINE-ITEM : contains"#;
+
+        let lines = hl.highlight_lines(code, "diagram.mermaid");
+
+        println!("\n=== MERMAID ER DIAGRAM ===");
+        for (i, line) in lines.iter().enumerate() {
+            println!("Line {}: {}", i + 1, line);
+        }
+        println!("=== END ===\n");
+
+        // erDiagram keyword
+        assert!(
+            lines[0].contains("keyword"),
+            "erDiagram should be highlighted. Actual: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn mermaid_highlights_gitgraph() {
+        let hl = Highlighter::new();
+        let code = r#"gitGraph
+    commit
+    branch develop
+    checkout develop
+    commit
+    checkout main
+    merge develop"#;
+
+        let lines = hl.highlight_lines(code, "diagram.mermaid");
+
+        println!("\n=== MERMAID GIT GRAPH ===");
+        for (i, line) in lines.iter().enumerate() {
+            println!("Line {}: {}", i + 1, line);
+        }
+        println!("=== END ===\n");
+
+        // gitGraph keyword
+        assert!(
+            lines[0].contains("keyword"),
+            "gitGraph should be highlighted. Actual: {}",
+            lines[0]
+        );
+
+        // commit, branch, checkout, merge keywords
+        assert!(
+            lines[1].contains("keyword"),
+            "commit should be highlighted. Actual: {}",
+            lines[1]
+        );
+    }
+
+    #[test]
+    fn mermaid_highlights_all_arrow_types() {
+        let hl = Highlighter::new();
+        let code = r#"graph LR
+    A --> B
+    B ---> C
+    C -.-> D
+    D ==> E
+    E -->> F"#;
+
+        let lines = hl.highlight_lines(code, "diagram.mermaid");
+
+        println!("\n=== MERMAID ARROWS ===");
+        for (i, line) in lines.iter().enumerate() {
+            println!("Line {}: {}", i + 1, line);
+        }
+        println!("=== END ===\n");
+
+        // All arrow lines should have highlighting
+        for (i, line) in lines.iter().enumerate().skip(1) {
+            assert!(
+                line.contains("keyword") || line.contains("operator"),
+                "Line {} arrow should be highlighted. Actual: {}",
+                i + 1,
+                line
+            );
+        }
+    }
+
+    #[test]
+    fn mermaid_highlights_subgraph() {
+        let hl = Highlighter::new();
+        let code = r#"graph TD
+    subgraph sub1[Title]
+        A --> B
+    end"#;
+
+        let lines = hl.highlight_lines(code, "diagram.mermaid");
+
+        println!("\n=== MERMAID SUBGRAPH ===");
+        for (i, line) in lines.iter().enumerate() {
+            println!("Line {}: {}", i + 1, line);
+        }
+        println!("=== END ===\n");
+
+        // subgraph keyword
+        assert!(
+            lines[1].contains("keyword"),
+            "subgraph should be highlighted. Actual: {}",
+            lines[1]
+        );
+
+        // end keyword
+        assert!(
+            lines[3].contains("keyword"),
+            "end should be highlighted. Actual: {}",
+            lines[3]
+        );
+    }
+
+    /// Documents the full HTML output for mermaid diagrams
+    #[test]
+    fn documents_mermaid_html_output() {
+        let hl = Highlighter::new();
+
+        let mermaid_code = r#"graph TD
+    %% This is a flowchart
+    A[Start] --> B{Is it?}
+    B -->|Yes| C["Done"]
+    B -->|No| D[Think]
+    D --> B"#;
+
+        let lines = hl.highlight_lines(mermaid_code, "diagram.mermaid");
+
+        println!("\n=== SYNTECT HTML OUTPUT (Mermaid) ===");
+        for (i, line) in lines.iter().enumerate() {
+            println!("Line {}: {}", i + 1, line);
+        }
+        println!("=== END ===\n");
+
+        // Basic verification that we get highlighted output
+        assert!(!lines.is_empty(), "Should produce output lines");
+        assert!(
+            lines[0].contains("class="),
+            "Mermaid should be highlighted, not plain text"
+        );
     }
 }
