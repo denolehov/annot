@@ -13,14 +13,16 @@ pub mod highlight;
 pub mod input;
 pub mod markdown;
 pub mod mcp;
+pub mod mermaid_window;
 pub mod output;
 pub mod state;
 
 use commands::{
     copy_to_clipboard, cycle_exit_mode, delete_annotation, delete_exit_mode, delete_tag,
-    finish_session, get_content, get_exit_modes, get_tags, reorder_exit_modes, set_exit_mode,
-    set_session_comment, upsert_annotation, upsert_exit_mode, upsert_tag,
+    finish_session, get_content, get_exit_modes, get_tags, reorder_exit_modes, save_content,
+    set_exit_mode, set_session_comment, upsert_annotation, upsert_exit_mode, upsert_tag,
 };
+use mermaid_window::{get_mermaid_source, open_mermaid_window, MermaidWindowState};
 use state::AppState;
 
 /// Shared flag to prevent app exit in MCP mode.
@@ -37,6 +39,7 @@ pub fn run(state: AppState, context: tauri::Context) {
         .manage(Mutex::new(state))
         .manage::<ResultSender>(Mutex::new(None))
         .manage::<ShouldExit>(Arc::new(AtomicBool::new(true))) // CLI mode: allow exit
+        .manage(Mutex::new(MermaidWindowState::new()))
         .invoke_handler(tauri::generate_handler![
             get_content,
             upsert_annotation,
@@ -52,7 +55,10 @@ pub fn run(state: AppState, context: tauri::Context) {
             upsert_exit_mode,
             delete_exit_mode,
             reorder_exit_modes,
-            copy_to_clipboard
+            copy_to_clipboard,
+            save_content,
+            open_mermaid_window,
+            get_mermaid_source
         ])
         .setup(|app| {
             // Create window programmatically (not from config, for MCP compatibility)
@@ -95,6 +101,7 @@ pub fn run_mcp(context: tauri::Context) {
         .manage(Mutex::new(initial_state))
         .manage::<ResultSender>(Mutex::new(None))
         .manage::<ShouldExit>(should_exit)
+        .manage(Mutex::new(MermaidWindowState::new()))
         .invoke_handler(tauri::generate_handler![
             get_content,
             upsert_annotation,
@@ -110,7 +117,10 @@ pub fn run_mcp(context: tauri::Context) {
             upsert_exit_mode,
             delete_exit_mode,
             reorder_exit_modes,
-            copy_to_clipboard
+            copy_to_clipboard,
+            save_content,
+            open_mermaid_window,
+            get_mermaid_source
         ])
         .setup(|app| {
             // Set accessory mode on macOS (hide dock icon)

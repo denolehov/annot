@@ -329,3 +329,91 @@ main = do
 ### Final Notes
 
 This concludes the **comprehensive** markdown test file with *various* formatting `options` and [links](https://example.com).
+
+## Wide Diagram Test
+
+```mermaid
+flowchart LR
+    A[Start] --> B[Step 1] --> C[Step 2] --> D[Step 3] --> E[Step 4] --> F[Step 5] --> G[Step 6] --> H[Step 7] --> I[Step 8] --> J[Step 9] --> K[Step 10] --> L[Step 11] --> M[Step 12] --> N[End]
+
+    B --> B1[Sub 1.1]
+    C --> C1[Sub 2.1]
+    D --> D1[Sub 3.1]
+    E --> E1[Sub 4.1]
+    F --> F1[Sub 5.1]
+    G --> G1[Sub 6.1]
+    H --> H1[Sub 7.1]
+    I --> I1[Sub 8.1]
+    J --> J1[Sub 9.1]
+    K --> K1[Sub 10.1]
+    L --> L1[Sub 11.1]
+    M --> M1[Sub 12.1]
+```
+
+## Tall Diagram Test
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant FE as Frontend
+    participant GW as API Gateway
+    participant AUTH as Auth Service
+    participant USER as User Service
+    participant PERM as Permission Service
+    participant AUDIT as Audit Service
+    participant CACHE as Redis Cache
+    participant DB as PostgreSQL
+    participant MQ as Message Queue
+    participant EMAIL as Email Service
+    participant SMS as SMS Service
+    participant PUSH as Push Service
+
+    U->>FE: Click Login
+    FE->>GW: POST /api/auth/login
+    GW->>AUTH: Forward request
+    AUTH->>CACHE: Check rate limit
+    CACHE-->>AUTH: OK
+    AUTH->>DB: Query user by email
+    DB-->>AUTH: User record
+    AUTH->>AUTH: Verify password hash
+    AUTH->>PERM: Get user permissions
+    PERM->>DB: Query roles
+    DB-->>PERM: Role data
+    PERM->>DB: Query permissions
+    DB-->>PERM: Permission data
+    PERM-->>AUTH: Permission set
+    AUTH->>AUTH: Generate JWT
+    AUTH->>CACHE: Store session
+    CACHE-->>AUTH: OK
+    AUTH->>AUDIT: Log login event
+    AUDIT->>MQ: Publish event
+    MQ-->>AUDIT: ACK
+    AUTH-->>GW: JWT + Refresh token
+    GW-->>FE: Response
+    FE->>FE: Store tokens
+    FE-->>U: Redirect to dashboard
+
+    Note over U,PUSH: Notification Flow
+
+    MQ->>EMAIL: Process login notification
+    EMAIL->>EMAIL: Render template
+    EMAIL-->>U: Send email
+    MQ->>SMS: Check 2FA settings
+    SMS-->>U: Send SMS code
+    MQ->>PUSH: Send push notification
+    PUSH-->>U: Device notification
+
+    Note over U,DB: Session Refresh
+
+    U->>FE: Action (token expiring)
+    FE->>GW: POST /api/auth/refresh
+    GW->>AUTH: Refresh request
+    AUTH->>CACHE: Validate refresh token
+    CACHE-->>AUTH: Token valid
+    AUTH->>AUTH: Generate new JWT
+    AUTH->>CACHE: Update session
+    AUTH->>AUDIT: Log refresh
+    AUTH-->>GW: New tokens
+    GW-->>FE: Response
+    FE-->>U: Continue session
+```

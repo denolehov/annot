@@ -14,9 +14,10 @@
     onTagsChange?: (tags: Tag[]) => void;
     onExitModesChange?: (modes: ExitMode[]) => void;
     showToast?: (message: string) => void;
+    onOpenSaveModal?: () => void;
   }
 
-  let { tags, exitModes, onClose, onSetExitMode, onTagsChange, onExitModesChange, showToast }: Props = $props();
+  let { tags, exitModes, onClose, onSetExitMode, onTagsChange, onExitModesChange, showToast, onOpenSaveModal }: Props = $props();
 
   // Convert domain types to Item format
   function tagToItem(tag: Tag): Item {
@@ -154,6 +155,10 @@
           .catch((e) => showToast?.(`Failed to copy: ${e}`));
         break;
       }
+
+      case 'OPEN_SAVE_MODAL':
+        onOpenSaveModal?.();
+        break;
 
       case 'EMIT_EVENT':
         // Events are for external listeners (not implemented yet)

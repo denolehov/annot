@@ -95,6 +95,13 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
         if (!ns) {
           return { state, commands };
         }
+        // Check for action-only namespace with single item (e.g., Save)
+        // Action namespaces have no fields (not editable)
+        const items = ctx.getItems(ns);
+        if (ns.fields.length === 0 && items.length === 1 && items[0].action) {
+          // Execute immediately and close
+          return { state: { type: 'IDLE' }, commands: [items[0].action] };
+        }
         commands.push({
           type: 'EMIT_EVENT',
           event: 'commandpalette:namespace-locked',
@@ -112,6 +119,13 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
         const ns = matches[action.index];
         if (!ns) {
           return { state, commands };
+        }
+        // Check for action-only namespace with single item (e.g., Save)
+        // Action namespaces have no fields (not editable)
+        const items = ctx.getItems(ns);
+        if (ns.fields.length === 0 && items.length === 1 && items[0].action) {
+          // Execute immediately and close
+          return { state: { type: 'IDLE' }, commands: [items[0].action] };
         }
         commands.push({
           type: 'EMIT_EVENT',

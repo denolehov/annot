@@ -10,6 +10,8 @@
   import CopyDropdown from "$lib/CopyDropdown.svelte";
   import { CommandPalette } from "$lib/CommandPalette";
   import MermaidModal from "$lib/MermaidModal.svelte";
+  import SaveModal from "$lib/SaveModal.svelte";
+  import type { SaveContentResponse } from "$lib/types";
 
   let lines: Line[] = $state([]);
   let label = $state("");
@@ -234,6 +236,9 @@
   let mermaidModalOpen = $state(false);
   let mermaidSource = $state('');
 
+  // Save modal state
+  let saveModalOpen = $state(false);
+
   // Derived: last line of current selection (for positioning editor)
   let lastSelectedLine = $derived.by(() => {
     if (!selection) return null;
@@ -299,6 +304,22 @@
     // Sync to backend
     const nodes = content ? extractContentNodes(content) : null;
     await invoke('set_session_comment', { content: nodes });
+  }
+
+  // Save modal handlers
+  function openSaveModal() {
+    saveModalOpen = true;
+  }
+
+  function closeSaveModal() {
+    saveModalOpen = false;
+  }
+
+  async function handleSave(path: string) {
+    const response = await invoke<SaveContentResponse>('save_content', { path });
+    label = response.new_label;
+    closeSaveModal();
+    showToast(`Saved to ${response.saved_path}`);
   }
 
   // CommandPalette handlers
@@ -407,6 +428,20 @@
   function openMermaidModal(block: { start_line: number; end_line: number }) {
     mermaidSource = getMermaidContent(block.start_line, block.end_line);
     mermaidModalOpen = true;
+  }
+
+  async function openMermaidWindow(block: { start_line: number; end_line: number }) {
+    const source = getMermaidContent(block.start_line, block.end_line);
+    try {
+      await invoke('open_mermaid_window', {
+        source,
+        filePath: label,
+        startLine: block.start_line,
+        endLine: block.end_line,
+      });
+    } catch (e) {
+      console.error('Failed to open mermaid window:', e);
+    }
   }
 
   function hasAnnotation(lineNum: number): boolean {
@@ -532,6 +567,10 @@
         e.preventDefault();
         commandPaletteOpen = true;
       }
+    } else if (e.key === 's' && (e.metaKey || e.ctrlKey) && !saveModalOpen) {
+      // Cmd+S / Ctrl+S opens save modal
+      e.preventDefault();
+      openSaveModal();
     }
     // Escape is now handled by the editor's blur handler
   }
@@ -689,6 +728,11 @@
       </div>
       <div class="header-right">
         <CopyDropdown {showToast} />
+        <button class="header-btn" onclick={openSaveModal} title="Save to file (Cmd+S)">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="16" height="16">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+          </svg>
+        </button>
       </div>
     </header>
     <!-- Session editor slot -->
@@ -772,6 +816,15 @@
                 <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z" />
               </svg>
             </button>
+            <button
+              class="mermaid-view-btn"
+              onclick={() => openMermaidWindow(mermaidBlock)}
+              title="Open in window"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="14" height="14">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.75H6A2.25 2.25 0 0 0 3.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0 1 20.25 6v1.5m0 9V18A2.25 2.25 0 0 1 18 20.25h-1.5m-9 0H6A2.25 2.25 0 0 1 3.75 18v-1.5M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+              </svg>
+            </button>
           {/if}
         </div>
         {@const annotationAtLine = getAnnotationAtLine(line.number)}
@@ -847,6 +900,7 @@
     onTagsChange={handleTagsChange}
     onExitModesChange={handleExitModesChange}
     {showToast}
+    onOpenSaveModal={openSaveModal}
   />
 {/if}
 
@@ -858,11 +912,51 @@
   <MermaidModal source={mermaidSource} onClose={() => mermaidModalOpen = false} />
 {/if}
 
+{#if saveModalOpen}
+  <SaveModal
+    defaultPath={label}
+    onSave={handleSave}
+    onCancel={closeSaveModal}
+  />
+{/if}
+
 <style>
   /* Page-specific styles only - see src/styles/ for the design system */
 
   :global(body) {
     overflow: hidden;
+  }
+
+  .header-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 6px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .header-btn:hover {
+    background: var(--bg-window);
+    border-color: var(--border-subtle);
+    color: var(--text-primary);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+
+  .header-btn:focus-visible {
+    outline: none;
+    border-color: var(--focus-ring);
+  }
+
+  .header-btn svg {
+    opacity: 0.7;
+    display: block;
+  }
+
+  .header-btn:hover svg {
+    opacity: 1;
   }
 
   .toast {

@@ -123,3 +123,9 @@ export interface ExcalidrawNode {
 
 // TipTap JSON content type for internal storage
 export type { JSONContent } from '@tiptap/core';
+
+// Save content response
+export interface SaveContentResponse {
+  saved_path: string;
+  new_label: string;
+}

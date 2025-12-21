@@ -35,6 +35,8 @@ unidiff = "0.4"
 comrak = { version = "0.31", default-features = false, features = ["syntect"] }
 unicode-width = "0.2"
 base64 = "0.22.1"
+sha2 = "0.10.9"
+hex = "0.4.3"
 
 [dev-dependencies]
 tempfile = "3.23.0"

@@ -23,6 +23,19 @@ const copyNamespace: Namespace = {
   hotkeys: [],
 };
 
+// Test namespace with single action item (should auto-execute)
+const saveNamespace: Namespace = {
+  id: 'save',
+  label: 'Save',
+  icon: '💾',
+  fields: [],
+  hotkeys: [],
+};
+
+const singleActionItem: Item[] = [
+  { id: 'save-to-file', name: 'Save to file', values: {}, action: { type: 'OPEN_SAVE_MODAL' as const } },
+];
+
 const regularItems: Item[] = [
   { id: 'tag-1', name: 'TODO', values: { name: 'TODO' } },
   { id: 'tag-2', name: 'FIXME', values: { name: 'FIXME' } },
@@ -211,5 +224,88 @@ describe('computeItemList', () => {
     const result = computeItemList(state, ctx);
 
     expect(result.showCreate).toBe(false);
+  });
+});
+
+describe('reducer: single-action namespace auto-execute', () => {
+  // Context with save namespace (single action item, no fields)
+  const ctx = createMockContext(
+    [tagsNamespace, copyNamespace, saveNamespace],
+    { tags: regularItems, copy: actionItems, save: singleActionItem }
+  );
+
+  // Also test context where tags has just 1 item (should NOT auto-execute)
+  const singleTagItems: Item[] = [{ id: 'tag-1', name: 'TODO', values: { name: 'TODO' } }];
+  const ctxSingleTag = createMockContext(
+    [tagsNamespace, saveNamespace],
+    { tags: singleTagItems, save: singleActionItem }
+  );
+
+  describe('ENTER on single-action namespace', () => {
+    it('auto-executes action and returns to IDLE', () => {
+      const state: State = {
+        type: 'NAMESPACE_FILTER',
+        query: '',
+        selectedIndex: 2, // saveNamespace
+        inputMode: 'navigating',
+      };
+
+      const result = reduce(state, { type: 'ENTER' }, ctx);
+
+      expect(result.state.type).toBe('IDLE');
+      expect(result.commands).toHaveLength(1);
+      expect(result.commands[0]).toEqual({ type: 'OPEN_SAVE_MODAL' });
+    });
+  });
+
+  describe('SELECT on single-action namespace', () => {
+    it('auto-executes action and returns to IDLE', () => {
+      const state: State = {
+        type: 'NAMESPACE_FILTER',
+        query: '',
+        selectedIndex: 0,
+        inputMode: 'navigating',
+      };
+
+      const result = reduce(state, { type: 'SELECT', index: 2 }, ctx); // saveNamespace
+
+      expect(result.state.type).toBe('IDLE');
+      expect(result.commands).toHaveLength(1);
+      expect(result.commands[0]).toEqual({ type: 'OPEN_SAVE_MODAL' });
+    });
+  });
+
+  describe('ENTER on multi-action namespace', () => {
+    it('transitions to ITEM_FILTER (does not auto-execute)', () => {
+      const state: State = {
+        type: 'NAMESPACE_FILTER',
+        query: '',
+        selectedIndex: 1, // copyNamespace (3 items)
+        inputMode: 'navigating',
+      };
+
+      const result = reduce(state, { type: 'ENTER' }, ctx);
+
+      expect(result.state.type).toBe('ITEM_FILTER');
+      // Should not have executed any action
+      expect(result.commands.find(c => c.type === 'COPY_TO_CLIPBOARD')).toBeUndefined();
+    });
+  });
+
+  describe('ENTER on editable namespace with single item', () => {
+    it('transitions to ITEM_FILTER (does not auto-execute)', () => {
+      const state: State = {
+        type: 'NAMESPACE_FILTER',
+        query: '',
+        selectedIndex: 0, // tagsNamespace (has fields, so editable)
+        inputMode: 'navigating',
+      };
+
+      const result = reduce(state, { type: 'ENTER' }, ctxSingleTag);
+
+      // Should go to ITEM_FILTER, not auto-execute
+      expect(result.state.type).toBe('ITEM_FILTER');
+      expect(result.commands.find(c => c.type === 'OPEN_SAVE_MODAL')).toBeUndefined();
+    });
   });
 });

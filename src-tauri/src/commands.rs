@@ -1,9 +1,11 @@
+use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{AppHandle, State, WebviewWindow};
 
 use crate::config;
 use crate::output::{format_output, OutputMode};
 use crate::state::{AppState, ContentNode, ContentResponse, ExitMode, Tag};
+use serde::Serialize;
 use crate::{ResultSender, ShouldExit};
 
 use serde::Deserialize;
@@ -251,4 +253,60 @@ pub fn copy_to_clipboard(state: State<Mutex<AppState>>, mode: CopyMode) -> Resul
     arboard::Clipboard::new()
         .and_then(|mut cb| cb.set_text(text))
         .map_err(|e| e.to_string())
+}
+
+/// Response from save_content command.
+#[derive(Serialize)]
+pub struct SaveContentResponse {
+    /// Absolute path where the file was saved.
+    pub saved_path: String,
+    /// New label for the header (filename portion).
+    pub new_label: String,
+}
+
+#[tauri::command]
+pub fn save_content(
+    state: State<Mutex<AppState>>,
+    path: String,
+) -> Result<SaveContentResponse, String> {
+    let state = state.lock().unwrap();
+
+    // Reconstruct raw content from lines (same as copy_to_clipboard)
+    let raw_content: String = state
+        .lines
+        .iter()
+        .map(|l| l.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // Resolve path (relative to cwd if not absolute)
+    let path = PathBuf::from(&path);
+    let path = if path.is_absolute() {
+        path
+    } else {
+        std::env::current_dir()
+            .map_err(|e| format!("Failed to get working directory: {}", e))?
+            .join(path)
+    };
+
+    // Create parent directories if needed
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directories: {}", e))?;
+    }
+
+    // Write the file
+    std::fs::write(&path, &raw_content)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    // Extract filename for new label
+    let new_label = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.display().to_string());
+
+    Ok(SaveContentResponse {
+        saved_path: path.display().to_string(),
+        new_label,
+    })
 }

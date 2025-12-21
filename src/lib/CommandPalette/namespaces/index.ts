@@ -4,8 +4,9 @@ import type { QueryContext, Namespace } from '../engine/types';
 import { tagsNamespace, getTagItems, filterTagItems } from './tags';
 import { exitModesNamespace, getExitModeItems, filterExitModeItems } from './exit-modes';
 import { copyNamespace, getCopyItems, filterCopyItems } from './copy';
+import { saveNamespace, getSaveItems, filterSaveItems } from './save';
 
-const namespaces: Namespace[] = [tagsNamespace, exitModesNamespace, copyNamespace];
+const namespaces: Namespace[] = [tagsNamespace, exitModesNamespace, copyNamespace, saveNamespace];
 
 export function createQueryContext(): QueryContext {
   return {
@@ -21,6 +22,7 @@ export function createQueryContext(): QueryContext {
       if (namespace.id === 'tags') return getTagItems();
       if (namespace.id === 'exit-modes') return getExitModeItems();
       if (namespace.id === 'copy') return getCopyItems();
+      if (namespace.id === 'save') return getSaveItems();
       return [];
     },
 
@@ -28,6 +30,7 @@ export function createQueryContext(): QueryContext {
       if (namespace.id === 'tags') return filterTagItems(query);
       if (namespace.id === 'exit-modes') return filterExitModeItems(query);
       if (namespace.id === 'copy') return filterCopyItems(query);
+      if (namespace.id === 'save') return filterSaveItems(query);
       return [];
     },
   };
@@ -37,3 +40,4 @@ export function createQueryContext(): QueryContext {
 export { tagsNamespace, getTagItems, setTagItems, filterTagItems, saveTagItem, deleteTagItem, generateTagId } from './tags';
 export { exitModesNamespace, getExitModeItems, setExitModeItems, filterExitModeItems, saveExitModeItem, deleteExitModeItem, reorderExitModeItems, generateExitModeId } from './exit-modes';
 export { copyNamespace, getCopyItems, filterCopyItems } from './copy';
+export { saveNamespace, getSaveItems, filterSaveItems } from './save';

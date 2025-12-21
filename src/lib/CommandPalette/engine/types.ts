@@ -100,7 +100,8 @@ export type Command =
   | { type: 'SET_MODE'; namespace: string; itemId: string }
   | { type: 'REORDER_ITEMS'; namespace: string; orderedIds: string[] }
   | { type: 'EMIT_EVENT'; event: string; payload: unknown }
-  | { type: 'COPY_TO_CLIPBOARD'; mode: 'content' | 'annotations' | 'all' };
+  | { type: 'COPY_TO_CLIPBOARD'; mode: 'content' | 'annotations' | 'all' }
+  | { type: 'OPEN_SAVE_MODAL' };
 
 // === Query Context ===
 
