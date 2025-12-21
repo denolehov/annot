@@ -93,6 +93,17 @@ impl Highlighter {
         lines.into_iter().next().unwrap_or_default()
     }
 
+    /// Map file extensions that syntect doesn't support to ones it does.
+    fn extension_fallback(ext: &str) -> &str {
+        match ext {
+            // TypeScript → JavaScript (syntect default doesn't include TS)
+            "ts" | "tsx" | "mts" | "cts" => "js",
+            // JSX also uses JavaScript
+            "jsx" | "mjs" | "cjs" => "js",
+            _ => ext,
+        }
+    }
+
     /// Highlight file content and return HTML for each line.
     ///
     /// Each line contains HTML spans with CSS classes (e.g., `<span class="k">fn</span>`).
@@ -103,9 +114,11 @@ impl Highlighter {
             .and_then(|e| e.to_str())
             .unwrap_or("");
 
+        // Try the original extension first, then fall back to a compatible one
         let syntax = self
             .syntax_set
             .find_syntax_by_extension(ext)
+            .or_else(|| self.syntax_set.find_syntax_by_extension(Self::extension_fallback(ext)))
             .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
 
         let mut html_generator = ClassedHTMLGenerator::new_with_class_style(
@@ -152,15 +165,29 @@ mod tests {
     }
 
     #[test]
-    fn detects_typescript_from_extension() {
+    fn typescript_falls_back_to_javascript_highlighting() {
         let hl = Highlighter::new();
-        // Check if syntect supports TypeScript
-        let ts_lang = hl.detect_language("app.ts");
-        let tsx_lang = hl.detect_language("app.tsx");
-        println!("TypeScript (.ts) detected as: {:?}", ts_lang);
-        println!("TSX (.tsx) detected as: {:?}", tsx_lang);
-        // This test will show us what syntect returns for TypeScript
-        // If None, syntect doesn't have TypeScript built-in
+
+        // syntect doesn't have TypeScript, but we should still get JS highlighting
+        let ts_code = "const x: number = 42;";
+        let lines = hl.highlight_lines(ts_code, "app.ts");
+
+        // Should have highlighting classes (not plain text)
+        assert!(
+            lines[0].contains("class="),
+            "TypeScript should be highlighted as JavaScript. Actual: {}",
+            lines[0]
+        );
+
+        // Test other TS variants
+        for ext in &["tsx", "mts", "cts"] {
+            let lines = hl.highlight_lines(ts_code, &format!("app.{}", ext));
+            assert!(
+                lines[0].contains("class="),
+                ".{} should be highlighted as JavaScript",
+                ext
+            );
+        }
     }
 
     #[test]

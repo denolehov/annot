@@ -27,6 +27,24 @@ export interface ExcalidrawLoaderOptions {
 let loadPromise: Promise<typeof import('@excalidraw/excalidraw')> | null = null;
 
 /**
+ * Preloads React + Excalidraw modules in the background.
+ * Call this early (e.g., on app init) so /excalidraw feels instant.
+ */
+export function preloadExcalidraw(): void {
+  if (loadPromise) return; // Already loading/loaded
+
+  loadPromise = import('@excalidraw/excalidraw');
+
+  // Fire-and-forget: preload React, ReactDOM, CSS in parallel
+  Promise.all([
+    import('react'),
+    import('react-dom/client'),
+    loadPromise,
+    import('@excalidraw/excalidraw/index.css'),
+  ]);
+}
+
+/**
  * Lazy-loads React + Excalidraw and mounts into the given container.
  * Returns a handle for controlling the instance.
  */

@@ -9,6 +9,7 @@
   import AnnotationEditor from "$lib/AnnotationEditor.svelte";
   import CopyDropdown from "$lib/CopyDropdown.svelte";
   import { CommandPalette } from "$lib/CommandPalette";
+  import MermaidModal from "$lib/MermaidModal.svelte";
 
   let lines: Line[] = $state([]);
   let label = $state("");
@@ -229,6 +230,10 @@
   let commandPaletteOpen = $state(false);
   let tags: Tag[] = $state([]);
 
+  // Mermaid modal state
+  let mermaidModalOpen = $state(false);
+  let mermaidSource = $state('');
+
   // Derived: last line of current selection (for positioning editor)
   let lastSelectedLine = $derived.by(() => {
     if (!selection) return null;
@@ -381,6 +386,27 @@
     const min = Math.min(selection.start, selection.end);
     const max = Math.max(selection.start, selection.end);
     return lineNum >= min && lineNum <= max;
+  }
+
+  // Check if a line starts a mermaid code block
+  function getMermaidBlockAt(lineNum: number) {
+    if (!markdownMetadata?.code_blocks) return null;
+    return markdownMetadata.code_blocks.find(
+      b => b.start_line === lineNum && b.language === 'mermaid'
+    ) ?? null;
+  }
+
+  // Extract mermaid content from a code block (excluding fence lines)
+  function getMermaidContent(startLine: number, endLine: number): string {
+    return lines
+      .filter(l => l.number > startLine && l.number < endLine)
+      .map(l => l.content)
+      .join('\n');
+  }
+
+  function openMermaidModal(block: { start_line: number; end_line: number }) {
+    mermaidSource = getMermaidContent(block.start_line, block.end_line);
+    mermaidModalOpen = true;
   }
 
   function hasAnnotation(lineNum: number): boolean {
@@ -700,6 +726,7 @@
     >
       {#each lines as line}
         {@const diffLine = getDiffLineInfo(line.number)}
+        {@const mermaidBlock = getMermaidBlockAt(line.number)}
         <div
           class="line"
           class:selected={isSelected(line.number)}
@@ -735,6 +762,17 @@
             {/if}
           </span>
           <span class="code">{#if line.html}{@html line.html}{:else}{line.content}{/if}</span>
+          {#if mermaidBlock}
+            <button
+              class="mermaid-view-btn"
+              onclick={() => openMermaidModal(mermaidBlock)}
+              title="View diagram"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="14" height="14">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z" />
+              </svg>
+            </button>
+          {/if}
         </div>
         {@const annotationAtLine = getAnnotationAtLine(line.number)}
         {@const isLastSelectedLine = line.number === lastSelectedLine && selection && !isDragging}
@@ -816,6 +854,10 @@
   <div class="toast" class:exiting={toastExiting}>{toastMessage}</div>
 {/if}
 
+{#if mermaidModalOpen}
+  <MermaidModal source={mermaidSource} onClose={() => mermaidModalOpen = false} />
+{/if}
+
 <style>
   /* Page-specific styles only - see src/styles/ for the design system */
 
@@ -863,5 +905,34 @@
       opacity: 0;
       transform: translateX(-50%) translateY(-8px);
     }
+  }
+
+  .mermaid-view-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 8px;
+    padding: 2px 4px;
+    background: var(--bg-window);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .mermaid-view-btn:hover {
+    background: var(--bg-panel);
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+  }
+
+  .mermaid-view-btn:focus-visible {
+    outline: none;
+    border-color: var(--focus-ring);
+  }
+
+  .mermaid-view-btn svg {
+    display: block;
   }
 </style>
