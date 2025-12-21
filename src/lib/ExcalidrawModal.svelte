@@ -15,6 +15,34 @@
   let handle: ExcalidrawHandle | null = null;
   let loading = $state(true);
   let error = $state<string | null>(null);
+  let showConfirmDialog = $state(false);
+  let initialElementCount = 0;
+
+  function hasUnsavedChanges(): boolean {
+    if (!handle) return false;
+    const currentElements = handle.getElements();
+    // Check if there are any elements beyond what we started with
+    // Filter out deleted elements (Excalidraw marks deleted elements with isDeleted: true)
+    const activeElements = currentElements.filter((el: { isDeleted?: boolean }) => !el.isDeleted);
+    return activeElements.length > initialElementCount;
+  }
+
+  function tryCancel() {
+    if (hasUnsavedChanges()) {
+      showConfirmDialog = true;
+    } else {
+      onCancel();
+    }
+  }
+
+  function confirmCancel() {
+    showConfirmDialog = false;
+    onCancel();
+  }
+
+  function dismissConfirm() {
+    showConfirmDialog = false;
+  }
 
   onMount(async () => {
     if (!containerEl) return;
@@ -33,13 +61,16 @@
         console.warn('Failed to parse initial elements, using empty array');
       }
 
+      // Track initial element count for change detection
+      initialElementCount = parsedElements.filter((el: { isDeleted?: boolean }) => !el.isDeleted).length;
+
       handle = await mountExcalidraw({
         container: containerEl,
         initialElements: parsedElements,
         onSave: (elements, png) => {
           onSave(JSON.stringify(elements), png);
         },
-        onCancel,
+        onCancel: tryCancel,
       });
 
       loading = false;
@@ -84,14 +115,18 @@
 
   function handleBackdropClick(e: MouseEvent) {
     if (e.target === e.currentTarget) {
-      onCancel();
+      tryCancel();
     }
   }
 
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       e.preventDefault();
-      onCancel();
+      if (showConfirmDialog) {
+        dismissConfirm();
+      } else {
+        tryCancel();
+      }
     }
   }
 </script>
@@ -109,6 +144,19 @@
     <div bind:this={containerEl} class="excalidraw-container"></div>
   </div>
 </div>
+
+{#if showConfirmDialog}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div class="confirm-backdrop" onclick={dismissConfirm} role="presentation">
+    <div class="confirm-dialog" role="alertdialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+      <p class="confirm-message">Discard unsaved drawing?</p>
+      <div class="confirm-buttons">
+        <button class="confirm-btn confirm-btn-cancel" onclick={dismissConfirm}>Keep editing</button>
+        <button class="confirm-btn confirm-btn-discard" onclick={confirmCancel}>Discard</button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .excalidraw-backdrop {
@@ -206,5 +254,69 @@
     background: var(--bg-panel, #f3f4f6);
     color: var(--text-primary, #1f2937);
     border: 1px solid var(--border-strong, #d1d5db);
+  }
+
+  /* Confirm dialog */
+  .confirm-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+  }
+
+  .confirm-dialog {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 320px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  }
+
+  .confirm-message {
+    margin: 0 0 20px 0;
+    font-family: var(--font-ui, system-ui);
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-primary, #1f2937);
+    text-align: center;
+  }
+
+  .confirm-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+
+  .confirm-btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: var(--font-ui, system-ui);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+
+  .confirm-btn:hover {
+    opacity: 0.9;
+  }
+
+  .confirm-btn:active {
+    transform: scale(0.98);
+  }
+
+  .confirm-btn-cancel {
+    background: var(--bg-panel, #f3f4f6);
+    color: var(--text-primary, #1f2937);
+    border: 1px solid var(--border-strong, #d1d5db);
+  }
+
+  .confirm-btn-discard {
+    background: #ef4444;
+    color: white;
   }
 </style>

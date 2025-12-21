@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { trimContent, isContentEmpty, EditorShortcuts } from './tiptap';
+import { trimContent, isContentEmpty, EditorShortcuts, extractContentNodes } from './tiptap';
 import { Editor, type JSONContent } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 
@@ -208,5 +208,328 @@ describe('EditorShortcuts', () => {
 
     // onSubmit should NOT be called for plain Enter
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+describe('extractContentNodes', () => {
+  it('preserves bold formatting as markdown', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'normal ' },
+            { type: 'text', text: 'bold', marks: [{ type: 'bold' }] },
+            { type: 'text', text: ' text' },
+          ],
+        },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({ type: 'text', text: 'normal **bold** text' });
+  });
+
+  it('preserves italic formatting as markdown', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'some ' },
+            { type: 'text', text: 'italic', marks: [{ type: 'italic' }] },
+            { type: 'text', text: ' here' },
+          ],
+        },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({ type: 'text', text: 'some *italic* here' });
+  });
+
+  it('preserves strikethrough formatting as markdown', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'crossed ' },
+            { type: 'text', text: 'out', marks: [{ type: 'strike' }] },
+          ],
+        },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({ type: 'text', text: 'crossed ~~out~~' });
+  });
+
+  it('preserves inline code formatting as markdown', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'run ' },
+            { type: 'text', text: 'npm install', marks: [{ type: 'code' }] },
+          ],
+        },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({ type: 'text', text: 'run `npm install`' });
+  });
+
+  it('handles multiple marks on same text (bold+italic)', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'emphasis',
+              marks: [{ type: 'bold' }, { type: 'italic' }],
+            },
+          ],
+        },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    // Bold wraps first, then italic wraps around that
+    expect(nodes[0]).toEqual({ type: 'text', text: '***emphasis***' });
+  });
+
+  it('preserves underline formatting as HTML', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'some ' },
+            { type: 'text', text: 'underlined', marks: [{ type: 'underline' }] },
+            { type: 'text', text: ' text' },
+          ],
+        },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({ type: 'text', text: 'some <u>underlined</u> text' });
+  });
+
+  it('preserves link formatting as markdown', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'click ' },
+            {
+              type: 'text',
+              text: 'here',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com' } }],
+            },
+          ],
+        },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({ type: 'text', text: 'click [here](https://example.com)' });
+  });
+
+  it('handles link with other formatting (bold link)', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'important',
+              marks: [
+                { type: 'bold' },
+                { type: 'link', attrs: { href: 'https://example.com' } },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    // Bold applied first, then wrapped in link
+    expect(nodes[0]).toEqual({ type: 'text', text: '[**important**](https://example.com)' });
+  });
+
+  it('preserves bullet list formatting', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'bulletList',
+          content: [
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Item 1' }] }] },
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Item 2' }] }] },
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Item 3' }] }] },
+          ],
+        },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({ type: 'text', text: '- Item 1\n- Item 2\n- Item 3' });
+  });
+
+  it('preserves ordered list formatting', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'orderedList',
+          content: [
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'First' }] }] },
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Second' }] }] },
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Third' }] }] },
+          ],
+        },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({ type: 'text', text: '1. First\n2. Second\n3. Third' });
+  });
+
+  it('preserves nested list formatting', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'bulletList',
+          content: [
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Item 1' }] }] },
+            {
+              type: 'listItem',
+              content: [
+                { type: 'paragraph', content: [{ type: 'text', text: 'Item 2' }] },
+                {
+                  type: 'bulletList',
+                  content: [
+                    { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Sub 1' }] }] },
+                    { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Sub 2' }] }] },
+                  ],
+                },
+              ],
+            },
+            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Item 3' }] }] },
+          ],
+        },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({
+      type: 'text',
+      text: '- Item 1\n- Item 2\n  - Sub 1\n  - Sub 2\n- Item 3',
+    });
+  });
+
+  it('preserves heading formatting', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Heading 1' }] },
+        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Heading 2' }] },
+        { type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: 'Heading 3' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'Regular text' }] },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({
+      type: 'text',
+      text: '# Heading 1\n## Heading 2\n### Heading 3\nRegular text',
+    });
+  });
+
+  it('preserves blockquote formatting', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'blockquote',
+          content: [
+            { type: 'paragraph', content: [{ type: 'text', text: 'Quoted text' }] },
+          ],
+        },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({ type: 'text', text: '> Quoted text' });
+  });
+
+  it('preserves code block formatting', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'codeBlock',
+          attrs: { language: 'typescript' },
+          content: [{ type: 'text', text: 'const x = 1;' }],
+        },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({
+      type: 'text',
+      text: '```typescript\nconst x = 1;\n```',
+    });
+  });
+
+  it('preserves hard breaks', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Line one' },
+            { type: 'hardBreak' },
+            { type: 'text', text: 'Line two' },
+          ],
+        },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({ type: 'text', text: 'Line one\nLine two' });
+  });
+
+  it('preserves horizontal rule', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Above' }] },
+        { type: 'horizontalRule' },
+        { type: 'paragraph', content: [{ type: 'text', text: 'Below' }] },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({ type: 'text', text: 'Above\n---\nBelow' });
   });
 });

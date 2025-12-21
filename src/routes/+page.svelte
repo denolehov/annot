@@ -534,8 +534,9 @@
         const modeId = selectedModeIndex !== null ? exitModes[selectedModeIndex].id : null;
         invoke('set_exit_mode', { modeId });
       }
-    } else if (e.key === 'c' && hoveredLine !== null && !selection) {
+    } else if (e.key === 'c' && !e.metaKey && !e.ctrlKey && hoveredLine !== null && !selection) {
       // Open editor on hovered line (skip header lines)
+      // Only when 'c' is pressed alone - Cmd+C/Ctrl+C should copy text
       // Skip if user is focused in an editor/input
       const activeEl = document.activeElement;
       const isInEditor = activeEl?.closest('.annotation-editor, .session-editor');
