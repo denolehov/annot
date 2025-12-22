@@ -231,6 +231,21 @@
   let commandPaletteOpen = $state(false);
   let tags: Tag[] = $state([]);
 
+  // Tag creation from selection state
+  let pendingTagCreation = $state<{
+    editorKey: string;  // 'session' or rangeKey
+    from: number;
+    to: number;
+    text: string;
+  } | null>(null);
+
+  let pendingTagInsertion = $state<{
+    editorKey: string;
+    from: number;
+    to: number;
+    tag: Tag;
+  } | null>(null);
+
   // Save modal state
   let saveModalOpen = $state(false);
 
@@ -272,6 +287,10 @@
 
   function sealCurrentAnnotation() {
     if (!selection) return;
+
+    // Don't seal if we're creating a tag from this editor - user will return after CP closes
+    if (pendingTagCreation) return;
+
     const key = rangeToKey(selection);
     const content = annotations.get(key);
     if (content) {
@@ -291,6 +310,9 @@
   }
 
   function closeSessionEditor() {
+    // Don't close if we're creating a tag from this editor - user will return after CP closes
+    if (pendingTagCreation?.editorKey === 'session') return;
+
     sessionEditorOpen = false;
   }
 
@@ -320,6 +342,36 @@
   // CommandPalette handlers
   function handleCommandPaletteClose() {
     commandPaletteOpen = false;
+    // Clear pending tag creation if cancelled
+    pendingTagCreation = null;
+  }
+
+  // Handle request to create tag from selected text in an editor
+  function handleRequestCreateTag(editorKey: string, text: string, from: number, to: number) {
+    pendingTagCreation = { editorKey, text, from, to };
+    commandPaletteOpen = true;
+  }
+
+  // Handle tag created via CommandPalette - trigger chip insertion
+  function handleItemCreated(item: { id: string; name: string; values: Record<string, string> }, namespace: string) {
+    if (namespace === 'tags' && pendingTagCreation) {
+      const tag: Tag = {
+        id: item.id,
+        name: item.values.name || item.name,
+        instruction: item.values.instruction || '',
+      };
+      pendingTagInsertion = {
+        editorKey: pendingTagCreation.editorKey,
+        from: pendingTagCreation.from,
+        to: pendingTagCreation.to,
+        tag,
+      };
+      pendingTagCreation = null;
+      // Clear pending insertion after a tick to allow the editor to react
+      setTimeout(() => {
+        pendingTagInsertion = null;
+      }, 0);
+    }
   }
 
   function handleSetExitModeFromPalette(modeId: string) {
@@ -744,6 +796,8 @@
           {tags}
           {ephemeral}
           onImagePasteBlocked={handleImagePasteBlocked}
+          onRequestCreateTag={(text, from, to) => handleRequestCreateTag('session', text, from, to)}
+          pendingTagInsertion={pendingTagInsertion?.editorKey === 'session' ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
         />
       </div>
     {/if}
@@ -833,6 +887,8 @@
               {tags}
               {ephemeral}
               onImagePasteBlocked={handleImagePasteBlocked}
+              onRequestCreateTag={(text, from, to) => handleRequestCreateTag(rangeKey, text, from, to)}
+              pendingTagInsertion={pendingTagInsertion?.editorKey === rangeKey ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
             />
           {/key}
         {/if}
@@ -889,6 +945,8 @@
     onExitModesChange={handleExitModesChange}
     {showToast}
     onOpenSaveModal={openSaveModal}
+    initialState={pendingTagCreation ? { namespace: 'tags', mode: 'create', prefill: { instruction: pendingTagCreation.text } } : undefined}
+    onItemCreated={handleItemCreated}
   />
 {/if}
 

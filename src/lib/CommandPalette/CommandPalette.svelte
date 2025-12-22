@@ -4,7 +4,7 @@
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { reduce, computeItemList } from './engine/reducer';
   import { createQueryContext, setTagItems, setExitModeItems, saveTagItem, deleteTagItem, saveExitModeItem, deleteExitModeItem, reorderExitModeItems, generateTagId, generateExitModeId, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId } from './namespaces';
-  import type { State, Action, Command, Item, Namespace } from './engine/types';
+  import type { State, Action, Command, Item, Namespace, InitialState } from './engine/types';
   import type { Tag, ExitMode } from '$lib/types';
   import Icon from './Icon.svelte';
 
@@ -24,9 +24,11 @@
     onExitModesChange?: (modes: ExitMode[]) => void;
     showToast?: (message: string) => void;
     onOpenSaveModal?: () => void;
+    initialState?: InitialState;
+    onItemCreated?: (item: Item, namespace: string) => void;
   }
 
-  let { tags, exitModes, onClose, onSetExitMode, onTagsChange, onExitModesChange, showToast, onOpenSaveModal }: Props = $props();
+  let { tags, exitModes, onClose, onSetExitMode, onTagsChange, onExitModesChange, showToast, onOpenSaveModal, initialState, onItemCreated }: Props = $props();
 
   // Convert domain types to Item format
   function tagToItem(tag: Tag): Item {
@@ -101,6 +103,7 @@
           };
           saveTagItem(newItem);
           onTagsChange?.(ctx.getItems({ id: 'tags' } as Namespace).map(itemToTag));
+          onItemCreated?.(newItem, 'tags');
         } else if (cmd.namespace === 'exit-modes') {
           const newItem: Item = {
             id: generateExitModeId(cmd.pending.name),
@@ -361,7 +364,7 @@
       console.error('Failed to load config:', e);
       setObsidianVaults([]);
     }
-    dispatch({ type: 'OPEN' });
+    dispatch({ type: 'OPEN', initialState });
   });
 
   // Focus management for filter states

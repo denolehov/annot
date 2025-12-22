@@ -39,9 +39,11 @@
     tags?: Tag[];
     ephemeral?: boolean;
     onImagePasteBlocked?: () => void;
+    onRequestCreateTag?: (text: string, from: number, to: number) => void;
+    pendingTagInsertion?: { from: number; to: number; tag: Tag } | null;
   }
 
-  let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], ephemeral = false, onImagePasteBlocked }: Props = $props();
+  let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], ephemeral = false, onImagePasteBlocked, onRequestCreateTag, pendingTagInsertion }: Props = $props();
 
   let container: HTMLDivElement | undefined = $state();
   let element: HTMLDivElement | undefined = $state();
@@ -79,6 +81,16 @@
   let excalidrawModalOpen = $state(false);
   let excalidrawEditPos: number | null = $state(null);
   let excalidrawEditElements = $state('[]');
+
+  // Selection popover state (for "Create Tag from Selection")
+  let selectionPopover = $state<{
+    text: string;
+    from: number;
+    to: number;
+    rect: DOMRect;
+  } | null>(null);
+  let selectionPopoverEl: HTMLDivElement | undefined = $state();
+  let selectionDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Force position recalculation on scroll (clientRect is a function, but Svelte needs a state change to re-render)
   let positionTick = $state(0);
@@ -313,6 +325,44 @@
           onDismiss?.();
         }
       },
+      onSelectionUpdate: ({ editor }) => {
+        // Clear any pending debounce
+        if (selectionDebounceTimer) {
+          clearTimeout(selectionDebounceTimer);
+          selectionDebounceTimer = null;
+        }
+
+        const { from, to, empty } = editor.state.selection;
+
+        // Hide popover if selection is empty or too short
+        if (empty || to - from < 2) {
+          selectionPopover = null;
+          return;
+        }
+
+        // Only show if onRequestCreateTag is provided
+        if (!onRequestCreateTag) return;
+
+        // Debounce: show popover after 150ms of stable selection
+        selectionDebounceTimer = setTimeout(() => {
+          const text = editor.state.doc.textBetween(from, to, ' ');
+          // Get the selection coordinates for positioning
+          const coords = editor.view.coordsAtPos(from);
+          const endCoords = editor.view.coordsAtPos(to);
+
+          selectionPopover = {
+            text,
+            from,
+            to,
+            rect: new DOMRect(
+              coords.left,
+              coords.top,
+              endCoords.right - coords.left,
+              endCoords.bottom - coords.top
+            ),
+          };
+        }, 150);
+      },
     });
 
     // Handle Excalidraw create/edit events
@@ -358,6 +408,9 @@
 
   onDestroy(() => {
     editorState.editor?.destroy();
+    if (selectionDebounceTimer) {
+      clearTimeout(selectionDebounceTimer);
+    }
   });
 
   // Update editable state when sealed changes
@@ -371,6 +424,30 @@
         }
       }
     });
+  });
+
+  // Handle pending tag insertion (after tag is created via CommandPalette)
+  $effect(() => {
+    if (!pendingTagInsertion || !editorState.editor) return;
+
+    const { from, to, tag } = pendingTagInsertion;
+
+    editorState.editor
+      .chain()
+      .focus()
+      .deleteRange({ from, to })
+      .insertContent([
+        {
+          type: 'tagChip',
+          attrs: {
+            id: tag.id,
+            name: tag.name,
+            instruction: tag.instruction,
+          },
+        },
+        { type: 'text', text: ' ' },
+      ])
+      .run();
   });
 
   // Excalidraw save handler
@@ -526,6 +603,33 @@
     onSave={handleExcalidrawSave}
     onCancel={handleExcalidrawCancel}
   />
+{/if}
+
+<!-- Selection popover for "Create Tag from Selection" -->
+{#if selectionPopover && onRequestCreateTag}
+  {@const pos = getSuggestionPosition(positionTick, () => selectionPopover?.rect ?? null, selectionPopoverEl)}
+  <div
+    bind:this={selectionPopoverEl}
+    use:portal
+    class="selection-popover"
+    style:left="{pos.left}px"
+    style:top="{pos.top}px"
+  >
+    <button
+      type="button"
+      class="create-tag-btn"
+      onmousedown={(e) => {
+        e.preventDefault();
+        if (selectionPopover && onRequestCreateTag) {
+          onRequestCreateTag(selectionPopover.text, selectionPopover.from, selectionPopover.to);
+          selectionPopover = null;
+        }
+      }}
+    >
+      <span class="create-tag-icon">#</span>
+      <span class="create-tag-label">Create Tag</span>
+    </button>
+  </div>
 {/if}
 
 <style>

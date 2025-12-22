@@ -62,6 +62,7 @@ export type State =
       namespace: Namespace;
       values: Record<string, string>;
       focusedField: number;
+      closeOnSave?: boolean; // If true, close CP after save instead of returning to ITEM_FILTER
     }
   | {
       type: 'ITEM_REORDER';
@@ -72,8 +73,14 @@ export type State =
 
 // === Actions ===
 
+export interface InitialState {
+  namespace: 'tags' | 'exit-modes';
+  mode: 'create';
+  prefill?: Record<string, string>;
+}
+
 export type Action =
-  | { type: 'OPEN' }
+  | { type: 'OPEN'; initialState?: InitialState }
   | { type: 'CLOSE' }
   | { type: 'INPUT'; char: string }
   | { type: 'SET_FIELD'; key: string; value: string }
