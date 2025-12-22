@@ -450,6 +450,26 @@
       .run();
   });
 
+  // Handle Enter key to create tag from selection (capture phase to intercept before TipTap)
+  $effect(() => {
+    if (!selectionPopover || !onRequestCreateTag) return;
+
+    const currentPopover = selectionPopover;
+    const createTag = onRequestCreateTag;
+
+    function handleKeydown(e: KeyboardEvent) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        createTag(currentPopover.text, currentPopover.from, currentPopover.to);
+        selectionPopover = null;
+      }
+    }
+
+    document.addEventListener('keydown', handleKeydown, true);
+    return () => document.removeEventListener('keydown', handleKeydown, true);
+  });
+
   // Excalidraw save handler
   function handleExcalidrawSave(elements: string, png: string) {
     if (excalidrawEditPos === null || !editorState.editor) return;

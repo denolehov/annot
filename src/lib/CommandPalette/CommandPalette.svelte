@@ -70,6 +70,7 @@
   // Modal element reference
   let modalEl: HTMLDivElement | undefined = $state(undefined);
   let inputEl: HTMLInputElement | undefined = $state(undefined);
+  let listEl: HTMLUListElement | undefined = $state(undefined);
 
   function dispatch(action: Action) {
     const result = reduce(machineState, action, ctx);
@@ -404,6 +405,17 @@
     }
   });
 
+  // Scroll selected item into view when selection changes
+  $effect(() => {
+    if (machineState.type === 'NAMESPACE_FILTER' || machineState.type === 'ITEM_FILTER' || machineState.type === 'ITEM_REORDER') {
+      const idx = machineState.selectedIndex;
+      requestAnimationFrame(() => {
+        const selected = listEl?.querySelector('.item.selected') as HTMLElement | null;
+        selected?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      });
+    }
+  });
+
   // Computed values for rendering
   let filteredNamespaces = $derived.by(() => {
     if (machineState.type !== 'NAMESPACE_FILTER') return [];
@@ -513,7 +525,7 @@
           oninput={handleInput}
         />
       </div>
-      <ul class="item-list" class:filtering={!isNavigating} role="listbox">
+      <ul class="item-list" class:filtering={!isNavigating} role="listbox" bind:this={listEl}>
         {#each filteredNamespaces as ns, i}
           <li
             class="item"
@@ -547,7 +559,7 @@
         />
       </div>
       {#if itemListData.matches.length > 0 || itemListData.showCreate}
-        <ul class="item-list" class:filtering={!isNavigating} role="listbox">
+        <ul class="item-list" class:filtering={!isNavigating} role="listbox" bind:this={listEl}>
           {#each itemListData.matches as item, i}
             <li
               class="item"
@@ -590,7 +602,7 @@
         <span class="separator">›</span>
         <span class="mode-prefix">Reorder</span>
       </div>
-      <ul class="item-list">
+      <ul class="item-list" bind:this={listEl}>
         {#each machineState.items as item, i}
           <li
             class="item"
