@@ -249,6 +249,9 @@
   // Save modal state
   let saveModalOpen = $state(false);
 
+  // Content zoom state
+  let contentZoom = $state(1.0);
+
   // Derived: last line of current selection (for positioning editor)
   let lastSelectedLine = $derived.by(() => {
     if (!selection) return null;
@@ -620,6 +623,18 @@
       // Cmd+S / Ctrl+S opens save modal
       e.preventDefault();
       openSaveModal();
+    } else if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '+')) {
+      // Cmd+Plus: zoom in content
+      e.preventDefault();
+      contentZoom = Math.min(contentZoom + 0.1, 3.0);
+    } else if ((e.metaKey || e.ctrlKey) && e.key === '-') {
+      // Cmd+Minus: zoom out content
+      e.preventDefault();
+      contentZoom = Math.max(contentZoom - 0.1, 0.5);
+    } else if ((e.metaKey || e.ctrlKey) && e.key === '0') {
+      // Cmd+0: reset zoom
+      e.preventDefault();
+      contentZoom = 1.0;
     }
     // Escape is now handled by the editor's blur handler
   }
@@ -819,6 +834,11 @@
       onmouseup={handleMouseUp}
       role="presentation"
     >
+      <div
+        class="content-inner"
+        style:transform="scale({contentZoom})"
+        style:width="calc(100% / {contentZoom})"
+      >
       {#each lines as line}
         {@const diffLine = getDiffLineInfo(line.number)}
         {@const mermaidBlock = getMermaidBlockAt(line.number)}
@@ -893,6 +913,7 @@
           {/key}
         {/if}
       {/each}
+      </div>
     </div>
   {/if}
 
