@@ -1,33 +1,28 @@
 use std::path::Path;
+use std::sync::LazyLock;
 
+use syntect::dumps::from_uncompressed_data;
 use syntect::html::{ClassStyle, ClassedHTMLGenerator};
-use syntect::parsing::{SyntaxDefinition, SyntaxSet};
+use syntect::parsing::SyntaxSet;
 use syntect::util::LinesWithEndings;
 
-/// Embedded mermaid grammar for syntax highlighting mermaid code blocks.
-const MERMAID_GRAMMAR: &str = include_str!("../grammars/mermaid.sublime-syntax");
-
+/// Pre-compiled SyntaxSet loaded from build-time generated dump.
+/// This avoids the ~120ms cost of loading/parsing grammars at runtime.
+static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(|| {
+    from_uncompressed_data(include_bytes!(concat!(env!("OUT_DIR"), "/syntaxes.packdump")))
+        .expect("Failed to load embedded syntax set")
+});
 
 /// Syntax highlighter using syntect with embedded grammars.
 pub struct Highlighter {
-    syntax_set: SyntaxSet,
+    syntax_set: &'static SyntaxSet,
 }
 
 impl Highlighter {
-    /// Create a new highlighter with default syntaxes plus custom grammars.
+    /// Create a new highlighter using the pre-compiled syntax set.
     pub fn new() -> Self {
-        // Start with defaults and convert to builder to add custom grammars
-        let mut builder = SyntaxSet::load_defaults_newlines().into_builder();
-
-        // Load custom mermaid grammar
-        if let Ok(mermaid_syntax) =
-            SyntaxDefinition::load_from_str(MERMAID_GRAMMAR, true, None)
-        {
-            builder.add(mermaid_syntax);
-        }
-
         Self {
-            syntax_set: builder.build(),
+            syntax_set: &SYNTAX_SET,
         }
     }
 

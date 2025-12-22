@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::diff::{self, DiffMetadata};
 use crate::highlight::Highlighter;
 use crate::markdown::{self, MarkdownMetadata};
+use crate::perf::timed;
 
 /// Type of line in markdown content for structural styling and UI features.
 #[derive(Clone, Debug, Serialize, Default)]
@@ -437,8 +438,11 @@ impl AppState {
         tags: Vec<Tag>,
         exit_modes: Vec<ExitMode>,
     ) -> Self {
-        let highlighter = Highlighter::new();
-        let html_lines = highlighter.highlight_lines(content, path);
+        let highlighter = timed!("Highlighter::new", Highlighter::new());
+        let html_lines = timed!(
+            &format!("highlight_lines({} lines)", content.lines().count()),
+            highlighter.highlight_lines(content, path)
+        );
 
         let lines = content
             .lines()
@@ -483,8 +487,8 @@ impl AppState {
         tags: Vec<Tag>,
         exit_modes: Vec<ExitMode>,
     ) -> Result<Self, String> {
-        let mut diff_metadata = diff::parse_diff(content)?;
-        let highlighter = Highlighter::new();
+        let mut diff_metadata = timed!("parse_diff", diff::parse_diff(content)?);
+        let highlighter = timed!("Highlighter::new", Highlighter::new());
 
         // Highlight function contexts in hunk headers
         for file in &mut diff_metadata.files {
@@ -583,8 +587,8 @@ impl AppState {
     ) -> Self {
         use comrak::Options;
 
-        let md_metadata = markdown::parse_markdown(content);
-        let highlighter = Highlighter::new();
+        let md_metadata = timed!("parse_markdown", markdown::parse_markdown(content));
+        let highlighter = timed!("Highlighter::new", Highlighter::new());
 
         // Build map of code block info by line: (language, is_fence_start, is_fence_end)
         #[derive(Clone)]

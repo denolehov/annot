@@ -252,6 +252,46 @@
   // Content zoom state
   let contentZoom = $state(1.0);
 
+  // Virtual scrolling state
+  const LINE_HEIGHT = 22;
+  const BUFFER_LINES = 10;
+  let scrollTop = $state(0);
+  let viewportHeight = $state(700);
+
+  // Virtual scroll computed values
+  let startIndex = $derived(Math.max(0, Math.floor(scrollTop / LINE_HEIGHT) - BUFFER_LINES));
+  let endIndex = $derived(Math.min(lines.length, Math.ceil((scrollTop + viewportHeight) / LINE_HEIGHT) + BUFFER_LINES));
+  let visibleLines = $derived(lines.slice(startIndex, endIndex));
+  let translateY = $derived(startIndex * LINE_HEIGHT);
+  let totalHeight = $derived(lines.length * LINE_HEIGHT);
+
+  // Get all annotation ranges for overlay rendering
+  let annotationRanges = $derived.by(() => {
+    const ranges: Array<{ key: string; start: number; end: number }> = [];
+    for (const [key] of annotations) {
+      const range = keyToRange(key);
+      ranges.push({ key, start: range.start, end: range.end });
+    }
+    return ranges;
+  });
+
+  // Active editor range (for positioning the editor overlay)
+  let activeEditorRange = $derived.by(() => {
+    if (!selection || isDragging) return null;
+    // Check if there's an existing annotation at the last selected line
+    const lastLine = Math.max(selection.start, selection.end);
+    for (const [key] of annotations) {
+      const range = keyToRange(key);
+      if (range.end === lastLine) {
+        return { key, start: range.start, end: range.end };
+      }
+    }
+    // New annotation at selection
+    const start = Math.min(selection.start, selection.end);
+    const end = Math.max(selection.start, selection.end);
+    return { key: rangeToKey({ start, end }), start, end };
+  });
+
   // Derived: last line of current selection (for positioning editor)
   let lastSelectedLine = $derived.by(() => {
     if (!selection) return null;
