@@ -96,7 +96,7 @@
   .save-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--backdrop-dark);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -106,11 +106,11 @@
   .save-modal {
     width: 400px;
     max-width: 90vw;
-    background: var(--bg-panel, #fff);
-    border-radius: 12px;
+    background: var(--bg-panel);
+    border-radius: var(--radius-xl);
     padding: 20px;
     position: relative;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-lg);
   }
 
   .save-close {
@@ -121,42 +121,42 @@
     border: none;
     padding: 4px;
     cursor: pointer;
-    color: var(--text-secondary, #6b7280);
-    border-radius: 4px;
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
   .save-close:hover {
-    background: var(--bg-hover, #f3f4f6);
-    color: var(--text-primary, #1f2937);
+    background: var(--bg-hover);
+    color: var(--text-primary);
   }
 
   .save-title {
-    font-family: var(--font-ui, system-ui);
+    font-family: var(--font-ui);
     font-size: 16px;
     font-weight: 600;
-    color: var(--text-primary, #1f2937);
+    color: var(--text-primary);
     margin: 0 0 16px 0;
   }
 
   .save-input {
     width: 100%;
     padding: 10px 12px;
-    font-family: var(--font-mono, monospace);
+    font-family: var(--font-mono);
     font-size: 14px;
-    border: 1px solid var(--border-default, #d1d5db);
-    border-radius: 6px;
-    background: var(--bg-input, #fff);
-    color: var(--text-primary, #1f2937);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--bg-input);
+    color: var(--text-primary);
     box-sizing: border-box;
   }
 
   .save-input:focus {
     outline: none;
-    border-color: var(--accent-primary, #3b82f6);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px var(--focus-glow);
   }
 
   .save-input:disabled {
@@ -166,9 +166,9 @@
 
   .save-error {
     margin-top: 8px;
-    font-family: var(--font-ui, system-ui);
+    font-family: var(--font-ui);
     font-size: 13px;
-    color: var(--error-text, #dc2626);
+    color: var(--error-text);
   }
 
   .save-actions {
@@ -181,13 +181,13 @@
   .save-btn-cancel,
   .save-btn-save {
     padding: 8px 16px;
-    border-radius: 6px;
-    font-family: var(--font-ui, system-ui);
+    border-radius: var(--radius-md);
+    font-family: var(--font-ui);
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
     border: none;
-    transition: opacity 0.15s;
+    transition: opacity var(--transition-normal);
   }
 
   .save-btn-cancel:hover,
@@ -202,13 +202,13 @@
   }
 
   .save-btn-cancel {
-    background: var(--bg-panel, #f3f4f6);
-    color: var(--text-primary, #1f2937);
-    border: 1px solid var(--border-strong, #d1d5db);
+    background: var(--bg-panel);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
   }
 
   .save-btn-save {
-    background: var(--accent-primary, #3b82f6);
+    background: var(--accent-primary);
     color: white;
   }
 </style>

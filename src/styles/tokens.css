@@ -1,50 +1,176 @@
 /* ===========================================
-   DESIGN TOKENS (V4)
+   DESIGN TOKENS (V5)
 
    The Spirit: annot is ephemeral, physical, keyboard-first.
    Human thought tears open machine code. Sans-serif warmth
    invades monospace precision. The portal is another dimension.
 
    Color palette: Warm zinc grays with amber accents.
+
+   Structure:
+   - Primitives: Raw color values (--light-*, --dark-*)
+   - Semantic tokens: Theme-aware aliases (--bg-*, --text-*, etc.)
+
+   Dark mode: Add [data-theme="dark"] override when ready.
    =========================================== */
+
 :root {
-	/* Backgrounds & Neutrals (zinc family - warmer grays) */
-	--bg-main: #fafaf9;          /* warm zinc-50 */
-	--bg-window: #fefefe;        /* warm white - subtle cream tint */
-	--bg-panel: #fafaf8;         /* warm zinc-50 */
+	/* ===========================================
+	   PRIMITIVE VALUES (Light Palette)
+	   Don't use directly in components - use semantic tokens below
+	   =========================================== */
 
-	/* Portal: A different material. */
-	--bg-portal: #fdfcfa;           /* Lighter warm cream */
-	--bg-portal-glow: rgba(253, 252, 250, 0.8);
+	/* Zinc family - warm grays */
+	--light-zinc-50: #fafaf9;
+	--light-zinc-100: #f4f4f5;
+	--light-zinc-200: #e4e4e7;
+	--light-zinc-300: #d4d4d8;
+	--light-zinc-400: #a1a1aa;
+	--light-zinc-500: #71717a;
+	--light-zinc-600: #52525b;
+	--light-zinc-700: #3f3f46;
+	--light-zinc-800: #27272a;
+	--light-zinc-900: #18181b;
 
-	--border-subtle: #e4e4e7;     /* zinc-200 */
-	--border-strong: #d4d4d8;     /* zinc-300 */
-	--border-active: #71717a;     /* zinc-500 */
+	/* Warm whites (portal dimension) */
+	--light-warm-white: #fefefe;
+	--light-warm-cream: #fdfcfa;
+	--light-warm-cream-alpha: rgba(253, 252, 250, 0.8);
 
-	/* Text (zinc family) */
-	--text-primary: #18181b;      /* zinc-900 */
-	--text-secondary: #52525b;    /* zinc-600 */
-	--text-muted: #71717a;        /* zinc-500 (4.51:1 contrast ratio for WCAG AA) */
+	/* Amber family - selection & accents */
+	--light-amber-50: #fefce8;
+	--light-amber-100: #fef9c3;
+	--light-amber-200: #fef08a;
+	--light-amber-300: #fcd34d;
+	--light-amber-400: #fbbf24;
+	--light-amber-700: #b45309;
+	--light-amber-900: #78350f;
 
-	/* Code Syntax (GitHub Light) */
-	--code-keyword: #d73a49;
-	--code-func: #6f42c1;
-	--code-string: #032f62;
-	--code-comment: #6a737d;
-	--code-variable: #e36209;
-	--code-constant: #005cc5;
-	--code-tag: #22863a;
-	--code-op: #d73a49;
-	--code-support: #6f42c1;
+	/* Blue family - primary actions */
+	--light-blue-500: #3b82f6;
+	--light-blue-600: #2563eb;
+
+	/* Red family - errors & danger */
+	--light-red-50: #fef2f2;
+	--light-red-500: #ef4444;
+	--light-red-700: #b91c1c;
+
+	/* Green family - success */
+	--light-green-600: #22863a;
+
+	/* Code syntax (GitHub Light) */
+	--light-code-keyword: #d73a49;
+	--light-code-func: #6f42c1;
+	--light-code-string: #032f62;
+	--light-code-comment: #6a737d;
+	--light-code-variable: #e36209;
+	--light-code-constant: #005cc5;
+	--light-code-tag: #22863a;
+
+	/* ===========================================
+	   PRIMITIVE VALUES (Dark Palette)
+	   Ready for dark mode - not active yet
+	   =========================================== */
+	--dark-zinc-50: #18181b;
+	--dark-zinc-100: #27272a;
+	--dark-zinc-200: #3f3f46;
+	--dark-zinc-300: #52525b;
+	--dark-zinc-400: #71717a;
+	--dark-zinc-500: #a1a1aa;
+	--dark-zinc-600: #d4d4d8;
+	--dark-zinc-700: #e4e4e7;
+	--dark-zinc-800: #f4f4f5;
+	--dark-zinc-900: #fafaf9;
+
+	--dark-warm-white: #1a1a1d;
+	--dark-warm-cream: #1f1f23;
+	--dark-warm-cream-alpha: rgba(31, 31, 35, 0.8);
+
+	/* ===========================================
+	   SEMANTIC TOKENS
+	   Use these in components - they adapt to theme
+	   =========================================== */
+
+	/* Backgrounds */
+	--bg-main: var(--light-zinc-50);
+	--bg-window: var(--light-warm-white);
+	--bg-panel: var(--light-zinc-50);
+	--bg-hover: var(--light-zinc-100);
+	--bg-selected: #d4d8e0;  /* Slightly blue-gray for selection */
+	--bg-input: var(--light-warm-white);
+
+	/* Portal: A different material */
+	--bg-portal: var(--light-warm-cream);
+	--bg-portal-glow: var(--light-warm-cream-alpha);
+
+	/* Borders */
+	--border-subtle: var(--light-zinc-200);
+	--border-strong: var(--light-zinc-300);
+	--border-hover: var(--light-zinc-400);
+	--border-active: var(--light-zinc-500);
+
+	/* Text */
+	--text-primary: var(--light-zinc-900);
+	--text-secondary: var(--light-zinc-600);
+	--text-muted: var(--light-zinc-500);  /* 4.51:1 contrast ratio for WCAG AA */
+
+	/* Code Syntax */
+	--code-keyword: var(--light-code-keyword);
+	--code-func: var(--light-code-func);
+	--code-string: var(--light-code-string);
+	--code-comment: var(--light-code-comment);
+	--code-variable: var(--light-code-variable);
+	--code-constant: var(--light-code-constant);
+	--code-tag: var(--light-code-tag);
+	--code-op: var(--light-code-keyword);
+	--code-support: var(--light-code-func);
 
 	/* Selection (amber family - warm gold, whisper not scream) */
-	--selection-bg: #fefce8;       /* amber-50 - softer than amber-100 */
-	--selection-border: #fcd34d;   /* amber-300 */
-	--selection-hover: rgb(251 191 36 / 0.15);    /* amber-400/15 */
-	--selection-active: rgb(251 191 36 / 0.3);    /* amber-400/30 */
-	--selection-gutter-text: #78350f;             /* amber-900 */
+	--selection-bg: var(--light-amber-50);
+	--selection-border: var(--light-amber-300);
+	--selection-hover: rgb(251 191 36 / 0.15);
+	--selection-active: rgb(251 191 36 / 0.3);
+	--selection-gutter-text: var(--light-amber-900);
 
-	/* Layout */
+	/* Tags */
+	--tag-bg: var(--light-zinc-50);
+	--tag-border: var(--light-zinc-300);
+	--tag-text: var(--light-zinc-600);
+
+	/* Errors & Danger */
+	--error-bg: var(--light-red-50);
+	--error-border: var(--light-red-500);
+	--error-text: var(--light-red-700);
+	--danger: var(--light-red-500);
+	--danger-hover: var(--light-red-700);
+
+	/* Focus */
+	--focus-ring: var(--border-active);
+	--focus-glow: rgba(113, 113, 122, 0.15);
+
+	/* Accent - amber family for interactive highlights */
+	--accent: var(--light-amber-700);
+	--accent-bg: var(--light-amber-100);
+	--accent-bg-hover: var(--light-amber-200);
+	--accent-border: var(--light-amber-300);
+	--accent-text: var(--light-amber-900);
+
+	/* Primary action - blue */
+	--accent-blue: var(--light-blue-500);
+	--accent-blue-hover: var(--light-blue-600);
+	/* Alias for components using --accent-primary */
+	--accent-primary: var(--accent-blue);
+
+	/* Overlays */
+	--backdrop-light: rgba(250, 250, 249, 0.4);
+	--backdrop-dark: rgba(0, 0, 0, 0.6);
+
+	/* ===========================================
+	   LAYOUT & SIZING
+	   Not theme-dependent
+	   =========================================== */
+
+	/* Gutter */
 	--gutter-width: 50px;
 
 	/* Fonts */
@@ -60,28 +186,44 @@
 	--chip-gap: 3px;
 	--chip-divider-height: 10px;
 
-	/* Tag Colors (zinc family) */
-	--tag-bg: #fafafa;            /* zinc-50 */
-	--tag-border: #d4d4d8;        /* zinc-300 */
-	--tag-text: #52525b;          /* zinc-600 */
+	/* Border Radii */
+	--radius-sm: 4px;
+	--radius-md: 6px;
+	--radius-lg: 8px;
+	--radius-xl: 12px;
 
-	/* Error/Validation Colors */
-	--error-bg: #fef2f2;
-	--error-border: #ef4444;
-	--error-text: #b91c1c;
+	/* Shadows */
+	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 4px rgba(0, 0, 0, 0.02);
+	--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+	--shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.15);
 
-	/* Focus - subtle, uses existing palette */
-	--focus-ring: var(--border-active);
-	--focus-glow: rgba(113, 113, 122, 0.15);    /* zinc-500/15 */
-
-	/* Accent - for interactive highlights (amber family) */
-	--accent: #b45309;             /* amber-700 - readable on light backgrounds */
-	--accent-bg: #fef9c3;          /* amber-100, lighter for bg */
-	--accent-bg-hover: #fef08a;    /* amber-200 */
-	--accent-border: #fcd34d;      /* amber-300 */
-	--accent-text: #78350f;        /* amber-900 */
-
-	/* Action button (blue - for primary actions) */
-	--accent-blue: #3b82f6;        /* blue-500 */
-	--accent-blue-hover: #2563eb;  /* blue-600 */
+	/* Transitions */
+	--transition-fast: 80ms ease;
+	--transition-normal: 150ms ease;
 }
+
+/* ===========================================
+   DARK MODE (Future)
+
+   Uncomment when implementing dark mode:
+
+   [data-theme="dark"] {
+     --bg-main: var(--dark-zinc-50);
+     --bg-window: var(--dark-warm-white);
+     --bg-panel: var(--dark-zinc-100);
+     --bg-hover: var(--dark-zinc-200);
+     --bg-portal: var(--dark-warm-cream);
+     --bg-portal-glow: var(--dark-warm-cream-alpha);
+
+     --border-subtle: var(--dark-zinc-200);
+     --border-strong: var(--dark-zinc-300);
+     --border-hover: var(--dark-zinc-400);
+     --border-active: var(--dark-zinc-500);
+
+     --text-primary: var(--dark-zinc-900);
+     --text-secondary: var(--dark-zinc-600);
+     --text-muted: var(--dark-zinc-500);
+
+     // ... add dark code syntax, selection colors, etc.
+   }
+   =========================================== */

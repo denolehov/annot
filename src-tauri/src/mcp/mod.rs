@@ -233,6 +233,13 @@ fn run_session_with_state(
     app_handle: &AppHandle,
     state: AppState,
 ) -> Result<SessionOutput, String> {
+    // Show dock icon while window is open
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::ActivationPolicy;
+        let _ = app_handle.set_activation_policy(ActivationPolicy::Regular);
+    }
+
     // Create channel for receiving result
     let (tx, rx) = mpsc::channel::<FormatResult>();
 
@@ -277,6 +284,13 @@ fn run_session_with_state(
 
     // Block until result received
     let result = rx.recv().map_err(|e| format!("Failed to receive result: {}", e))?;
+
+    // Hide dock icon after window closes
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::ActivationPolicy;
+        let _ = app_handle.set_activation_policy(ActivationPolicy::Accessory);
+    }
 
     Ok(SessionOutput {
         text: result.text,

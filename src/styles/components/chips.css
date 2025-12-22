@@ -72,7 +72,7 @@
 
 .excalidraw-chip:hover {
 	background: var(--bg-hover);
-	border-color: var(--accent-primary, #3b82f6);
+	border-color: var(--accent-primary);
 }
 
 /* Placeholder style (transient, dashed border) */

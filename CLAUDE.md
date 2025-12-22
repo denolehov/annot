@@ -125,13 +125,14 @@ Tauri IPC commands replace the HTTP API from the Go version:
 
 ## Reference Materials
 
-**Primary reference**: `HL_REFERENCE.md` in this repo — comprehensive documentation of the original hl feature set, data models, API routes, output format, and architecture patterns. **Read this first** instead of exploring the Go codebase.
+- `HL_REFERENCE.md` — Original hl feature set, data models, output format
+- `COMPONENTS.md` — UI component inventory with files, styles, states
+- `src/styles/README.md` — Style system guide and token reference
+- `fixtures/README.md` — Sample files for testing
 
 **Original Go implementation** (for edge cases only): `/Users/denolehov/_p/golang/hl`
 
 **Tauri documentation**: `/Users/denolehov/_p/docs/tauri-docs`
-
-**Important**: Use `HL_REFERENCE.md` for understanding hl behavior. Only explore the original Go codebase when you need implementation details not covered in the reference doc.
 
 ## Tech Stack
 
@@ -140,7 +141,23 @@ Tauri IPC commands replace the HTTP API from the Go version:
 - **Testing**: Vitest + @testing-library/svelte (frontend), cargo test (Rust)
 - **Syntax highlighting**: TBD (tree-sitter or syntect)
 - **Diff parsing**: TBD (similar-diff or custom)
-- **Rich editor**: TBD (TipTap port or Svelte alternative)
+- **Rich editor**: TipTap
+
+## Style System
+
+Styles live in `src/styles/` with tokens in `tokens.css`. See `src/styles/README.md` for the full guide.
+
+- **Tokens**: All colors, spacing, radii, shadows in `tokens.css` (dark mode ready)
+- **Components**: One CSS file per component in `components/`
+- **Rule**: Never hardcode colors — use `var(--token-name)`
+
+## Fixtures
+
+Sample files for testing UI states in `fixtures/`:
+```bash
+pnpm tauri dev -- -- fixtures/files/simple.rs      # File mode
+pnpm tauri dev -- -- --diff fixtures/diffs/mixed-changes.diff  # Diff mode
+```
 
 ## Tauri Configuration Notes
 

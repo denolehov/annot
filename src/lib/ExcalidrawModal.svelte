@@ -162,7 +162,7 @@
   .excalidraw-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--backdrop-dark);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -172,8 +172,8 @@
   .excalidraw-modal {
     width: 90vw;
     height: 85vh;
-    background: white;
-    border-radius: 12px;
+    background: var(--bg-window);
+    border-radius: var(--radius-xl);
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -211,11 +211,11 @@
     font-size: 16px;
     color: var(--text-secondary);
     z-index: 10;
-    background: white;
+    background: var(--bg-window);
   }
 
   .excalidraw-error {
-    color: var(--error-text, #dc2626);
+    color: var(--error-text);
   }
 
   /* Control buttons positioned in modal */
@@ -231,13 +231,13 @@
   :global(.excalidraw-save),
   :global(.excalidraw-cancel) {
     padding: 8px 16px;
-    border-radius: 6px;
-    font-family: var(--font-ui, system-ui);
+    border-radius: var(--radius-md);
+    font-family: var(--font-ui);
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
     border: none;
-    transition: opacity 0.15s;
+    transition: opacity var(--transition-normal);
   }
 
   :global(.excalidraw-save:hover),
@@ -246,21 +246,21 @@
   }
 
   :global(.excalidraw-save) {
-    background: var(--accent-primary, #3b82f6);
+    background: var(--accent-primary);
     color: white;
   }
 
   :global(.excalidraw-cancel) {
-    background: var(--bg-panel, #f3f4f6);
-    color: var(--text-primary, #1f2937);
-    border: 1px solid var(--border-strong, #d1d5db);
+    background: var(--bg-panel);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
   }
 
   /* Confirm dialog */
   .confirm-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--backdrop-dark);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -268,19 +268,19 @@
   }
 
   .confirm-dialog {
-    background: white;
-    border-radius: 12px;
+    background: var(--bg-window);
+    border-radius: var(--radius-xl);
     padding: 24px;
     max-width: 320px;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-lg);
   }
 
   .confirm-message {
     margin: 0 0 20px 0;
-    font-family: var(--font-ui, system-ui);
+    font-family: var(--font-ui);
     font-size: 16px;
     font-weight: 500;
-    color: var(--text-primary, #1f2937);
+    color: var(--text-primary);
     text-align: center;
   }
 
@@ -292,13 +292,13 @@
 
   .confirm-btn {
     padding: 10px 20px;
-    border-radius: 8px;
-    font-family: var(--font-ui, system-ui);
+    border-radius: var(--radius-lg);
+    font-family: var(--font-ui);
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
     border: none;
-    transition: opacity 0.15s, transform 0.1s;
+    transition: opacity var(--transition-normal), transform 0.1s;
   }
 
   .confirm-btn:hover {
@@ -310,13 +310,13 @@
   }
 
   .confirm-btn-cancel {
-    background: var(--bg-panel, #f3f4f6);
-    color: var(--text-primary, #1f2937);
-    border: 1px solid var(--border-strong, #d1d5db);
+    background: var(--bg-panel);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
   }
 
   .confirm-btn-discard {
-    background: #ef4444;
+    background: var(--danger);
     color: white;
   }
 </style>

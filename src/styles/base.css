@@ -33,14 +33,14 @@ code {
 }
 
 ::-webkit-scrollbar-thumb {
-	background: #d4d4d8;
+	background: var(--border-strong);
 	border: 1px solid transparent;
 	background-clip: content-box;
 	border-radius: 99px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-	background-color: #a1a1aa;
+	background-color: var(--border-hover);
 }
 
 /* ===========================================
