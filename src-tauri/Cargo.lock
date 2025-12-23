@@ -52,6 +52,7 @@ dependencies = [
  "dirs 5.0.1",
  "fs4",
  "hex",
+ "parking_lot",
  "rand 0.8.5",
  "rmcp",
  "schemars 1.1.0",

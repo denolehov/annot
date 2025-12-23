@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
 
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager, State, WebviewWindow, WebviewWindowBuilder};
@@ -50,7 +50,7 @@ pub fn open_mermaid_window(
     let hash = context_hash(&file_path, start_line, end_line);
     let label = format!("mermaid-{}", hash);
 
-    let mut state = mermaid_state.lock().unwrap();
+    let mut state = mermaid_state.lock();
 
     // Check if window already exists
     if let Some((existing_label, _)) = state.windows.get(&hash) {
@@ -112,7 +112,7 @@ pub fn get_mermaid_source(
     window: WebviewWindow,
     mermaid_state: State<Mutex<MermaidWindowState>>,
 ) -> Result<MermaidContext, String> {
-    let state = mermaid_state.lock().unwrap();
+    let state = mermaid_state.lock();
 
     // Find context by window label
     let window_label = window.label();

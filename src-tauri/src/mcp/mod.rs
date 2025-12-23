@@ -247,13 +247,13 @@ fn run_session_with_state(
     {
         use crate::ResultSender;
 
-        let managed_state = app_handle.state::<std::sync::Mutex<AppState>>();
-        let mut guard = managed_state.lock().unwrap();
+        let managed_state = app_handle.state::<parking_lot::Mutex<AppState>>();
+        let mut guard = managed_state.lock();
         *guard = state;
 
         // Store the sender for finish_session to use
         let sender_state = app_handle.state::<ResultSender>();
-        let mut sender_guard = sender_state.lock().unwrap();
+        let mut sender_guard = sender_state.lock();
         *sender_guard = Some(tx);
     }
 

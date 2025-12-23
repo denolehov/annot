@@ -1,5 +1,6 @@
 use std::path::PathBuf;
-use std::sync::Mutex;
+
+use parking_lot::Mutex;
 use tauri::{AppHandle, State, WebviewWindow};
 
 use crate::config::{self, Config};
@@ -20,7 +21,7 @@ pub enum CopyMode {
 
 #[tauri::command]
 pub fn get_content(state: State<Mutex<AppState>>) -> ContentResponse {
-    state.lock().unwrap().to_response()
+    state.lock().to_response()
 }
 
 #[tauri::command]
@@ -32,7 +33,6 @@ pub fn upsert_annotation(
 ) {
     state
         .lock()
-        .unwrap()
         .upsert_annotation(start_line, end_line, content);
 }
 
@@ -40,7 +40,6 @@ pub fn upsert_annotation(
 pub fn delete_annotation(state: State<Mutex<AppState>>, start_line: u32, end_line: u32) {
     state
         .lock()
-        .unwrap()
         .delete_annotation(start_line, end_line);
 }
 
@@ -54,14 +53,14 @@ pub fn finish_session(
 ) -> String {
     // Check if we're in MCP mode (has a result sender)
     let sender = {
-        let mut guard = result_sender.lock().unwrap();
+        let mut guard = result_sender.lock();
         guard.take()
     };
 
     let mode = if sender.is_some() { OutputMode::Mcp } else { OutputMode::Cli };
 
     let result = {
-        let state = state.lock().unwrap();
+        let state = state.lock();
         format_output(&state, mode)
     };
 
@@ -84,12 +83,12 @@ pub fn finish_session(
 
 #[tauri::command]
 pub fn set_exit_mode(state: State<Mutex<AppState>>, mode_id: Option<String>) {
-    state.lock().unwrap().selected_exit_mode_id = mode_id;
+    state.lock().selected_exit_mode_id = mode_id;
 }
 
 #[tauri::command]
 pub fn cycle_exit_mode(state: State<Mutex<AppState>>, direction: i32) -> Option<ExitMode> {
-    let mut state = state.lock().unwrap();
+    let mut state = state.lock();
     if state.exit_modes.is_empty() {
         return None;
     }
@@ -113,17 +112,17 @@ pub fn cycle_exit_mode(state: State<Mutex<AppState>>, direction: i32) -> Option<
 
 #[tauri::command]
 pub fn set_session_comment(state: State<Mutex<AppState>>, content: Option<Vec<ContentNode>>) {
-    state.lock().unwrap().session_comment = content;
+    state.lock().session_comment = content;
 }
 
 #[tauri::command]
 pub fn get_tags(state: State<Mutex<AppState>>) -> Vec<Tag> {
-    state.lock().unwrap().tags.clone()
+    state.lock().tags.clone()
 }
 
 #[tauri::command]
 pub fn upsert_tag(state: State<Mutex<AppState>>, tag: Tag) -> Vec<Tag> {
-    let mut state = state.lock().unwrap();
+    let mut state = state.lock();
 
     // Find existing tag by ID and update, or add new
     if let Some(existing) = state.tags.iter_mut().find(|t| t.id == tag.id) {
@@ -143,7 +142,7 @@ pub fn upsert_tag(state: State<Mutex<AppState>>, tag: Tag) -> Vec<Tag> {
 
 #[tauri::command]
 pub fn delete_tag(state: State<Mutex<AppState>>, id: String) -> Vec<Tag> {
-    let mut state = state.lock().unwrap();
+    let mut state = state.lock();
     state.tags.retain(|t| t.id != id);
     state.deleted_tag_ids.insert(id);
 
@@ -157,12 +156,12 @@ pub fn delete_tag(state: State<Mutex<AppState>>, id: String) -> Vec<Tag> {
 
 #[tauri::command]
 pub fn get_exit_modes(state: State<Mutex<AppState>>) -> Vec<ExitMode> {
-    state.lock().unwrap().exit_modes.clone()
+    state.lock().exit_modes.clone()
 }
 
 #[tauri::command]
 pub fn upsert_exit_mode(state: State<Mutex<AppState>>, mode: ExitMode) -> Vec<ExitMode> {
-    let mut state = state.lock().unwrap();
+    let mut state = state.lock();
 
     // Find existing mode by ID and update, or add new
     if let Some(existing) = state.exit_modes.iter_mut().find(|m| m.id == mode.id) {
@@ -187,7 +186,7 @@ pub fn upsert_exit_mode(state: State<Mutex<AppState>>, mode: ExitMode) -> Vec<Ex
 
 #[tauri::command]
 pub fn delete_exit_mode(state: State<Mutex<AppState>>, id: String) -> Vec<ExitMode> {
-    let mut state = state.lock().unwrap();
+    let mut state = state.lock();
     state.exit_modes.retain(|m| m.id != id);
     state.deleted_exit_mode_ids.insert(id);
 
@@ -201,7 +200,7 @@ pub fn delete_exit_mode(state: State<Mutex<AppState>>, id: String) -> Vec<ExitMo
 
 #[tauri::command]
 pub fn reorder_exit_modes(state: State<Mutex<AppState>>, ids: Vec<String>) -> Vec<ExitMode> {
-    let mut state = state.lock().unwrap();
+    let mut state = state.lock();
 
     // Update order based on position in ids array
     for (new_order, id) in ids.iter().enumerate() {
@@ -223,7 +222,7 @@ pub fn reorder_exit_modes(state: State<Mutex<AppState>>, ids: Vec<String>) -> Ve
 
 #[tauri::command]
 pub fn copy_to_clipboard(state: State<Mutex<AppState>>, mode: CopyMode) -> Result<(), String> {
-    let state = state.lock().unwrap();
+    let state = state.lock();
 
     // Reconstruct raw content from lines
     let raw_content: String = state
@@ -269,7 +268,7 @@ pub fn save_content(
     state: State<Mutex<AppState>>,
     path: String,
 ) -> Result<SaveContentResponse, String> {
-    let state = state.lock().unwrap();
+    let state = state.lock();
 
     // Reconstruct raw content from lines (same as copy_to_clipboard)
     let raw_content: String = state
@@ -337,7 +336,7 @@ pub fn export_to_obsidian(
     state: State<Mutex<AppState>>,
     vault_name: String,
 ) -> Result<ObsidianExportResponse, String> {
-    let state = state.lock().unwrap();
+    let state = state.lock();
 
     // Reconstruct raw content from lines
     let content: String = state
