@@ -406,7 +406,7 @@ fn render_content(
 mod tests {
     use super::*;
     use crate::input::{CliSource, ContentSource};
-    use crate::state::{ContentModel, ExitMode, ExitModeOrigin, Line, UserConfig};
+    use crate::state::{ContentModel, ExitMode, ExitModeOrigin, Line, LineRange, UserConfig};
     use std::collections::HashMap;
     use std::path::PathBuf;
 
@@ -419,7 +419,7 @@ mod tests {
         }
     }
 
-    fn make_review(label: &str, lines: Vec<Line>, annotations: HashMap<String, Annotation>) -> Review {
+    fn make_review(label: &str, lines: Vec<Line>, annotations: HashMap<LineRange, Annotation>) -> Review {
         let source = ContentSource::Cli(CliSource::File {
             path: PathBuf::from(label),
         });
@@ -448,7 +448,7 @@ mod tests {
     fn single_line_annotation() {
         let mut annotations = HashMap::new();
         annotations.insert(
-            "5-5".to_string(),
+            LineRange::new(5, 5),
             Annotation {
                 start_line: 5,
                 end_line: 5,
@@ -475,7 +475,7 @@ mod tests {
     fn multi_line_annotation() {
         let mut annotations = HashMap::new();
         annotations.insert(
-            "10-15".to_string(),
+            LineRange::new(10, 15),
             Annotation {
                 start_line: 10,
                 end_line: 15,
@@ -505,7 +505,7 @@ mod tests {
     fn multiple_annotations_sorted_by_line() {
         let mut annotations = HashMap::new();
         annotations.insert(
-            "20-20".to_string(),
+            LineRange::new(20, 20),
             Annotation {
                 start_line: 20,
                 end_line: 20,
@@ -515,7 +515,7 @@ mod tests {
             },
         );
         annotations.insert(
-            "5-5".to_string(),
+            LineRange::new(5, 5),
             Annotation {
                 start_line: 5,
                 end_line: 5,
@@ -545,7 +545,7 @@ mod tests {
     fn context_line_excluded_when_empty() {
         let mut annotations = HashMap::new();
         annotations.insert(
-            "3-3".to_string(),
+            LineRange::new(3, 3),
             Annotation {
                 start_line: 3,
                 end_line: 3,
@@ -572,7 +572,7 @@ mod tests {
     fn multiline_content_properly_indented() {
         let mut annotations = HashMap::new();
         annotations.insert(
-            "5-5".to_string(),
+            LineRange::new(5, 5),
             Annotation {
                 start_line: 5,
                 end_line: 5,
@@ -646,7 +646,7 @@ mod tests {
 
         let mut annotations = HashMap::new();
         annotations.insert(
-            "5-5".to_string(),
+            LineRange::new(5, 5),
             Annotation {
                 start_line: 5,
                 end_line: 5,
@@ -765,7 +765,7 @@ mod tests {
     fn legend_block_with_tags() {
         let mut annotations = HashMap::new();
         annotations.insert(
-            "5-5".to_string(),
+            LineRange::new(5, 5),
             Annotation {
                 start_line: 5,
                 end_line: 5,
@@ -801,7 +801,7 @@ mod tests {
     fn legend_alphabetically_sorted() {
         let mut annotations = HashMap::new();
         annotations.insert(
-            "5-5".to_string(),
+            LineRange::new(5, 5),
             Annotation {
                 start_line: 5,
                 end_line: 5,
@@ -837,7 +837,7 @@ mod tests {
     fn tag_deduplication_in_legend() {
         let mut annotations = HashMap::new();
         annotations.insert(
-            "5-5".to_string(),
+            LineRange::new(5, 5),
             Annotation {
                 start_line: 5,
                 end_line: 5,
@@ -849,7 +849,7 @@ mod tests {
             },
         );
         annotations.insert(
-            "10-10".to_string(),
+            LineRange::new(10, 10),
             Annotation {
                 start_line: 10,
                 end_line: 10,

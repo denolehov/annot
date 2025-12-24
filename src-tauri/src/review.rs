@@ -17,7 +17,7 @@ use std::sync::mpsc::Sender;
 use serde::Serialize;
 
 use crate::output::FormatResult;
-use crate::state::{Annotation, ContentModel, ContentNode, ContentResponse, UserConfig};
+use crate::state::{Annotation, ContentModel, ContentNode, ContentResponse, LineRange, UserConfig};
 
 /// An active review. Wrapped in `Option`: `Some` = active, `None` = idle.
 pub struct Review {
@@ -49,8 +49,8 @@ pub struct Review {
 pub struct FileState {
     /// The content model (lines, metadata, source info).
     pub content: ContentModel,
-    /// Annotations keyed by "start-end" range string (e.g., "10-15").
-    pub annotations: HashMap<String, Annotation>,
+    /// Annotations keyed by normalized line range.
+    pub annotations: HashMap<LineRange, Annotation>,
 }
 
 /// What a window is displaying.
@@ -221,29 +221,14 @@ impl Review {
 }
 
 impl FileState {
-    /// Create a normalized range key (smaller line first).
-    pub fn range_key(start_line: u32, end_line: u32) -> String {
-        let (min, max) = if start_line <= end_line {
-            (start_line, end_line)
-        } else {
-            (end_line, start_line)
-        };
-        format!("{}-{}", min, max)
-    }
-
     /// Insert or update an annotation.
     pub fn upsert_annotation(&mut self, start_line: u32, end_line: u32, content: Vec<ContentNode>) {
-        let key = Self::range_key(start_line, end_line);
-        let (min, max) = if start_line <= end_line {
-            (start_line, end_line)
-        } else {
-            (end_line, start_line)
-        };
+        let key = LineRange::new(start_line, end_line);
         self.annotations.insert(
             key,
             Annotation {
-                start_line: min,
-                end_line: max,
+                start_line: key.start,
+                end_line: key.end,
                 content,
             },
         );
@@ -251,8 +236,7 @@ impl FileState {
 
     /// Delete an annotation by range.
     pub fn delete_annotation(&mut self, start_line: u32, end_line: u32) {
-        let key = Self::range_key(start_line, end_line);
-        self.annotations.remove(&key);
+        self.annotations.remove(&LineRange::new(start_line, end_line));
     }
 }
 

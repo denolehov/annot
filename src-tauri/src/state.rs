@@ -67,15 +67,8 @@ impl Tag {
 
 /// Generates a 12-character alphanumeric ID.
 fn generate_id() -> String {
-    use rand::Rng;
-    const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
-    let mut rng = rand::thread_rng();
-    (0..12)
-        .map(|_| {
-            let idx = rng.gen_range(0..CHARSET.len());
-            CHARSET[idx] as char
-        })
-        .collect()
+    use rand::distributions::{Alphanumeric, DistString};
+    Alphanumeric.sample_string(&mut rand::thread_rng(), 12)
 }
 
 /// Content node for structured annotation content.
@@ -86,6 +79,24 @@ pub enum ContentNode {
     Tag { id: String, name: String, instruction: String },
     Media { image: String, mime_type: String },
     Excalidraw { elements: String, image: Option<String> },
+}
+
+/// A normalized line range (start ≤ end).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LineRange {
+    pub start: u32,
+    pub end: u32,
+}
+
+impl LineRange {
+    /// Create a normalized range (swaps if start > end).
+    #[must_use]
+    pub fn new(a: u32, b: u32) -> Self {
+        Self {
+            start: a.min(b),
+            end: a.max(b),
+        }
+    }
 }
 
 /// An annotation attached to a line range.
@@ -180,8 +191,8 @@ pub enum ContentMetadata {
 /// Session state: mutable data during annotation session.
 #[derive(Default)]
 pub struct SessionState {
-    /// Annotations keyed by "start-end" range string (e.g., "10-15").
-    pub annotations: HashMap<String, Annotation>,
+    /// Annotations keyed by normalized line range.
+    pub annotations: HashMap<LineRange, Annotation>,
     /// Session-level comment (not tied to specific lines).
     pub comment: Option<Vec<ContentNode>>,
     /// Currently selected exit mode ID (None if no mode selected).
@@ -590,6 +601,7 @@ fn render_node_inline<'a>(node: &'a comrak::nodes::AstNode<'a>, output: &mut Str
 
 impl ContentModel {
     /// Parse file content into structured lines with syntax highlighting.
+    #[must_use]
     pub fn from_file(content: &str, source: ContentSource) -> Self {
         let label = source.label().to_string();
         let path = source.path_hint().unwrap_or("");
@@ -620,6 +632,7 @@ impl ContentModel {
     }
 
     /// Parse diff content into structured lines with diff metadata.
+    #[must_use]
     pub fn from_diff(content: &str, source: ContentSource) -> Result<Self, AnnotError> {
         let label = source.label().to_string();
         let mut diff_metadata = diff::parse_diff(content)?;
@@ -697,6 +710,7 @@ impl ContentModel {
     }
 
     /// Parse markdown content with inline rendering and code block highlighting.
+    #[must_use]
     pub fn from_markdown(content: &str, source: ContentSource) -> Self {
         let label = source.label().to_string();
         use comrak::Options;
@@ -858,29 +872,14 @@ impl AppState {
         }
     }
 
-    /// Create a normalized range key (smaller line first).
-    pub fn range_key(start_line: u32, end_line: u32) -> String {
-        let (min, max) = if start_line <= end_line {
-            (start_line, end_line)
-        } else {
-            (end_line, start_line)
-        };
-        format!("{}-{}", min, max)
-    }
-
     /// Insert or update an annotation.
     pub fn upsert_annotation(&mut self, start_line: u32, end_line: u32, content: Vec<ContentNode>) {
-        let key = Self::range_key(start_line, end_line);
-        let (min, max) = if start_line <= end_line {
-            (start_line, end_line)
-        } else {
-            (end_line, start_line)
-        };
+        let key = LineRange::new(start_line, end_line);
         self.session.annotations.insert(
             key,
             Annotation {
-                start_line: min,
-                end_line: max,
+                start_line: key.start,
+                end_line: key.end,
                 content,
             },
         );
@@ -888,8 +887,7 @@ impl AppState {
 
     /// Delete an annotation by range.
     pub fn delete_annotation(&mut self, start_line: u32, end_line: u32) {
-        let key = Self::range_key(start_line, end_line);
-        self.session.annotations.remove(&key);
+        self.session.annotations.remove(&LineRange::new(start_line, end_line));
     }
 }
 
