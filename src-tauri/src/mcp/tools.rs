@@ -90,13 +90,14 @@ impl ExitModeInput {
 
     /// Convert to internal ExitMode.
     pub fn to_exit_mode(&self, index: usize) -> crate::state::ExitMode {
+        use crate::state::ExitModeOrigin;
         crate::state::ExitMode {
-            id: format!("ephemeral-{}", index),
+            id: format!("transient-{}", index),
             name: self.name.clone(),
             color: Self::color_to_hex(&self.color, index),
             instruction: self.instruction.clone(),
             order: index as u32,
-            is_ephemeral: true,
+            origin: ExitModeOrigin::Transient,
         }
     }
 }

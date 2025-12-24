@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::diff::{self, DiffMetadata};
 use crate::highlight::Highlighter;
+use crate::input::{CliSource, ContentSource};
 use crate::markdown::{self, MarkdownMetadata};
-use crate::perf::timed;
 
 /// Type of line in markdown content for structural styling and UI features.
 #[derive(Clone, Debug, Serialize, Default)]
@@ -94,6 +94,26 @@ pub struct Annotation {
     pub content: Vec<ContentNode>,
 }
 
+/// Where an exit mode was defined.
+///
+/// ```text
+/// ExitModeOrigin (persist?)  x  ContentSource (where from?)
+///      Persisted                    Cli::File
+///      Transient                    Cli::Stdin
+///                                   Mcp::File
+///                                   Mcp::Content
+///                                   Mcp::Diff
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ExitModeOrigin {
+    /// Loaded from config file — will be saved on exit.
+    #[default]
+    Persisted,
+    /// Provided in MCP tool call params — session-only, not saved.
+    Transient,
+}
+
 /// An exit mode representing a user decision (Apply, Reject, Revise, etc.).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExitMode {
@@ -104,7 +124,9 @@ pub struct ExitMode {
     /// LLM-facing instruction text
     pub instruction: String,
     pub order: u32,
-    pub is_ephemeral: bool,
+    /// Where this exit mode came from (config or MCP params).
+    #[serde(default)]
+    pub origin: ExitModeOrigin,
 }
 
 impl ExitMode {
@@ -116,8 +138,13 @@ impl ExitMode {
             color,
             instruction,
             order,
-            is_ephemeral: false,
+            origin: ExitModeOrigin::Persisted,
         }
+    }
+
+    /// Whether this exit mode is transient (from MCP params, not persisted).
+    pub fn is_transient(&self) -> bool {
+        matches!(self.origin, ExitModeOrigin::Transient)
     }
 }
 
@@ -143,9 +170,8 @@ pub struct AppState {
     pub diff_metadata: Option<DiffMetadata>,
     /// Markdown metadata (Some if content is markdown).
     pub markdown_metadata: Option<MarkdownMetadata>,
-    /// Whether this is an ephemeral session (MCP/review_content mode).
-    /// When true, image paste is enabled.
-    pub ephemeral: bool,
+    /// Where content came from — determines available features.
+    pub content_source: ContentSource,
 }
 
 /// Response sent to the frontend via the get_content command.
@@ -161,8 +187,8 @@ pub struct ContentResponse {
     pub diff_metadata: Option<DiffMetadata>,
     /// Markdown metadata (Some if content is markdown).
     pub markdown_metadata: Option<MarkdownMetadata>,
-    /// Whether this is an ephemeral session (enables image paste).
-    pub ephemeral: bool,
+    /// Whether image paste is allowed (MCP mode only).
+    pub allows_image_paste: bool,
 }
 
 /// HTML-escape a string for safe display.
@@ -419,30 +445,31 @@ impl AppState {
             session_comment: None,
             diff_metadata: None,
             markdown_metadata: None,
-            ephemeral: false,
+            // Placeholder — will be replaced before use
+            content_source: ContentSource::Cli(CliSource::Stdin {
+                label: String::new(),
+            }),
         }
     }
 
     /// Parse file content into structured lines with syntax highlighting.
     ///
     /// # Arguments
-    /// * `label` - Display name (usually the filename)
     /// * `content` - Raw file content
-    /// * `path` - File path (used for language detection via extension)
     /// * `tags` - Available tags (loaded from config)
     /// * `exit_modes` - Available exit modes (loaded from config)
+    /// * `content_source` - Where the content came from
     pub fn from_file(
-        label: String,
         content: &str,
-        path: &str,
         tags: Vec<Tag>,
         exit_modes: Vec<ExitMode>,
+        content_source: ContentSource,
     ) -> Self {
-        let highlighter = timed!("Highlighter::new", Highlighter::new());
-        let html_lines = timed!(
-            &format!("highlight_lines({} lines)", content.lines().count()),
-            highlighter.highlight_lines(content, path)
-        );
+        let label = content_source.label().to_string();
+        let path = content_source.path_hint().unwrap_or("");
+
+        let highlighter = Highlighter::new();
+        let html_lines = highlighter.highlight_lines(content, path);
 
         let lines = content
             .lines()
@@ -470,25 +497,26 @@ impl AppState {
             session_comment: None,
             diff_metadata: None,
             markdown_metadata: None,
-            ephemeral: false,
+            content_source,
         }
     }
 
     /// Parse diff content into structured lines with diff metadata.
     ///
     /// # Arguments
-    /// * `label` - Display name
     /// * `content` - Raw diff content
     /// * `tags` - Available tags (loaded from config)
     /// * `exit_modes` - Available exit modes (loaded from config)
+    /// * `content_source` - Where the content came from
     pub fn from_diff(
-        label: String,
         content: &str,
         tags: Vec<Tag>,
         exit_modes: Vec<ExitMode>,
+        content_source: ContentSource,
     ) -> Result<Self, String> {
-        let mut diff_metadata = timed!("parse_diff", diff::parse_diff(content)?);
-        let highlighter = timed!("Highlighter::new", Highlighter::new());
+        let label = content_source.label().to_string();
+        let mut diff_metadata = diff::parse_diff(content)?;
+        let highlighter = Highlighter::new();
 
         // Highlight function contexts in hunk headers
         for file in &mut diff_metadata.files {
@@ -564,31 +592,28 @@ impl AppState {
             session_comment: None,
             diff_metadata: Some(diff_metadata),
             markdown_metadata: None,
-            ephemeral: false,
+            content_source,
         })
     }
 
     /// Parse markdown content with inline rendering and code block highlighting.
     ///
     /// # Arguments
-    /// * `label` - Display name
     /// * `content` - Raw markdown content
-    /// * `path` - File path (used for markdown detection)
     /// * `tags` - Available tags (loaded from config)
     /// * `exit_modes` - Available exit modes (loaded from config)
-    /// * `ephemeral` - Whether this is ephemeral content (MCP/review_content mode)
+    /// * `content_source` - Where the content came from
     pub fn from_markdown(
-        label: String,
         content: &str,
-        _path: &str,
         tags: Vec<Tag>,
         exit_modes: Vec<ExitMode>,
-        ephemeral: bool,
+        content_source: ContentSource,
     ) -> Self {
+        let label = content_source.label().to_string();
         use comrak::Options;
 
-        let md_metadata = timed!("parse_markdown", markdown::parse_markdown(content));
-        let highlighter = timed!("Highlighter::new", Highlighter::new());
+        let md_metadata = markdown::parse_markdown(content);
+        let highlighter = Highlighter::new();
 
         // Build map of code block info by line: (language, is_fence_start, is_fence_end)
         #[derive(Clone)]
@@ -706,7 +731,7 @@ impl AppState {
             session_comment: None,
             diff_metadata: None,
             markdown_metadata: Some(md_metadata),
-            ephemeral,
+            content_source,
         }
     }
 
@@ -721,7 +746,7 @@ impl AppState {
             session_comment: self.session_comment.clone(),
             diff_metadata: self.diff_metadata.clone(),
             markdown_metadata: self.markdown_metadata.clone(),
-            ephemeral: self.ephemeral,
+            allows_image_paste: self.content_source.allows_image_paste(),
         }
     }
 
@@ -763,14 +788,26 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::input::{DiffSource, McpSource};
+    use std::path::PathBuf;
 
-    fn test_state(label: &str, content: &str, path: &str) -> AppState {
-        AppState::from_file(label.to_string(), content, path, vec![], vec![])
+    fn test_state(content: &str, path: &str) -> AppState {
+        let content_source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from(path),
+        });
+        AppState::from_file(content, vec![], vec![], content_source)
+    }
+
+    fn test_diff_source(label: &str) -> ContentSource {
+        ContentSource::Mcp(McpSource::Diff {
+            label: Some(label.to_string()),
+            source: DiffSource::Raw,
+        })
     }
 
     #[test]
     fn content_response_has_1_indexed_line_numbers() {
-        let state = test_state("test.rs", "a\nb\nc", "test.rs");
+        let state = test_state("a\nb\nc", "test.rs");
         let response = state.to_response();
 
         assert_eq!(response.lines[0].number, 1);
@@ -780,7 +817,7 @@ mod tests {
 
     #[test]
     fn content_response_includes_label() {
-        let state = test_state("my_file.rs", "content", "my_file.rs");
+        let state = test_state("content", "my_file.rs");
         let response = state.to_response();
 
         assert_eq!(response.label, "my_file.rs");
@@ -788,7 +825,7 @@ mod tests {
 
     #[test]
     fn content_response_preserves_whitespace() {
-        let state = test_state("test.rs", "  indented\n\ttabbed", "test.rs");
+        let state = test_state("  indented\n\ttabbed", "test.rs");
         let response = state.to_response();
 
         assert_eq!(response.lines[0].content, "  indented");
@@ -797,7 +834,7 @@ mod tests {
 
     #[test]
     fn content_response_includes_highlighted_html() {
-        let state = test_state("test.rs", "fn main() {}", "test.rs");
+        let state = test_state("fn main() {}", "test.rs");
         let response = state.to_response();
 
         // Should have HTML highlighting for Rust
@@ -810,7 +847,7 @@ mod tests {
     fn content_response_html_is_none_for_empty_lines_mismatch() {
         // If the highlighter returns fewer lines than content (edge case),
         // html should be None for missing lines
-        let state = test_state("test.txt", "line1\nline2", "test.txt");
+        let state = test_state("line1\nline2", "test.txt");
         let response = state.to_response();
 
         // Plain text should still have html (just escaped text)
@@ -824,7 +861,10 @@ mod tests {
             name: "TEST".into(),
             instruction: "Test tag".into(),
         }];
-        let state = AppState::from_file("test.rs".into(), "code", "test.rs", tags, vec![]);
+        let content_source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from("test.rs"),
+        });
+        let state = AppState::from_file("code", tags, vec![], content_source);
         let response = state.to_response();
 
         assert_eq!(response.tags.len(), 1);
@@ -843,7 +883,7 @@ mod tests {
         let mode = ExitMode::new("Test".into(), "#ff0000".into(), "instruction".into(), 0);
         assert_eq!(mode.id.len(), 12);
         assert!(mode.id.chars().all(|c| c.is_ascii_alphanumeric()));
-        assert!(!mode.is_ephemeral);
+        assert!(!mode.is_transient()); // new() creates persisted modes
     }
 
     // === Diff tests ===
@@ -862,10 +902,10 @@ mod tests {
     #[test]
     fn from_diff_creates_state_with_metadata() {
         let state = AppState::from_diff(
-            "changes.diff".into(),
             SIMPLE_DIFF,
             vec![],
             vec![],
+            test_diff_source("changes.diff"),
         )
         .unwrap();
 
@@ -878,10 +918,10 @@ mod tests {
     #[test]
     fn from_diff_creates_lines_from_content() {
         let state = AppState::from_diff(
-            "changes.diff".into(),
             SIMPLE_DIFF,
             vec![],
             vec![],
+            test_diff_source("changes.diff"),
         )
         .unwrap();
 
@@ -901,10 +941,10 @@ mod tests {
     #[test]
     fn from_diff_line_numbers_are_1_indexed() {
         let state = AppState::from_diff(
-            "changes.diff".into(),
             SIMPLE_DIFF,
             vec![],
             vec![],
+            test_diff_source("changes.diff"),
         )
         .unwrap();
 
@@ -915,10 +955,10 @@ mod tests {
     #[test]
     fn from_diff_response_includes_metadata() {
         let state = AppState::from_diff(
-            "changes.diff".into(),
             SIMPLE_DIFF,
             vec![],
             vec![],
+            test_diff_source("changes.diff"),
         )
         .unwrap();
 
@@ -929,10 +969,10 @@ mod tests {
     #[test]
     fn from_diff_error_on_invalid_content() {
         let result = AppState::from_diff(
-            "not-a-diff.txt".into(),
             "just regular text",
             vec![],
             vec![],
+            test_diff_source("not-a-diff.txt"),
         );
 
         assert!(result.is_err());
@@ -940,7 +980,7 @@ mod tests {
 
     #[test]
     fn from_file_has_no_diff_metadata() {
-        let state = test_state("test.rs", "fn main() {}", "test.rs");
+        let state = test_state("fn main() {}", "test.rs");
         assert!(state.diff_metadata.is_none());
 
         let response = state.to_response();
@@ -953,10 +993,10 @@ mod tests {
         let modes = vec![ExitMode::new("Apply".into(), "#22c55e".into(), "Apply it".into(), 0)];
 
         let state = AppState::from_diff(
-            "changes.diff".into(),
             SIMPLE_DIFF,
             tags,
             modes,
+            test_diff_source("changes.diff"),
         )
         .unwrap();
 
@@ -978,10 +1018,10 @@ mod tests {
 "#;
 
         let state = AppState::from_diff(
-            "changes.diff".into(),
             diff_with_doc_comment,
             vec![],
             vec![],
+            test_diff_source("changes.diff"),
         )
         .unwrap();
 

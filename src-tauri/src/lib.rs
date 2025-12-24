@@ -17,7 +17,6 @@ pub mod markdown;
 pub mod mcp;
 pub mod mermaid_window;
 pub mod output;
-mod perf;
 pub mod state;
 
 use commands::{

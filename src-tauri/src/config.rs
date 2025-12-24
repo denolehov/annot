@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use fs4::fs_std::FileExt;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::state::{ExitMode, Tag};
+use crate::state::{ExitMode, ExitModeOrigin, Tag};
 
 /// Current config version. Bump when making breaking changes.
 pub const CONFIG_VERSION: u32 = 1;
@@ -308,7 +308,7 @@ mod tests {
             color: "#ff0000".into(),
             instruction: "Custom mode".into(),
             order: 0,
-            is_ephemeral: false,
+            origin: ExitModeOrigin::Persisted,
         }];
 
         save_exit_modes_to(temp.path(), &custom_modes).unwrap();

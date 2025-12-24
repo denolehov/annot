@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::mcp::tools::SessionImage;
-use crate::state::{Annotation, AppState, ContentNode};
+use crate::state::{Annotation, AppState, ContentNode, ExitModeOrigin};
 
 /// Output mode determines how content is formatted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -385,8 +385,10 @@ fn render_content(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::input::{CliSource, ContentSource};
     use crate::state::Line;
     use std::collections::{HashMap, HashSet};
+    use std::path::PathBuf;
 
     fn make_line(number: u32, content: &str) -> Line {
         Line {
@@ -410,7 +412,9 @@ mod tests {
             session_comment: None,
             diff_metadata: None,
             markdown_metadata: None,
-            ephemeral: false,
+            content_source: ContentSource::Cli(CliSource::File {
+                path: PathBuf::from(label),
+            }),
         }
     }
 
@@ -582,7 +586,7 @@ mod tests {
             color: "#22c55e".to_string(),
             instruction: "Apply the suggested changes".to_string(),
             order: 0,
-            is_ephemeral: false,
+            origin: ExitModeOrigin::Persisted,
         }];
 
         let state = AppState {
@@ -597,7 +601,9 @@ mod tests {
             session_comment: None,
             diff_metadata: None,
             markdown_metadata: None,
-            ephemeral: false,
+            content_source: ContentSource::Cli(CliSource::File {
+                path: PathBuf::from("test.rs"),
+            }),
         };
 
         let output = format_output(&state, OutputMode::Cli).text;
@@ -616,7 +622,7 @@ mod tests {
             color: "#ef4444".to_string(),
             instruction: "Do not apply".to_string(),
             order: 0,
-            is_ephemeral: false,
+            origin: ExitModeOrigin::Persisted,
         }];
 
         let mut annotations = HashMap::new();
@@ -647,7 +653,9 @@ mod tests {
             session_comment: None,
             diff_metadata: None,
             markdown_metadata: None,
-            ephemeral: false,
+            content_source: ContentSource::Cli(CliSource::File {
+                path: PathBuf::from("test.rs"),
+            }),
         };
 
         let output = format_output(&state, OutputMode::Cli).text;
@@ -677,7 +685,9 @@ mod tests {
             }]),
             diff_metadata: None,
             markdown_metadata: None,
-            ephemeral: false,
+            content_source: ContentSource::Cli(CliSource::File {
+                path: PathBuf::from("test.rs"),
+            }),
         };
 
         let output = format_output(&state, OutputMode::Cli).text;
@@ -696,7 +706,7 @@ mod tests {
             color: "#22c55e".to_string(),
             instruction: "Apply changes".to_string(),
             order: 0,
-            is_ephemeral: false,
+            origin: ExitModeOrigin::Persisted,
         }];
 
         let state = AppState {
@@ -713,7 +723,9 @@ mod tests {
             }]),
             diff_metadata: None,
             markdown_metadata: None,
-            ephemeral: false,
+            content_source: ContentSource::Cli(CliSource::File {
+                path: PathBuf::from("test.rs"),
+            }),
         };
 
         let output = format_output(&state, OutputMode::Cli).text;
@@ -738,7 +750,9 @@ mod tests {
             session_comment: Some(vec![]),
             diff_metadata: None,
             markdown_metadata: None,
-            ephemeral: false,
+            content_source: ContentSource::Cli(CliSource::File {
+                path: PathBuf::from("test.rs"),
+            }),
         };
 
         let output = format_output(&state, OutputMode::Cli).text;

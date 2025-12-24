@@ -3,6 +3,7 @@ pub mod tools;
 use std::fs;
 use std::panic::AssertUnwindSafe;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::mpsc;
 
 use rmcp::handler::server::tool::ToolRouter;
@@ -12,6 +13,7 @@ use rmcp::{tool, tool_handler, tool_router, ErrorData as McpError, ServerHandler
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 
 use crate::config;
+use crate::input::{ContentSource, DiffSource, McpSource};
 use crate::output::FormatResult;
 use crate::state::AppState;
 use tools::{ReviewContentInput, ReviewDiffInput, ReviewFileInput, SessionImage, SessionOutput};
@@ -108,12 +110,11 @@ fn run_file_session(app_handle: &AppHandle, params: ReviewFileInput) -> Result<S
     let content = fs::read_to_string(path)
         .map_err(|e| format!("Failed to read file '{}': {}", params.file_path, e))?;
 
-    let label = path
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| params.file_path.clone());
+    let content_source = ContentSource::Mcp(McpSource::File {
+        path: PathBuf::from(&params.file_path),
+    });
 
-    run_session(app_handle, label, content, &params.file_path, params.exit_modes, false)
+    run_session(app_handle, content, params.exit_modes, content_source)
 }
 
 /// Run a content review session.
@@ -121,14 +122,11 @@ fn run_content_session(
     app_handle: &AppHandle,
     params: ReviewContentInput,
 ) -> Result<SessionOutput, String> {
-    run_session(
-        app_handle,
-        params.label.clone(),
-        params.content,
-        &params.label,
-        params.exit_modes,
-        true, // Content review is ephemeral (enables image paste)
-    )
+    let content_source = ContentSource::Mcp(McpSource::Content {
+        label: params.label,
+    });
+
+    run_session(app_handle, params.content, params.exit_modes, content_source)
 }
 
 /// Run a diff review session.
@@ -138,8 +136,8 @@ fn run_diff_session(
 ) -> Result<SessionOutput, String> {
     use std::process::Command;
 
-    // Get diff content and derive label based on which source was provided
-    let (diff_text, derived_label) = match (&params.git_diff_args, &params.diff_content) {
+    // Get diff content and derive label + source based on which input was provided
+    let (diff_text, derived_label, diff_source) = match (&params.git_diff_args, &params.diff_content) {
         (Some(args), None) => {
             // Git diff mode
             let output = Command::new("git")
@@ -158,11 +156,12 @@ fn run_diff_session(
                 .first()
                 .map(|s| s.trim_start_matches('-').to_string())
                 .unwrap_or_else(|| "diff".to_string());
-            (diff, label)
+            let source = DiffSource::Git { args: args.clone() };
+            (diff, label, source)
         }
         (None, Some(content)) => {
             // Raw diff mode
-            (content.clone(), "diff".to_string())
+            (content.clone(), "diff".to_string(), DiffSource::Raw)
         }
         (Some(_), Some(_)) => {
             return Err("Provide either git_diff_args or diff_content, not both".to_string());
@@ -172,24 +171,28 @@ fn run_diff_session(
         }
     };
 
-    let label = params.label.unwrap_or(derived_label);
+    let label = params.label.clone().unwrap_or(derived_label);
+    let content_source = ContentSource::Mcp(McpSource::Diff {
+        label: Some(label),
+        source: diff_source,
+    });
 
     // Load config
     let tags = config::load_tags();
     let mut exit_modes = config::load_exit_modes();
 
-    // Prepend ephemeral exit modes
+    // Prepend transient exit modes
     if let Some(inputs) = params.exit_modes {
-        let ephemeral: Vec<_> = inputs
+        let transient: Vec<_> = inputs
             .into_iter()
             .enumerate()
             .map(|(i, m)| m.to_exit_mode(i))
             .collect();
-        exit_modes.splice(0..0, ephemeral);
+        exit_modes.splice(0..0, transient);
     }
 
     // Create state using from_diff
-    let state = AppState::from_diff(label, &diff_text, tags, exit_modes)
+    let state = AppState::from_diff(&diff_text, tags, exit_modes, content_source)
         .map_err(|e| format!("Invalid diff: {}", e))?;
 
     run_session_with_state(app_handle, state)
@@ -198,31 +201,30 @@ fn run_diff_session(
 /// Run a review session with the given content (for file/content modes).
 fn run_session(
     app_handle: &AppHandle,
-    label: String,
     content: String,
-    path_hint: &str,
     exit_modes_input: Option<Vec<tools::ExitModeInput>>,
-    ephemeral: bool,
+    content_source: ContentSource,
 ) -> Result<SessionOutput, String> {
     // Load config
     let tags = config::load_tags();
     let mut exit_modes = config::load_exit_modes();
 
-    // Prepend ephemeral exit modes from MCP input
+    // Prepend transient exit modes from MCP input
     if let Some(inputs) = exit_modes_input {
-        let ephemeral_modes: Vec<_> = inputs
+        let transient_modes: Vec<_> = inputs
             .into_iter()
             .enumerate()
             .map(|(i, m)| m.to_exit_mode(i))
             .collect();
-        exit_modes.splice(0..0, ephemeral_modes);
+        exit_modes.splice(0..0, transient_modes);
     }
 
-    // Create state (check for markdown by extension)
+    // Create state (check for markdown by path hint)
+    let path_hint = content_source.path_hint().unwrap_or("");
     let state = if crate::markdown::is_markdown(path_hint) {
-        AppState::from_markdown(label, &content, path_hint, tags, exit_modes, ephemeral)
+        AppState::from_markdown(&content, tags, exit_modes, content_source)
     } else {
-        AppState::from_file(label, &content, path_hint, tags, exit_modes)
+        AppState::from_file(&content, tags, exit_modes, content_source)
     };
 
     run_session_with_state(app_handle, state)
