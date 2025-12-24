@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use serde::Serialize;
 use unidiff::PatchSet;
 
+use crate::error::AnnotError;
+
 /// Line type in a diff.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -80,15 +82,15 @@ pub fn is_diff(content: &str) -> bool {
 
 /// Parse unified diff content into metadata by iterating raw lines.
 /// This ensures line numbers match the actual content display.
-pub fn parse_diff(content: &str) -> Result<DiffMetadata, String> {
+pub fn parse_diff(content: &str) -> Result<DiffMetadata, AnnotError> {
     // Validate it's a diff first
     let mut patch = PatchSet::new();
     patch
         .parse(content)
-        .map_err(|e| format!("Failed to parse diff: {:?}", e))?;
+        .map_err(|e| AnnotError::Diff(format!("Failed to parse diff: {:?}", e)))?;
 
     if patch.files().is_empty() {
-        return Err("Not a valid diff".to_string());
+        return Err(AnnotError::Diff("Not a valid diff".into()));
     }
 
     let mut metadata = DiffMetadata {

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config;
 use crate::diff::{self, DiffMetadata};
+use crate::error::AnnotError;
 use crate::highlight::Highlighter;
 use crate::input::ContentSource;
 use crate::markdown::{self, MarkdownMetadata};
@@ -619,7 +620,7 @@ impl ContentModel {
     }
 
     /// Parse diff content into structured lines with diff metadata.
-    pub fn from_diff(content: &str, source: ContentSource) -> Result<Self, String> {
+    pub fn from_diff(content: &str, source: ContentSource) -> Result<Self, AnnotError> {
         let label = source.label().to_string();
         let mut diff_metadata = diff::parse_diff(content)?;
         let highlighter = Highlighter::new();

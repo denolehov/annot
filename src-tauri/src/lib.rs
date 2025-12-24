@@ -8,6 +8,7 @@ use tauri::WebviewWindowBuilder;
 pub mod commands;
 pub mod config;
 pub mod diff;
+pub mod error;
 pub mod highlight;
 pub mod input;
 pub mod markdown;

@@ -17,6 +17,7 @@ use std::io::{self, IsTerminal, Read};
 use std::path::PathBuf;
 
 use crate::diff;
+use crate::error::AnnotError;
 use crate::markdown;
 
 /// How the content should be rendered/processed.
@@ -146,12 +147,12 @@ impl InputMode {
     /// Resolve the input mode to content and metadata.
     ///
     /// # Errors
-    /// Returns an error string if reading fails or content is empty.
-    pub fn resolve(self) -> Result<ResolvedInput, String> {
+    /// Returns an error if reading fails or content is empty.
+    pub fn resolve(self) -> Result<ResolvedInput, AnnotError> {
         match self {
             InputMode::File { path } => {
                 let content = std::fs::read_to_string(&path)
-                    .map_err(|e| format!("Error reading file '{}': {}", path.display(), e))?;
+                    .map_err(|e| AnnotError::io(e, format!("reading file '{}'", path.display())))?;
 
                 let path_str = path.to_string_lossy();
                 let rendering_mode = if diff::is_diff(&content) {
@@ -172,10 +173,10 @@ impl InputMode {
                 let mut content = String::new();
                 io::stdin()
                     .read_to_string(&mut content)
-                    .map_err(|e| format!("Error reading stdin: {}", e))?;
+                    .map_err(|e| AnnotError::io(e, "reading stdin"))?;
 
                 if content.is_empty() {
-                    return Err("Error: stdin is empty".to_string());
+                    return Err(AnnotError::Validation("stdin is empty".into()));
                 }
 
                 let rendering_mode = if diff::is_diff(&content) {
@@ -199,7 +200,7 @@ impl InputMode {
     ///
     /// Returns the input mode and optionally a warning message.
     /// File argument takes priority over stdin when both are present.
-    pub fn detect(file: Option<PathBuf>, label: String) -> Result<(InputMode, Option<String>), String> {
+    pub fn detect(file: Option<PathBuf>, label: String) -> Result<(InputMode, Option<String>), AnnotError> {
         let has_stdin = !io::stdin().is_terminal();
 
         if let Some(path) = file {
@@ -212,7 +213,9 @@ impl InputMode {
         } else if has_stdin {
             Ok((InputMode::Stdin { label }, None))
         } else {
-            Err("Error: no input provided\nUsage: annot <file> or <command> | annot\nTry: annot --help".to_string())
+            Err(AnnotError::Validation(
+                "no input provided\nUsage: annot <file> or <command> | annot\nTry: annot --help".into(),
+            ))
         }
     }
 }
@@ -243,7 +246,9 @@ mod tests {
         let result = mode.resolve();
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Error reading file"));
+        let err = result.unwrap_err();
+        assert!(matches!(err, AnnotError::Io { .. }));
+        assert!(err.to_string().contains("reading file"));
     }
 
     #[test]
