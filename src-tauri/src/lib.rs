@@ -19,29 +19,16 @@ pub mod state;
 
 use commands::{
     copy_to_clipboard, cycle_exit_mode, delete_annotation, delete_exit_mode, delete_tag,
-    export_to_obsidian, finish_review, get_config, get_content,
-    get_exit_modes, get_tags, reorder_exit_modes, save_config, save_content,
-    set_exit_mode, set_session_comment, upsert_annotation, upsert_exit_mode, upsert_tag,
+    export_to_obsidian, finish_review, get_config, get_content, get_exit_modes, get_tags,
+    reorder_exit_modes, save_config, save_content, set_exit_mode, set_session_comment,
+    upsert_annotation, upsert_exit_mode, upsert_tag,
 };
 use mermaid_window::{get_mermaid_source, open_mermaid_window, MermaidWindowState};
-use review::{ActiveReview, Review};
-use state::AppState;
 
-/// Shared flag to prevent app exit in MCP mode.
-pub type ShouldExit = Arc<AtomicBool>;
-
-/// Run in CLI mode (file/stdin input, prints result, exits).
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run(state: AppState, context: tauri::Context) {
-    // Convert AppState to Review for the new architecture
-    let review = Review::cli(state.content, state.config, "main".to_string());
-
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .manage::<ActiveReview>(Mutex::new(Some(review)))
-        .manage::<ShouldExit>(Arc::new(AtomicBool::new(true))) // CLI mode: allow exit
-        .manage(Mutex::new(MermaidWindowState::new()))
-        .invoke_handler(tauri::generate_handler![
+/// All IPC commands exposed to the frontend.
+macro_rules! all_commands {
+    () => {
+        tauri::generate_handler![
             get_content,
             upsert_annotation,
             delete_annotation,
@@ -63,7 +50,27 @@ pub fn run(state: AppState, context: tauri::Context) {
             get_config,
             save_config,
             export_to_obsidian
-        ])
+        ]
+    };
+}
+use review::{ActiveReview, Review};
+use state::AppState;
+
+/// Shared flag to prevent app exit in MCP mode.
+pub type ShouldExit = Arc<AtomicBool>;
+
+/// Run in CLI mode (file/stdin input, prints result, exits).
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run(state: AppState, context: tauri::Context) {
+    // Convert AppState to Review for the new architecture
+    let review = Review::cli(state.content, state.config, "main".to_string());
+
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .manage::<ActiveReview>(Mutex::new(Some(review)))
+        .manage::<ShouldExit>(Arc::new(AtomicBool::new(true))) // CLI mode: allow exit
+        .manage(Mutex::new(MermaidWindowState::new()))
+        .invoke_handler(all_commands!())
         .setup(|app| {
             // Create window programmatically (not from config, for MCP compatibility)
             let mut builder = WebviewWindowBuilder::new(
@@ -104,29 +111,7 @@ pub fn run_mcp(context: tauri::Context) {
         .manage::<ActiveReview>(Mutex::new(None))
         .manage::<ShouldExit>(should_exit)
         .manage(Mutex::new(MermaidWindowState::new()))
-        .invoke_handler(tauri::generate_handler![
-            get_content,
-            upsert_annotation,
-            delete_annotation,
-            finish_review,
-            set_exit_mode,
-            cycle_exit_mode,
-            set_session_comment,
-            get_tags,
-            upsert_tag,
-            delete_tag,
-            get_exit_modes,
-            upsert_exit_mode,
-            delete_exit_mode,
-            reorder_exit_modes,
-            copy_to_clipboard,
-            save_content,
-            open_mermaid_window,
-            get_mermaid_source,
-            get_config,
-            save_config,
-            export_to_obsidian
-        ])
+        .invoke_handler(all_commands!())
         .setup(|app| {
             // Set accessory mode on macOS (hide dock icon)
             #[cfg(target_os = "macos")]
