@@ -728,24 +728,15 @@
         sessionComment = contentNodesToTipTap(res.session_comment);
       }
 
-      // Determine session mode once at startup
-      const mode = await invoke<'cli' | 'mcp'>('get_session_mode');
-
       // Listen for window close - this triggers output and exit
       const unlisten = await window.onCloseRequested(async (event) => {
         event.preventDefault();
         unlisten();  // Remove listener before closing to prevent re-entry
 
         try {
-          if (mode === 'mcp') {
-            await invoke('finish_session_mcp');
-            await window.destroy();
-          } else {
-            await invoke('finish_session_cli');
-            // Process exits, no destroy needed
-          }
+          await invoke('finish_review');
         } catch (e) {
-          console.error('Failed to finish session:', e);
+          console.error('Failed to finish review:', e);
           await window.destroy(); // Fallback
         }
       });

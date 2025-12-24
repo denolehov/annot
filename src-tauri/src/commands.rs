@@ -1,24 +1,14 @@
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 
-use parking_lot::Mutex;
-use tauri::{AppHandle, State};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 use crate::config::{self, Config};
 use crate::output::{format_output, OutputMode};
-use crate::state::{AppState, ContentNode, ContentResponse, ExitMode, Tag};
-use serde::Serialize;
-use crate::{ResultSender, ShouldExit};
-
-/// Session mode derived from ContentSource.
-#[derive(Debug, Clone, Copy, serde::Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum SessionMode {
-    Cli,
-    Mcp,
-}
-
-use serde::Deserialize;
+use crate::review::{ActiveReview, WindowView};
+use crate::state::{ContentNode, ContentResponse, ExitMode, Tag};
+use crate::ShouldExit;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -28,168 +18,240 @@ pub enum CopyMode {
     All,
 }
 
+/// Helper macro for commands that need mutable access to the file for the calling window.
+/// Acquires lock, resolves window → file, and provides both `$review` and `$file` bindings.
+/// For read-only access, use `review.file_for_window()` instead.
+macro_rules! with_file {
+    ($window:expr, $review_state:expr, |$review:ident, $file:ident| $body:expr) => {{
+        let mut guard = $review_state.lock();
+        let $review = guard.as_mut().ok_or("No active review")?;
+        let path = match $review.windows.get($window.label()) {
+            Some(WindowView::File { path }) => path.clone(),
+            Some(_) => return Err("Window is not showing a file".into()),
+            None => return Err(format!("Unknown window: {}", $window.label())),
+        };
+        let $file = $review.files.get_mut(&path).ok_or("File not loaded")?;
+        $body
+    }};
+}
+
+/// Helper macro for commands that need mutable access to the review (but not a specific file).
+macro_rules! with_review {
+    ($review_state:expr, |$review:ident| $body:expr) => {{
+        let mut guard = $review_state.lock();
+        let $review = guard.as_mut().ok_or("No active review")?;
+        $body
+    }};
+}
+
 #[tauri::command]
-pub fn get_content(state: State<Mutex<AppState>>) -> ContentResponse {
-    state.lock().to_response()
+pub fn get_content(
+    window: WebviewWindow,
+    review_state: State<ActiveReview>,
+) -> Result<ContentResponse, String> {
+    let guard = review_state.lock();
+    let review = guard.as_ref().ok_or("No active review")?;
+    review
+        .to_response_for_window(window.label())
+        .ok_or_else(|| "Cannot get content for this window type".into())
 }
 
 #[tauri::command]
 pub fn upsert_annotation(
-    state: State<Mutex<AppState>>,
+    window: WebviewWindow,
+    review_state: State<ActiveReview>,
     start_line: u32,
     end_line: u32,
     content: Vec<ContentNode>,
-) {
-    state
-        .lock()
-        .upsert_annotation(start_line, end_line, content);
+) -> Result<(), String> {
+    with_file!(window, review_state, |_review, file| {
+        file.upsert_annotation(start_line, end_line, content);
+        Ok(())
+    })
 }
 
 #[tauri::command]
-pub fn delete_annotation(state: State<Mutex<AppState>>, start_line: u32, end_line: u32) {
-    state
-        .lock()
-        .delete_annotation(start_line, end_line);
+pub fn delete_annotation(
+    window: WebviewWindow,
+    review_state: State<ActiveReview>,
+    start_line: u32,
+    end_line: u32,
+) -> Result<(), String> {
+    with_file!(window, review_state, |_review, file| {
+        file.delete_annotation(start_line, end_line);
+        Ok(())
+    })
 }
 
-/// Returns the session mode, derived from ContentSource
+/// Unified finish command - handles both CLI and MCP modes.
 #[tauri::command]
-pub fn get_session_mode(state: State<Mutex<AppState>>) -> SessionMode {
-    if state.lock().content.source.is_mcp() {
-        SessionMode::Mcp
-    } else {
-        SessionMode::Cli
-    }
-}
-
-/// CLI mode: format output, print to stdout, exit process
-#[tauri::command]
-pub fn finish_session_cli(
-    state: State<Mutex<AppState>>,
+pub fn finish_review(
+    review_state: State<ActiveReview>,
     should_exit: State<ShouldExit>,
     app: AppHandle,
-) {
-    let result = {
-        let state_guard = state.lock();
-        format_output(&state_guard, OutputMode::Cli)
-    };
+) -> Result<(), String> {
+    let mut guard = review_state.lock();
+    let mut review = guard.take().ok_or("No active review")?;
 
-    if !result.text.is_empty() {
-        print!("{}", result.text);
+    let is_mcp = review.is_mcp();
+    let result = format_output(
+        &review,
+        if is_mcp {
+            OutputMode::Mcp
+        } else {
+            OutputMode::Cli
+        },
+    );
+
+    // Close all windows
+    let labels: Vec<_> = review.window_labels().map(|s| s.to_string()).collect();
+    for label in &labels {
+        if let Some(w) = app.get_webview_window(label) {
+            let _ = w.destroy();
+        }
     }
 
-    should_exit.store(true, Ordering::SeqCst);
-    app.exit(0);
-}
+    if let Some(tx) = review.take_result_sender() {
+        // MCP mode: send result via channel
+        tx.send(result).map_err(|_| "Failed to send result")?;
+    } else {
+        // CLI mode: print and exit
+        if !result.text.is_empty() {
+            print!("{}", result.text);
+        }
+        should_exit.store(true, Ordering::SeqCst);
+        app.exit(0);
+    }
 
-/// MCP mode: format output, send via channel
-#[tauri::command]
-pub fn finish_session_mcp(
-    state: State<Mutex<AppState>>,
-    result_sender: State<ResultSender>,
-) -> Result<(), String> {
-    let tx = result_sender
-        .lock()
-        .take()
-        .ok_or_else(|| "MCP sender missing or already used".to_string())?;
-
-    let result = {
-        let state_guard = state.lock();
-        format_output(&state_guard, OutputMode::Mcp)
-    };
-
-    tx.send(result)
-        .map_err(|_| "Failed to send result to MCP host".to_string())?;
     Ok(())
 }
 
 #[tauri::command]
-pub fn set_exit_mode(state: State<Mutex<AppState>>, mode_id: Option<String>) {
-    state.lock().session.selected_exit_mode_id = mode_id;
+pub fn set_exit_mode(
+    review_state: State<ActiveReview>,
+    mode_id: Option<String>,
+) -> Result<(), String> {
+    with_review!(review_state, |review| {
+        review.selected_exit_mode_id = mode_id;
+        Ok(())
+    })
 }
 
 #[tauri::command]
-pub fn cycle_exit_mode(state: State<Mutex<AppState>>, direction: i32) -> Option<ExitMode> {
-    let mut state = state.lock();
-    let exit_modes = state.config.exit_modes();
-    if exit_modes.is_empty() {
-        return None;
-    }
+pub fn cycle_exit_mode(
+    review_state: State<ActiveReview>,
+    direction: i32,
+) -> Result<Option<ExitMode>, String> {
+    with_review!(review_state, |review| {
+        let exit_modes = review.config.exit_modes();
+        if exit_modes.is_empty() {
+            return Ok(None);
+        }
 
-    // Find current index
-    let current_index = state
-        .session
-        .selected_exit_mode_id
-        .as_ref()
-        .and_then(|id| exit_modes.iter().position(|m| &m.id == id))
-        .unwrap_or(0);
+        // Find current index
+        let current_index = review
+            .selected_exit_mode_id
+            .as_ref()
+            .and_then(|id| exit_modes.iter().position(|m| &m.id == id))
+            .unwrap_or(0);
 
-    // Calculate new index with wrapping
-    let len = exit_modes.len() as i32;
-    let new_index = ((current_index as i32 + direction) % len + len) % len;
+        // Calculate new index with wrapping
+        let len = exit_modes.len() as i32;
+        let new_index = ((current_index as i32 + direction) % len + len) % len;
 
-    let new_mode = exit_modes[new_index as usize].clone();
-    state.session.selected_exit_mode_id = Some(new_mode.id.clone());
+        let new_mode = exit_modes[new_index as usize].clone();
+        review.selected_exit_mode_id = Some(new_mode.id.clone());
 
-    Some(new_mode)
+        Ok(Some(new_mode))
+    })
 }
 
 #[tauri::command]
-pub fn set_session_comment(state: State<Mutex<AppState>>, content: Option<Vec<ContentNode>>) {
-    state.lock().session.comment = content;
+pub fn set_session_comment(
+    review_state: State<ActiveReview>,
+    content: Option<Vec<ContentNode>>,
+) -> Result<(), String> {
+    with_review!(review_state, |review| {
+        review.session_comment = content;
+        Ok(())
+    })
 }
 
 #[tauri::command]
-pub fn get_tags(state: State<Mutex<AppState>>) -> Vec<Tag> {
-    state.lock().config.tags().to_vec()
+pub fn get_tags(review_state: State<ActiveReview>) -> Result<Vec<Tag>, String> {
+    let guard = review_state.lock();
+    let review = guard.as_ref().ok_or("No active review")?;
+    Ok(review.config.tags().to_vec())
 }
 
 #[tauri::command]
-pub fn upsert_tag(state: State<Mutex<AppState>>, tag: Tag) -> Vec<Tag> {
-    let mut state = state.lock();
-    state.config.upsert_tag(tag);
-    state.config.tags().to_vec()
+pub fn upsert_tag(review_state: State<ActiveReview>, tag: Tag) -> Result<Vec<Tag>, String> {
+    with_review!(review_state, |review| {
+        review.config.upsert_tag(tag);
+        Ok(review.config.tags().to_vec())
+    })
 }
 
 #[tauri::command]
-pub fn delete_tag(state: State<Mutex<AppState>>, id: String) -> Vec<Tag> {
-    let mut state = state.lock();
-    state.config.delete_tag(&id);
-    state.config.tags().to_vec()
+pub fn delete_tag(review_state: State<ActiveReview>, id: String) -> Result<Vec<Tag>, String> {
+    with_review!(review_state, |review| {
+        review.config.delete_tag(&id);
+        Ok(review.config.tags().to_vec())
+    })
 }
 
 #[tauri::command]
-pub fn get_exit_modes(state: State<Mutex<AppState>>) -> Vec<ExitMode> {
-    state.lock().config.exit_modes().to_vec()
+pub fn get_exit_modes(review_state: State<ActiveReview>) -> Result<Vec<ExitMode>, String> {
+    let guard = review_state.lock();
+    let review = guard.as_ref().ok_or("No active review")?;
+    Ok(review.config.exit_modes().to_vec())
 }
 
 #[tauri::command]
-pub fn upsert_exit_mode(state: State<Mutex<AppState>>, mode: ExitMode) -> Vec<ExitMode> {
-    let mut state = state.lock();
-    state.config.upsert_exit_mode(mode);
-    state.config.exit_modes().to_vec()
+pub fn upsert_exit_mode(
+    review_state: State<ActiveReview>,
+    mode: ExitMode,
+) -> Result<Vec<ExitMode>, String> {
+    with_review!(review_state, |review| {
+        review.config.upsert_exit_mode(mode);
+        Ok(review.config.exit_modes().to_vec())
+    })
 }
 
 #[tauri::command]
-pub fn delete_exit_mode(state: State<Mutex<AppState>>, id: String) -> Vec<ExitMode> {
-    let mut state = state.lock();
-    state.config.delete_exit_mode(&id);
-    state.config.exit_modes().to_vec()
+pub fn delete_exit_mode(
+    review_state: State<ActiveReview>,
+    id: String,
+) -> Result<Vec<ExitMode>, String> {
+    with_review!(review_state, |review| {
+        review.config.delete_exit_mode(&id);
+        Ok(review.config.exit_modes().to_vec())
+    })
 }
 
 #[tauri::command]
-pub fn reorder_exit_modes(state: State<Mutex<AppState>>, ids: Vec<String>) -> Vec<ExitMode> {
-    let mut state = state.lock();
-    state.config.reorder_exit_modes(ids);
-    state.config.exit_modes().to_vec()
+pub fn reorder_exit_modes(
+    review_state: State<ActiveReview>,
+    ids: Vec<String>,
+) -> Result<Vec<ExitMode>, String> {
+    with_review!(review_state, |review| {
+        review.config.reorder_exit_modes(ids);
+        Ok(review.config.exit_modes().to_vec())
+    })
 }
 
 #[tauri::command]
-pub fn copy_to_clipboard(state: State<Mutex<AppState>>, mode: CopyMode) -> Result<(), String> {
-    let state = state.lock();
+pub fn copy_to_clipboard(
+    window: WebviewWindow,
+    review_state: State<ActiveReview>,
+    mode: CopyMode,
+) -> Result<(), String> {
+    let guard = review_state.lock();
+    let review = guard.as_ref().ok_or("No active review")?;
+    let file = review.file_for_window(window.label())?;
 
     // Reconstruct raw content from lines
-    let raw_content: String = state
+    let raw_content: String = file
         .content
         .lines
         .iter()
@@ -199,9 +261,9 @@ pub fn copy_to_clipboard(state: State<Mutex<AppState>>, mode: CopyMode) -> Resul
 
     let text = match mode {
         CopyMode::Content => raw_content,
-        CopyMode::Annotations => format_output(&state, OutputMode::Clipboard).text,
+        CopyMode::Annotations => format_output(review, OutputMode::Clipboard).text,
         CopyMode::All => {
-            let annotations = format_output(&state, OutputMode::Clipboard).text;
+            let annotations = format_output(review, OutputMode::Clipboard).text;
             if annotations.is_empty() {
                 raw_content
             } else {
@@ -230,13 +292,16 @@ pub struct SaveContentResponse {
 
 #[tauri::command]
 pub fn save_content(
-    state: State<Mutex<AppState>>,
+    window: WebviewWindow,
+    review_state: State<ActiveReview>,
     path: String,
 ) -> Result<SaveContentResponse, String> {
-    let state = state.lock();
+    let guard = review_state.lock();
+    let review = guard.as_ref().ok_or("No active review")?;
+    let file = review.file_for_window(window.label())?;
 
-    // Reconstruct raw content from lines (same as copy_to_clipboard)
-    let raw_content: String = state
+    // Reconstruct raw content from lines
+    let raw_content: String = file
         .content
         .lines
         .iter()
@@ -261,8 +326,7 @@ pub fn save_content(
     }
 
     // Write the file
-    std::fs::write(&path, &raw_content)
-        .map_err(|e| format!("Failed to write file: {}", e))?;
+    std::fs::write(&path, &raw_content).map_err(|e| format!("Failed to write file: {}", e))?;
 
     // Extract filename for new label
     let new_label = path
@@ -299,13 +363,16 @@ pub struct ObsidianExportResponse {
 
 #[tauri::command]
 pub fn export_to_obsidian(
-    state: State<Mutex<AppState>>,
+    window: WebviewWindow,
+    review_state: State<ActiveReview>,
     vault_name: String,
 ) -> Result<ObsidianExportResponse, String> {
-    let state = state.lock();
+    let guard = review_state.lock();
+    let review = guard.as_ref().ok_or("No active review")?;
+    let file = review.file_for_window(window.label())?;
 
     // Reconstruct raw content from lines
-    let content: String = state
+    let content: String = file
         .content
         .lines
         .iter()
@@ -319,14 +386,14 @@ pub fn export_to_obsidian(
         .map_err(|e| format!("Failed to copy to clipboard: {}", e))?;
 
     // Use H1 title as note name if present, otherwise fall back to label
-    let note_name = state
+    let note_name = file
         .content
         .lines
         .iter()
         .find(|l| l.content.starts_with("# "))
         .map(|l| l.content.trim_start_matches("# ").trim())
         .filter(|s| !s.is_empty())
-        .unwrap_or(&state.content.label);
+        .unwrap_or(&file.content.label);
 
     // Build Obsidian URI with clipboard parameter
     let url = format!(

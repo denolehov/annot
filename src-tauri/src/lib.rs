@@ -1,10 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-
-use output::FormatResult;
 
 use tauri::WebviewWindowBuilder;
 
@@ -17,39 +14,38 @@ pub mod markdown;
 pub mod mcp;
 pub mod mermaid_window;
 pub mod output;
+pub mod review;
 pub mod state;
 
 use commands::{
     copy_to_clipboard, cycle_exit_mode, delete_annotation, delete_exit_mode, delete_tag,
-    export_to_obsidian, finish_session_cli, finish_session_mcp, get_config, get_content,
-    get_exit_modes, get_session_mode, get_tags, reorder_exit_modes, save_config, save_content,
+    export_to_obsidian, finish_review, get_config, get_content,
+    get_exit_modes, get_tags, reorder_exit_modes, save_config, save_content,
     set_exit_mode, set_session_comment, upsert_annotation, upsert_exit_mode, upsert_tag,
 };
 use mermaid_window::{get_mermaid_source, open_mermaid_window, MermaidWindowState};
+use review::{ActiveReview, Review};
 use state::AppState;
 
 /// Shared flag to prevent app exit in MCP mode.
 pub type ShouldExit = Arc<AtomicBool>;
 
-/// Sender for MCP session results.
-pub type ResultSender = Mutex<Option<Sender<FormatResult>>>;
-
 /// Run in CLI mode (file/stdin input, prints result, exits).
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run(state: AppState, context: tauri::Context) {
+    // Convert AppState to Review for the new architecture
+    let review = Review::cli(state.content, state.config, "main".to_string());
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .manage(Mutex::new(state))
-        .manage::<ResultSender>(Mutex::new(None))
+        .manage::<ActiveReview>(Mutex::new(Some(review)))
         .manage::<ShouldExit>(Arc::new(AtomicBool::new(true))) // CLI mode: allow exit
         .manage(Mutex::new(MermaidWindowState::new()))
         .invoke_handler(tauri::generate_handler![
             get_content,
             upsert_annotation,
             delete_annotation,
-            get_session_mode,
-            finish_session_cli,
-            finish_session_mcp,
+            finish_review,
             set_exit_mode,
             cycle_exit_mode,
             set_session_comment,
@@ -99,24 +95,20 @@ pub fn run(state: AppState, context: tauri::Context) {
 
 /// Run in MCP server mode (no initial window, handles tool calls).
 pub fn run_mcp(context: tauri::Context) {
-    // Create empty initial state (will be replaced per-session)
-    let initial_state = AppState::empty();
+    // No initial review - created per MCP tool call
     let should_exit = Arc::new(AtomicBool::new(false));
     let should_exit_clone = should_exit.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .manage(Mutex::new(initial_state))
-        .manage::<ResultSender>(Mutex::new(None))
+        .manage::<ActiveReview>(Mutex::new(None))
         .manage::<ShouldExit>(should_exit)
         .manage(Mutex::new(MermaidWindowState::new()))
         .invoke_handler(tauri::generate_handler![
             get_content,
             upsert_annotation,
             delete_annotation,
-            get_session_mode,
-            finish_session_cli,
-            finish_session_mcp,
+            finish_review,
             set_exit_mode,
             cycle_exit_mode,
             set_session_comment,

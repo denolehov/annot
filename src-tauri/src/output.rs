@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use crate::mcp::tools::SessionImage;
-use crate::state::{Annotation, AppState, ContentMetadata, ContentNode};
+use crate::review::{FileState, Review};
+use crate::state::{Annotation, ContentMetadata, ContentNode};
 
 /// Output mode determines how content is formatted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -23,11 +24,11 @@ pub struct FormatResult {
 
 /// Collect unique tags from all content nodes (session comment + annotations).
 /// Returns a BTreeMap for alphabetical ordering by tag name.
-fn collect_unique_tags(state: &AppState) -> BTreeMap<String, String> {
+fn collect_unique_tags(review: &Review) -> BTreeMap<String, String> {
     let mut tags: BTreeMap<String, String> = BTreeMap::new();
 
     // Collect from session comment
-    if let Some(ref comment) = state.session.comment {
+    if let Some(ref comment) = review.session_comment {
         for node in comment {
             if let ContentNode::Tag {
                 name, instruction, ..
@@ -38,14 +39,16 @@ fn collect_unique_tags(state: &AppState) -> BTreeMap<String, String> {
         }
     }
 
-    // Collect from all annotations
-    for annotation in state.session.annotations.values() {
-        for node in &annotation.content {
-            if let ContentNode::Tag {
-                name, instruction, ..
-            } = node
-            {
-                tags.insert(name.clone(), instruction.clone());
+    // Collect from all file annotations
+    for file in review.files.values() {
+        for annotation in file.annotations.values() {
+            for node in &annotation.content {
+                if let ContentNode::Tag {
+                    name, instruction, ..
+                } = node
+                {
+                    tags.insert(name.clone(), instruction.clone());
+                }
             }
         }
     }
@@ -54,12 +57,22 @@ fn collect_unique_tags(state: &AppState) -> BTreeMap<String, String> {
 }
 
 /// Format all annotations as structured output for LLM consumption.
-pub fn format_output(state: &AppState, mode: OutputMode) -> FormatResult {
-    let has_exit_mode = state.session.selected_exit_mode_id.is_some();
-    let has_annotations = !state.session.annotations.is_empty();
-    let has_session_comment = state
-        .session
-        .comment
+pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
+    // Get first file (current single-file model)
+    let file = match review.files.values().next() {
+        Some(f) => f,
+        None => {
+            return FormatResult {
+                text: String::new(),
+                images: Vec::new(),
+            }
+        }
+    };
+
+    let has_exit_mode = review.selected_exit_mode_id.is_some();
+    let has_annotations = !file.annotations.is_empty();
+    let has_session_comment = review
+        .session_comment
         .as_ref()
         .map(|c| !c.is_empty())
         .unwrap_or(false);
@@ -76,7 +89,7 @@ pub fn format_output(state: &AppState, mode: OutputMode) -> FormatResult {
     let mut figure_counter = 0usize;
 
     // LEGEND block (if any tags are used)
-    let unique_tags = collect_unique_tags(state);
+    let unique_tags = collect_unique_tags(review);
     if !unique_tags.is_empty() {
         output.push_str("LEGEND:\n");
         for (name, instruction) in &unique_tags {
@@ -90,7 +103,7 @@ pub fn format_output(state: &AppState, mode: OutputMode) -> FormatResult {
         output.push_str("SESSION:\n");
 
         // Session comment (no prefix, directly indented)
-        if let Some(ref comment) = state.session.comment {
+        if let Some(ref comment) = review.session_comment {
             if !comment.is_empty() {
                 let comment_text = render_content(comment, &mut images, &mut figure_counter, mode);
                 for line in comment_text.lines() {
@@ -100,8 +113,8 @@ pub fn format_output(state: &AppState, mode: OutputMode) -> FormatResult {
         }
 
         // Exit mode (original format: "Name (instruction)")
-        if let Some(ref mode_id) = state.session.selected_exit_mode_id {
-            if let Some(exit_mode) = state.config.exit_modes().iter().find(|m| &m.id == mode_id) {
+        if let Some(ref mode_id) = review.selected_exit_mode_id {
+            if let Some(exit_mode) = review.config.exit_modes().iter().find(|m| &m.id == mode_id) {
                 output.push_str(&format!("  {} ({})\n", exit_mode.name, exit_mode.instruction));
             }
         }
@@ -119,7 +132,7 @@ pub fn format_output(state: &AppState, mode: OutputMode) -> FormatResult {
     }
 
     // Collect and sort annotations by start line
-    let mut annotations: Vec<&Annotation> = state.session.annotations.values().collect();
+    let mut annotations: Vec<&Annotation> = file.annotations.values().collect();
     annotations.sort_by_key(|a| a.start_line);
 
     // Calculate max line number width for alignment
@@ -134,7 +147,7 @@ pub fn format_output(state: &AppState, mode: OutputMode) -> FormatResult {
         if i > 0 {
             output.push_str("\n---\n\n");
         }
-        format_annotation_block(&mut output, state, ann, line_num_width, &mut images, &mut figure_counter, mode);
+        format_annotation_block(&mut output, file, ann, line_num_width, &mut images, &mut figure_counter, mode);
     }
 
     FormatResult {
@@ -146,36 +159,36 @@ pub fn format_output(state: &AppState, mode: OutputMode) -> FormatResult {
 /// Format a single annotation block with context and content.
 fn format_annotation_block(
     out: &mut String,
-    state: &AppState,
+    file: &FileState,
     ann: &Annotation,
     line_num_width: usize,
     images: &mut Vec<SessionImage>,
     figure_counter: &mut usize,
     mode: OutputMode,
 ) {
-    let is_diff = matches!(state.content.metadata, ContentMetadata::Diff(_));
+    let is_diff = matches!(file.content.metadata, ContentMetadata::Diff(_));
 
     // File header: "file.rs:10-15" or "file.rs:10"
     // For diffs, include old/new line numbers if available
     if is_diff {
-        format_diff_header(out, state, ann);
+        format_diff_header(out, file, ann);
     } else if ann.start_line == ann.end_line {
-        out.push_str(&format!("{}:{}\n", state.content.label, ann.start_line));
+        out.push_str(&format!("{}:{}\n", file.content.label, ann.start_line));
     } else {
         out.push_str(&format!(
             "{}:{}-{}\n",
-            state.content.label, ann.start_line, ann.end_line
+            file.content.label, ann.start_line, ann.end_line
         ));
     }
 
     // Context line (1 line before, if exists and non-empty)
     if ann.start_line > 1 {
         let context_line_num = ann.start_line - 1;
-        if let Some(line) = state.content.lines.get((context_line_num - 1) as usize) {
+        if let Some(line) = file.content.lines.get((context_line_num - 1) as usize) {
             if !line.content.trim().is_empty() {
                 // Format: "    N | content" (3 extra spaces for ">" prefix alignment)
                 if is_diff {
-                    format_diff_line(out, state, context_line_num, &line.content, false, line_num_width);
+                    format_diff_line(out, file, context_line_num, &line.content, false, line_num_width);
                 } else {
                     out.push_str(&format!(
                         "{:>width$} | {}\n",
@@ -190,9 +203,9 @@ fn format_annotation_block(
 
     // Selected lines with ">" prefix
     for line_num in ann.start_line..=ann.end_line {
-        if let Some(line) = state.content.lines.get((line_num - 1) as usize) {
+        if let Some(line) = file.content.lines.get((line_num - 1) as usize) {
             if is_diff {
-                format_diff_line(out, state, line_num, &line.content, true, line_num_width);
+                format_diff_line(out, file, line_num, &line.content, true, line_num_width);
             } else {
                 // Format: ">  N | content"
                 out.push_str(&format!(
@@ -227,8 +240,8 @@ fn format_annotation_block(
 }
 
 /// Format diff header with file info from annotation range.
-fn format_diff_header(out: &mut String, state: &AppState, ann: &Annotation) {
-    let diff_meta = match &state.content.metadata {
+fn format_diff_header(out: &mut String, file: &FileState, ann: &Annotation) {
+    let diff_meta = match &file.content.metadata {
         ContentMetadata::Diff(d) => d,
         _ => return,
     };
@@ -240,7 +253,7 @@ fn format_diff_header(out: &mut String, state: &AppState, ann: &Annotation) {
         .and_then(|info| diff_meta.files.get(info.file_index))
         .and_then(|f| f.new_name.as_ref().or(f.old_name.as_ref()))
         .map(|s| s.as_str())
-        .unwrap_or(&state.content.label);
+        .unwrap_or(&file.content.label);
 
     // Collect old/new line ranges from the annotated lines
     let mut old_lines: Vec<u32> = Vec::new();
@@ -286,13 +299,13 @@ fn format_line_range(lines: &[u32]) -> String {
 /// Format a single diff line with old:new line numbers.
 fn format_diff_line(
     out: &mut String,
-    state: &AppState,
+    file: &FileState,
     line_num: u32,
     content: &str,
     is_selected: bool,
     line_num_width: usize,
 ) {
-    let diff_meta = match &state.content.metadata {
+    let diff_meta = match &file.content.metadata {
         ContentMetadata::Diff(d) => d,
         _ => return,
     };
@@ -393,7 +406,7 @@ fn render_content(
 mod tests {
     use super::*;
     use crate::input::{CliSource, ContentSource};
-    use crate::state::{ContentModel, ExitMode, ExitModeOrigin, Line, SessionState, UserConfig};
+    use crate::state::{ContentModel, ExitMode, ExitModeOrigin, Line, UserConfig};
     use std::collections::HashMap;
     use std::path::PathBuf;
 
@@ -406,30 +419,29 @@ mod tests {
         }
     }
 
-    fn make_state(label: &str, lines: Vec<Line>, annotations: HashMap<String, Annotation>) -> AppState {
+    fn make_review(label: &str, lines: Vec<Line>, annotations: HashMap<String, Annotation>) -> Review {
         let source = ContentSource::Cli(CliSource::File {
             path: PathBuf::from(label),
         });
-        AppState {
-            content: ContentModel {
-                label: label.to_string(),
-                lines,
-                source,
-                metadata: ContentMetadata::Plain,
-            },
-            session: SessionState {
-                annotations,
-                comment: None,
-                selected_exit_mode_id: None,
-            },
-            config: UserConfig::empty(),
+        let content = ContentModel {
+            label: label.to_string(),
+            lines,
+            source,
+            metadata: ContentMetadata::Plain,
+        };
+        let config = UserConfig::empty();
+        let mut review = Review::cli(content, config, "main".to_string());
+        // Insert annotations into the first file
+        if let Some(file) = review.files.values_mut().next() {
+            file.annotations = annotations;
         }
+        review
     }
 
     #[test]
     fn empty_annotations_returns_empty_string() {
-        let state = make_state("test.rs", vec![], HashMap::new());
-        assert_eq!(format_output(&state, OutputMode::Cli).text, "");
+        let review = make_review("test.rs", vec![], HashMap::new());
+        assert_eq!(format_output(&review, OutputMode::Cli).text, "");
     }
 
     #[test]
@@ -450,7 +462,7 @@ mod tests {
             .map(|n| make_line(n, &format!("line {}", n)))
             .collect();
 
-        let state = make_state("test.rs", lines, annotations);
+        let state = make_review("test.rs", lines, annotations);
         let output = format_output(&state, OutputMode::Cli).text;
 
         assert!(output.contains("test.rs:5\n"));
@@ -477,7 +489,7 @@ mod tests {
             .map(|n| make_line(n, &format!("line {}", n)))
             .collect();
 
-        let state = make_state("test.rs", lines, annotations);
+        let state = make_review("test.rs", lines, annotations);
         let output = format_output(&state, OutputMode::Cli).text;
 
         assert!(output.contains("test.rs:10-15\n"));
@@ -517,7 +529,7 @@ mod tests {
             .map(|n| make_line(n, &format!("line {}", n)))
             .collect();
 
-        let state = make_state("test.rs", lines, annotations);
+        let state = make_review("test.rs", lines, annotations);
         let output = format_output(&state, OutputMode::Cli).text;
 
         // First annotation should come before second
@@ -549,7 +561,7 @@ mod tests {
             make_line(3, "third"),
         ];
 
-        let state = make_state("test.rs", lines, annotations);
+        let state = make_review("test.rs", lines, annotations);
         let output = format_output(&state, OutputMode::Cli).text;
 
         // Line 2 is whitespace, shouldn't appear as context
@@ -574,7 +586,7 @@ mod tests {
             .map(|n| make_line(n, &format!("line {}", n)))
             .collect();
 
-        let state = make_state("test.rs", lines, annotations);
+        let state = make_review("test.rs", lines, annotations);
         let output = format_output(&state, OutputMode::Cli).text;
 
         // First line has arrow
@@ -600,23 +612,16 @@ mod tests {
                 origin: ExitModeOrigin::Persisted,
             }],
         );
-
-        let state = AppState {
-            content: ContentModel {
-                label: "test.rs".to_string(),
-                lines: vec![],
-                source,
-                metadata: ContentMetadata::Plain,
-            },
-            session: SessionState {
-                annotations: HashMap::new(),
-                comment: None,
-                selected_exit_mode_id: Some("apply".to_string()),
-            },
-            config,
+        let content = ContentModel {
+            label: "test.rs".to_string(),
+            lines: vec![],
+            source,
+            metadata: ContentMetadata::Plain,
         };
+        let mut review = Review::cli(content, config, "main".to_string());
+        review.selected_exit_mode_id = Some("apply".to_string());
 
-        let output = format_output(&state, OutputMode::Cli).text;
+        let output = format_output(&review, OutputMode::Cli).text;
 
         assert!(output.contains("SESSION:"));
         assert!(output.contains("Apply (Apply the suggested changes)"));
@@ -655,22 +660,19 @@ mod tests {
             .map(|n| make_line(n, &format!("line {}", n)))
             .collect();
 
-        let state = AppState {
-            content: ContentModel {
-                label: "test.rs".to_string(),
-                lines,
-                source,
-                metadata: ContentMetadata::Plain,
-            },
-            session: SessionState {
-                annotations,
-                comment: None,
-                selected_exit_mode_id: Some("reject".to_string()),
-            },
-            config,
+        let content = ContentModel {
+            label: "test.rs".to_string(),
+            lines,
+            source,
+            metadata: ContentMetadata::Plain,
         };
+        let mut review = Review::cli(content, config, "main".to_string());
+        review.selected_exit_mode_id = Some("reject".to_string());
+        if let Some(file) = review.files.values_mut().next() {
+            file.annotations = annotations;
+        }
 
-        let output = format_output(&state, OutputMode::Cli).text;
+        let output = format_output(&review, OutputMode::Cli).text;
 
         // SESSION block comes first
         let session_pos = output.find("SESSION:").unwrap();
@@ -686,25 +688,18 @@ mod tests {
         let source = ContentSource::Cli(CliSource::File {
             path: PathBuf::from("test.rs"),
         });
-
-        let state = AppState {
-            content: ContentModel {
-                label: "test.rs".to_string(),
-                lines: vec![],
-                source,
-                metadata: ContentMetadata::Plain,
-            },
-            session: SessionState {
-                annotations: HashMap::new(),
-                comment: Some(vec![ContentNode::Text {
-                    text: "This is a session comment".to_string(),
-                }]),
-                selected_exit_mode_id: None,
-            },
-            config: UserConfig::empty(),
+        let content = ContentModel {
+            label: "test.rs".to_string(),
+            lines: vec![],
+            source,
+            metadata: ContentMetadata::Plain,
         };
+        let mut review = Review::cli(content, UserConfig::empty(), "main".to_string());
+        review.session_comment = Some(vec![ContentNode::Text {
+            text: "This is a session comment".to_string(),
+        }]);
 
-        let output = format_output(&state, OutputMode::Cli).text;
+        let output = format_output(&review, OutputMode::Cli).text;
 
         assert!(output.contains("SESSION:"));
         assert!(output.contains("  This is a session comment"));
@@ -726,25 +721,19 @@ mod tests {
                 origin: ExitModeOrigin::Persisted,
             }],
         );
-
-        let state = AppState {
-            content: ContentModel {
-                label: "test.rs".to_string(),
-                lines: vec![],
-                source,
-                metadata: ContentMetadata::Plain,
-            },
-            session: SessionState {
-                annotations: HashMap::new(),
-                comment: Some(vec![ContentNode::Text {
-                    text: "Overall looks good!".to_string(),
-                }]),
-                selected_exit_mode_id: Some("apply".to_string()),
-            },
-            config,
+        let content = ContentModel {
+            label: "test.rs".to_string(),
+            lines: vec![],
+            source,
+            metadata: ContentMetadata::Plain,
         };
+        let mut review = Review::cli(content, config, "main".to_string());
+        review.session_comment = Some(vec![ContentNode::Text {
+            text: "Overall looks good!".to_string(),
+        }]);
+        review.selected_exit_mode_id = Some("apply".to_string());
 
-        let output = format_output(&state, OutputMode::Cli).text;
+        let output = format_output(&review, OutputMode::Cli).text;
 
         // Session comment comes before exit mode
         let comment_pos = output.find("Overall looks good!").unwrap();
@@ -757,23 +746,16 @@ mod tests {
         let source = ContentSource::Cli(CliSource::File {
             path: PathBuf::from("test.rs"),
         });
-
-        let state = AppState {
-            content: ContentModel {
-                label: "test.rs".to_string(),
-                lines: vec![],
-                source,
-                metadata: ContentMetadata::Plain,
-            },
-            session: SessionState {
-                annotations: HashMap::new(),
-                comment: Some(vec![]),
-                selected_exit_mode_id: None,
-            },
-            config: UserConfig::empty(),
+        let content = ContentModel {
+            label: "test.rs".to_string(),
+            lines: vec![],
+            source,
+            metadata: ContentMetadata::Plain,
         };
+        let mut review = Review::cli(content, UserConfig::empty(), "main".to_string());
+        review.session_comment = Some(vec![]);
 
-        let output = format_output(&state, OutputMode::Cli).text;
+        let output = format_output(&review, OutputMode::Cli).text;
 
         // Empty session comment should result in no output
         assert!(output.is_empty());
@@ -804,7 +786,7 @@ mod tests {
             .map(|n| make_line(n, &format!("line {}", n)))
             .collect();
 
-        let state = make_state("test.rs", lines, annotations);
+        let state = make_review("test.rs", lines, annotations);
         let output = format_output(&state, OutputMode::Cli).text;
 
         // LEGEND block should appear at the top
@@ -842,7 +824,7 @@ mod tests {
             .map(|n| make_line(n, &format!("line {}", n)))
             .collect();
 
-        let state = make_state("test.rs", lines, annotations);
+        let state = make_review("test.rs", lines, annotations);
         let output = format_output(&state, OutputMode::Cli).text;
 
         // BUG should come before SECURITY (alphabetical)
@@ -883,7 +865,7 @@ mod tests {
             .map(|n| make_line(n, &format!("line {}", n)))
             .collect();
 
-        let state = make_state("test.rs", lines, annotations);
+        let state = make_review("test.rs", lines, annotations);
         let output = format_output(&state, OutputMode::Cli).text;
 
         // SECURITY should only appear once in LEGEND

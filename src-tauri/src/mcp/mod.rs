@@ -14,6 +14,7 @@ use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 
 use crate::input::{ContentSource, DiffSource, McpSource};
 use crate::output::FormatResult;
+use crate::review::{ActiveReview, Review};
 use crate::state::AppState;
 use tools::{ReviewContentInput, ReviewDiffInput, ReviewFileInput, SessionImage, SessionOutput};
 
@@ -244,21 +245,7 @@ fn run_session_with_state(
     // Create channel for receiving result
     let (tx, rx) = mpsc::channel::<FormatResult>();
 
-    // Store state and sender
-    {
-        use crate::ResultSender;
-
-        let managed_state = app_handle.state::<parking_lot::Mutex<AppState>>();
-        let mut guard = managed_state.lock();
-        *guard = state;
-
-        // Store the sender for finish_session to use
-        let sender_state = app_handle.state::<ResultSender>();
-        let mut sender_guard = sender_state.lock();
-        *sender_guard = Some(tx);
-    }
-
-    // Create window
+    // Generate window label first (needed for Review creation)
     let window_label = format!(
         "session-{}",
         std::time::SystemTime::now()
@@ -266,6 +253,13 @@ fn run_session_with_state(
             .unwrap()
             .as_millis()
     );
+
+    // Create Review and store it
+    {
+        let review = Review::mcp(state.content, state.config, window_label.clone(), tx);
+        let slot = app_handle.state::<ActiveReview>();
+        *slot.lock() = Some(review);
+    }
 
     let mut builder = WebviewWindowBuilder::new(app_handle, &window_label, tauri::WebviewUrl::App("index.html".into()))
         .title("annot")
