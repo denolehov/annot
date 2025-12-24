@@ -11,8 +11,14 @@ export interface ExitMode {
   color: string;
   instruction: string;
   order: number;
-  is_ephemeral: boolean;
+  origin: 'persisted' | 'transient';
 }
+
+// Content metadata discriminated union
+export type ContentMetadata =
+  | { type: 'plain' }
+  | ({ type: 'diff' } & DiffMetadata)
+  | ({ type: 'markdown' } & MarkdownMetadata);
 
 export interface ContentResponse {
   label: string;
@@ -21,10 +27,9 @@ export interface ContentResponse {
   exit_modes: ExitMode[];
   selected_exit_mode_id: string | null;
   session_comment: ContentNode[] | null;
-  diff_metadata: DiffMetadata | null;
-  markdown_metadata: MarkdownMetadata | null;
-  /** Whether this is an ephemeral session (enables image paste). */
-  ephemeral: boolean;
+  metadata: ContentMetadata;
+  /** Whether image paste is allowed (MCP content mode). */
+  allows_image_paste: boolean;
 }
 
 // Diff types

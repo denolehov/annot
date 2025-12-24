@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::mcp::tools::SessionImage;
-use crate::state::{Annotation, AppState, ContentNode, ExitModeOrigin};
+use crate::state::{Annotation, AppState, ContentMetadata, ContentNode};
 
 /// Output mode determines how content is formatted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -27,7 +27,7 @@ fn collect_unique_tags(state: &AppState) -> BTreeMap<String, String> {
     let mut tags: BTreeMap<String, String> = BTreeMap::new();
 
     // Collect from session comment
-    if let Some(ref comment) = state.session_comment {
+    if let Some(ref comment) = state.session.comment {
         for node in comment {
             if let ContentNode::Tag {
                 name, instruction, ..
@@ -39,7 +39,7 @@ fn collect_unique_tags(state: &AppState) -> BTreeMap<String, String> {
     }
 
     // Collect from all annotations
-    for annotation in state.annotations.values() {
+    for annotation in state.session.annotations.values() {
         for node in &annotation.content {
             if let ContentNode::Tag {
                 name, instruction, ..
@@ -55,10 +55,11 @@ fn collect_unique_tags(state: &AppState) -> BTreeMap<String, String> {
 
 /// Format all annotations as structured output for LLM consumption.
 pub fn format_output(state: &AppState, mode: OutputMode) -> FormatResult {
-    let has_exit_mode = state.selected_exit_mode_id.is_some();
-    let has_annotations = !state.annotations.is_empty();
+    let has_exit_mode = state.session.selected_exit_mode_id.is_some();
+    let has_annotations = !state.session.annotations.is_empty();
     let has_session_comment = state
-        .session_comment
+        .session
+        .comment
         .as_ref()
         .map(|c| !c.is_empty())
         .unwrap_or(false);
@@ -89,7 +90,7 @@ pub fn format_output(state: &AppState, mode: OutputMode) -> FormatResult {
         output.push_str("SESSION:\n");
 
         // Session comment (no prefix, directly indented)
-        if let Some(ref comment) = state.session_comment {
+        if let Some(ref comment) = state.session.comment {
             if !comment.is_empty() {
                 let comment_text = render_content(comment, &mut images, &mut figure_counter, mode);
                 for line in comment_text.lines() {
@@ -99,9 +100,9 @@ pub fn format_output(state: &AppState, mode: OutputMode) -> FormatResult {
         }
 
         // Exit mode (original format: "Name (instruction)")
-        if let Some(ref mode_id) = state.selected_exit_mode_id {
-            if let Some(mode) = state.exit_modes.iter().find(|m| &m.id == mode_id) {
-                output.push_str(&format!("  {} ({})\n", mode.name, mode.instruction));
+        if let Some(ref mode_id) = state.session.selected_exit_mode_id {
+            if let Some(exit_mode) = state.config.exit_modes().iter().find(|m| &m.id == mode_id) {
+                output.push_str(&format!("  {} ({})\n", exit_mode.name, exit_mode.instruction));
             }
         }
 
@@ -118,7 +119,7 @@ pub fn format_output(state: &AppState, mode: OutputMode) -> FormatResult {
     }
 
     // Collect and sort annotations by start line
-    let mut annotations: Vec<&Annotation> = state.annotations.values().collect();
+    let mut annotations: Vec<&Annotation> = state.session.annotations.values().collect();
     annotations.sort_by_key(|a| a.start_line);
 
     // Calculate max line number width for alignment
@@ -152,25 +153,25 @@ fn format_annotation_block(
     figure_counter: &mut usize,
     mode: OutputMode,
 ) {
-    let is_diff = state.diff_metadata.is_some();
+    let is_diff = matches!(state.content.metadata, ContentMetadata::Diff(_));
 
     // File header: "file.rs:10-15" or "file.rs:10"
     // For diffs, include old/new line numbers if available
     if is_diff {
         format_diff_header(out, state, ann);
     } else if ann.start_line == ann.end_line {
-        out.push_str(&format!("{}:{}\n", state.label, ann.start_line));
+        out.push_str(&format!("{}:{}\n", state.content.label, ann.start_line));
     } else {
         out.push_str(&format!(
             "{}:{}-{}\n",
-            state.label, ann.start_line, ann.end_line
+            state.content.label, ann.start_line, ann.end_line
         ));
     }
 
     // Context line (1 line before, if exists and non-empty)
     if ann.start_line > 1 {
         let context_line_num = ann.start_line - 1;
-        if let Some(line) = state.lines.get((context_line_num - 1) as usize) {
+        if let Some(line) = state.content.lines.get((context_line_num - 1) as usize) {
             if !line.content.trim().is_empty() {
                 // Format: "    N | content" (3 extra spaces for ">" prefix alignment)
                 if is_diff {
@@ -189,7 +190,7 @@ fn format_annotation_block(
 
     // Selected lines with ">" prefix
     for line_num in ann.start_line..=ann.end_line {
-        if let Some(line) = state.lines.get((line_num - 1) as usize) {
+        if let Some(line) = state.content.lines.get((line_num - 1) as usize) {
             if is_diff {
                 format_diff_line(out, state, line_num, &line.content, true, line_num_width);
             } else {
@@ -227,7 +228,10 @@ fn format_annotation_block(
 
 /// Format diff header with file info from annotation range.
 fn format_diff_header(out: &mut String, state: &AppState, ann: &Annotation) {
-    let diff_meta = state.diff_metadata.as_ref().unwrap();
+    let diff_meta = match &state.content.metadata {
+        ContentMetadata::Diff(d) => d,
+        _ => return,
+    };
 
     // Get the file name from the diff metadata for the annotated range
     let file_name = diff_meta
@@ -236,7 +240,7 @@ fn format_diff_header(out: &mut String, state: &AppState, ann: &Annotation) {
         .and_then(|info| diff_meta.files.get(info.file_index))
         .and_then(|f| f.new_name.as_ref().or(f.old_name.as_ref()))
         .map(|s| s.as_str())
-        .unwrap_or(&state.label);
+        .unwrap_or(&state.content.label);
 
     // Collect old/new line ranges from the annotated lines
     let mut old_lines: Vec<u32> = Vec::new();
@@ -288,7 +292,10 @@ fn format_diff_line(
     is_selected: bool,
     line_num_width: usize,
 ) {
-    let diff_meta = state.diff_metadata.as_ref().unwrap();
+    let diff_meta = match &state.content.metadata {
+        ContentMetadata::Diff(d) => d,
+        _ => return,
+    };
     let info = diff_meta.lines.get(&line_num);
 
     let prefix = if is_selected { "> " } else { "  " };
@@ -386,8 +393,8 @@ fn render_content(
 mod tests {
     use super::*;
     use crate::input::{CliSource, ContentSource};
-    use crate::state::Line;
-    use std::collections::{HashMap, HashSet};
+    use crate::state::{ContentModel, ExitMode, ExitModeOrigin, Line, SessionState, UserConfig};
+    use std::collections::HashMap;
     use std::path::PathBuf;
 
     fn make_line(number: u32, content: &str) -> Line {
@@ -400,21 +407,22 @@ mod tests {
     }
 
     fn make_state(label: &str, lines: Vec<Line>, annotations: HashMap<String, Annotation>) -> AppState {
+        let source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from(label),
+        });
         AppState {
-            label: label.to_string(),
-            lines,
-            annotations,
-            tags: vec![],
-            deleted_tag_ids: HashSet::new(),
-            exit_modes: vec![],
-            deleted_exit_mode_ids: HashSet::new(),
-            selected_exit_mode_id: None,
-            session_comment: None,
-            diff_metadata: None,
-            markdown_metadata: None,
-            content_source: ContentSource::Cli(CliSource::File {
-                path: PathBuf::from(label),
-            }),
+            content: ContentModel {
+                label: label.to_string(),
+                lines,
+                source,
+                metadata: ContentMetadata::Plain,
+            },
+            session: SessionState {
+                annotations,
+                comment: None,
+                selected_exit_mode_id: None,
+            },
+            config: UserConfig::empty(),
         }
     }
 
@@ -578,32 +586,34 @@ mod tests {
 
     #[test]
     fn session_block_with_exit_mode() {
-        use crate::state::ExitMode;
-
-        let exit_modes = vec![ExitMode {
-            id: "apply".to_string(),
-            name: "Apply".to_string(),
-            color: "#22c55e".to_string(),
-            instruction: "Apply the suggested changes".to_string(),
-            order: 0,
-            origin: ExitModeOrigin::Persisted,
-        }];
+        let source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from("test.rs"),
+        });
+        let config = UserConfig::with_data(
+            vec![],
+            vec![ExitMode {
+                id: "apply".to_string(),
+                name: "Apply".to_string(),
+                color: "#22c55e".to_string(),
+                instruction: "Apply the suggested changes".to_string(),
+                order: 0,
+                origin: ExitModeOrigin::Persisted,
+            }],
+        );
 
         let state = AppState {
-            label: "test.rs".to_string(),
-            lines: vec![],
-            annotations: HashMap::new(),
-            tags: vec![],
-            deleted_tag_ids: HashSet::new(),
-            exit_modes,
-            deleted_exit_mode_ids: HashSet::new(),
-            selected_exit_mode_id: Some("apply".to_string()),
-            session_comment: None,
-            diff_metadata: None,
-            markdown_metadata: None,
-            content_source: ContentSource::Cli(CliSource::File {
-                path: PathBuf::from("test.rs"),
-            }),
+            content: ContentModel {
+                label: "test.rs".to_string(),
+                lines: vec![],
+                source,
+                metadata: ContentMetadata::Plain,
+            },
+            session: SessionState {
+                annotations: HashMap::new(),
+                comment: None,
+                selected_exit_mode_id: Some("apply".to_string()),
+            },
+            config,
         };
 
         let output = format_output(&state, OutputMode::Cli).text;
@@ -614,16 +624,20 @@ mod tests {
 
     #[test]
     fn session_block_with_annotations() {
-        use crate::state::ExitMode;
-
-        let exit_modes = vec![ExitMode {
-            id: "reject".to_string(),
-            name: "Reject".to_string(),
-            color: "#ef4444".to_string(),
-            instruction: "Do not apply".to_string(),
-            order: 0,
-            origin: ExitModeOrigin::Persisted,
-        }];
+        let source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from("test.rs"),
+        });
+        let config = UserConfig::with_data(
+            vec![],
+            vec![ExitMode {
+                id: "reject".to_string(),
+                name: "Reject".to_string(),
+                color: "#ef4444".to_string(),
+                instruction: "Do not apply".to_string(),
+                order: 0,
+                origin: ExitModeOrigin::Persisted,
+            }],
+        );
 
         let mut annotations = HashMap::new();
         annotations.insert(
@@ -642,20 +656,18 @@ mod tests {
             .collect();
 
         let state = AppState {
-            label: "test.rs".to_string(),
-            lines,
-            annotations,
-            tags: vec![],
-            deleted_tag_ids: HashSet::new(),
-            exit_modes,
-            deleted_exit_mode_ids: HashSet::new(),
-            selected_exit_mode_id: Some("reject".to_string()),
-            session_comment: None,
-            diff_metadata: None,
-            markdown_metadata: None,
-            content_source: ContentSource::Cli(CliSource::File {
-                path: PathBuf::from("test.rs"),
-            }),
+            content: ContentModel {
+                label: "test.rs".to_string(),
+                lines,
+                source,
+                metadata: ContentMetadata::Plain,
+            },
+            session: SessionState {
+                annotations,
+                comment: None,
+                selected_exit_mode_id: Some("reject".to_string()),
+            },
+            config,
         };
 
         let output = format_output(&state, OutputMode::Cli).text;
@@ -671,23 +683,25 @@ mod tests {
 
     #[test]
     fn session_comment_in_output() {
+        let source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from("test.rs"),
+        });
+
         let state = AppState {
-            label: "test.rs".to_string(),
-            lines: vec![],
-            annotations: HashMap::new(),
-            tags: vec![],
-            deleted_tag_ids: HashSet::new(),
-            exit_modes: vec![],
-            deleted_exit_mode_ids: HashSet::new(),
-            selected_exit_mode_id: None,
-            session_comment: Some(vec![ContentNode::Text {
-                text: "This is a session comment".to_string(),
-            }]),
-            diff_metadata: None,
-            markdown_metadata: None,
-            content_source: ContentSource::Cli(CliSource::File {
-                path: PathBuf::from("test.rs"),
-            }),
+            content: ContentModel {
+                label: "test.rs".to_string(),
+                lines: vec![],
+                source,
+                metadata: ContentMetadata::Plain,
+            },
+            session: SessionState {
+                annotations: HashMap::new(),
+                comment: Some(vec![ContentNode::Text {
+                    text: "This is a session comment".to_string(),
+                }]),
+                selected_exit_mode_id: None,
+            },
+            config: UserConfig::empty(),
         };
 
         let output = format_output(&state, OutputMode::Cli).text;
@@ -698,34 +712,36 @@ mod tests {
 
     #[test]
     fn session_comment_with_exit_mode() {
-        use crate::state::ExitMode;
-
-        let exit_modes = vec![ExitMode {
-            id: "apply".to_string(),
-            name: "Apply".to_string(),
-            color: "#22c55e".to_string(),
-            instruction: "Apply changes".to_string(),
-            order: 0,
-            origin: ExitModeOrigin::Persisted,
-        }];
+        let source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from("test.rs"),
+        });
+        let config = UserConfig::with_data(
+            vec![],
+            vec![ExitMode {
+                id: "apply".to_string(),
+                name: "Apply".to_string(),
+                color: "#22c55e".to_string(),
+                instruction: "Apply changes".to_string(),
+                order: 0,
+                origin: ExitModeOrigin::Persisted,
+            }],
+        );
 
         let state = AppState {
-            label: "test.rs".to_string(),
-            lines: vec![],
-            annotations: HashMap::new(),
-            tags: vec![],
-            deleted_tag_ids: HashSet::new(),
-            exit_modes,
-            deleted_exit_mode_ids: HashSet::new(),
-            selected_exit_mode_id: Some("apply".to_string()),
-            session_comment: Some(vec![ContentNode::Text {
-                text: "Overall looks good!".to_string(),
-            }]),
-            diff_metadata: None,
-            markdown_metadata: None,
-            content_source: ContentSource::Cli(CliSource::File {
-                path: PathBuf::from("test.rs"),
-            }),
+            content: ContentModel {
+                label: "test.rs".to_string(),
+                lines: vec![],
+                source,
+                metadata: ContentMetadata::Plain,
+            },
+            session: SessionState {
+                annotations: HashMap::new(),
+                comment: Some(vec![ContentNode::Text {
+                    text: "Overall looks good!".to_string(),
+                }]),
+                selected_exit_mode_id: Some("apply".to_string()),
+            },
+            config,
         };
 
         let output = format_output(&state, OutputMode::Cli).text;
@@ -738,21 +754,23 @@ mod tests {
 
     #[test]
     fn empty_session_comment_not_rendered() {
+        let source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from("test.rs"),
+        });
+
         let state = AppState {
-            label: "test.rs".to_string(),
-            lines: vec![],
-            annotations: HashMap::new(),
-            tags: vec![],
-            deleted_tag_ids: HashSet::new(),
-            exit_modes: vec![],
-            deleted_exit_mode_ids: HashSet::new(),
-            selected_exit_mode_id: None,
-            session_comment: Some(vec![]),
-            diff_metadata: None,
-            markdown_metadata: None,
-            content_source: ContentSource::Cli(CliSource::File {
-                path: PathBuf::from("test.rs"),
-            }),
+            content: ContentModel {
+                label: "test.rs".to_string(),
+                lines: vec![],
+                source,
+                metadata: ContentMetadata::Plain,
+            },
+            session: SessionState {
+                annotations: HashMap::new(),
+                comment: Some(vec![]),
+                selected_exit_mode_id: None,
+            },
+            config: UserConfig::empty(),
         };
 
         let output = format_output(&state, OutputMode::Cli).text;

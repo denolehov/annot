@@ -37,13 +37,13 @@
     onUnseal?: () => void;
     onDismiss?: () => void;
     tags?: Tag[];
-    ephemeral?: boolean;
+    allowsImagePaste?: boolean;
     onImagePasteBlocked?: () => void;
     onRequestCreateTag?: (text: string, from: number, to: number) => void;
     pendingTagInsertion?: { from: number; to: number; tag: Tag } | null;
   }
 
-  let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], ephemeral = false, onImagePasteBlocked, onRequestCreateTag, pendingTagInsertion }: Props = $props();
+  let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], allowsImagePaste = false, onImagePasteBlocked, onRequestCreateTag, pendingTagInsertion }: Props = $props();
 
   let container: HTMLDivElement | undefined = $state();
   let element: HTMLDivElement | undefined = $state();
@@ -238,7 +238,7 @@
         ExcalidrawChip,
         ExcalidrawPlaceholder,
         ImagePasteHandler.configure({
-          ephemeral,
+          allowsImagePaste,
           onPasteBlocked: onImagePasteBlocked,
         }),
         SlashCommands.configure({

@@ -12,7 +12,6 @@ use rmcp::model::{CallToolResult, Content, ServerInfo, ServerCapabilities, Imple
 use rmcp::{tool, tool_handler, tool_router, ErrorData as McpError, ServerHandler, ServiceExt};
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 
-use crate::config;
 use crate::input::{ContentSource, DiffSource, McpSource};
 use crate::output::FormatResult;
 use crate::state::AppState;
@@ -178,8 +177,7 @@ fn run_diff_session(
     });
 
     // Load config
-    let tags = config::load_tags();
-    let mut exit_modes = config::load_exit_modes();
+    let mut config = crate::state::UserConfig::load();
 
     // Prepend transient exit modes
     if let Some(inputs) = params.exit_modes {
@@ -188,12 +186,13 @@ fn run_diff_session(
             .enumerate()
             .map(|(i, m)| m.to_exit_mode(i))
             .collect();
-        exit_modes.splice(0..0, transient);
+        config.prepend_transient_modes(transient);
     }
 
     // Create state using from_diff
-    let state = AppState::from_diff(&diff_text, tags, exit_modes, content_source)
+    let content = crate::state::ContentModel::from_diff(&diff_text, content_source)
         .map_err(|e| format!("Invalid diff: {}", e))?;
+    let state = AppState::new(content, config);
 
     run_session_with_state(app_handle, state)
 }
@@ -206,8 +205,7 @@ fn run_session(
     content_source: ContentSource,
 ) -> Result<SessionOutput, String> {
     // Load config
-    let tags = config::load_tags();
-    let mut exit_modes = config::load_exit_modes();
+    let mut config = crate::state::UserConfig::load();
 
     // Prepend transient exit modes from MCP input
     if let Some(inputs) = exit_modes_input {
@@ -216,17 +214,18 @@ fn run_session(
             .enumerate()
             .map(|(i, m)| m.to_exit_mode(i))
             .collect();
-        exit_modes.splice(0..0, transient_modes);
+        config.prepend_transient_modes(transient_modes);
     }
 
-    // Create state (check for markdown by path hint)
+    // Create content model (check for markdown by path hint)
     let path_hint = content_source.path_hint().unwrap_or("");
-    let state = if crate::markdown::is_markdown(path_hint) {
-        AppState::from_markdown(&content, tags, exit_modes, content_source)
+    let content_model = if crate::markdown::is_markdown(path_hint) {
+        crate::state::ContentModel::from_markdown(&content, content_source)
     } else {
-        AppState::from_file(&content, tags, exit_modes, content_source)
+        crate::state::ContentModel::from_file(&content, content_source)
     };
 
+    let state = AppState::new(content_model, config);
     run_session_with_state(app_handle, state)
 }
 

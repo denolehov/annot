@@ -77,36 +77,28 @@ fn main() {
     };
 
     // Load config
-    let tags = annot_lib::config::load_tags();
-    let exit_modes = annot_lib::config::load_exit_modes();
+    let config = annot_lib::state::UserConfig::load();
 
-    // Create state based on rendering mode
-    let state = match input.rendering_mode {
-        RenderingMode::Diff => match AppState::from_diff(
-            &input.content,
-            tags,
-            exit_modes,
-            input.content_source,
-        ) {
-            Ok(state) => state,
-            Err(e) => {
-                eprintln!("Error parsing diff: {}", e);
-                process::exit(1);
+    // Create content model based on rendering mode
+    let content = match input.rendering_mode {
+        RenderingMode::Diff => {
+            match annot_lib::state::ContentModel::from_diff(&input.content, input.content_source) {
+                Ok(content) => content,
+                Err(e) => {
+                    eprintln!("Error parsing diff: {}", e);
+                    process::exit(1);
+                }
             }
-        },
-        RenderingMode::Markdown => AppState::from_markdown(
-            &input.content,
-            tags,
-            exit_modes,
-            input.content_source,
-        ),
-        RenderingMode::Source => AppState::from_file(
-            &input.content,
-            tags,
-            exit_modes,
-            input.content_source,
-        ),
+        }
+        RenderingMode::Markdown => {
+            annot_lib::state::ContentModel::from_markdown(&input.content, input.content_source)
+        }
+        RenderingMode::Source => {
+            annot_lib::state::ContentModel::from_file(&input.content, input.content_source)
+        }
     };
+
+    let state = AppState::new(content, config);
 
     annot_lib::run(state, context);
 }

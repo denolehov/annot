@@ -36,7 +36,7 @@
   }
 
   function exitModeToItem(mode: ExitMode): Item {
-    return { id: mode.id, name: mode.name, values: { name: mode.name, instruction: mode.instruction }, isEphemeral: mode.is_ephemeral };
+    return { id: mode.id, name: mode.name, values: { name: mode.name, instruction: mode.instruction }, isEphemeral: mode.origin === 'transient' };
   }
 
   function itemToTag(item: Item): Tag {
@@ -50,7 +50,7 @@
       instruction: item.values.instruction || '',
       color: original?.color || '#888888',
       order: original?.order ?? 0,
-      is_ephemeral: original?.is_ephemeral ?? false,
+      origin: original?.origin ?? 'persisted',
     };
   }
 

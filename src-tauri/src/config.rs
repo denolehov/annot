@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use fs4::fs_std::FileExt;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::state::{ExitMode, ExitModeOrigin, Tag};
+use crate::state::{ExitMode, Tag};
 
 /// Current config version. Bump when making breaking changes.
 pub const CONFIG_VERSION: u32 = 1;
@@ -267,6 +267,7 @@ fn save_exit_modes_to(path: &std::path::Path, modes: &[ExitMode]) -> io::Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::ExitModeOrigin;
     use tempfile::TempDir;
 
     #[test]

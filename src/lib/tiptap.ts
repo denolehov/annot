@@ -396,10 +396,10 @@ export const EditorShortcuts = Extension.create<EditorShortcutsOptions>({
 
 /**
  * ImagePasteHandler extension - intercepts paste events and inserts MediaChip nodes for images.
- * Only active in ephemeral mode.
+ * Only active when image paste is allowed (MCP content mode).
  */
 export interface ImagePasteHandlerOptions {
-  ephemeral: boolean;
+  allowsImagePaste: boolean;
   onPasteBlocked?: () => void;
 }
 
@@ -408,14 +408,14 @@ export const ImagePasteHandler = Extension.create<ImagePasteHandlerOptions>({
 
   addOptions() {
     return {
-      ephemeral: false,
+      allowsImagePaste: false,
       onPasteBlocked: undefined,
     };
   },
 
   addStorage() {
     return {
-      ephemeral: this.options.ephemeral,
+      allowsImagePaste: this.options.allowsImagePaste,
     };
   },
 
@@ -442,12 +442,12 @@ export const ImagePasteHandler = Extension.create<ImagePasteHandlerOptions>({
 
             if (!imageFile) return false;
 
-            // Check ephemeral from storage
-            const { ephemeral } = extension.storage;
+            // Check allowsImagePaste from storage
+            const { allowsImagePaste } = extension.storage;
             const { onPasteBlocked } = extension.options;
 
-            // Block paste if not in ephemeral mode
-            if (!ephemeral) {
+            // Block paste if not allowed
+            if (!allowsImagePaste) {
               onPasteBlocked?.();
               return true; // Consume the event
             }

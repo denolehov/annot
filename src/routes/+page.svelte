@@ -2,7 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
-  import type { ContentResponse, ContentNode, Line, JSONContent, ExitMode, Tag, DiffMetadata, DiffLineInfo, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
+  import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, DiffLineInfo, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
   import { rangeToKey, keyToRange, isLineInRange, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap } from "$lib/tiptap";
   import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
@@ -15,9 +15,12 @@
   let lines: Line[] = $state([]);
   let label = $state("");
   let error = $state("");
-  let diffMetadata: DiffMetadata | null = $state(null);
-  let markdownMetadata: MarkdownMetadata | null = $state(null);
-  let ephemeral = $state(false);
+  let metadata = $state<ContentMetadata>({ type: 'plain' });
+  let allowsImagePaste = $state(false);
+
+  // Derived metadata for backwards compatibility
+  let diffMetadata = $derived(metadata.type === 'diff' ? metadata : null);
+  let markdownMetadata = $derived(metadata.type === 'markdown' ? metadata : null);
 
   // Toast state
   let toastMessage = $state<string | null>(null);
@@ -703,16 +706,15 @@
       lines = res.lines;
       tags = res.tags;
       exitModes = res.exit_modes;
-      diffMetadata = res.diff_metadata;
-      markdownMetadata = res.markdown_metadata;
-      ephemeral = res.ephemeral;
+      metadata = res.metadata;
+      allowsImagePaste = res.allows_image_paste;
 
       // Build content trackers for scroll tracking
-      if (res.diff_metadata) {
-        hunkTracker = buildHunkTracker(res.diff_metadata);
+      if (res.metadata.type === 'diff') {
+        hunkTracker = buildHunkTracker(res.metadata);
       }
-      if (res.markdown_metadata) {
-        sectionTracker = buildSectionTracker(res.markdown_metadata);
+      if (res.metadata.type === 'markdown') {
+        sectionTracker = buildSectionTracker(res.metadata);
       }
 
       // Find index of initially selected mode (if any)
@@ -849,7 +851,7 @@
           onUnseal={openSessionEditor}
           onDismiss={closeSessionEditor}
           {tags}
-          {ephemeral}
+          {allowsImagePaste}
           onImagePasteBlocked={handleImagePasteBlocked}
           onRequestCreateTag={(text, from, to) => handleRequestCreateTag('session', text, from, to)}
           pendingTagInsertion={pendingTagInsertion?.editorKey === 'session' ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
@@ -945,7 +947,7 @@
               }}
               onDismiss={sealCurrentAnnotation}
               {tags}
-              {ephemeral}
+              {allowsImagePaste}
               onImagePasteBlocked={handleImagePasteBlocked}
               onRequestCreateTag={(text, from, to) => handleRequestCreateTag(rangeKey, text, from, to)}
               pendingTagInsertion={pendingTagInsertion?.editorKey === rangeKey ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}

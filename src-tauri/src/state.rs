@@ -2,9 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
+use crate::config;
 use crate::diff::{self, DiffMetadata};
 use crate::highlight::Highlighter;
-use crate::input::{CliSource, ContentSource};
+use crate::input::ContentSource;
 use crate::markdown::{self, MarkdownMetadata};
 
 /// Type of line in markdown content for structural styling and UI features.
@@ -148,30 +149,188 @@ impl ExitMode {
     }
 }
 
-/// Application state initialized at startup, before the window opens.
-pub struct AppState {
+// ════════════════════════════════════════════════════════════════════════════
+// CONTENT MODEL — immutable after construction
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Content model: the document being annotated.
+/// Immutable after construction.
+pub struct ContentModel {
     pub label: String,
     pub lines: Vec<Line>,
+    pub source: ContentSource,
+    pub metadata: ContentMetadata,
+}
+
+/// Type-safe representation of content-specific metadata.
+/// Replaces the two Option fields that were mutually exclusive.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentMetadata {
+    Plain,
+    Diff(DiffMetadata),
+    Markdown(MarkdownMetadata),
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SESSION STATE — mutates during session, not persisted
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Session state: mutable data during annotation session.
+#[derive(Default)]
+pub struct SessionState {
     /// Annotations keyed by "start-end" range string (e.g., "10-15").
     pub annotations: HashMap<String, Annotation>,
-    /// Available tags for annotation.
-    pub tags: Vec<Tag>,
-    /// IDs of tags deleted this session (for merge-on-save).
-    pub deleted_tag_ids: HashSet<String>,
-    /// Available exit modes for this session.
-    pub exit_modes: Vec<ExitMode>,
-    /// IDs of exit modes deleted this session (for merge-on-save).
-    pub deleted_exit_mode_ids: HashSet<String>,
+    /// Session-level comment (not tied to specific lines).
+    pub comment: Option<Vec<ContentNode>>,
     /// Currently selected exit mode ID (None if no mode selected).
     pub selected_exit_mode_id: Option<String>,
-    /// Session-level comment (not tied to specific lines).
-    pub session_comment: Option<Vec<ContentNode>>,
-    /// Diff metadata (Some if content is a unified diff).
-    pub diff_metadata: Option<DiffMetadata>,
-    /// Markdown metadata (Some if content is markdown).
-    pub markdown_metadata: Option<MarkdownMetadata>,
-    /// Where content came from — determines available features.
-    pub content_source: ContentSource,
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// USER CONFIG — encapsulates deletion tracking
+// ════════════════════════════════════════════════════════════════════════════
+
+/// User configuration for tags and exit modes.
+/// Encapsulates deletion tracking for safe concurrent writes.
+pub struct UserConfig {
+    tags: Vec<Tag>,
+    exit_modes: Vec<ExitMode>,
+    deleted_tags: HashSet<String>,
+    deleted_exit_modes: HashSet<String>,
+}
+
+impl UserConfig {
+    /// Load configuration from disk.
+    pub fn load() -> Self {
+        Self {
+            tags: config::load_tags(),
+            exit_modes: config::load_exit_modes(),
+            deleted_tags: HashSet::new(),
+            deleted_exit_modes: HashSet::new(),
+        }
+    }
+
+    /// Create empty config (for testing).
+    pub fn empty() -> Self {
+        Self {
+            tags: Vec::new(),
+            exit_modes: Vec::new(),
+            deleted_tags: HashSet::new(),
+            deleted_exit_modes: HashSet::new(),
+        }
+    }
+
+    /// Get all tags.
+    pub fn tags(&self) -> &[Tag] {
+        &self.tags
+    }
+
+    /// Get all exit modes.
+    pub fn exit_modes(&self) -> &[ExitMode] {
+        &self.exit_modes
+    }
+
+    /// Get mutable reference to exit modes (for reordering).
+    pub fn exit_modes_mut(&mut self) -> &mut Vec<ExitMode> {
+        &mut self.exit_modes
+    }
+
+    /// Insert or update a tag, then save to disk.
+    pub fn upsert_tag(&mut self, tag: Tag) {
+        if let Some(existing) = self.tags.iter_mut().find(|t| t.id == tag.id) {
+            *existing = tag;
+        } else {
+            self.tags.push(tag);
+        }
+        let _ = config::save_tags(&self.tags, &self.deleted_tags);
+    }
+
+    /// Delete a tag by ID, then save to disk.
+    pub fn delete_tag(&mut self, id: &str) {
+        self.tags.retain(|t| t.id != id);
+        self.deleted_tags.insert(id.to_string());
+        let _ = config::save_tags(&self.tags, &self.deleted_tags);
+    }
+
+    /// Insert or update an exit mode, then save to disk.
+    /// Only persists non-transient modes.
+    pub fn upsert_exit_mode(&mut self, mode: ExitMode) {
+        if let Some(existing) = self.exit_modes.iter_mut().find(|m| m.id == mode.id) {
+            *existing = mode;
+        } else {
+            self.exit_modes.push(mode);
+        }
+        // Sort by order
+        self.exit_modes.sort_by_key(|m| m.order);
+        // Only save persisted modes
+        let persisted: Vec<_> = self
+            .exit_modes
+            .iter()
+            .filter(|m| !m.is_transient())
+            .cloned()
+            .collect();
+        let _ = config::save_exit_modes(&persisted, &self.deleted_exit_modes);
+    }
+
+    /// Delete an exit mode by ID, then save to disk.
+    pub fn delete_exit_mode(&mut self, id: &str) {
+        self.exit_modes.retain(|m| m.id != id);
+        self.deleted_exit_modes.insert(id.to_string());
+        let persisted: Vec<_> = self
+            .exit_modes
+            .iter()
+            .filter(|m| !m.is_transient())
+            .cloned()
+            .collect();
+        let _ = config::save_exit_modes(&persisted, &self.deleted_exit_modes);
+    }
+
+    /// Reorder exit modes by ID list, then save to disk.
+    pub fn reorder_exit_modes(&mut self, ids: Vec<String>) {
+        // Update order field based on position in ids
+        for (new_order, id) in ids.iter().enumerate() {
+            if let Some(mode) = self.exit_modes.iter_mut().find(|m| m.id == *id) {
+                mode.order = new_order as u32;
+            }
+        }
+        self.exit_modes.sort_by_key(|m| m.order);
+        let persisted: Vec<_> = self
+            .exit_modes
+            .iter()
+            .filter(|m| !m.is_transient())
+            .cloned()
+            .collect();
+        let _ = config::save_exit_modes(&persisted, &self.deleted_exit_modes);
+    }
+
+    /// Prepend transient exit modes (from MCP params) at the start.
+    pub fn prepend_transient_modes(&mut self, modes: Vec<ExitMode>) {
+        // Insert at beginning, shifting existing modes
+        self.exit_modes.splice(0..0, modes);
+    }
+
+    /// Create config with specific tags and exit modes (for testing).
+    #[cfg(test)]
+    pub fn with_data(tags: Vec<Tag>, exit_modes: Vec<ExitMode>) -> Self {
+        Self {
+            tags,
+            exit_modes,
+            deleted_tags: HashSet::new(),
+            deleted_exit_modes: HashSet::new(),
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// APP STATE — composition of content, session, and config
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Application state initialized at startup, before the window opens.
+pub struct AppState {
+    pub content: ContentModel,
+    pub session: SessionState,
+    pub config: UserConfig,
 }
 
 /// Response sent to the frontend via the get_content command.
@@ -183,10 +342,8 @@ pub struct ContentResponse {
     pub exit_modes: Vec<ExitMode>,
     pub selected_exit_mode_id: Option<String>,
     pub session_comment: Option<Vec<ContentNode>>,
-    /// Diff metadata (Some if content is a unified diff).
-    pub diff_metadata: Option<DiffMetadata>,
-    /// Markdown metadata (Some if content is markdown).
-    pub markdown_metadata: Option<MarkdownMetadata>,
+    /// Content-specific metadata (diff info, markdown sections, or plain).
+    pub metadata: ContentMetadata,
     /// Whether image paste is allowed (MCP mode only).
     pub allows_image_paste: bool,
 }
@@ -430,43 +587,11 @@ fn render_node_inline<'a>(node: &'a comrak::nodes::AstNode<'a>, output: &mut Str
     }
 }
 
-impl AppState {
-    /// Create an empty state (used as placeholder in MCP mode before first session).
-    pub fn empty() -> Self {
-        Self {
-            label: String::new(),
-            lines: Vec::new(),
-            annotations: HashMap::new(),
-            tags: Vec::new(),
-            deleted_tag_ids: HashSet::new(),
-            exit_modes: Vec::new(),
-            deleted_exit_mode_ids: HashSet::new(),
-            selected_exit_mode_id: None,
-            session_comment: None,
-            diff_metadata: None,
-            markdown_metadata: None,
-            // Placeholder — will be replaced before use
-            content_source: ContentSource::Cli(CliSource::Stdin {
-                label: String::new(),
-            }),
-        }
-    }
-
+impl ContentModel {
     /// Parse file content into structured lines with syntax highlighting.
-    ///
-    /// # Arguments
-    /// * `content` - Raw file content
-    /// * `tags` - Available tags (loaded from config)
-    /// * `exit_modes` - Available exit modes (loaded from config)
-    /// * `content_source` - Where the content came from
-    pub fn from_file(
-        content: &str,
-        tags: Vec<Tag>,
-        exit_modes: Vec<ExitMode>,
-        content_source: ContentSource,
-    ) -> Self {
-        let label = content_source.label().to_string();
-        let path = content_source.path_hint().unwrap_or("");
+    pub fn from_file(content: &str, source: ContentSource) -> Self {
+        let label = source.label().to_string();
+        let path = source.path_hint().unwrap_or("");
 
         let highlighter = Highlighter::new();
         let html_lines = highlighter.highlight_lines(content, path);
@@ -488,33 +613,14 @@ impl AppState {
         Self {
             label,
             lines,
-            annotations: HashMap::new(),
-            tags,
-            deleted_tag_ids: HashSet::new(),
-            exit_modes,
-            deleted_exit_mode_ids: HashSet::new(),
-            selected_exit_mode_id: None,
-            session_comment: None,
-            diff_metadata: None,
-            markdown_metadata: None,
-            content_source,
+            source,
+            metadata: ContentMetadata::Plain,
         }
     }
 
     /// Parse diff content into structured lines with diff metadata.
-    ///
-    /// # Arguments
-    /// * `content` - Raw diff content
-    /// * `tags` - Available tags (loaded from config)
-    /// * `exit_modes` - Available exit modes (loaded from config)
-    /// * `content_source` - Where the content came from
-    pub fn from_diff(
-        content: &str,
-        tags: Vec<Tag>,
-        exit_modes: Vec<ExitMode>,
-        content_source: ContentSource,
-    ) -> Result<Self, String> {
-        let label = content_source.label().to_string();
+    pub fn from_diff(content: &str, source: ContentSource) -> Result<Self, String> {
+        let label = source.label().to_string();
         let mut diff_metadata = diff::parse_diff(content)?;
         let highlighter = Highlighter::new();
 
@@ -548,7 +654,8 @@ impl AppState {
                     .unwrap_or("");
 
                 // Only highlight non-header lines with actual code
-                let html = if !language.is_empty() && !line_content.starts_with("diff ")
+                let html = if !language.is_empty()
+                    && !line_content.starts_with("diff ")
                     && !line_content.starts_with("---")
                     && !line_content.starts_with("+++")
                     && !line_content.starts_with("@@")
@@ -583,33 +690,14 @@ impl AppState {
         Ok(Self {
             label,
             lines,
-            annotations: HashMap::new(),
-            tags,
-            deleted_tag_ids: HashSet::new(),
-            exit_modes,
-            deleted_exit_mode_ids: HashSet::new(),
-            selected_exit_mode_id: None,
-            session_comment: None,
-            diff_metadata: Some(diff_metadata),
-            markdown_metadata: None,
-            content_source,
+            source,
+            metadata: ContentMetadata::Diff(diff_metadata),
         })
     }
 
     /// Parse markdown content with inline rendering and code block highlighting.
-    ///
-    /// # Arguments
-    /// * `content` - Raw markdown content
-    /// * `tags` - Available tags (loaded from config)
-    /// * `exit_modes` - Available exit modes (loaded from config)
-    /// * `content_source` - Where the content came from
-    pub fn from_markdown(
-        content: &str,
-        tags: Vec<Tag>,
-        exit_modes: Vec<ExitMode>,
-        content_source: ContentSource,
-    ) -> Self {
-        let label = content_source.label().to_string();
+    pub fn from_markdown(content: &str, source: ContentSource) -> Self {
+        let label = source.label().to_string();
         use comrak::Options;
 
         let md_metadata = markdown::parse_markdown(content);
@@ -722,31 +810,50 @@ impl AppState {
         Self {
             label,
             lines,
-            annotations: HashMap::new(),
-            tags,
-            deleted_tag_ids: HashSet::new(),
-            exit_modes,
-            deleted_exit_mode_ids: HashSet::new(),
-            selected_exit_mode_id: None,
-            session_comment: None,
-            diff_metadata: None,
-            markdown_metadata: Some(md_metadata),
-            content_source,
+            source,
+            metadata: ContentMetadata::Markdown(md_metadata),
+        }
+    }
+}
+
+impl AppState {
+    /// Create a new AppState from content model and config.
+    pub fn new(content: ContentModel, config: UserConfig) -> Self {
+        Self {
+            content,
+            session: SessionState::default(),
+            config,
+        }
+    }
+
+    /// Create an empty state (used as placeholder in MCP mode before first session).
+    pub fn empty() -> Self {
+        use crate::input::CliSource;
+        Self {
+            content: ContentModel {
+                label: String::new(),
+                lines: Vec::new(),
+                source: ContentSource::Cli(CliSource::Stdin {
+                    label: String::new(),
+                }),
+                metadata: ContentMetadata::Plain,
+            },
+            session: SessionState::default(),
+            config: UserConfig::empty(),
         }
     }
 
     /// Convert to response for frontend.
     pub fn to_response(&self) -> ContentResponse {
         ContentResponse {
-            label: self.label.clone(),
-            lines: self.lines.clone(),
-            tags: self.tags.clone(),
-            exit_modes: self.exit_modes.clone(),
-            selected_exit_mode_id: self.selected_exit_mode_id.clone(),
-            session_comment: self.session_comment.clone(),
-            diff_metadata: self.diff_metadata.clone(),
-            markdown_metadata: self.markdown_metadata.clone(),
-            allows_image_paste: self.content_source.allows_image_paste(),
+            label: self.content.label.clone(),
+            lines: self.content.lines.clone(),
+            tags: self.config.tags().to_vec(),
+            exit_modes: self.config.exit_modes().to_vec(),
+            selected_exit_mode_id: self.session.selected_exit_mode_id.clone(),
+            session_comment: self.session.comment.clone(),
+            metadata: self.content.metadata.clone(),
+            allows_image_paste: self.content.source.allows_image_paste(),
         }
     }
 
@@ -768,7 +875,7 @@ impl AppState {
         } else {
             (end_line, start_line)
         };
-        self.annotations.insert(
+        self.session.annotations.insert(
             key,
             Annotation {
                 start_line: min,
@@ -781,21 +888,22 @@ impl AppState {
     /// Delete an annotation by range.
     pub fn delete_annotation(&mut self, start_line: u32, end_line: u32) {
         let key = Self::range_key(start_line, end_line);
-        self.annotations.remove(&key);
+        self.session.annotations.remove(&key);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::input::{DiffSource, McpSource};
+    use crate::input::{CliSource, DiffSource, McpSource};
     use std::path::PathBuf;
 
     fn test_state(content: &str, path: &str) -> AppState {
-        let content_source = ContentSource::Cli(CliSource::File {
+        let source = ContentSource::Cli(CliSource::File {
             path: PathBuf::from(path),
         });
-        AppState::from_file(content, vec![], vec![], content_source)
+        let content_model = ContentModel::from_file(content, source);
+        AppState::new(content_model, UserConfig::empty())
     }
 
     fn test_diff_source(label: &str) -> ContentSource {
@@ -803,6 +911,11 @@ mod tests {
             label: Some(label.to_string()),
             source: DiffSource::Raw,
         })
+    }
+
+    fn test_diff_state(content: &str, source: ContentSource) -> AppState {
+        let content_model = ContentModel::from_diff(content, source).unwrap();
+        AppState::new(content_model, UserConfig::empty())
     }
 
     #[test]
@@ -856,15 +969,19 @@ mod tests {
 
     #[test]
     fn content_response_includes_tags() {
-        let tags = vec![Tag {
-            id: "test123".into(),
-            name: "TEST".into(),
-            instruction: "Test tag".into(),
-        }];
-        let content_source = ContentSource::Cli(CliSource::File {
+        let source = ContentSource::Cli(CliSource::File {
             path: PathBuf::from("test.rs"),
         });
-        let state = AppState::from_file("code", tags, vec![], content_source);
+        let content_model = ContentModel::from_file("code", source);
+        let config = UserConfig::with_data(
+            vec![Tag {
+                id: "test123".into(),
+                name: "TEST".into(),
+                instruction: "Test tag".into(),
+            }],
+            vec![],
+        );
+        let state = AppState::new(content_model, config);
         let response = state.to_response();
 
         assert_eq!(response.tags.len(), 1);
@@ -901,107 +1018,77 @@ mod tests {
 
     #[test]
     fn from_diff_creates_state_with_metadata() {
-        let state = AppState::from_diff(
-            SIMPLE_DIFF,
-            vec![],
-            vec![],
-            test_diff_source("changes.diff"),
-        )
-        .unwrap();
+        let state = test_diff_state(SIMPLE_DIFF, test_diff_source("changes.diff"));
 
-        assert!(state.diff_metadata.is_some());
-        let meta = state.diff_metadata.as_ref().unwrap();
-        assert_eq!(meta.files.len(), 1);
-        assert_eq!(meta.files[0].new_name, Some("file.rs".to_string()));
+        match &state.content.metadata {
+            ContentMetadata::Diff(meta) => {
+                assert_eq!(meta.files.len(), 1);
+                assert_eq!(meta.files[0].new_name, Some("file.rs".to_string()));
+            }
+            _ => panic!("Expected Diff metadata"),
+        }
     }
 
     #[test]
     fn from_diff_creates_lines_from_content() {
-        let state = AppState::from_diff(
-            SIMPLE_DIFF,
-            vec![],
-            vec![],
-            test_diff_source("changes.diff"),
-        )
-        .unwrap();
+        let state = test_diff_state(SIMPLE_DIFF, test_diff_source("changes.diff"));
 
         // Should have lines matching the diff content
-        assert!(!state.lines.is_empty());
+        assert!(!state.content.lines.is_empty());
 
         // First line should be the diff header
-        assert!(state.lines[0].content.starts_with("diff --git"));
+        assert!(state.content.lines[0].content.starts_with("diff --git"));
 
         // Check that +/- lines are preserved
-        let has_added = state.lines.iter().any(|l| l.content.starts_with('+'));
-        let has_deleted = state.lines.iter().any(|l| l.content.starts_with('-'));
+        let has_added = state.content.lines.iter().any(|l| l.content.starts_with('+'));
+        let has_deleted = state.content.lines.iter().any(|l| l.content.starts_with('-'));
         assert!(has_added, "Should have added lines");
         assert!(has_deleted, "Should have deleted lines");
     }
 
     #[test]
     fn from_diff_line_numbers_are_1_indexed() {
-        let state = AppState::from_diff(
-            SIMPLE_DIFF,
-            vec![],
-            vec![],
-            test_diff_source("changes.diff"),
-        )
-        .unwrap();
+        let state = test_diff_state(SIMPLE_DIFF, test_diff_source("changes.diff"));
 
-        assert_eq!(state.lines[0].number, 1);
-        assert_eq!(state.lines[1].number, 2);
+        assert_eq!(state.content.lines[0].number, 1);
+        assert_eq!(state.content.lines[1].number, 2);
     }
 
     #[test]
     fn from_diff_response_includes_metadata() {
-        let state = AppState::from_diff(
-            SIMPLE_DIFF,
-            vec![],
-            vec![],
-            test_diff_source("changes.diff"),
-        )
-        .unwrap();
-
+        let state = test_diff_state(SIMPLE_DIFF, test_diff_source("changes.diff"));
         let response = state.to_response();
-        assert!(response.diff_metadata.is_some());
+
+        assert!(matches!(response.metadata, ContentMetadata::Diff(_)));
     }
 
     #[test]
     fn from_diff_error_on_invalid_content() {
-        let result = AppState::from_diff(
-            "just regular text",
-            vec![],
-            vec![],
-            test_diff_source("not-a-diff.txt"),
-        );
-
+        let result = ContentModel::from_diff("just regular text", test_diff_source("not-a-diff.txt"));
         assert!(result.is_err());
     }
 
     #[test]
     fn from_file_has_no_diff_metadata() {
         let state = test_state("fn main() {}", "test.rs");
-        assert!(state.diff_metadata.is_none());
+        assert!(matches!(state.content.metadata, ContentMetadata::Plain));
 
         let response = state.to_response();
-        assert!(response.diff_metadata.is_none());
+        assert!(matches!(response.metadata, ContentMetadata::Plain));
     }
 
     #[test]
     fn from_diff_includes_tags_and_exit_modes() {
-        let tags = vec![Tag::new("TEST".into(), "instruction".into())];
-        let modes = vec![ExitMode::new("Apply".into(), "#22c55e".into(), "Apply it".into(), 0)];
+        let source = test_diff_source("changes.diff");
+        let content_model = ContentModel::from_diff(SIMPLE_DIFF, source).unwrap();
+        let config = UserConfig::with_data(
+            vec![Tag::new("TEST".into(), "instruction".into())],
+            vec![ExitMode::new("Apply".into(), "#22c55e".into(), "Apply it".into(), 0)],
+        );
+        let state = AppState::new(content_model, config);
 
-        let state = AppState::from_diff(
-            SIMPLE_DIFF,
-            tags,
-            modes,
-            test_diff_source("changes.diff"),
-        )
-        .unwrap();
-
-        assert_eq!(state.tags.len(), 1);
-        assert_eq!(state.exit_modes.len(), 1);
+        assert_eq!(state.config.tags().len(), 1);
+        assert_eq!(state.config.exit_modes().len(), 1);
     }
 
     /// Test that diff lines with doc comments produce single-line HTML
@@ -1017,16 +1104,10 @@ mod tests {
  }
 "#;
 
-        let state = AppState::from_diff(
-            diff_with_doc_comment,
-            vec![],
-            vec![],
-            test_diff_source("changes.diff"),
-        )
-        .unwrap();
+        let state = test_diff_state(diff_with_doc_comment, test_diff_source("changes.diff"));
 
         println!("\n=== DIFF DOC COMMENT LINES ===");
-        for line in &state.lines {
+        for line in &state.content.lines {
             println!("Line {}: content={:?}", line.number, line.content);
             if let Some(ref html) = line.html {
                 println!("        html={:?}", html);
@@ -1039,7 +1120,7 @@ mod tests {
         println!("=== END ===\n");
 
         // Find the deleted doc comment line
-        let deleted_line = state.lines.iter().find(|l| l.content.starts_with("-///")).unwrap();
+        let deleted_line = state.content.lines.iter().find(|l| l.content.starts_with("-///")).unwrap();
         assert!(deleted_line.html.is_some(), "Deleted doc comment should have HTML");
         let html = deleted_line.html.as_ref().unwrap();
 

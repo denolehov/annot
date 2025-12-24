@@ -83,141 +83,83 @@ pub fn finish_session(
 
 #[tauri::command]
 pub fn set_exit_mode(state: State<Mutex<AppState>>, mode_id: Option<String>) {
-    state.lock().selected_exit_mode_id = mode_id;
+    state.lock().session.selected_exit_mode_id = mode_id;
 }
 
 #[tauri::command]
 pub fn cycle_exit_mode(state: State<Mutex<AppState>>, direction: i32) -> Option<ExitMode> {
     let mut state = state.lock();
-    if state.exit_modes.is_empty() {
+    let exit_modes = state.config.exit_modes();
+    if exit_modes.is_empty() {
         return None;
     }
 
     // Find current index
     let current_index = state
+        .session
         .selected_exit_mode_id
         .as_ref()
-        .and_then(|id| state.exit_modes.iter().position(|m| &m.id == id))
+        .and_then(|id| exit_modes.iter().position(|m| &m.id == id))
         .unwrap_or(0);
 
     // Calculate new index with wrapping
-    let len = state.exit_modes.len() as i32;
+    let len = exit_modes.len() as i32;
     let new_index = ((current_index as i32 + direction) % len + len) % len;
 
-    let new_mode = state.exit_modes[new_index as usize].clone();
-    state.selected_exit_mode_id = Some(new_mode.id.clone());
+    let new_mode = exit_modes[new_index as usize].clone();
+    state.session.selected_exit_mode_id = Some(new_mode.id.clone());
 
     Some(new_mode)
 }
 
 #[tauri::command]
 pub fn set_session_comment(state: State<Mutex<AppState>>, content: Option<Vec<ContentNode>>) {
-    state.lock().session_comment = content;
+    state.lock().session.comment = content;
 }
 
 #[tauri::command]
 pub fn get_tags(state: State<Mutex<AppState>>) -> Vec<Tag> {
-    state.lock().tags.clone()
+    state.lock().config.tags().to_vec()
 }
 
 #[tauri::command]
 pub fn upsert_tag(state: State<Mutex<AppState>>, tag: Tag) -> Vec<Tag> {
     let mut state = state.lock();
-
-    // Find existing tag by ID and update, or add new
-    if let Some(existing) = state.tags.iter_mut().find(|t| t.id == tag.id) {
-        existing.name = tag.name;
-        existing.instruction = tag.instruction;
-    } else {
-        state.tags.push(tag);
-    }
-
-    // Persist to disk (with locking and merge)
-    if let Err(e) = config::save_tags(&state.tags, &state.deleted_tag_ids) {
-        eprintln!("Warning: Failed to save tags: {}", e);
-    }
-
-    state.tags.clone()
+    state.config.upsert_tag(tag);
+    state.config.tags().to_vec()
 }
 
 #[tauri::command]
 pub fn delete_tag(state: State<Mutex<AppState>>, id: String) -> Vec<Tag> {
     let mut state = state.lock();
-    state.tags.retain(|t| t.id != id);
-    state.deleted_tag_ids.insert(id);
-
-    // Persist to disk (with locking and merge)
-    if let Err(e) = config::save_tags(&state.tags, &state.deleted_tag_ids) {
-        eprintln!("Warning: Failed to save tags: {}", e);
-    }
-
-    state.tags.clone()
+    state.config.delete_tag(&id);
+    state.config.tags().to_vec()
 }
 
 #[tauri::command]
 pub fn get_exit_modes(state: State<Mutex<AppState>>) -> Vec<ExitMode> {
-    state.lock().exit_modes.clone()
+    state.lock().config.exit_modes().to_vec()
 }
 
 #[tauri::command]
 pub fn upsert_exit_mode(state: State<Mutex<AppState>>, mode: ExitMode) -> Vec<ExitMode> {
     let mut state = state.lock();
-
-    // Find existing mode by ID and update, or add new
-    if let Some(existing) = state.exit_modes.iter_mut().find(|m| m.id == mode.id) {
-        existing.name = mode.name;
-        existing.color = mode.color;
-        existing.instruction = mode.instruction;
-        existing.order = mode.order;
-    } else {
-        state.exit_modes.push(mode);
-    }
-
-    // Sort by order
-    state.exit_modes.sort_by_key(|m| m.order);
-
-    // Persist to disk (with locking and merge)
-    if let Err(e) = config::save_exit_modes(&state.exit_modes, &state.deleted_exit_mode_ids) {
-        eprintln!("Warning: Failed to save exit modes: {}", e);
-    }
-
-    state.exit_modes.clone()
+    state.config.upsert_exit_mode(mode);
+    state.config.exit_modes().to_vec()
 }
 
 #[tauri::command]
 pub fn delete_exit_mode(state: State<Mutex<AppState>>, id: String) -> Vec<ExitMode> {
     let mut state = state.lock();
-    state.exit_modes.retain(|m| m.id != id);
-    state.deleted_exit_mode_ids.insert(id);
-
-    // Persist to disk (with locking and merge)
-    if let Err(e) = config::save_exit_modes(&state.exit_modes, &state.deleted_exit_mode_ids) {
-        eprintln!("Warning: Failed to save exit modes: {}", e);
-    }
-
-    state.exit_modes.clone()
+    state.config.delete_exit_mode(&id);
+    state.config.exit_modes().to_vec()
 }
 
 #[tauri::command]
 pub fn reorder_exit_modes(state: State<Mutex<AppState>>, ids: Vec<String>) -> Vec<ExitMode> {
     let mut state = state.lock();
-
-    // Update order based on position in ids array
-    for (new_order, id) in ids.iter().enumerate() {
-        if let Some(mode) = state.exit_modes.iter_mut().find(|m| &m.id == id) {
-            mode.order = new_order as u32;
-        }
-    }
-
-    // Sort by new order
-    state.exit_modes.sort_by_key(|m| m.order);
-
-    // Persist to disk (with locking and merge)
-    if let Err(e) = config::save_exit_modes(&state.exit_modes, &state.deleted_exit_mode_ids) {
-        eprintln!("Warning: Failed to save exit modes: {}", e);
-    }
-
-    state.exit_modes.clone()
+    state.config.reorder_exit_modes(ids);
+    state.config.exit_modes().to_vec()
 }
 
 #[tauri::command]
@@ -226,6 +168,7 @@ pub fn copy_to_clipboard(state: State<Mutex<AppState>>, mode: CopyMode) -> Resul
 
     // Reconstruct raw content from lines
     let raw_content: String = state
+        .content
         .lines
         .iter()
         .map(|l| l.content.as_str())
@@ -272,6 +215,7 @@ pub fn save_content(
 
     // Reconstruct raw content from lines (same as copy_to_clipboard)
     let raw_content: String = state
+        .content
         .lines
         .iter()
         .map(|l| l.content.as_str())
@@ -340,6 +284,7 @@ pub fn export_to_obsidian(
 
     // Reconstruct raw content from lines
     let content: String = state
+        .content
         .lines
         .iter()
         .map(|l| l.content.as_str())
@@ -353,12 +298,13 @@ pub fn export_to_obsidian(
 
     // Use H1 title as note name if present, otherwise fall back to label
     let note_name = state
+        .content
         .lines
         .iter()
         .find(|l| l.content.starts_with("# "))
         .map(|l| l.content.trim_start_matches("# ").trim())
         .filter(|s| !s.is_empty())
-        .unwrap_or(&state.label);
+        .unwrap_or(&state.content.label);
 
     // Build Obsidian URI with clipboard parameter
     let url = format!(

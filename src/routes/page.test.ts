@@ -17,22 +17,41 @@ vi.mock("@tauri-apps/api/window", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 
+// Helper to create a valid mock response
+function createMockResponse(overrides: Partial<{
+  label: string;
+  lines: { number: number; content: string }[];
+  exit_modes: [];
+  selected_exit_mode_id: string | null;
+  tags: [];
+}> = {}) {
+  return {
+    label: "test.rs",
+    lines: [{ number: 1, content: "// comment" }],
+    exit_modes: [],
+    selected_exit_mode_id: null,
+    tags: [],
+    session_comment: null,
+    metadata: { type: 'plain' as const },
+    allows_image_paste: false,
+    ...overrides,
+  };
+}
+
 describe("+page.svelte", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("renders file content with line numbers", async () => {
-    vi.mocked(invoke).mockResolvedValue({
+    vi.mocked(invoke).mockResolvedValue(createMockResponse({
       label: "test.rs",
       lines: [
         { number: 1, content: "fn main() {" },
         { number: 2, content: '    println!("hello");' },
         { number: 3, content: "}" },
       ],
-      exit_modes: [],
-      selected_exit_mode_id: null,
-    });
+    }));
 
     render(Page);
 
@@ -46,12 +65,10 @@ describe("+page.svelte", () => {
   });
 
   it("displays filename in header", async () => {
-    vi.mocked(invoke).mockResolvedValue({
+    vi.mocked(invoke).mockResolvedValue(createMockResponse({
       label: "my_module.rs",
       lines: [{ number: 1, content: "// comment" }],
-      exit_modes: [],
-      selected_exit_mode_id: null,
-    });
+    }));
 
     render(Page);
 
@@ -79,16 +96,13 @@ describe("+page.svelte", () => {
   });
 
   it("does not open editor when Cmd+C is pressed (allows copy)", async () => {
-    vi.mocked(invoke).mockResolvedValue({
+    vi.mocked(invoke).mockResolvedValue(createMockResponse({
       label: "test.rs",
       lines: [
         { number: 1, content: "fn main() {" },
         { number: 2, content: '    println!("hello");' },
       ],
-      exit_modes: [],
-      selected_exit_mode_id: null,
-      tags: [],
-    });
+    }));
 
     render(Page);
 
@@ -118,16 +132,13 @@ describe("+page.svelte", () => {
   });
 
   it("opens editor when 'c' is pressed alone on hovered line", async () => {
-    vi.mocked(invoke).mockResolvedValue({
+    vi.mocked(invoke).mockResolvedValue(createMockResponse({
       label: "test.rs",
       lines: [
         { number: 1, content: "fn main() {" },
         { number: 2, content: '    println!("hello");' },
       ],
-      exit_modes: [],
-      selected_exit_mode_id: null,
-      tags: [],
-    });
+    }));
 
     render(Page);
 
