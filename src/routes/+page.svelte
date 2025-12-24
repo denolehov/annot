@@ -728,12 +728,26 @@
         sessionComment = contentNodesToTipTap(res.session_comment);
       }
 
+      // Determine session mode once at startup
+      const mode = await invoke<'cli' | 'mcp'>('get_session_mode');
+
       // Listen for window close - this triggers output and exit
       const unlisten = await window.onCloseRequested(async (event) => {
         event.preventDefault();
         unlisten();  // Remove listener before closing to prevent re-entry
-        await invoke('finish_session');
-        await window.destroy();
+
+        try {
+          if (mode === 'mcp') {
+            await invoke('finish_session_mcp');
+            await window.destroy();
+          } else {
+            await invoke('finish_session_cli');
+            // Process exits, no destroy needed
+          }
+        } catch (e) {
+          console.error('Failed to finish session:', e);
+          await window.destroy(); // Fallback
+        }
       });
     } catch (e) {
       error = String(e);

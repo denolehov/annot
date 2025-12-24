@@ -21,9 +21,9 @@ pub mod state;
 
 use commands::{
     copy_to_clipboard, cycle_exit_mode, delete_annotation, delete_exit_mode, delete_tag,
-    export_to_obsidian, finish_session, get_config, get_content, get_exit_modes, get_tags,
-    reorder_exit_modes, save_config, save_content, set_exit_mode, set_session_comment,
-    upsert_annotation, upsert_exit_mode, upsert_tag,
+    export_to_obsidian, finish_session_cli, finish_session_mcp, get_config, get_content,
+    get_exit_modes, get_session_mode, get_tags, reorder_exit_modes, save_config, save_content,
+    set_exit_mode, set_session_comment, upsert_annotation, upsert_exit_mode, upsert_tag,
 };
 use mermaid_window::{get_mermaid_source, open_mermaid_window, MermaidWindowState};
 use state::AppState;
@@ -47,7 +47,9 @@ pub fn run(state: AppState, context: tauri::Context) {
             get_content,
             upsert_annotation,
             delete_annotation,
-            finish_session,
+            get_session_mode,
+            finish_session_cli,
+            finish_session_mcp,
             set_exit_mode,
             cycle_exit_mode,
             set_session_comment,
@@ -112,7 +114,9 @@ pub fn run_mcp(context: tauri::Context) {
             get_content,
             upsert_annotation,
             delete_annotation,
-            finish_session,
+            get_session_mode,
+            finish_session_cli,
+            finish_session_mcp,
             set_exit_mode,
             cycle_exit_mode,
             set_session_comment,

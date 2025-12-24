@@ -79,11 +79,16 @@ pub enum DiffSource {
 }
 
 impl ContentSource {
+    /// Whether this is an MCP session.
+    pub fn is_mcp(&self) -> bool {
+        matches!(self, ContentSource::Mcp(_))
+    }
+
     /// Whether image paste is allowed.
     ///
     /// MCP mode can return images in responses; CLI stdout cannot.
     pub fn allows_image_paste(&self) -> bool {
-        matches!(self, ContentSource::Mcp(_))
+        self.is_mcp()
     }
 
     /// Display label for headers.

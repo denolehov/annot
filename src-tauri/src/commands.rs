@@ -1,13 +1,22 @@
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
 
 use parking_lot::Mutex;
-use tauri::{AppHandle, State, WebviewWindow};
+use tauri::{AppHandle, State};
 
 use crate::config::{self, Config};
 use crate::output::{format_output, OutputMode};
 use crate::state::{AppState, ContentNode, ContentResponse, ExitMode, Tag};
 use serde::Serialize;
 use crate::{ResultSender, ShouldExit};
+
+/// Session mode derived from ContentSource.
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SessionMode {
+    Cli,
+    Mcp,
+}
 
 use serde::Deserialize;
 
@@ -43,42 +52,55 @@ pub fn delete_annotation(state: State<Mutex<AppState>>, start_line: u32, end_lin
         .delete_annotation(start_line, end_line);
 }
 
+/// Returns the session mode, derived from ContentSource
 #[tauri::command]
-pub fn finish_session(
-    state: State<Mutex<AppState>>,
-    result_sender: State<ResultSender>,
-    should_exit: State<ShouldExit>,
-    _window: WebviewWindow,
-    app: AppHandle,
-) -> String {
-    // Check if we're in MCP mode (has a result sender)
-    let sender = {
-        let mut guard = result_sender.lock();
-        guard.take()
-    };
-
-    let mode = if sender.is_some() { OutputMode::Mcp } else { OutputMode::Cli };
-
-    let result = {
-        let state = state.lock();
-        format_output(&state, mode)
-    };
-
-    let output_text = result.text.clone();
-
-    if let Some(tx) = sender {
-        // MCP mode: send full result via channel (includes images)
-        let _ = tx.send(result);
+pub fn get_session_mode(state: State<Mutex<AppState>>) -> SessionMode {
+    if state.lock().content.source.is_mcp() {
+        SessionMode::Mcp
     } else {
-        // CLI mode: print text to stdout and exit app
-        if !output_text.is_empty() {
-            print!("{}", output_text);
-        }
-        should_exit.store(true, std::sync::atomic::Ordering::SeqCst);
-        app.exit(0);
+        SessionMode::Cli
+    }
+}
+
+/// CLI mode: format output, print to stdout, exit process
+#[tauri::command]
+pub fn finish_session_cli(
+    state: State<Mutex<AppState>>,
+    should_exit: State<ShouldExit>,
+    app: AppHandle,
+) {
+    let result = {
+        let state_guard = state.lock();
+        format_output(&state_guard, OutputMode::Cli)
+    };
+
+    if !result.text.is_empty() {
+        print!("{}", result.text);
     }
 
-    output_text
+    should_exit.store(true, Ordering::SeqCst);
+    app.exit(0);
+}
+
+/// MCP mode: format output, send via channel
+#[tauri::command]
+pub fn finish_session_mcp(
+    state: State<Mutex<AppState>>,
+    result_sender: State<ResultSender>,
+) -> Result<(), String> {
+    let tx = result_sender
+        .lock()
+        .take()
+        .ok_or_else(|| "MCP sender missing or already used".to_string())?;
+
+    let result = {
+        let state_guard = state.lock();
+        format_output(&state_guard, OutputMode::Mcp)
+    };
+
+    tx.send(result)
+        .map_err(|_| "Failed to send result to MCP host".to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
