@@ -1,8 +1,54 @@
+// =============================================================================
+// Unified line model (LineOrigin + LineSemantics)
+// =============================================================================
+
+/** Where this line's content originates from. */
+export type LineOrigin =
+  | { type: 'document'; line: number }
+  | { type: 'diff'; old_line: number | null; new_line: number | null; file_index: number }
+  | { type: 'external'; file: string; line: number; portal_id: string }
+  | { type: 'virtual' };
+
+/** Content classification: what kind of line is this? */
+export type LineSemantics =
+  | { type: 'plain' }
+  | ({ type: 'markdown' } & MarkdownSemantics)
+  | ({ type: 'diff' } & DiffSemantics)
+  | ({ type: 'portal' } & PortalSemantics);
+
+/** Markdown structural semantics. */
+export type MarkdownSemantics =
+  | { kind: 'header'; level: number }
+  | { kind: 'code_block_start'; language: string | null }
+  | { kind: 'code_block_content' }
+  | { kind: 'code_block_end' }
+  | { kind: 'table_row' }
+  | { kind: 'list_item'; ordered: boolean }
+  | { kind: 'block_quote' }
+  | { kind: 'horizontal_rule' };
+
+/** Diff line semantics. */
+export type DiffSemantics =
+  | { kind: 'file_header' }
+  | { kind: 'hunk_header'; context: string | null }
+  | { kind: 'added' }
+  | { kind: 'deleted' }
+  | { kind: 'context' };
+
+/** Portal line semantics. */
+export type PortalSemantics =
+  | { kind: 'header'; label: string; path: string; range: string }
+  | { kind: 'content' }
+  | { kind: 'footer' };
+
 export interface Line {
-  number: number;
   content: string;
   /** Syntax-highlighted HTML with CSS classes, or null if unavailable */
   html: string | null;
+  /** Where this line originates from. */
+  origin: LineOrigin;
+  /** Content classification. */
+  semantics: LineSemantics;
 }
 
 export interface ExitMode {
@@ -35,7 +81,8 @@ export interface ContentResponse {
 // Diff types
 export interface DiffMetadata {
   files: DiffFileInfo[];
-  lines: Record<number, DiffLineInfo>;
+  // Note: `lines` HashMap is no longer serialized from backend.
+  // Line info is now embedded in each Line's origin/semantics.
 }
 
 export interface HunkInfo {
@@ -57,14 +104,9 @@ export interface DiffFileInfo {
   hunks: HunkInfo[];
 }
 
-export interface DiffLineInfo {
-  kind: DiffLineKind;
-  old_line_num: number | null;
-  new_line_num: number | null;
-  file_index: number;
-}
-
-export type DiffLineKind = 'context' | 'added' | 'deleted' | 'header';
+// Note: DiffLineInfo and DiffLineKind are no longer needed on frontend.
+// Line info is now embedded in each Line's origin (LineOrigin::Diff)
+// and semantics (LineSemantics::Diff).
 
 // Markdown types
 export interface MarkdownMetadata {

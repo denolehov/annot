@@ -9,41 +9,107 @@ use crate::highlight::Highlighter;
 use crate::input::ContentSource;
 use crate::markdown::{self, MarkdownMetadata};
 
-/// Type of line in markdown content for structural styling and UI features.
+// =============================================================================
+// Unified line model (LineOrigin + LineSemantics)
+// =============================================================================
+
+use std::path::PathBuf;
+
+/// Where this line's content originates from.
+/// Carries line number information for annotation routing and gutter display.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum LineOrigin {
+    /// Line from the primary document being reviewed.
+    Document {
+        /// 1-indexed line number in the source file.
+        line: u32,
+    },
+    /// Line from a diff (maps to old/new file versions).
+    Diff {
+        /// Line number in old file (None if added line or header).
+        old_line: Option<u32>,
+        /// Line number in new file (None if deleted line or header).
+        new_line: Option<u32>,
+        /// Index into diff file list for annotation routing.
+        file_index: usize,
+    },
+    /// Line from an external file (portal content).
+    External {
+        /// Path to the external file.
+        file: PathBuf,
+        /// 1-indexed line number in the external file.
+        line: u32,
+        /// Portal identifier for grouping and boundaries.
+        portal_id: String,
+    },
+    /// Synthetic line with no source (portal headers, decorators).
+    Virtual,
+}
+
+/// Content classification: what kind of line is this?
 #[derive(Clone, Debug, Serialize, Default)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum LineType {
+pub enum LineSemantics {
     #[default]
     Plain,
-    Header {
-        level: u8,
-    },
-    CodeBlockStart {
-        language: Option<String>,
-    },
+    Markdown(MarkdownSemantics),
+    Diff(DiffSemantics),
+    Portal(PortalSemantics),
+}
+
+/// Markdown structural semantics.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum MarkdownSemantics {
+    Header { level: u8 },
+    CodeBlockStart { language: Option<String> },
     CodeBlockContent,
     CodeBlockEnd,
     TableRow,
-    ListItem {
-        ordered: bool,
-    },
+    ListItem { ordered: bool },
     BlockQuote,
     HorizontalRule,
 }
 
-/// A single line of content with its line number.
+/// Diff line semantics.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum DiffSemantics {
+    FileHeader,
+    HunkHeader { context: Option<String> },
+    Added,
+    Deleted,
+    Context,
+}
+
+/// Portal line semantics.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PortalSemantics {
+    Header {
+        label: String,
+        path: String,
+        range: String,
+    },
+    Content,
+    Footer,
+}
+
+/// A single line of content.
 #[derive(Clone, Serialize)]
 pub struct Line {
-    pub number: u32,
+    /// Raw text content of the line.
     pub content: String,
     /// Rendered HTML for display:
     /// - For code blocks: syntect-highlighted spans
     /// - For markdown: inline formatting (bold, italic, etc.)
     /// - None if no rendering needed
     pub html: Option<String>,
-    /// Type of line for structural styling and UI features.
-    #[serde(flatten)]
-    pub line_type: LineType,
+    /// Where this line originates from.
+    pub origin: LineOrigin,
+    /// Content classification.
+    pub semantics: LineSemantics,
 }
 
 /// A tag is a composable mini-prompt that can be embedded in annotations.
@@ -374,7 +440,7 @@ fn html_escape(s: &str) -> String {
 ///
 /// Structural markers (`#`, `-`, `>`, etc.) are preserved as escaped text.
 /// Only inline content (bold, italic, links, code) is rendered as HTML.
-fn render_markdown_line(line: &str, options: &comrak::Options) -> (String, LineType) {
+fn render_markdown_line(line: &str, options: &comrak::Options) -> (String, LineSemantics) {
     let trimmed = line.trim_start();
     let indent = line.len() - trimmed.len();
     let indent_str = &line[..indent];
@@ -390,7 +456,7 @@ fn render_markdown_line(line: &str, options: &comrak::Options) -> (String, LineT
             html_escape(hashes),
             render_inline(content, options)
         );
-        return (html, LineType::Header { level });
+        return (html, LineSemantics::Markdown(MarkdownSemantics::Header { level }));
     }
 
     // Blockquotes: > text -> "> " + inline_render("text")
@@ -408,7 +474,7 @@ fn render_markdown_line(line: &str, options: &comrak::Options) -> (String, LineT
             html_escape(marker),
             render_inline(content, options)
         );
-        return (html, LineType::BlockQuote);
+        return (html, LineSemantics::Markdown(MarkdownSemantics::BlockQuote));
     }
 
     // Unordered list: - item or * item
@@ -421,7 +487,7 @@ fn render_markdown_line(line: &str, options: &comrak::Options) -> (String, LineT
             html_escape(marker),
             render_inline(content, options)
         );
-        return (html, LineType::ListItem { ordered: false });
+        return (html, LineSemantics::Markdown(MarkdownSemantics::ListItem { ordered: false }));
     }
 
     // Ordered list: 1. item, 2. item, etc.
@@ -434,18 +500,18 @@ fn render_markdown_line(line: &str, options: &comrak::Options) -> (String, LineT
             html_escape(marker),
             render_inline(content, options)
         );
-        return (html, LineType::ListItem { ordered: true });
+        return (html, LineSemantics::Markdown(MarkdownSemantics::ListItem { ordered: true }));
     }
 
     // Horizontal rule: ---, ***, ___
     if is_horizontal_rule(trimmed) {
         let html = format!("<span class=\"md md-hr\">{}</span>", html_escape(line));
-        return (html, LineType::HorizontalRule);
+        return (html, LineSemantics::Markdown(MarkdownSemantics::HorizontalRule));
     }
 
     // Regular text: render inline markdown
     let html = format!("<span class=\"md\">{}</span>", render_inline(line, options));
-    (html, LineType::Plain)
+    (html, LineSemantics::Plain)
 }
 
 /// Get the length of an ordered list marker (e.g., "1. " = 3, "12. " = 4)
@@ -613,12 +679,13 @@ impl ContentModel {
             .lines()
             .enumerate()
             .map(|(i, line)| {
+                let line_num = (i + 1) as u32;
                 let html = html_lines.get(i).cloned();
                 Line {
-                    number: (i + 1) as u32,
                     content: line.to_string(),
                     html,
-                    line_type: LineType::default(),
+                    origin: LineOrigin::Document { line: line_num },
+                    semantics: LineSemantics::Plain,
                 }
             })
             .collect();
@@ -692,11 +759,38 @@ impl ContentModel {
                     None
                 };
 
+                // Get diff line info for origin and semantics
+                let diff_info = diff_metadata.lines.get(&line_num);
+
+                let (origin, semantics) = match diff_info {
+                    Some(info) => {
+                        let origin = LineOrigin::Diff {
+                            old_line: info.old_line_num,
+                            new_line: info.new_line_num,
+                            file_index: info.file_index,
+                        };
+                        let semantics = LineSemantics::Diff(match info.kind {
+                            diff::DiffLineKind::Context => DiffSemantics::Context,
+                            diff::DiffLineKind::Added => DiffSemantics::Added,
+                            diff::DiffLineKind::Deleted => DiffSemantics::Deleted,
+                            diff::DiffLineKind::Header => DiffSemantics::FileHeader,
+                        });
+                        (origin, semantics)
+                    }
+                    None => {
+                        // Lines not in diff metadata (shouldn't happen, but fallback)
+                        (
+                            LineOrigin::Document { line: line_num },
+                            LineSemantics::Plain,
+                        )
+                    }
+                };
+
                 Line {
-                    number: line_num,
                     content: line_content.to_string(),
                     html,
-                    line_type: LineType::default(),
+                    origin,
+                    semantics,
                 }
             })
             .collect();
@@ -768,18 +862,20 @@ impl ContentModel {
                     .cloned()
                     .unwrap_or_else(|| line_content.to_string());
 
-                // Determine HTML rendering strategy and line type
+                let origin = LineOrigin::Document { line: line_num };
+
+                // Determine HTML rendering strategy and semantics
                 if let Some(info) = code_block_lines.get(&line_num) {
                     // Inside a code block
-                    let line_type = if info.is_start {
-                        LineType::CodeBlockStart {
+                    let semantics = LineSemantics::Markdown(if info.is_start {
+                        MarkdownSemantics::CodeBlockStart {
                             language: info.language.clone(),
                         }
                     } else if info.is_end {
-                        LineType::CodeBlockEnd
+                        MarkdownSemantics::CodeBlockEnd
                     } else {
-                        LineType::CodeBlockContent
-                    };
+                        MarkdownSemantics::CodeBlockContent
+                    });
 
                     let html = if info.is_start || info.is_end {
                         // Fence line: render as-is (escaped)
@@ -796,27 +892,27 @@ impl ContentModel {
                     };
 
                     Line {
-                        number: line_num,
                         content: display_content,
                         html,
-                        line_type,
+                        origin,
+                        semantics,
                     }
                 } else if table_lines.contains(&line_num) {
                     // Table row
                     Line {
-                        number: line_num,
                         content: display_content.clone(),
                         html: Some(html_escape(&display_content)),
-                        line_type: LineType::TableRow,
+                        origin,
+                        semantics: LineSemantics::Markdown(MarkdownSemantics::TableRow),
                     }
                 } else {
                     // Regular markdown: render with structural markers preserved
-                    let (html, line_type) = render_markdown_line(line_content, &options);
+                    let (html, semantics) = render_markdown_line(line_content, &options);
                     Line {
-                        number: line_num,
                         content: display_content,
                         html: Some(html),
-                        line_type,
+                        origin,
+                        semantics,
                     }
                 }
             })
@@ -922,9 +1018,9 @@ mod tests {
         let state = test_state("a\nb\nc", "test.rs");
         let response = state.to_response();
 
-        assert_eq!(response.lines[0].number, 1);
-        assert_eq!(response.lines[1].number, 2);
-        assert_eq!(response.lines[2].number, 3);
+        assert!(matches!(response.lines[0].origin, LineOrigin::Document { line: 1 }));
+        assert!(matches!(response.lines[1].origin, LineOrigin::Document { line: 2 }));
+        assert!(matches!(response.lines[2].origin, LineOrigin::Document { line: 3 }));
     }
 
     #[test]
@@ -1049,8 +1145,10 @@ mod tests {
     fn from_diff_line_numbers_are_1_indexed() {
         let state = test_diff_state(SIMPLE_DIFF, test_diff_source("changes.diff"));
 
-        assert_eq!(state.content.lines[0].number, 1);
-        assert_eq!(state.content.lines[1].number, 2);
+        // Diff lines have LineOrigin::Diff with old_line/new_line info
+        // Just verify lines exist and have Diff origin
+        assert!(matches!(state.content.lines[0].origin, LineOrigin::Diff { .. }));
+        assert!(matches!(state.content.lines[1].origin, LineOrigin::Diff { .. }));
     }
 
     #[test]
@@ -1106,8 +1204,8 @@ mod tests {
         let state = test_diff_state(diff_with_doc_comment, test_diff_source("changes.diff"));
 
         println!("\n=== DIFF DOC COMMENT LINES ===");
-        for line in &state.content.lines {
-            println!("Line {}: content={:?}", line.number, line.content);
+        for (i, line) in state.content.lines.iter().enumerate() {
+            println!("Line {}: content={:?}", i + 1, line.content);
             if let Some(ref html) = line.html {
                 println!("        html={:?}", html);
                 // Check for newlines

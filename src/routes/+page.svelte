@@ -2,7 +2,8 @@
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
-  import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, DiffLineInfo, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
+  import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
+  import { getLineNumber, getLineId, getDiffKind, isSelectable } from "$lib/line-utils";
   import { rangeToKey, keyToRange, isLineInRange, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap } from "$lib/tiptap";
   import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
@@ -153,17 +154,15 @@
     });
   }
 
-  // Helper to get diff line info
-  function getDiffLineInfo(lineNum: number): DiffLineInfo | null {
-    if (!diffMetadata) return null;
-    return diffMetadata.lines[lineNum] ?? null;
+  // Find a line by its line number (from origin)
+  function findLineByNumber(lineNum: number): Line | null {
+    return lines.find(l => getLineNumber(l) === lineNum) ?? null;
   }
 
-  // Check if a line is selectable (not a header in diff mode)
-  function isLineSelectable(lineNum: number): boolean {
-    if (!diffMetadata) return true; // Non-diff mode: all lines selectable
-    const info = getDiffLineInfo(lineNum);
-    return info ? info.kind !== 'header' : true;
+  // Check if a line number is selectable
+  function isLineNumSelectable(lineNum: number): boolean {
+    const line = findLineByNumber(lineNum);
+    return line ? isSelectable(line) : false;
   }
 
   // Get hunk bounds for a line (returns null if line is a header or not in diff mode)
@@ -513,7 +512,10 @@
   // Extract mermaid content from a code block (excluding fence lines)
   function getMermaidContent(startLine: number, endLine: number): string {
     return lines
-      .filter(l => l.number > startLine && l.number < endLine)
+      .filter(l => {
+        const num = getLineNumber(l);
+        return num !== null && num > startLine && num < endLine;
+      })
       .map(l => l.content)
       .join('\n');
   }
@@ -550,7 +552,7 @@
   // Mouse handlers for selection
   function handleGutterMouseDown(lineNum: number, e: MouseEvent) {
     // Skip header lines in diff mode
-    if (!isLineSelectable(lineNum)) return;
+    if (!isLineNumSelectable(lineNum)) return;
 
     e.preventDefault();
     isDragging = true;
@@ -563,7 +565,7 @@
     const lineNum = getLineFromEvent(e);
     if (lineNum === null) return;
     // Skip header lines in diff mode
-    if (!isLineSelectable(lineNum)) return;
+    if (!isLineNumSelectable(lineNum)) return;
 
     e.preventDefault();
     isDragging = true;
@@ -591,7 +593,7 @@
       return;
     }
     // Skip header lines in diff mode
-    if (!isLineSelectable(lineNum)) return;
+    if (!isLineNumSelectable(lineNum)) return;
 
     // Toggle off if clicking same single-line selection
     if (selection?.start === lineNum && selection?.end === lineNum) {
@@ -641,7 +643,7 @@
       const isInInput = activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement;
       const isContentEditable = activeEl instanceof HTMLElement && activeEl.isContentEditable;
       if (isInEditor || isInInput || isContentEditable) return;
-      if (!isLineSelectable(hoveredLine)) return;
+      if (!isLineNumSelectable(hoveredLine)) return;
       e.preventDefault();
       selection = { start: hoveredLine, end: hoveredLine };
     } else if (e.key === 'g' && !selection && !sessionEditorOpen) {
@@ -690,7 +692,7 @@
 
   function handleAddMouseDown(lineNum: number, e: MouseEvent) {
     // Skip header lines in diff mode
-    if (!isLineSelectable(lineNum)) return;
+    if (!isLineNumSelectable(lineNum)) return;
 
     e.preventDefault();
     isDragging = true;
@@ -886,41 +888,43 @@
         style:transform="scale({contentZoom})"
         style:width="calc(100% / {contentZoom})"
       >
-      {#each lines as line}
-        {@const diffLine = getDiffLineInfo(line.number)}
-        {@const mermaidBlock = getMermaidBlockAt(line.number)}
+      {#each lines as line, idx}
+        {@const lineNum = getLineNumber(line)}
+        {@const lineId = getLineId(line, idx)}
+        {@const diffKind = getDiffKind(line)}
+        {@const mermaidBlock = lineNum !== null ? getMermaidBlockAt(lineNum) : null}
         <div
           class="line"
-          class:selected={isSelected(line.number)}
-          class:annotated={hasAnnotation(line.number)}
-          class:diff-added={diffLine?.kind === 'added'}
-          class:diff-deleted={diffLine?.kind === 'deleted'}
-          class:diff-context={diffLine?.kind === 'context'}
-          class:diff-header={diffLine?.kind === 'header'}
-          data-line={line.number}
-          onmouseenter={() => hoveredLine = line.number}
+          class:selected={lineNum !== null && isSelected(lineNum)}
+          class:annotated={lineNum !== null && hasAnnotation(lineNum)}
+          class:diff-added={diffKind === 'added'}
+          class:diff-deleted={diffKind === 'deleted'}
+          class:diff-context={diffKind === 'context'}
+          class:diff-header={diffKind === 'file_header' || diffKind === 'hunk_header'}
+          data-line={lineId}
+          onmouseenter={() => hoveredLine = lineNum}
           onmouseleave={() => hoveredLine = null}
           role="presentation"
         >
           <button
             class="add-btn"
-            onmousedown={(e) => handleAddMouseDown(line.number, e)}
+            onmousedown={(e) => lineNum !== null && handleAddMouseDown(lineNum, e)}
             aria-label="Add annotation"
           >+</button>
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <span
             class="gutter"
-            class:selected={isSelected(line.number)}
-            onmousedown={(e) => handleGutterMouseDown(line.number, e)}
-            onclick={() => handleGutterClick(line.number)}
+            class:selected={lineNum !== null && isSelected(lineNum)}
+            onmousedown={(e) => lineNum !== null && handleGutterMouseDown(lineNum, e)}
+            onclick={() => lineNum !== null && handleGutterClick(lineNum)}
             role="button"
             tabindex="-1"
           >
-            {#if diffMetadata}
-              <span class="diff-gutter-old">{diffLine?.old_line_num ?? ''}</span>
-              <span class="diff-gutter-new">{diffLine?.new_line_num ?? ''}</span>
-            {:else}
-              {line.number}
+            {#if line.origin.type === 'diff'}
+              <span class="diff-gutter-old">{line.origin.old_line ?? ''}</span>
+              <span class="diff-gutter-new">{line.origin.new_line ?? ''}</span>
+            {:else if lineNum !== null}
+              {lineNum}
             {/if}
           </span>
           <span class="code" class:md={markdownMetadata}>{#if line.html}{@html line.html}{:else}{line.content}{/if}</span>
@@ -936,8 +940,8 @@
             </button>
           {/if}
         </div>
-        {@const annotationAtLine = getAnnotationAtLine(line.number)}
-        {@const isLastSelectedLine = line.number === lastSelectedLine && selection && !isDragging}
+        {@const annotationAtLine = lineNum !== null ? getAnnotationAtLine(lineNum) : null}
+        {@const isLastSelectedLine = lineNum !== null && lineNum === lastSelectedLine && selection && !isDragging}
         {@const rangeKey = annotationAtLine?.key ?? (isLastSelectedLine && selection ? rangeToKey(selection) : null)}
         {#if rangeKey}
           {#key rangeKey}

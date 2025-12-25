@@ -412,10 +412,10 @@ mod tests {
 
     fn make_line(number: u32, content: &str) -> Line {
         Line {
-            number,
             content: content.to_string(),
             html: None,
-            line_type: crate::state::LineType::default(),
+            origin: crate::state::LineOrigin::Document { line: number },
+            semantics: crate::state::LineSemantics::Plain,
         }
     }
 

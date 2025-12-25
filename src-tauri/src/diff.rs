@@ -68,6 +68,8 @@ pub struct DiffFileInfo {
 pub struct DiffMetadata {
     pub files: Vec<DiffFileInfo>,
     /// Map from display line number (1-indexed) to line info.
+    /// Used internally during Line construction, not serialized to frontend.
+    #[serde(skip)]
     pub lines: HashMap<u32, DiffLineInfo>,
 }
 

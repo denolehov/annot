@@ -17,17 +17,27 @@ vi.mock("@tauri-apps/api/window", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 
+// Helper to create a line with the new model
+function makeLine(num: number, content: string, html: string | null = null) {
+  return {
+    content,
+    html,
+    origin: { type: 'document' as const, line: num },
+    semantics: { type: 'plain' as const },
+  };
+}
+
 // Helper to create a valid mock response
 function createMockResponse(overrides: Partial<{
   label: string;
-  lines: { number: number; content: string }[];
+  lines: ReturnType<typeof makeLine>[];
   exit_modes: [];
   selected_exit_mode_id: string | null;
   tags: [];
 }> = {}) {
   return {
     label: "test.rs",
-    lines: [{ number: 1, content: "// comment" }],
+    lines: [makeLine(1, "// comment")],
     exit_modes: [],
     selected_exit_mode_id: null,
     tags: [],
@@ -47,9 +57,9 @@ describe("+page.svelte", () => {
     vi.mocked(invoke).mockResolvedValue(createMockResponse({
       label: "test.rs",
       lines: [
-        { number: 1, content: "fn main() {" },
-        { number: 2, content: '    println!("hello");' },
-        { number: 3, content: "}" },
+        makeLine(1, "fn main() {"),
+        makeLine(2, '    println!("hello");'),
+        makeLine(3, "}"),
       ],
     }));
 
@@ -67,7 +77,7 @@ describe("+page.svelte", () => {
   it("displays filename in header", async () => {
     vi.mocked(invoke).mockResolvedValue(createMockResponse({
       label: "my_module.rs",
-      lines: [{ number: 1, content: "// comment" }],
+      lines: [makeLine(1, "// comment")],
     }));
 
     render(Page);
@@ -99,8 +109,8 @@ describe("+page.svelte", () => {
     vi.mocked(invoke).mockResolvedValue(createMockResponse({
       label: "test.rs",
       lines: [
-        { number: 1, content: "fn main() {" },
-        { number: 2, content: '    println!("hello");' },
+        makeLine(1, "fn main() {"),
+        makeLine(2, '    println!("hello");'),
       ],
     }));
 
@@ -135,8 +145,8 @@ describe("+page.svelte", () => {
     vi.mocked(invoke).mockResolvedValue(createMockResponse({
       label: "test.rs",
       lines: [
-        { number: 1, content: "fn main() {" },
-        { number: 2, content: '    println!("hello");' },
+        makeLine(1, "fn main() {"),
+        makeLine(2, '    println!("hello");'),
       ],
     }));
 
