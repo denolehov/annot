@@ -3,8 +3,8 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
-  import { getLineNumber, getLineId, getDiffKind, isSelectable } from "$lib/line-utils";
-  import { rangeToKey, keyToRange, isLineInRange, type Range } from "$lib/range";
+  import { getLineNumber, getDiffKind, isSelectable } from "$lib/line-utils";
+  import { rangeToKey, keyToRange, isLineInRange, rangeToSourceCoords, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap } from "$lib/tiptap";
   import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
   import AnnotationEditor from "$lib/AnnotationEditor.svelte";
@@ -21,6 +21,17 @@
 
   // Derived metadata for backwards compatibility
   let diffMetadata = $derived(metadata.type === 'diff' ? metadata : null);
+
+  // =============================================================================
+  // Coordinate System (Display Index)
+  // =============================================================================
+  // All selection coordinates use display indices (1-indexed positions in the
+  // lines array). Display indices are inherently unique across all files/content.
+  //
+  // Source line numbers are only extracted at the backend boundary via
+  // rangeToSourceCoords() when calling Tauri commands.
+  // =============================================================================
+
   let markdownMetadata = $derived(metadata.type === 'markdown' ? metadata : null);
 
   // Toast state
@@ -122,11 +133,14 @@
     for (const el of lineEls) {
       const htmlEl = el as HTMLElement;
       if (htmlEl.offsetTop >= scrollTop) {
-        const lineNum = parseInt(htmlEl.dataset.line ?? '1', 10);
+        const displayIdx = parseInt(htmlEl.dataset.displayIdx ?? '1', 10);
+        const line = lines[displayIdx - 1];
+        const sourceLineNum = line ? getLineNumber(line) : null;
+        if (sourceLineNum === null) continue;
 
         // Update diff tracking
         if (hunkTracker) {
-          const boundary = hunkTracker.findAt(lineNum);
+          const boundary = hunkTracker.findAt(sourceLineNum);
           if (boundary) {
             currentFileIndex = boundary.data.fileIndex;
             currentHunkIndex = boundary.data.hunkIndex;
@@ -135,7 +149,7 @@
 
         // Update markdown tracking
         if (sectionTracker) {
-          const boundary = sectionTracker.findAt(lineNum);
+          const boundary = sectionTracker.findAt(sourceLineNum);
           if (boundary) {
             currentSectionIndex = boundary.data.sectionIndex;
           }
@@ -154,14 +168,9 @@
     });
   }
 
-  // Find a line by its line number (from origin)
-  function findLineByNumber(lineNum: number): Line | null {
-    return lines.find(l => getLineNumber(l) === lineNum) ?? null;
-  }
-
-  // Check if a line number is selectable
-  function isLineNumSelectable(lineNum: number): boolean {
-    const line = findLineByNumber(lineNum);
+  // Check if a line at the given display index is selectable.
+  function isLineSelectable(displayIdx: number): boolean {
+    const line = lines[displayIdx - 1];
     return line ? isSelectable(line) : false;
   }
 
@@ -208,11 +217,12 @@
   }
 
   // Selection state
-  let selection: { start: number; end: number } | null = $state(null);
+  let selection: Range | null = $state(null);
   let isDragging = $state(false);
   let isShiftHeld = $state(false);
   let mouseDownHandled = false;  // Prevents click from undoing mousedown
-  let hoveredLine: number | null = $state(null);
+  /** Display index (1-indexed array position) of currently hovered line. Unambiguous in diff mode. */
+  let hoveredDisplayIdx: number | null = $state(null);
 
   // Annotation state - Map keyed by "startLine-endLine" → TipTap JSON
   let annotations: Map<string, JSONContent> = $state(new Map());
@@ -307,24 +317,27 @@
   async function updateAnnotation(content: JSONContent | null) {
     if (!selection) return;
     const key = rangeToKey(selection);
-    const min = Math.min(selection.start, selection.end);
-    const max = Math.max(selection.start, selection.end);
+    const coords = rangeToSourceCoords(selection, lines);
+    if (!coords) return;
+
+    const startIdx = Math.min(selection.start, selection.end);
+    const endIdx = Math.max(selection.start, selection.end);
 
     if (content && !isContentEmpty(content)) {
       annotations.set(key, content);
-      // Sync to backend
       const nodes = extractContentNodes(content);
       await invoke('upsert_annotation', {
-        startLine: min,
-        endLine: max,
+        fileIndex: coords.fileIndex,
+        startLine: startIdx,
+        endLine: endIdx,
         content: nodes
       });
     } else {
       annotations.delete(key);
-      // Delete from backend
       await invoke('delete_annotation', {
-        startLine: min,
-        endLine: max
+        fileIndex: coords.fileIndex,
+        startLine: startIdx,
+        endLine: endIdx
       });
     }
     annotations = new Map(annotations); // trigger reactivity
@@ -483,22 +496,21 @@
     }
   }
 
-  // Get annotation info for a specific line (is it the last line of any annotation?)
-  function getAnnotationAtLine(lineNum: number): { key: string; content: JSONContent } | null {
+  // Get annotation info for a specific display index (is it the last line of any annotation?)
+  function getAnnotationAtLine(displayIdx: number): { key: string; content: JSONContent } | null {
     for (const [key, content] of annotations) {
       const range = keyToRange(key);
-      if (range.end === lineNum) {
+      if (range.end === displayIdx) {
         return { key, content };
       }
     }
     return null;
   }
 
-  function isSelected(lineNum: number): boolean {
+  // Check if a display index is selected
+  function isSelected(displayIdx: number): boolean {
     if (!selection) return false;
-    const min = Math.min(selection.start, selection.end);
-    const max = Math.max(selection.start, selection.end);
-    return lineNum >= min && lineNum <= max;
+    return isLineInRange(displayIdx, selection);
   }
 
   // Check if a line starts a mermaid code block
@@ -534,72 +546,78 @@
     }
   }
 
-  function hasAnnotation(lineNum: number): boolean {
+  // Check if a display index has an annotation
+  function hasAnnotation(displayIdx: number): boolean {
     for (const key of annotations.keys()) {
-      if (isLineInRange(lineNum, keyToRange(key))) {
+      const range = keyToRange(key);
+      if (isLineInRange(displayIdx, range)) {
         return true;
       }
     }
     return false;
   }
 
-  function getLineFromEvent(e: MouseEvent): number | null {
+  /** Get display index (1-indexed) from a mouse event on a line element. */
+  function getDisplayIdxFromEvent(e: MouseEvent): number | null {
     const el = e.target as Element;
     const row = el.closest('.line') as HTMLElement | null;
-    return row ? parseInt(row.dataset.line ?? '', 10) : null;
+    if (!row) return null;
+    const idx = parseInt(row.dataset.displayIdx ?? '', 10);
+    return Number.isNaN(idx) ? null : idx;
   }
 
   // Mouse handlers for selection
-  function handleGutterMouseDown(lineNum: number, e: MouseEvent) {
-    // Skip header lines in diff mode
-    if (!isLineNumSelectable(lineNum)) return;
+  function handleGutterMouseDown(displayIdx: number, e: MouseEvent) {
+    // Skip header lines
+    if (!isLineSelectable(displayIdx)) return;
 
     e.preventDefault();
     isDragging = true;
     mouseDownHandled = true;
-    selection = { start: lineNum, end: lineNum };
+    selection = { start: displayIdx, end: displayIdx };
   }
 
   function handleContentMouseDown(e: MouseEvent) {
     if (!e.shiftKey) return;
-    const lineNum = getLineFromEvent(e);
-    if (lineNum === null) return;
-    // Skip header lines in diff mode
-    if (!isLineNumSelectable(lineNum)) return;
+    const displayIdx = getDisplayIdxFromEvent(e);
+    if (displayIdx === null) return;
+
+    // Check if line is selectable
+    if (!isLineSelectable(displayIdx)) return;
 
     e.preventDefault();
     isDragging = true;
-    selection = { start: lineNum, end: lineNum };
+    selection = { start: displayIdx, end: displayIdx };
   }
 
   function handleMouseMove(e: MouseEvent) {
     if (!isDragging || !selection) return;
-    const lineNum = getLineFromEvent(e);
-    if (lineNum !== null) {
-      // Constrain to hunk bounds and skip header lines
-      const constrainedLine = constrainToHunkBounds(lineNum, selection.start);
-      selection = { start: selection.start, end: constrainedLine };
-    }
+    const displayIdx = getDisplayIdxFromEvent(e);
+    if (displayIdx === null) return;
+
+    // Constrain to hunk bounds
+    const constrainedIdx = constrainToHunkBounds(displayIdx, selection.start);
+    selection = { start: selection.start, end: constrainedIdx };
   }
 
   function handleMouseUp() {
     isDragging = false;
   }
 
-  function handleGutterClick(lineNum: number) {
+  function handleGutterClick(displayIdx: number) {
     // Skip if mousedown already handled this interaction
     if (mouseDownHandled) {
       mouseDownHandled = false;
       return;
     }
-    // Skip header lines in diff mode
-    if (!isLineNumSelectable(lineNum)) return;
+    // Skip header lines
+    if (!isLineSelectable(displayIdx)) return;
 
     // Toggle off if clicking same single-line selection
-    if (selection?.start === lineNum && selection?.end === lineNum) {
+    if (selection?.start === displayIdx && selection?.end === displayIdx) {
       selection = null;
     } else {
-      selection = { start: lineNum, end: lineNum };
+      selection = { start: displayIdx, end: displayIdx };
     }
   }
 
@@ -634,7 +652,7 @@
         const modeId = selectedModeIndex !== null ? exitModes[selectedModeIndex].id : null;
         invoke('set_exit_mode', { modeId });
       }
-    } else if (e.key === 'c' && !e.metaKey && !e.ctrlKey && hoveredLine !== null && !selection) {
+    } else if (e.key === 'c' && !e.metaKey && !e.ctrlKey && hoveredDisplayIdx !== null && !selection) {
       // Open editor on hovered line (skip header lines)
       // Only when 'c' is pressed alone - Cmd+C/Ctrl+C should copy text
       // Skip if user is focused in an editor/input
@@ -643,9 +661,10 @@
       const isInInput = activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement;
       const isContentEditable = activeEl instanceof HTMLElement && activeEl.isContentEditable;
       if (isInEditor || isInInput || isContentEditable) return;
-      if (!isLineNumSelectable(hoveredLine)) return;
+      // Check if line is selectable
+      if (!isLineSelectable(hoveredDisplayIdx)) return;
       e.preventDefault();
-      selection = { start: hoveredLine, end: hoveredLine };
+      selection = { start: hoveredDisplayIdx, end: hoveredDisplayIdx };
     } else if (e.key === 'g' && !selection && !sessionEditorOpen) {
       // Open session comment editor (when not in any editor)
       const activeEl = document.activeElement;
@@ -690,14 +709,14 @@
     }
   }
 
-  function handleAddMouseDown(lineNum: number, e: MouseEvent) {
-    // Skip header lines in diff mode
-    if (!isLineNumSelectable(lineNum)) return;
+  function handleAddMouseDown(displayIdx: number, e: MouseEvent) {
+    // Skip header lines
+    if (!isLineSelectable(displayIdx)) return;
 
     e.preventDefault();
     isDragging = true;
     mouseDownHandled = true;
-    selection = { start: lineNum, end: lineNum };
+    selection = { start: displayIdx, end: displayIdx };
   }
 
   onMount(async () => {
@@ -889,42 +908,42 @@
         style:width="calc(100% / {contentZoom})"
       >
       {#each lines as line, idx}
-        {@const lineNum = getLineNumber(line)}
-        {@const lineId = getLineId(line, idx)}
+        {@const sourceLineNum = getLineNumber(line)}
+        {@const displayIndex = idx + 1}
         {@const diffKind = getDiffKind(line)}
-        {@const mermaidBlock = lineNum !== null ? getMermaidBlockAt(lineNum) : null}
+        {@const mermaidBlock = sourceLineNum !== null ? getMermaidBlockAt(sourceLineNum) : null}
         <div
           class="line"
-          class:selected={lineNum !== null && isSelected(lineNum)}
-          class:annotated={lineNum !== null && hasAnnotation(lineNum)}
+          class:selected={isSelected(displayIndex)}
+          class:annotated={hasAnnotation(displayIndex)}
           class:diff-added={diffKind === 'added'}
           class:diff-deleted={diffKind === 'deleted'}
           class:diff-context={diffKind === 'context'}
           class:diff-header={diffKind === 'file_header' || diffKind === 'hunk_header'}
-          data-line={lineId}
-          onmouseenter={() => hoveredLine = lineNum}
-          onmouseleave={() => hoveredLine = null}
+          data-display-idx={displayIndex}
+          onmouseenter={() => hoveredDisplayIdx = displayIndex}
+          onmouseleave={() => hoveredDisplayIdx = null}
           role="presentation"
         >
           <button
             class="add-btn"
-            onmousedown={(e) => lineNum !== null && handleAddMouseDown(lineNum, e)}
+            onmousedown={(e) => handleAddMouseDown(displayIndex, e)}
             aria-label="Add annotation"
           >+</button>
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <span
             class="gutter"
-            class:selected={lineNum !== null && isSelected(lineNum)}
-            onmousedown={(e) => lineNum !== null && handleGutterMouseDown(lineNum, e)}
-            onclick={() => lineNum !== null && handleGutterClick(lineNum)}
+            class:selected={isSelected(displayIndex)}
+            onmousedown={(e) => handleGutterMouseDown(displayIndex, e)}
+            onclick={() => handleGutterClick(displayIndex)}
             role="button"
             tabindex="-1"
           >
             {#if line.origin.type === 'diff'}
               <span class="diff-gutter-old">{line.origin.old_line ?? ''}</span>
               <span class="diff-gutter-new">{line.origin.new_line ?? ''}</span>
-            {:else if lineNum !== null}
-              {lineNum}
+            {:else if sourceLineNum !== null}
+              {sourceLineNum}
             {/if}
           </span>
           <span class="code" class:md={markdownMetadata}>{#if line.html}{@html line.html}{:else}{line.content}{/if}</span>
@@ -940,8 +959,8 @@
             </button>
           {/if}
         </div>
-        {@const annotationAtLine = lineNum !== null ? getAnnotationAtLine(lineNum) : null}
-        {@const isLastSelectedLine = lineNum !== null && lineNum === lastSelectedLine && selection && !isDragging}
+        {@const annotationAtLine = getAnnotationAtLine(displayIndex)}
+        {@const isLastSelectedLine = displayIndex === lastSelectedLine && selection && !isDragging}
         {@const rangeKey = annotationAtLine?.key ?? (isLastSelectedLine && selection ? rangeToKey(selection) : null)}
         {#if rangeKey}
           {#key rangeKey}

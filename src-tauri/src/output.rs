@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use crate::mcp::tools::SessionImage;
-use crate::review::Review;
+use crate::review::{FileKey, Review};
 use crate::state::{Annotation, ContentMetadata, ContentModel, ContentNode};
 
 /// Output mode determines how content is formatted.
@@ -61,19 +62,13 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
     // Get content from root_view
     let content = review.root_view.content();
 
-    // Get annotations from first file (current single-file model)
-    let annotations = match review.files.values().next() {
-        Some(target) => &target.annotations,
-        None => {
-            return FormatResult {
-                text: String::new(),
-                images: Vec::new(),
-            }
-        }
-    };
+    // Check if ANY file has annotations
+    let has_annotations = review
+        .files
+        .values()
+        .any(|target| !target.annotations.is_empty());
 
     let has_exit_mode = review.selected_exit_mode_id.is_some();
-    let has_annotations = !annotations.is_empty();
     let has_session_comment = review
         .session_comment
         .as_ref()
@@ -134,23 +129,70 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
         };
     }
 
-    // Collect and sort annotations by start line
-    let mut sorted_annotations: Vec<&Annotation> = annotations.values().collect();
-    sorted_annotations.sort_by_key(|a| a.start_line);
+    // Build list of (display_path, annotations) for files with annotations
+    // We collect display paths (PathBuf) for output formatting
+    let files_with_annotations: Vec<(PathBuf, &_)> = if let Some(diff_files) = review.root_view.diff_files() {
+        // Diff mode: use DiffFileView for display paths, enumerate for index
+        diff_files
+            .iter()
+            .enumerate()
+            .filter_map(|(index, df)| {
+                let key = FileKey::diff_file(index);
+                review.files.get(&key).and_then(|target| {
+                    if target.annotations.is_empty() {
+                        None
+                    } else {
+                        Some((df.path.clone(), target))
+                    }
+                })
+            })
+            .collect()
+    } else {
+        // File mode: extract path from FileKey
+        review
+            .files
+            .iter()
+            .filter(|(_, target)| !target.annotations.is_empty())
+            .filter_map(|(key, target)| {
+                match key {
+                    FileKey::Path(p) => Some((p.clone(), target)),
+                    FileKey::DiffFile { .. } => None, // Should not happen in file mode
+                }
+            })
+            .collect()
+    };
 
-    // Calculate max line number width for alignment
-    let max_line = sorted_annotations
+    // Calculate max line number width across all annotations
+    let max_line = files_with_annotations
         .iter()
+        .flat_map(|(_, target)| target.annotations.values())
         .map(|a| a.end_line)
         .max()
         .unwrap_or(0);
     let line_num_width = max_line.to_string().len();
 
-    for (i, ann) in sorted_annotations.iter().enumerate() {
-        if i > 0 {
-            output.push_str("\n---\n\n");
+    let mut first_block = true;
+    for (display_path, target) in &files_with_annotations {
+        // Sort annotations within this file by start line
+        let mut sorted_annotations: Vec<&Annotation> = target.annotations.values().collect();
+        sorted_annotations.sort_by_key(|a| a.start_line);
+
+        for ann in sorted_annotations {
+            if !first_block {
+                output.push_str("\n---\n\n");
+            }
+            first_block = false;
+            format_annotation_block(
+                &mut output,
+                content,
+                ann,
+                display_path,
+                line_num_width,
+                &mut images,
+                &mut figure_counter,
+                mode,
+            );
         }
-        format_annotation_block(&mut output, content, ann, line_num_width, &mut images, &mut figure_counter, mode);
     }
 
     FormatResult {
@@ -164,23 +206,25 @@ fn format_annotation_block(
     out: &mut String,
     content: &ContentModel,
     ann: &Annotation,
+    file_path: &std::path::PathBuf,
     line_num_width: usize,
     images: &mut Vec<SessionImage>,
     figure_counter: &mut usize,
     mode: OutputMode,
 ) {
     let is_diff = matches!(content.metadata, ContentMetadata::Diff(_));
+    let file_label = file_path.display();
 
     // File header: "file.rs:10-15" or "file.rs:10"
     // For diffs, include old/new line numbers if available
     if is_diff {
-        format_diff_header(out, content, ann);
+        format_diff_header(out, content, ann, file_path);
     } else if ann.start_line == ann.end_line {
-        out.push_str(&format!("{}:{}\n", content.label, ann.start_line));
+        out.push_str(&format!("{}:{}\n", file_label, ann.start_line));
     } else {
         out.push_str(&format!(
             "{}:{}-{}\n",
-            content.label, ann.start_line, ann.end_line
+            file_label, ann.start_line, ann.end_line
         ));
     }
 
@@ -243,20 +287,19 @@ fn format_annotation_block(
 }
 
 /// Format diff header with file info from annotation range.
-fn format_diff_header(out: &mut String, content: &ContentModel, ann: &Annotation) {
+fn format_diff_header(
+    out: &mut String,
+    content: &ContentModel,
+    ann: &Annotation,
+    file_path: &std::path::PathBuf,
+) {
     let diff_meta = match &content.metadata {
         ContentMetadata::Diff(d) => d,
         _ => return,
     };
 
-    // Get the file name from the diff metadata for the annotated range
-    let file_name = diff_meta
-        .lines
-        .get(&ann.start_line)
-        .and_then(|info| diff_meta.files.get(info.file_index))
-        .and_then(|f| f.new_name.as_ref().or(f.old_name.as_ref()))
-        .map(|s| s.as_str())
-        .unwrap_or(&content.label);
+    // Use the file path we already have (from Review.files key)
+    let file_name = file_path.display();
 
     // Collect old/new line ranges from the annotated lines
     let mut old_lines: Vec<u32> = Vec::new();

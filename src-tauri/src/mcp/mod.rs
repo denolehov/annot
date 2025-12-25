@@ -254,7 +254,7 @@ fn run_session_with_state(
             .as_millis()
     );
 
-    // Create Review and store it
+    // Create Review and store it (auto-detects file vs diff mode)
     {
         let review = Review::mcp(state.content, state.config, window_label.clone(), tx);
         let slot = app_handle.state::<ActiveReview>();

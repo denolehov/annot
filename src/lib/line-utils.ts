@@ -41,6 +41,14 @@ export function getDiffKind(line: Line): DiffKind | null {
 }
 
 /**
+ * Get the file index for a line (diff mode only).
+ * Returns null for non-diff lines.
+ */
+export function getFileIndex(line: Line): number | null {
+  return line.origin.type === 'diff' ? line.origin.file_index : null;
+}
+
+/**
  * Check if a line can be selected/annotated.
  */
 export function isSelectable(line: Line): boolean {

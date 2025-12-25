@@ -416,15 +416,11 @@ div.line.diff-context.annotated {
 }
 
 .diff-header-fn {
-	color: var(--accent);
 	font-weight: 500;
 	max-width: 250px;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	padding: 1px 6px;
-	background: color-mix(in srgb, var(--accent) 12%, transparent);
-	border-radius: 4px;
 }
 
 /* ===========================================

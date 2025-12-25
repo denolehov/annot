@@ -1,19 +1,35 @@
-export type Range = { start: number; end: number };
+import type { Line } from './types';
+import { getLineNumber, getFileIndex } from './line-utils';
 
-/** Convert a range to a normalized string key (min-max) */
+/**
+ * A range of display indices (1-indexed positions in the lines array).
+ * Display indices are inherently unique across all files/content.
+ */
+export type Range = {
+  start: number;  // Display index (1-indexed)
+  end: number;    // Display index (1-indexed)
+};
+
+/**
+ * Convert a range to a normalized string key.
+ * Format: "start-end" where start <= end.
+ */
 export function rangeToKey(range: Range): string {
   if (!Number.isInteger(range.start) || !Number.isInteger(range.end)) {
     throw new Error(`Invalid range: start and end must be integers, got ${range.start}-${range.end}`);
   }
   if (range.start < 1 || range.end < 1) {
-    throw new Error(`Invalid range: line numbers must be >= 1, got ${range.start}-${range.end}`);
+    throw new Error(`Invalid range: display indices must be >= 1, got ${range.start}-${range.end}`);
   }
   const min = Math.min(range.start, range.end);
   const max = Math.max(range.start, range.end);
   return `${min}-${max}`;
 }
 
-/** Parse a string key back to a range */
+/**
+ * Parse a string key back to a range.
+ * Format: "start-end"
+ */
 export function keyToRange(key: string): Range {
   const match = key.match(/^(\d+)-(\d+)$/);
   if (!match) {
@@ -22,7 +38,7 @@ export function keyToRange(key: string): Range {
   const start = parseInt(match[1], 10);
   const end = parseInt(match[2], 10);
   if (start < 1 || end < 1) {
-    throw new Error(`Invalid range key: line numbers must be >= 1, got "${key}"`);
+    throw new Error(`Invalid range key: display indices must be >= 1, got "${key}"`);
   }
   if (start > end) {
     throw new Error(`Invalid range key: start must be <= end, got "${key}"`);
@@ -30,9 +46,38 @@ export function keyToRange(key: string): Range {
   return { start, end };
 }
 
-/** Check if a line number is within a range */
-export function isLineInRange(lineNum: number, range: Range): boolean {
+/** Check if a display index is within a range */
+export function isLineInRange(displayIdx: number, range: Range): boolean {
   const min = Math.min(range.start, range.end);
   const max = Math.max(range.start, range.end);
-  return lineNum >= min && lineNum <= max;
+  return displayIdx >= min && displayIdx <= max;
+}
+
+/**
+ * Extract source coordinates from a display index range.
+ * Returns fileIndex and source line numbers for backend API calls.
+ * Returns null if the range spans virtual lines without source coordinates.
+ */
+export function rangeToSourceCoords(
+  range: Range,
+  lines: Line[]
+): { fileIndex: number | null; startLine: number; endLine: number } | null {
+  const min = Math.min(range.start, range.end);
+  const max = Math.max(range.start, range.end);
+
+  const startLine = lines[min - 1];
+  const endLine = lines[max - 1];
+  if (!startLine || !endLine) return null;
+
+  const fileIndex = getFileIndex(startLine);
+  const startSource = getLineNumber(startLine);
+  const endSource = getLineNumber(endLine);
+
+  if (startSource === null || endSource === null) return null;
+
+  return {
+    fileIndex,
+    startLine: Math.min(startSource, endSource),
+    endLine: Math.max(startSource, endSource),
+  };
 }

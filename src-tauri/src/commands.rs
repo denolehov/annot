@@ -6,7 +6,7 @@ use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 use crate::config::{self, Config};
 use crate::output::{format_output, OutputMode};
-use crate::review::{ActiveReview, WindowView};
+use crate::review::ActiveReview;
 use crate::state::{ContentNode, ContentResponse, ExitMode, Tag};
 use crate::ShouldExit;
 
@@ -16,23 +16,6 @@ pub enum CopyMode {
     Content,
     Annotations,
     All,
-}
-
-/// Helper macro for commands that need mutable access to the file for the calling window.
-/// Acquires lock, resolves window → file, and provides both `$review` and `$file` bindings.
-/// For read-only access, use `review.file_for_window()` instead.
-macro_rules! with_file {
-    ($window:expr, $review_state:expr, |$review:ident, $file:ident| $body:expr) => {{
-        let mut guard = $review_state.lock();
-        let $review = guard.as_mut().ok_or("No active review")?;
-        let path = match $review.windows.get($window.label()) {
-            Some(WindowView::File { path }) => path.clone(),
-            Some(_) => return Err("Window is not showing a file".into()),
-            None => return Err(format!("Unknown window: {}", $window.label())),
-        };
-        let $file = $review.files.get_mut(&path).ok_or("File not loaded")?;
-        $body
-    }};
 }
 
 /// Helper macro for commands that need mutable access to the review (but not a specific file).
@@ -60,12 +43,14 @@ pub fn get_content(
 pub fn upsert_annotation(
     window: WebviewWindow,
     review_state: State<ActiveReview>,
+    file_index: Option<usize>,
     start_line: u32,
     end_line: u32,
     content: Vec<ContentNode>,
 ) -> Result<(), String> {
-    with_file!(window, review_state, |_review, file| {
-        file.upsert_annotation(start_line, end_line, content);
+    with_review!(review_state, |review| {
+        let target = review.resolve_target_mut(window.label(), file_index)?;
+        target.upsert_annotation(start_line, end_line, content);
         Ok(())
     })
 }
@@ -74,11 +59,13 @@ pub fn upsert_annotation(
 pub fn delete_annotation(
     window: WebviewWindow,
     review_state: State<ActiveReview>,
+    file_index: Option<usize>,
     start_line: u32,
     end_line: u32,
 ) -> Result<(), String> {
-    with_file!(window, review_state, |_review, file| {
-        file.delete_annotation(start_line, end_line);
+    with_review!(review_state, |review| {
+        let target = review.resolve_target_mut(window.label(), file_index)?;
+        target.delete_annotation(start_line, end_line);
         Ok(())
     })
 }

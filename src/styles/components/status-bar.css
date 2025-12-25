@@ -7,6 +7,7 @@
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+	gap: 24px;
 	padding: 6px 16px;
 	background: color-mix(in srgb, var(--mode-color, var(--bg-main)) 15%, var(--bg-main));
 	backdrop-filter: blur(16px) saturate(150%);
@@ -18,11 +19,20 @@
 	transition: background 400ms ease, border-top-color 400ms ease;
 }
 
-.status-bar-left,
+.status-bar-left {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+}
+
 .status-bar-right {
 	display: flex;
 	align-items: center;
 	gap: 16px;
+	flex-shrink: 0;
 }
 
 /* Exit mode button */
@@ -43,6 +53,8 @@
 	color: var(--text-muted);
 	line-height: 1;
 	transition: background 150ms ease;
+	min-width: 0;
+	overflow: hidden;
 }
 
 .exit-mode-btn:hover {
@@ -55,6 +67,9 @@
 
 .exit-mode-label {
 	font-weight: 500;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .exit-mode-instruction {

@@ -63,7 +63,7 @@ pub type ShouldExit = Arc<AtomicBool>;
 /// Run in CLI mode (file/stdin input, prints result, exits).
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run(state: AppState, context: tauri::Context) {
-    // Convert AppState to Review for the new architecture
+    // Convert AppState to Review (auto-detects file vs diff mode)
     let review = Review::cli(state.content, state.config, "main".to_string());
 
     tauri::Builder::default()
