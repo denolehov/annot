@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use crate::mcp::tools::SessionImage;
-use crate::review::{FileState, Review};
-use crate::state::{Annotation, ContentMetadata, ContentNode};
+use crate::review::Review;
+use crate::state::{Annotation, ContentMetadata, ContentModel, ContentNode};
 
 /// Output mode determines how content is formatted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -58,9 +58,12 @@ fn collect_unique_tags(review: &Review) -> BTreeMap<String, String> {
 
 /// Format all annotations as structured output for LLM consumption.
 pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
-    // Get first file (current single-file model)
-    let file = match review.files.values().next() {
-        Some(f) => f,
+    // Get content from root_view
+    let content = review.root_view.content();
+
+    // Get annotations from first file (current single-file model)
+    let annotations = match review.files.values().next() {
+        Some(target) => &target.annotations,
         None => {
             return FormatResult {
                 text: String::new(),
@@ -70,7 +73,7 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
     };
 
     let has_exit_mode = review.selected_exit_mode_id.is_some();
-    let has_annotations = !file.annotations.is_empty();
+    let has_annotations = !annotations.is_empty();
     let has_session_comment = review
         .session_comment
         .as_ref()
@@ -132,22 +135,22 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
     }
 
     // Collect and sort annotations by start line
-    let mut annotations: Vec<&Annotation> = file.annotations.values().collect();
-    annotations.sort_by_key(|a| a.start_line);
+    let mut sorted_annotations: Vec<&Annotation> = annotations.values().collect();
+    sorted_annotations.sort_by_key(|a| a.start_line);
 
     // Calculate max line number width for alignment
-    let max_line = annotations
+    let max_line = sorted_annotations
         .iter()
         .map(|a| a.end_line)
         .max()
         .unwrap_or(0);
     let line_num_width = max_line.to_string().len();
 
-    for (i, ann) in annotations.iter().enumerate() {
+    for (i, ann) in sorted_annotations.iter().enumerate() {
         if i > 0 {
             output.push_str("\n---\n\n");
         }
-        format_annotation_block(&mut output, file, ann, line_num_width, &mut images, &mut figure_counter, mode);
+        format_annotation_block(&mut output, content, ann, line_num_width, &mut images, &mut figure_counter, mode);
     }
 
     FormatResult {
@@ -159,36 +162,36 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
 /// Format a single annotation block with context and content.
 fn format_annotation_block(
     out: &mut String,
-    file: &FileState,
+    content: &ContentModel,
     ann: &Annotation,
     line_num_width: usize,
     images: &mut Vec<SessionImage>,
     figure_counter: &mut usize,
     mode: OutputMode,
 ) {
-    let is_diff = matches!(file.content.metadata, ContentMetadata::Diff(_));
+    let is_diff = matches!(content.metadata, ContentMetadata::Diff(_));
 
     // File header: "file.rs:10-15" or "file.rs:10"
     // For diffs, include old/new line numbers if available
     if is_diff {
-        format_diff_header(out, file, ann);
+        format_diff_header(out, content, ann);
     } else if ann.start_line == ann.end_line {
-        out.push_str(&format!("{}:{}\n", file.content.label, ann.start_line));
+        out.push_str(&format!("{}:{}\n", content.label, ann.start_line));
     } else {
         out.push_str(&format!(
             "{}:{}-{}\n",
-            file.content.label, ann.start_line, ann.end_line
+            content.label, ann.start_line, ann.end_line
         ));
     }
 
     // Context line (1 line before, if exists and non-empty)
     if ann.start_line > 1 {
         let context_line_num = ann.start_line - 1;
-        if let Some(line) = file.content.lines.get((context_line_num - 1) as usize) {
+        if let Some(line) = content.lines.get((context_line_num - 1) as usize) {
             if !line.content.trim().is_empty() {
                 // Format: "    N | content" (3 extra spaces for ">" prefix alignment)
                 if is_diff {
-                    format_diff_line(out, file, context_line_num, &line.content, false, line_num_width);
+                    format_diff_line(out, content, context_line_num, &line.content, false, line_num_width);
                 } else {
                     out.push_str(&format!(
                         "{:>width$} | {}\n",
@@ -203,9 +206,9 @@ fn format_annotation_block(
 
     // Selected lines with ">" prefix
     for line_num in ann.start_line..=ann.end_line {
-        if let Some(line) = file.content.lines.get((line_num - 1) as usize) {
+        if let Some(line) = content.lines.get((line_num - 1) as usize) {
             if is_diff {
-                format_diff_line(out, file, line_num, &line.content, true, line_num_width);
+                format_diff_line(out, content, line_num, &line.content, true, line_num_width);
             } else {
                 // Format: ">  N | content"
                 out.push_str(&format!(
@@ -240,8 +243,8 @@ fn format_annotation_block(
 }
 
 /// Format diff header with file info from annotation range.
-fn format_diff_header(out: &mut String, file: &FileState, ann: &Annotation) {
-    let diff_meta = match &file.content.metadata {
+fn format_diff_header(out: &mut String, content: &ContentModel, ann: &Annotation) {
+    let diff_meta = match &content.metadata {
         ContentMetadata::Diff(d) => d,
         _ => return,
     };
@@ -253,7 +256,7 @@ fn format_diff_header(out: &mut String, file: &FileState, ann: &Annotation) {
         .and_then(|info| diff_meta.files.get(info.file_index))
         .and_then(|f| f.new_name.as_ref().or(f.old_name.as_ref()))
         .map(|s| s.as_str())
-        .unwrap_or(&file.content.label);
+        .unwrap_or(&content.label);
 
     // Collect old/new line ranges from the annotated lines
     let mut old_lines: Vec<u32> = Vec::new();
@@ -299,13 +302,13 @@ fn format_line_range(lines: &[u32]) -> String {
 /// Format a single diff line with old:new line numbers.
 fn format_diff_line(
     out: &mut String,
-    file: &FileState,
+    content_model: &ContentModel,
     line_num: u32,
     content: &str,
     is_selected: bool,
     line_num_width: usize,
 ) {
-    let diff_meta = match &file.content.metadata {
+    let diff_meta = match &content_model.metadata {
         ContentMetadata::Diff(d) => d,
         _ => return,
     };

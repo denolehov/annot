@@ -233,6 +233,7 @@ impl ExitMode {
 
 /// Content model: the document being annotated.
 /// Immutable after construction.
+#[derive(Clone)]
 pub struct ContentModel {
     pub label: String,
     pub lines: Vec<Line>,
@@ -248,6 +249,14 @@ pub enum ContentMetadata {
     Plain,
     Diff(DiffMetadata),
     Markdown(MarkdownMetadata),
+}
+
+/// Per-file metadata for annotation targets.
+/// Contains file-level info that's NOT content (e.g., language for syntax highlighting).
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct FileMetadata {
+    /// Language identifier for syntax highlighting (e.g., "rs", "go", "py").
+    pub language: Option<String>,
 }
 
 // ════════════════════════════════════════════════════════════════════════════

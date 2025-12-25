@@ -1,13 +1,15 @@
 //! Review abstraction for state management.
 //!
 //! A Review represents an active annotation task. It owns:
-//! - Content (files loaded for annotation)
+//! - Content (root_view with the document being reviewed)
+//! - Annotation targets (files that can receive annotations)
 //! - Windows (how content is displayed)
 //! - Session-level state (comment, exit mode, result channel)
 //!
-//! Content and windows are orthogonal:
-//! - A window is a viewport that can display any content type
-//! - Annotations live on content (FileState), not windows
+//! Content and annotations are orthogonal:
+//! - Content lives in `View` (root_view field)
+//! - Annotations live on `AnnotationTarget` (files map)
+//! - A window is a viewport that can display content
 //! - Two windows showing the same file share annotations
 
 use std::collections::HashMap;
@@ -17,14 +19,17 @@ use std::sync::mpsc::Sender;
 use serde::Serialize;
 
 use crate::output::FormatResult;
-use crate::state::{Annotation, ContentModel, ContentNode, ContentResponse, LineRange, UserConfig};
+use crate::state::{Annotation, ContentModel, ContentNode, ContentResponse, FileMetadata, LineRange, UserConfig};
 
 /// An active review. Wrapped in `Option`: `Some` = active, `None` = idle.
 pub struct Review {
     //--- Content (what exists) ---
-    /// Files loaded in this review, keyed by path.
+    /// The root view — what content is being reviewed.
+    /// Content lives here, separate from annotation storage.
+    pub root_view: View,
+    /// Annotation targets keyed by path.
     /// For ephemeral content or stdin, uses a synthetic path like "__ephemeral__".
-    pub files: HashMap<PathBuf, FileState>,
+    pub files: HashMap<PathBuf, AnnotationTarget>,
 
     //--- Windows (how content is displayed) ---
     /// Root window label - review lifecycle is tied to this window.
@@ -45,13 +50,29 @@ pub struct Review {
     result_channel: Option<Sender<FormatResult>>,
 }
 
-/// State for a single file within the review.
-pub struct FileState {
-    /// The content model (lines, metadata, source info).
-    pub content: ContentModel,
+/// Annotation target — a file that can receive annotations.
+/// Contains annotations and file-specific metadata, but NOT content.
+/// Content lives in `View` (the root_view field on Review).
+pub struct AnnotationTarget {
     /// Annotations keyed by normalized line range.
     pub annotations: HashMap<LineRange, Annotation>,
+    /// File-specific metadata (language, etc.).
+    pub metadata: FileMetadata,
 }
+
+impl AnnotationTarget {
+    /// Create an empty annotation target.
+    pub fn new() -> Self {
+        Self {
+            annotations: HashMap::new(),
+            metadata: FileMetadata::default(),
+        }
+    }
+}
+
+/// Type alias for backwards compatibility during migration.
+#[deprecated(note = "Use AnnotationTarget instead")]
+pub type FileState = AnnotationTarget;
 
 /// What a window is displaying.
 #[derive(Clone, Debug, Serialize)]
@@ -68,23 +89,61 @@ pub enum WindowView {
     // Future: FilePicker, Portal, Table, etc.
 }
 
+/// The root view — what content is being reviewed in this session.
+/// Content lives here, separate from annotation storage.
+#[derive(Clone)]
+pub enum View {
+    /// Single file review.
+    File {
+        path: PathBuf,
+        content: ContentModel,
+    },
+    // Future: Diff { label, files }, Markdown { path, content, portals }
+}
+
+impl View {
+    /// Get the content model.
+    pub fn content(&self) -> &ContentModel {
+        match self {
+            View::File { content, .. } => content,
+        }
+    }
+
+    /// Get the path for the primary file.
+    pub fn path(&self) -> &PathBuf {
+        match self {
+            View::File { path, .. } => path,
+        }
+    }
+
+    /// Get the label for display.
+    pub fn label(&self) -> &str {
+        match self {
+            View::File { content, .. } => &content.label,
+        }
+    }
+}
+
 impl Review {
     /// Create a CLI review (single file, no result channel).
     pub fn cli(content: ContentModel, config: UserConfig, root_window: String) -> Self {
         let path = content.source_path();
+
+        // Create root view with content
+        let root_view = View::File {
+            path: path.clone(),
+            content,
+        };
+
+        // Create annotation target for this file
         let mut files = HashMap::new();
-        files.insert(
-            path.clone(),
-            FileState {
-                content,
-                annotations: HashMap::new(),
-            },
-        );
+        files.insert(path.clone(), AnnotationTarget::new());
 
         let mut windows = HashMap::new();
         windows.insert(root_window.clone(), WindowView::File { path });
 
         Self {
+            root_view,
             files,
             root_window,
             windows,
@@ -103,19 +162,22 @@ impl Review {
         tx: Sender<FormatResult>,
     ) -> Self {
         let path = content.source_path();
+
+        // Create root view with content
+        let root_view = View::File {
+            path: path.clone(),
+            content,
+        };
+
+        // Create annotation target for this file
         let mut files = HashMap::new();
-        files.insert(
-            path.clone(),
-            FileState {
-                content,
-                annotations: HashMap::new(),
-            },
-        );
+        files.insert(path.clone(), AnnotationTarget::new());
 
         let mut windows = HashMap::new();
         windows.insert(root_window.clone(), WindowView::File { path });
 
         Self {
+            root_view,
             files,
             root_window,
             windows,
@@ -152,8 +214,8 @@ impl Review {
         self.windows.keys().map(|s| s.as_str())
     }
 
-    /// Get the file for a window, if any.
-    pub fn get_file_for_window(&self, window_label: &str) -> Option<&FileState> {
+    /// Get the annotation target for a window, if any.
+    pub fn get_target_for_window(&self, window_label: &str) -> Option<&AnnotationTarget> {
         let view = self.windows.get(window_label)?;
         match view {
             WindowView::File { path } => self.files.get(path),
@@ -161,20 +223,20 @@ impl Review {
         }
     }
 
-    /// Get the file for a window with detailed errors.
-    pub fn file_for_window(&self, window_label: &str) -> Result<&FileState, String> {
+    /// Get the annotation target for a window with detailed errors.
+    pub fn target_for_window(&self, window_label: &str) -> Result<&AnnotationTarget, String> {
         let view = self.windows.get(window_label)
             .ok_or_else(|| format!("Unknown window: {}", window_label))?;
         match view {
             WindowView::File { path } => {
-                self.files.get(path).ok_or_else(|| "File not loaded".into())
+                self.files.get(path).ok_or_else(|| "Target not loaded".into())
             }
             _ => Err("Window is not showing a file".into()),
         }
     }
 
-    /// Get mutable file for a window, if any.
-    pub fn get_file_for_window_mut(&mut self, window_label: &str) -> Option<&mut FileState> {
+    /// Get mutable annotation target for a window, if any.
+    pub fn get_target_for_window_mut(&mut self, window_label: &str) -> Option<&mut AnnotationTarget> {
         let view = self.windows.get(window_label)?;
         let path = match view {
             WindowView::File { path } => path.clone(),
@@ -183,14 +245,30 @@ impl Review {
         self.files.get_mut(&path)
     }
 
-    /// Get file by path.
-    pub fn get_file(&self, path: &PathBuf) -> Option<&FileState> {
+    /// Get annotation target by path.
+    pub fn get_target(&self, path: &PathBuf) -> Option<&AnnotationTarget> {
         self.files.get(path)
     }
 
-    /// Get mutable file by path.
-    pub fn get_file_mut(&mut self, path: &PathBuf) -> Option<&mut FileState> {
+    /// Get mutable annotation target by path.
+    pub fn get_target_mut(&mut self, path: &PathBuf) -> Option<&mut AnnotationTarget> {
         self.files.get_mut(path)
+    }
+
+    // Deprecated aliases for backwards compatibility
+    #[deprecated(note = "Use get_target_for_window instead")]
+    pub fn get_file_for_window(&self, window_label: &str) -> Option<&AnnotationTarget> {
+        self.get_target_for_window(window_label)
+    }
+
+    #[deprecated(note = "Use target_for_window instead")]
+    pub fn file_for_window(&self, window_label: &str) -> Result<&AnnotationTarget, String> {
+        self.target_for_window(window_label)
+    }
+
+    #[deprecated(note = "Use get_target_for_window_mut instead")]
+    pub fn get_file_for_window_mut(&mut self, window_label: &str) -> Option<&mut AnnotationTarget> {
+        self.get_target_for_window_mut(window_label)
     }
 
     /// Check if image paste is allowed (MCP mode only).
@@ -202,17 +280,18 @@ impl Review {
     pub fn to_response_for_window(&self, window_label: &str) -> Option<ContentResponse> {
         let view = self.windows.get(window_label)?;
         match view {
-            WindowView::File { path } => {
-                let file = self.files.get(path)?;
+            WindowView::File { path: _ } => {
+                // Get content from root_view
+                let content = self.root_view.content();
                 Some(ContentResponse {
-                    label: file.content.label.clone(),
-                    lines: file.content.lines.clone(),
+                    label: content.label.clone(),
+                    lines: content.lines.clone(),
                     tags: self.config.tags().to_vec(),
                     exit_modes: self.config.exit_modes().to_vec(),
                     selected_exit_mode_id: self.selected_exit_mode_id.clone(),
                     session_comment: self.session_comment.clone(),
-                    metadata: file.content.metadata.clone(),
-                    allows_image_paste: file.content.source.allows_image_paste(),
+                    metadata: content.metadata.clone(),
+                    allows_image_paste: content.source.allows_image_paste(),
                 })
             }
             WindowView::Mermaid { .. } => None, // Mermaid windows don't use ContentResponse
@@ -220,7 +299,7 @@ impl Review {
     }
 }
 
-impl FileState {
+impl AnnotationTarget {
     /// Insert or update an annotation.
     pub fn upsert_annotation(&mut self, start_line: u32, end_line: u32, content: Vec<ContentNode>) {
         let key = LineRange::new(start_line, end_line);

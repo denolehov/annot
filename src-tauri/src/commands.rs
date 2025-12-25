@@ -248,11 +248,14 @@ pub fn copy_to_clipboard(
 ) -> Result<(), String> {
     let guard = review_state.lock();
     let review = guard.as_ref().ok_or("No active review")?;
-    let file = review.file_for_window(window.label())?;
+    // Verify window exists
+    let _ = review.target_for_window(window.label())?;
+
+    // Get content from root_view
+    let content = review.root_view.content();
 
     // Reconstruct raw content from lines
-    let raw_content: String = file
-        .content
+    let raw_content: String = content
         .lines
         .iter()
         .map(|l| l.content.as_str())
@@ -298,11 +301,14 @@ pub fn save_content(
 ) -> Result<SaveContentResponse, String> {
     let guard = review_state.lock();
     let review = guard.as_ref().ok_or("No active review")?;
-    let file = review.file_for_window(window.label())?;
+    // Verify window exists
+    let _ = review.target_for_window(window.label())?;
+
+    // Get content from root_view
+    let content = review.root_view.content();
 
     // Reconstruct raw content from lines
-    let raw_content: String = file
-        .content
+    let raw_content: String = content
         .lines
         .iter()
         .map(|l| l.content.as_str())
@@ -369,11 +375,14 @@ pub fn export_to_obsidian(
 ) -> Result<ObsidianExportResponse, String> {
     let guard = review_state.lock();
     let review = guard.as_ref().ok_or("No active review")?;
-    let file = review.file_for_window(window.label())?;
+    // Verify window exists
+    let _ = review.target_for_window(window.label())?;
+
+    // Get content from root_view
+    let content_model = review.root_view.content();
 
     // Reconstruct raw content from lines
-    let content: String = file
-        .content
+    let content: String = content_model
         .lines
         .iter()
         .map(|l| l.content.as_str())
@@ -386,14 +395,13 @@ pub fn export_to_obsidian(
         .map_err(|e| format!("Failed to copy to clipboard: {}", e))?;
 
     // Use H1 title as note name if present, otherwise fall back to label
-    let note_name = file
-        .content
+    let note_name = content_model
         .lines
         .iter()
         .find(|l| l.content.starts_with("# "))
         .map(|l| l.content.trim_start_matches("# ").trim())
         .filter(|s| !s.is_empty())
-        .unwrap_or(&file.content.label);
+        .unwrap_or(&content_model.label);
 
     // Build Obsidian URI with clipboard parameter
     let url = format!(
