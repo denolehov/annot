@@ -7,7 +7,7 @@ use crate::diff::{self, DiffMetadata};
 use crate::error::AnnotError;
 use crate::highlight::Highlighter;
 use crate::input::ContentSource;
-use crate::markdown::{self, MarkdownMetadata};
+use crate::markdown::{self, html_escape, MarkdownMetadata, MarkdownSemantics};
 
 // =============================================================================
 // Unified line model (LineOrigin + LineSemantics)
@@ -58,19 +58,7 @@ pub enum LineSemantics {
     Portal(PortalSemantics),
 }
 
-/// Markdown structural semantics.
-#[derive(Clone, Debug, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum MarkdownSemantics {
-    Header { level: u8 },
-    CodeBlockStart { language: Option<String> },
-    CodeBlockContent,
-    CodeBlockEnd,
-    TableRow,
-    ListItem { ordered: bool },
-    BlockQuote,
-    HorizontalRule,
-}
+// MarkdownSemantics is imported from crate::markdown
 
 /// Diff line semantics.
 #[derive(Clone, Debug, Serialize)]
@@ -435,244 +423,7 @@ pub struct ContentResponse {
     pub allows_image_paste: bool,
 }
 
-/// HTML-escape a string for safe display.
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#x27;")
-}
-
-/// Render a markdown line while preserving structural markers.
-/// Returns (html, line_type) tuple.
-///
-/// Structural markers (`#`, `-`, `>`, etc.) are preserved as escaped text.
-/// Only inline content (bold, italic, links, code) is rendered as HTML.
-fn render_markdown_line(line: &str, options: &comrak::Options) -> (String, LineSemantics) {
-    let trimmed = line.trim_start();
-    let indent = line.len() - trimmed.len();
-    let indent_str = &line[..indent];
-
-    // Headers: # Title -> styled "# " + inline_render("Title")
-    if let Some(level) = detect_header_level(trimmed) {
-        let hashes = &trimmed[..level as usize]; // Just the "#" characters
-        let content = &trimmed[level as usize..].trim_start(); // Title after space
-        let html = format!(
-            "<span class=\"md md-h{}\">{}<span class=\"md-header-level\">{}</span> {}</span>",
-            level,
-            html_escape(indent_str),
-            html_escape(hashes),
-            render_inline(content, options)
-        );
-        return (html, LineSemantics::Markdown(MarkdownSemantics::Header { level }));
-    }
-
-    // Blockquotes: > text -> "> " + inline_render("text")
-    if trimmed.starts_with('>') {
-        // Handle "> text" or ">text"
-        let content = if trimmed.starts_with("> ") {
-            &trimmed[2..]
-        } else {
-            &trimmed[1..]
-        };
-        let marker = &trimmed[..trimmed.len() - content.len()];
-        let html = format!(
-            "<span class=\"md md-blockquote\">{}{}{}</span>",
-            html_escape(indent_str),
-            html_escape(marker),
-            render_inline(content, options)
-        );
-        return (html, LineSemantics::Markdown(MarkdownSemantics::BlockQuote));
-    }
-
-    // Unordered list: - item or * item
-    if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
-        let marker = &trimmed[..2];
-        let content = &trimmed[2..];
-        let html = format!(
-            "<span class=\"md md-list\">{}{}{}</span>",
-            html_escape(indent_str),
-            html_escape(marker),
-            render_inline(content, options)
-        );
-        return (html, LineSemantics::Markdown(MarkdownSemantics::ListItem { ordered: false }));
-    }
-
-    // Ordered list: 1. item, 2. item, etc.
-    if let Some(marker_len) = detect_ordered_list_marker_len(trimmed) {
-        let marker = &trimmed[..marker_len];
-        let content = &trimmed[marker_len..];
-        let html = format!(
-            "<span class=\"md md-list\">{}{}{}</span>",
-            html_escape(indent_str),
-            html_escape(marker),
-            render_inline(content, options)
-        );
-        return (html, LineSemantics::Markdown(MarkdownSemantics::ListItem { ordered: true }));
-    }
-
-    // Horizontal rule: ---, ***, ___
-    if is_horizontal_rule(trimmed) {
-        let html = format!("<span class=\"md md-hr\">{}</span>", html_escape(line));
-        return (html, LineSemantics::Markdown(MarkdownSemantics::HorizontalRule));
-    }
-
-    // Regular text: render inline markdown
-    let html = format!("<span class=\"md\">{}</span>", render_inline(line, options));
-    (html, LineSemantics::Plain)
-}
-
-/// Get the length of an ordered list marker (e.g., "1. " = 3, "12. " = 4)
-fn detect_ordered_list_marker_len(line: &str) -> Option<usize> {
-    let mut chars = line.chars().peekable();
-    let mut len = 0;
-
-    // Must start with digit
-    if !chars.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
-        return None;
-    }
-
-    // Consume digits
-    while chars.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
-        chars.next();
-        len += 1;
-    }
-
-    // Must be followed by ". "
-    if chars.next() == Some('.') && chars.next() == Some(' ') {
-        Some(len + 2) // digits + ". "
-    } else {
-        None
-    }
-}
-
-/// Detect header level (1-6) from line, or None if not a header.
-fn detect_header_level(line: &str) -> Option<u8> {
-    let mut level = 0u8;
-    for c in line.chars() {
-        if c == '#' {
-            level += 1;
-            if level > 6 {
-                return None;
-            }
-        } else if c == ' ' && level > 0 {
-            return Some(level);
-        } else {
-            return None;
-        }
-    }
-    None
-}
-
-/// Check if line is a horizontal rule (---, ***, ___)
-fn is_horizontal_rule(line: &str) -> bool {
-    let trimmed = line.trim();
-    if trimmed.len() < 3 {
-        return false;
-    }
-    let first = trimmed.chars().next().unwrap();
-    if first != '-' && first != '*' && first != '_' {
-        return false;
-    }
-    trimmed.chars().all(|c| c == first || c == ' ')
-}
-
-/// Render only inline markdown (bold, italic, links, inline code) using AST.
-/// This preserves the source text and only renders inline formatting as HTML.
-fn render_inline(text: &str, options: &comrak::Options) -> String {
-    use comrak::{parse_document, Arena};
-
-    if text.is_empty() {
-        return String::new();
-    }
-
-    let arena = Arena::new();
-    let root = parse_document(&arena, text, options);
-
-    let mut output = String::new();
-    render_node_inline(root, &mut output);
-    output
-}
-
-/// Recursively render AST nodes, emitting HTML only for inline elements.
-fn render_node_inline<'a>(node: &'a comrak::nodes::AstNode<'a>, output: &mut String) {
-    use comrak::nodes::NodeValue;
-
-    let data = node.data.borrow();
-
-    match &data.value {
-        // Block elements: skip wrapper, recurse into children
-        NodeValue::Document
-        | NodeValue::Paragraph
-        | NodeValue::BlockQuote
-        | NodeValue::List(_)
-        | NodeValue::Item(_)
-        | NodeValue::Heading(_) => {
-            for child in node.children() {
-                render_node_inline(child, output);
-            }
-        }
-
-        // Text: escape and emit
-        NodeValue::Text(t) => {
-            output.push_str(&html_escape(t));
-        }
-
-        // Strong (bold): **text**
-        NodeValue::Strong => {
-            output.push_str("<strong>");
-            for child in node.children() {
-                render_node_inline(child, output);
-            }
-            output.push_str("</strong>");
-        }
-
-        // Emphasis (italic): *text*
-        NodeValue::Emph => {
-            output.push_str("<em>");
-            for child in node.children() {
-                render_node_inline(child, output);
-            }
-            output.push_str("</em>");
-        }
-
-        // Inline code: `code`
-        NodeValue::Code(c) => {
-            output.push_str("<code>");
-            output.push_str(&html_escape(&c.literal));
-            output.push_str("</code>");
-        }
-
-        // Links: [text](url)
-        NodeValue::Link(link) => {
-            output.push_str("<a href=\"");
-            output.push_str(&html_escape(&link.url));
-            output.push_str("\">");
-            for child in node.children() {
-                render_node_inline(child, output);
-            }
-            output.push_str("</a>");
-        }
-
-        // Strikethrough: ~~text~~
-        NodeValue::Strikethrough => {
-            output.push_str("<del>");
-            for child in node.children() {
-                render_node_inline(child, output);
-            }
-            output.push_str("</del>");
-        }
-
-        // Soft/hard breaks
-        NodeValue::SoftBreak | NodeValue::LineBreak => {
-            output.push(' ');
-        }
-
-        // Skip other node types (code blocks, tables, etc.)
-        _ => {}
-    }
-}
+// Render functions moved to crate::markdown (render_line, render_inline)
 
 impl ContentModel {
     /// Parse file content into structured lines with syntax highlighting.
@@ -816,7 +567,6 @@ impl ContentModel {
     #[must_use]
     pub fn from_markdown(content: &str, source: ContentSource) -> Self {
         let label = source.label().to_string();
-        use comrak::Options;
 
         let md_metadata = markdown::parse_markdown(content);
         let highlighter = Highlighter::new();
@@ -852,12 +602,6 @@ impl ContentModel {
                 table_replacements.insert(line_num, formatted.clone());
             }
         }
-
-        // Create comrak options for inline rendering
-        let mut options = Options::default();
-        options.extension.strikethrough = true;
-        options.extension.autolink = true;
-        options.render.unsafe_ = true; // Allow raw HTML passthrough
 
         let lines: Vec<Line> = content
             .lines()
@@ -916,10 +660,14 @@ impl ContentModel {
                     }
                 } else {
                     // Regular markdown: render with structural markers preserved
-                    let (html, semantics) = render_markdown_line(line_content, &options);
+                    let rendered = markdown::render_line(line_content);
+                    let semantics = match rendered.semantics {
+                        Some(md_sem) => LineSemantics::Markdown(md_sem),
+                        None => LineSemantics::Plain,
+                    };
                     Line {
                         content: display_content,
-                        html: Some(html),
+                        html: Some(rendered.html),
                         origin,
                         semantics,
                     }

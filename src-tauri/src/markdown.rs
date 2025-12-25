@@ -1,9 +1,10 @@
-//! Markdown parsing and table formatting.
+//! Markdown parsing, rendering, and table formatting.
+//!
+//! Uses pulldown-cmark's event stream architecture for extensibility.
 
 use std::path::Path;
 
-use comrak::nodes::{AstNode, NodeValue};
-use comrak::{parse_document, Arena, Options};
+use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use serde::Serialize;
 
 /// Metadata extracted from a markdown document.
@@ -52,6 +53,32 @@ pub struct TableInfo {
     pub formatted_lines: Vec<String>,
 }
 
+// =============================================================================
+// Markdown semantics and rendering
+// =============================================================================
+
+/// Markdown structural semantics for a line.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum MarkdownSemantics {
+    Header { level: u8 },
+    CodeBlockStart { language: Option<String> },
+    CodeBlockContent,
+    CodeBlockEnd,
+    TableRow,
+    ListItem { ordered: bool },
+    BlockQuote,
+    HorizontalRule,
+}
+
+/// Result of rendering a markdown line.
+pub struct RenderedLine {
+    /// HTML-rendered content.
+    pub html: String,
+    /// Semantic classification of the line, if it has markdown structure.
+    pub semantics: Option<MarkdownSemantics>,
+}
+
 /// Check if a file is markdown based on extension.
 pub fn is_markdown(path: &str) -> bool {
     let ext = Path::new(path)
@@ -64,25 +91,90 @@ pub fn is_markdown(path: &str) -> bool {
 
 /// Parse markdown content and extract metadata.
 pub fn parse_markdown(content: &str) -> MarkdownMetadata {
-    let arena = Arena::new();
+    let mapper = LineMapper::new(content);
     let options = markdown_options();
-    let root = parse_document(&arena, content, &options);
+    let parser = Parser::new_ext(content, options).into_offset_iter();
 
     let mut sections = Vec::new();
     let mut code_blocks = Vec::new();
     let mut tables = Vec::new();
 
-    // Build line start positions for accurate line number lookup
-    let line_starts = build_line_starts(content);
+    // State for collecting text within headings
+    let mut current_heading: Option<(u32, u8)> = None; // (line, level)
+    let mut heading_text = String::new();
 
-    extract_nodes(
-        root,
-        &line_starts,
-        &mut sections,
-        &mut code_blocks,
-        &mut tables,
-        content,
-    );
+    // State for code blocks
+    let mut current_code_block: Option<(u32, Option<String>)> = None; // (start_line, language)
+
+    // State for tables
+    let mut current_table_start: Option<u32> = None;
+
+    for (event, range) in parser {
+        let line = mapper.byte_to_line(range.start);
+
+        match event {
+            Event::Start(Tag::Heading { level, .. }) => {
+                current_heading = Some((line, heading_level_to_u8(level)));
+                heading_text.clear();
+            }
+            Event::End(TagEnd::Heading(_)) => {
+                if let Some((source_line, level)) = current_heading.take() {
+                    sections.push(SectionInfo {
+                        source_line,
+                        level,
+                        title: heading_text.trim().to_string(),
+                        parent_index: None,
+                    });
+                }
+                heading_text.clear();
+            }
+            Event::Text(text) | Event::Code(text) if current_heading.is_some() => {
+                heading_text.push_str(&text);
+            }
+
+            Event::Start(Tag::CodeBlock(kind)) => {
+                let language = match kind {
+                    CodeBlockKind::Fenced(info) => {
+                        let lang = info.split(&[',', ' '][..]).next().unwrap_or("");
+                        if lang.is_empty() {
+                            None
+                        } else {
+                            Some(lang.to_string())
+                        }
+                    }
+                    CodeBlockKind::Indented => None,
+                };
+                current_code_block = Some((line, language));
+            }
+            Event::End(TagEnd::CodeBlock) => {
+                if let Some((start_line, language)) = current_code_block.take() {
+                    code_blocks.push(CodeBlockInfo {
+                        start_line,
+                        end_line: mapper.byte_to_line(range.end.saturating_sub(1)),
+                        language,
+                    });
+                }
+            }
+
+            Event::Start(Tag::Table(_)) => {
+                current_table_start = Some(line);
+            }
+            Event::End(TagEnd::Table) => {
+                if let Some(start_line) = current_table_start.take() {
+                    let end_line = mapper.byte_to_line(range.end.saturating_sub(1));
+                    let table_content = extract_table_lines(content, start_line, end_line);
+                    let formatted = format_table(&table_content);
+                    tables.push(TableInfo {
+                        start_line,
+                        end_line,
+                        formatted_lines: formatted,
+                    });
+                }
+            }
+
+            _ => {}
+        }
+    }
 
     // Build parent chain for sections
     build_section_hierarchy(&mut sections);
@@ -94,104 +186,49 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
     }
 }
 
-/// Build line start byte offsets (reserved for future use).
-fn build_line_starts(content: &str) -> Vec<usize> {
-    let mut starts = vec![0];
-    for (i, c) in content.char_indices() {
-        if c == '\n' {
-            starts.push(i + 1);
-        }
+/// Helper to convert HeadingLevel to u8.
+fn heading_level_to_u8(level: HeadingLevel) -> u8 {
+    match level {
+        HeadingLevel::H1 => 1,
+        HeadingLevel::H2 => 2,
+        HeadingLevel::H3 => 3,
+        HeadingLevel::H4 => 4,
+        HeadingLevel::H5 => 5,
+        HeadingLevel::H6 => 6,
     }
-    starts
 }
 
-/// Create comrak options with GFM extensions.
+/// Maps byte offsets to line numbers.
+struct LineMapper {
+    line_starts: Vec<usize>,
+}
+
+impl LineMapper {
+    fn new(source: &str) -> Self {
+        let mut line_starts = vec![0];
+        for (i, c) in source.char_indices() {
+            if c == '\n' {
+                line_starts.push(i + 1);
+            }
+        }
+        Self { line_starts }
+    }
+
+    /// Convert byte offset to 1-indexed line number.
+    fn byte_to_line(&self, offset: usize) -> u32 {
+        match self.line_starts.binary_search(&offset) {
+            Ok(idx) => (idx + 1) as u32,
+            Err(idx) => idx as u32,
+        }
+    }
+}
+
+/// Create pulldown-cmark options with GFM extensions.
 fn markdown_options() -> Options {
-    let mut options = Options::default();
-    options.extension.strikethrough = true;
-    options.extension.table = true;
-    options.extension.autolink = true;
-    options.extension.tasklist = true;
-    options.parse.smart = true;
-    options
-}
-
-/// Recursively extract nodes from AST.
-fn extract_nodes<'a>(
-    node: &'a AstNode<'a>,
-    line_starts: &[usize],
-    sections: &mut Vec<SectionInfo>,
-    code_blocks: &mut Vec<CodeBlockInfo>,
-    tables: &mut Vec<TableInfo>,
-    content: &str,
-) {
-    let data = node.data.borrow();
-
-    match &data.value {
-        NodeValue::Heading(heading) => {
-            // Extract title from heading children
-            let title = extract_text_content(node);
-            sections.push(SectionInfo {
-                source_line: data.sourcepos.start.line as u32,
-                level: heading.level,
-                title,
-                parent_index: None, // Will be filled in build_section_hierarchy
-            });
-        }
-        NodeValue::CodeBlock(code_block) => {
-            let lang = if code_block.info.is_empty() {
-                None
-            } else {
-                // Extract language from info string (e.g., "rust" from "rust,linenos")
-                Some(code_block.info.split(&[',', ' '][..]).next().unwrap_or("").to_string())
-                    .filter(|s| !s.is_empty())
-            };
-            code_blocks.push(CodeBlockInfo {
-                start_line: data.sourcepos.start.line as u32,
-                end_line: data.sourcepos.end.line as u32,
-                language: lang,
-            });
-        }
-        NodeValue::Table(_) => {
-            let start_line = data.sourcepos.start.line as u32;
-            let end_line = data.sourcepos.end.line as u32;
-
-            // Extract and format table lines
-            let table_content = extract_table_lines(content, start_line, end_line);
-            let formatted = format_table(&table_content);
-
-            tables.push(TableInfo {
-                start_line,
-                end_line,
-                formatted_lines: formatted,
-            });
-        }
-        _ => {}
-    }
-
-    // Recurse into children
-    for child in node.children() {
-        extract_nodes(child, line_starts, sections, code_blocks, tables, content);
-    }
-}
-
-/// Extract plain text content from a node and its children.
-fn extract_text_content<'a>(node: &'a AstNode<'a>) -> String {
-    let mut text = String::new();
-    collect_text(node, &mut text);
-    text
-}
-
-fn collect_text<'a>(node: &'a AstNode<'a>, text: &mut String) {
-    let data = node.data.borrow();
-    if let NodeValue::Text(ref t) = data.value {
-        text.push_str(t);
-    } else if let NodeValue::Code(ref c) = data.value {
-        text.push_str(&c.literal);
-    }
-    for child in node.children() {
-        collect_text(child, text);
-    }
+    Options::ENABLE_TABLES
+        | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_TASKLISTS
+        | Options::ENABLE_SMART_PUNCTUATION
 }
 
 /// Extract table lines from content.
@@ -321,6 +358,253 @@ fn build_section_hierarchy(sections: &mut [SectionInfo]) {
         // Push current section
         stack.push((i, level));
     }
+}
+
+// =============================================================================
+// Markdown line rendering
+// =============================================================================
+
+/// HTML-escape a string for safe display.
+pub fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#x27;")
+}
+
+/// Render a markdown line with structural markers preserved.
+///
+/// Structural markers (`#`, `-`, `>`, etc.) are preserved as escaped text.
+/// Only inline content (bold, italic, links, code) is rendered as HTML.
+pub fn render_line(line: &str) -> RenderedLine {
+    let trimmed = line.trim_start();
+    let indent = line.len() - trimmed.len();
+    let indent_str = &line[..indent];
+
+    // Headers: # Title -> styled "# " + inline_render("Title")
+    if let Some(level) = detect_header_level(trimmed) {
+        let hashes = &trimmed[..level as usize];
+        let content = trimmed[level as usize..].trim_start();
+        let html = format!(
+            "<span class=\"md md-h{}\">{}<span class=\"md-header-level\">{}</span> {}</span>",
+            level,
+            html_escape(indent_str),
+            html_escape(hashes),
+            render_inline(content)
+        );
+        return RenderedLine {
+            html,
+            semantics: Some(MarkdownSemantics::Header { level }),
+        };
+    }
+
+    // Blockquotes: > text -> "> " + inline_render("text")
+    if trimmed.starts_with('>') {
+        let content = if trimmed.starts_with("> ") {
+            &trimmed[2..]
+        } else {
+            &trimmed[1..]
+        };
+        let marker = &trimmed[..trimmed.len() - content.len()];
+        let html = format!(
+            "<span class=\"md md-blockquote\">{}{}{}</span>",
+            html_escape(indent_str),
+            html_escape(marker),
+            render_inline(content)
+        );
+        return RenderedLine {
+            html,
+            semantics: Some(MarkdownSemantics::BlockQuote),
+        };
+    }
+
+    // Unordered list: - item or * item
+    if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
+        let marker = &trimmed[..2];
+        let content = &trimmed[2..];
+        let html = format!(
+            "<span class=\"md md-list\">{}{}{}</span>",
+            html_escape(indent_str),
+            html_escape(marker),
+            render_inline(content)
+        );
+        return RenderedLine {
+            html,
+            semantics: Some(MarkdownSemantics::ListItem { ordered: false }),
+        };
+    }
+
+    // Ordered list: 1. item, 2. item, etc.
+    if let Some(marker_len) = detect_ordered_list_marker_len(trimmed) {
+        let marker = &trimmed[..marker_len];
+        let content = &trimmed[marker_len..];
+        let html = format!(
+            "<span class=\"md md-list\">{}{}{}</span>",
+            html_escape(indent_str),
+            html_escape(marker),
+            render_inline(content)
+        );
+        return RenderedLine {
+            html,
+            semantics: Some(MarkdownSemantics::ListItem { ordered: true }),
+        };
+    }
+
+    // Horizontal rule: ---, ***, ___
+    if is_horizontal_rule(trimmed) {
+        let html = format!("<span class=\"md md-hr\">{}</span>", html_escape(line));
+        return RenderedLine {
+            html,
+            semantics: Some(MarkdownSemantics::HorizontalRule),
+        };
+    }
+
+    // Regular text: render inline markdown
+    let html = format!("<span class=\"md\">{}</span>", render_inline(line));
+    RenderedLine {
+        html,
+        semantics: None,
+    }
+}
+
+/// Render inline markdown (bold, italic, links, code) to HTML.
+pub fn render_inline(text: &str) -> String {
+    if text.is_empty() {
+        return String::new();
+    }
+
+    let options = markdown_options();
+    let parser = Parser::new_ext(text, options);
+
+    let mut output = String::new();
+
+    for event in parser {
+        match event {
+            // Text: escape and emit
+            Event::Text(t) => {
+                output.push_str(&html_escape(&t));
+            }
+
+            // Strong (bold): **text**
+            Event::Start(Tag::Strong) => {
+                output.push_str("<strong>");
+            }
+            Event::End(TagEnd::Strong) => {
+                output.push_str("</strong>");
+            }
+
+            // Emphasis (italic): *text*
+            Event::Start(Tag::Emphasis) => {
+                output.push_str("<em>");
+            }
+            Event::End(TagEnd::Emphasis) => {
+                output.push_str("</em>");
+            }
+
+            // Inline code: `code`
+            Event::Code(code) => {
+                output.push_str("<code>");
+                output.push_str(&html_escape(&code));
+                output.push_str("</code>");
+            }
+
+            // Links: [text](url)
+            Event::Start(Tag::Link { dest_url, .. }) => {
+                output.push_str("<a href=\"");
+                output.push_str(&html_escape(&dest_url));
+                output.push_str("\">");
+            }
+            Event::End(TagEnd::Link) => {
+                output.push_str("</a>");
+            }
+
+            // Strikethrough: ~~text~~
+            Event::Start(Tag::Strikethrough) => {
+                output.push_str("<del>");
+            }
+            Event::End(TagEnd::Strikethrough) => {
+                output.push_str("</del>");
+            }
+
+            // Soft/hard breaks
+            Event::SoftBreak | Event::HardBreak => {
+                output.push(' ');
+            }
+
+            // Skip block elements (paragraph wrappers, etc.)
+            Event::Start(Tag::Paragraph)
+            | Event::End(TagEnd::Paragraph)
+            | Event::Start(Tag::BlockQuote(_))
+            | Event::End(TagEnd::BlockQuote(_))
+            | Event::Start(Tag::List(_))
+            | Event::End(TagEnd::List(_))
+            | Event::Start(Tag::Item)
+            | Event::End(TagEnd::Item)
+            | Event::Start(Tag::Heading { .. })
+            | Event::End(TagEnd::Heading(_)) => {}
+
+            // Skip other events
+            _ => {}
+        }
+    }
+
+    output
+}
+
+/// Detect header level (1-6) from line, or None if not a header.
+fn detect_header_level(line: &str) -> Option<u8> {
+    let mut level = 0u8;
+    for c in line.chars() {
+        if c == '#' {
+            level += 1;
+            if level > 6 {
+                return None;
+            }
+        } else if c == ' ' && level > 0 {
+            return Some(level);
+        } else {
+            return None;
+        }
+    }
+    None
+}
+
+/// Get the length of an ordered list marker (e.g., "1. " = 3, "12. " = 4)
+fn detect_ordered_list_marker_len(line: &str) -> Option<usize> {
+    let mut chars = line.chars().peekable();
+    let mut len = 0;
+
+    // Must start with digit
+    if !chars.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+        return None;
+    }
+
+    // Consume digits
+    while chars.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+        chars.next();
+        len += 1;
+    }
+
+    // Must be followed by ". "
+    if chars.next() == Some('.') && chars.next() == Some(' ') {
+        Some(len + 2)
+    } else {
+        None
+    }
+}
+
+/// Check if line is a horizontal rule (---, ***, ___)
+fn is_horizontal_rule(line: &str) -> bool {
+    let trimmed = line.trim();
+    if trimmed.len() < 3 {
+        return false;
+    }
+    let first = trimmed.chars().next().unwrap();
+    if first != '-' && first != '*' && first != '_' {
+        return false;
+    }
+    trimmed.chars().all(|c| c == first || c == ' ')
 }
 
 #[cfg(test)]
@@ -483,5 +767,120 @@ mod tests {
 
         assert_eq!(meta.sections[0].source_line, 1);
         assert_eq!(meta.sections[1].source_line, 5);
+    }
+
+    // =========================================================================
+    // Inline rendering tests
+    // =========================================================================
+
+    #[test]
+    fn render_inline_bold() {
+        let html = render_inline("**bold text**");
+        assert!(html.contains("<strong>bold text</strong>"));
+    }
+
+    #[test]
+    fn render_inline_italic() {
+        let html = render_inline("*italic text*");
+        assert!(html.contains("<em>italic text</em>"));
+    }
+
+    #[test]
+    fn render_inline_bold_and_italic() {
+        let html = render_inline("**bold** and *italic*");
+        assert!(html.contains("<strong>bold</strong>"));
+        assert!(html.contains("<em>italic</em>"));
+    }
+
+    #[test]
+    fn render_inline_code() {
+        let html = render_inline("use `inline code` here");
+        assert!(html.contains("<code>inline code</code>"));
+    }
+
+    #[test]
+    fn render_inline_link() {
+        let html = render_inline("[link text](https://example.com)");
+        assert!(html.contains("<a href=\"https://example.com\">link text</a>"));
+    }
+
+    #[test]
+    fn render_inline_strikethrough() {
+        let html = render_inline("~~deleted~~");
+        assert!(html.contains("<del>deleted</del>"));
+    }
+
+    #[test]
+    fn render_inline_escapes_html() {
+        let html = render_inline("<script>alert('xss')</script>");
+        // Comrak parses this as HTML block which is skipped in inline rendering
+        // Just verify no raw script tags in output
+        assert!(!html.contains("<script>") || html.contains("&lt;"));
+    }
+
+    // =========================================================================
+    // Line rendering tests
+    // =========================================================================
+
+    #[test]
+    fn render_line_heading() {
+        let result = render_line("# Title");
+        assert!(matches!(result.semantics, Some(MarkdownSemantics::Header { level: 1 })));
+        assert!(result.html.contains("md-h1"));
+        assert!(result.html.contains("Title"));
+    }
+
+    #[test]
+    fn render_line_heading_level_2() {
+        let result = render_line("## Subtitle");
+        assert!(matches!(result.semantics, Some(MarkdownSemantics::Header { level: 2 })));
+        assert!(result.html.contains("md-h2"));
+    }
+
+    #[test]
+    fn render_line_blockquote() {
+        let result = render_line("> quoted text");
+        assert!(matches!(result.semantics, Some(MarkdownSemantics::BlockQuote)));
+        assert!(result.html.contains("md-blockquote"));
+    }
+
+    #[test]
+    fn render_line_unordered_list() {
+        let result = render_line("- list item");
+        assert!(matches!(result.semantics, Some(MarkdownSemantics::ListItem { ordered: false })));
+        assert!(result.html.contains("md-list"));
+    }
+
+    #[test]
+    fn render_line_ordered_list() {
+        let result = render_line("1. first item");
+        assert!(matches!(result.semantics, Some(MarkdownSemantics::ListItem { ordered: true })));
+        assert!(result.html.contains("md-list"));
+    }
+
+    #[test]
+    fn render_line_horizontal_rule() {
+        let result = render_line("---");
+        assert!(matches!(result.semantics, Some(MarkdownSemantics::HorizontalRule)));
+        assert!(result.html.contains("md-hr"));
+    }
+
+    #[test]
+    fn render_line_plain_text() {
+        let result = render_line("Just regular text");
+        assert!(result.semantics.is_none());
+        assert!(result.html.contains("Just regular text"));
+    }
+
+    #[test]
+    fn render_line_with_2_space_indent() {
+        // 4 spaces triggers code block in markdown, so use 2 spaces
+        let result = render_line("  indented text");
+        assert!(result.html.contains("indented text"), "HTML should contain 'indented text': {}", result.html);
+    }
+
+    #[test]
+    fn html_escape_special_chars() {
+        assert_eq!(html_escape("<>&\"'"), "&lt;&gt;&amp;&quot;&#x27;");
     }
 }
