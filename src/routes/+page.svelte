@@ -13,6 +13,11 @@
   import SaveModal from "$lib/SaveModal.svelte";
   import Portal from "$lib/components/embedded/Portal.svelte";
   import { Header, StatusBar, SessionEditor } from "$lib/components";
+  import { useExitModes } from "$lib/composables/useExitModes.svelte";
+  import { useContentTracking } from "$lib/composables/useContentTracking.svelte";
+  import { useSelection } from "$lib/composables/useSelection.svelte";
+  import { useAnnotations } from "$lib/composables/useAnnotations.svelte";
+  import { useKeyboard } from "$lib/composables/useKeyboard.svelte";
   import type { SaveContentResponse } from "$lib/types";
 
   let lines: Line[] = $state([]);
@@ -55,39 +60,35 @@
     }, duration);
   }
 
-  // Content tracking (generalized for diff/markdown/future modes)
-  let hunkTracker: ContentTracker<HunkPayload> | null = $state(null);
-  let sectionTracker: ContentTracker<SectionPayload> | null = $state(null);
-  let currentFileIndex = $state(0);
-  let currentHunkIndex = $state(0);
-  let currentSectionIndex = $state(0);
+  // Content tracking (composable)
+  const contentTracking = useContentTracking();
   let contentEl: HTMLDivElement | null = $state(null);
   let scrollRafId: number | null = null;
 
   // Current file/hunk derived from indices (diff mode)
   let currentFile = $derived.by(() => {
     if (!diffMetadata || diffMetadata.files.length === 0) return null;
-    return diffMetadata.files[currentFileIndex] ?? null;
+    return diffMetadata.files[contentTracking.currentFileIndex] ?? null;
   });
 
   let currentHunk = $derived.by(() => {
     if (!currentFile || currentFile.hunks.length === 0) return null;
-    return currentFile.hunks[currentHunkIndex] ?? null;
+    return currentFile.hunks[contentTracking.currentHunkIndex] ?? null;
   });
 
   // Current section derived from index (markdown mode)
   let currentSection = $derived.by(() => {
     if (!markdownMetadata || markdownMetadata.sections.length === 0) return null;
-    return markdownMetadata.sections[currentSectionIndex] ?? null;
+    return markdownMetadata.sections[contentTracking.currentSectionIndex] ?? null;
   });
 
   // Build breadcrumb for markdown sections
   let sectionBreadcrumb = $derived.by(() => {
-    if (!markdownMetadata || currentSectionIndex < 0) return [];
+    if (!markdownMetadata || contentTracking.currentSectionIndex < 0) return [];
     const sections = markdownMetadata.sections;
     const breadcrumb: SectionInfo[] = [];
 
-    let idx: number | null = currentSectionIndex;
+    let idx: number | null = contentTracking.currentSectionIndex;
     while (idx !== null && idx >= 0 && idx < sections.length) {
       breadcrumb.unshift(sections[idx]);
       idx = sections[idx].parent_index;
@@ -148,30 +149,6 @@
     return segments;
   });
 
-  // Build ContentTracker for diff mode
-  function buildHunkTracker(meta: DiffMetadata): ContentTracker<HunkPayload> {
-    const boundaries: { line: number; data: HunkPayload }[] = [];
-    for (let fi = 0; fi < meta.files.length; fi++) {
-      const file = meta.files[fi];
-      for (let hi = 0; hi < file.hunks.length; hi++) {
-        boundaries.push({
-          line: file.hunks[hi].display_line,
-          data: { fileIndex: fi, hunkIndex: hi },
-        });
-      }
-    }
-    return new ContentTracker(boundaries);
-  }
-
-  // Build ContentTracker for markdown mode
-  function buildSectionTracker(meta: MarkdownMetadata): ContentTracker<SectionPayload> {
-    const boundaries = meta.sections.map((section, i) => ({
-      line: section.source_line,
-      data: { sectionIndex: i },
-    }));
-    return new ContentTracker(boundaries);
-  }
-
   function updateCurrentPosition() {
     if (!contentEl) return;
 
@@ -186,23 +163,7 @@
         const sourceLineNum = line ? getLineNumber(line) : null;
         if (sourceLineNum === null) continue;
 
-        // Update diff tracking
-        if (hunkTracker) {
-          const boundary = hunkTracker.findAt(sourceLineNum);
-          if (boundary) {
-            currentFileIndex = boundary.data.fileIndex;
-            currentHunkIndex = boundary.data.hunkIndex;
-          }
-        }
-
-        // Update markdown tracking
-        if (sectionTracker) {
-          const boundary = sectionTracker.findAt(sourceLineNum);
-          if (boundary) {
-            currentSectionIndex = boundary.data.sectionIndex;
-          }
-        }
-
+        contentTracking.updateFromLine(sourceLineNum);
         break;
       }
     }
@@ -224,12 +185,13 @@
 
   // Get hunk bounds for a line (returns null if line is a header or not in diff mode)
   function getHunkBounds(lineNum: number): { start: number; end: number } | null {
-    if (!diffMetadata || !hunkTracker || hunkTracker.length === 0) return null;
+    const tracker = contentTracking.hunkTracker;
+    if (!diffMetadata || !tracker || tracker.length === 0) return null;
 
-    const boundary = hunkTracker.findAt(lineNum);
+    const boundary = tracker.findAt(lineNum);
     if (!boundary) return null;
 
-    const boundaries = hunkTracker.all();
+    const boundaries = tracker.all();
 
     // Find this boundary's index
     const boundaryIdx = boundaries.findIndex(
@@ -346,38 +308,29 @@
     return constrained;
   }
 
-  // Selection state
-  let selection: Range | null = $state(null);
-  let isDragging = $state(false);
-  let isShiftHeld = $state(false);
-  let mouseDownHandled = false;  // Prevents click from undoing mousedown
-  /** Display index (1-indexed array position) of currently hovered line. Unambiguous in diff mode. */
-  let hoveredDisplayIdx: number | null = $state(null);
+  // Selection state (composable)
+  const selectionState = useSelection({
+    isLineSelectable,
+    constrainToBounds: constrainToSelectionBounds,
+    getDisplayIdxFromEvent,
+  });
 
-  // Annotation state - Map keyed by "startLine-endLine" → TipTap JSON
-  let annotations: Map<string, JSONContent> = $state(new Map());
-  let sealedRanges: Set<string> = $state(new Set());
+  // Annotation state (composable)
+  const annotationState = useAnnotations({
+    getLines: () => lines,
+  });
 
-  // Exit mode state (null index = neutral/no mode selected)
-  let exitModes: ExitMode[] = $state([]);
-  let selectedModeIndex: number | null = $state(null);
-  let selectedMode = $derived.by(() =>
-    selectedModeIndex !== null && exitModes.length > 0 ? exitModes[selectedModeIndex] : null
-  );
-
-  function cycleExitModeForward() {
-    if (exitModes.length === 0) return;
-    // Cycle forward including neutral: null → 0 → 1 → ... → last → null
-    if (selectedModeIndex === null) {
-      selectedModeIndex = 0;
-    } else if (selectedModeIndex === exitModes.length - 1) {
-      selectedModeIndex = null;
-    } else {
-      selectedModeIndex = selectedModeIndex + 1;
+  // Derived Map for Portal compatibility (converts Record to Map)
+  let annotationsMap = $derived.by(() => {
+    const map = new Map<string, JSONContent>();
+    for (const [key, entry] of Object.entries(annotationState.annotations)) {
+      map.set(key, entry.content);
     }
-    const modeId = selectedModeIndex !== null ? exitModes[selectedModeIndex].id : null;
-    invoke('set_exit_mode', { modeId });
-  }
+    return map;
+  });
+
+  // Exit mode state (composable)
+  const exitModeState = useExitModes();
 
   // Session comment state (global/file-level comment)
   let sessionComment: JSONContent | undefined = $state(undefined);
@@ -422,85 +375,54 @@
   let totalHeight = $derived(lines.length * LINE_HEIGHT);
 
   // Get all annotation ranges for overlay rendering
-  let annotationRanges = $derived.by(() => {
-    const ranges: Array<{ key: string; start: number; end: number }> = [];
-    for (const [key] of annotations) {
-      const range = keyToRange(key);
-      ranges.push({ key, start: range.start, end: range.end });
-    }
-    return ranges;
-  });
+  let annotationRanges = $derived(annotationState.allRanges());
 
   // Active editor range (for positioning the editor overlay)
   let activeEditorRange = $derived.by(() => {
-    if (!selection || isDragging) return null;
+    const sel = selectionState.selection;
+    if (!sel || selectionState.isDragging) return null;
     // Check if there's an existing annotation at the last selected line
-    const lastLine = Math.max(selection.start, selection.end);
-    for (const [key] of annotations) {
-      const range = keyToRange(key);
-      if (range.end === lastLine) {
-        return { key, start: range.start, end: range.end };
-      }
+    const lastLine = Math.max(sel.start, sel.end);
+    const existing = annotationState.getAtLine(lastLine);
+    if (existing) {
+      const range = keyToRange(existing.key);
+      return { key: existing.key, start: range.start, end: range.end };
     }
     // New annotation at selection
-    const start = Math.min(selection.start, selection.end);
-    const end = Math.max(selection.start, selection.end);
+    const start = Math.min(sel.start, sel.end);
+    const end = Math.max(sel.start, sel.end);
     return { key: rangeToKey({ start, end }), start, end };
   });
 
   // Derived: last line of current selection (for positioning editor)
   let lastSelectedLine = $derived.by(() => {
-    if (!selection) return null;
-    return Math.max(selection.start, selection.end);
+    const sel = selectionState.selection;
+    if (!sel) return null;
+    return Math.max(sel.start, sel.end);
   });
 
-  function getAnnotation(sel: Range): JSONContent | undefined {
-    return annotations.get(rangeToKey(sel));
-  }
-
   async function updateAnnotation(content: JSONContent | null) {
-    if (!selection) return;
-    const key = rangeToKey(selection);
-    const coords = validateRange(selection, lines);
-    if (!coords) return;
-
-    if (content && !isContentEmpty(content)) {
-      annotations.set(key, content);
-      const nodes = extractContentNodes(content);
-      await invoke('upsert_annotation', {
-        path: coords.path,
-        startLine: coords.startLine,
-        endLine: coords.endLine,
-        content: nodes
-      });
-    } else {
-      annotations.delete(key);
-      await invoke('delete_annotation', {
-        path: coords.path,
-        startLine: coords.startLine,
-        endLine: coords.endLine
-      });
-    }
-    annotations = new Map(annotations); // trigger reactivity
+    const sel = selectionState.selection;
+    if (!sel) return;
+    await annotationState.upsert(sel, content);
   }
 
   function sealCurrentAnnotation() {
-    if (!selection) return;
+    const sel = selectionState.selection;
+    if (!sel) return;
 
     // Don't seal if we're creating a tag from this editor - user will return after CP closes
     if (pendingTagCreation) return;
 
-    const key = rangeToKey(selection);
-    const content = annotations.get(key);
-    if (content) {
-      sealedRanges.add(key);
-      sealedRanges = new Set(sealedRanges);
+    const key = rangeToKey(sel);
+    const entry = annotationState.getByKey(key);
+    if (entry) {
+      annotationState.seal(key);
     } else {
       // Remove empty annotation
-      annotations.delete(key);
-      annotations = new Map(annotations);
+      annotationState.remove(key);
     }
-    selection = null;
+    selectionState.clearSelection();
   }
 
   // Session comment handlers
@@ -574,11 +496,7 @@
   }
 
   function handleSetExitModeFromPalette(modeId: string) {
-    const idx = exitModes.findIndex(m => m.id === modeId);
-    if (idx >= 0) {
-      selectedModeIndex = idx;
-      invoke('set_exit_mode', { modeId });
-    }
+    exitModeState.selectById(modeId);
   }
 
   async function handleTagsChange(newTags: Tag[]) {
@@ -610,11 +528,11 @@
 
   async function handleExitModesChange(newModes: ExitMode[]) {
     // Find changed modes by comparing with current state
-    const currentIds = new Set(exitModes.map(m => m.id));
+    const currentModes = exitModeState.modes;
     const newIds = new Set(newModes.map(m => m.id));
 
     // Check for deleted modes
-    for (const mode of exitModes) {
+    for (const mode of currentModes) {
       if (!newIds.has(mode.id)) {
         await invoke('delete_exit_mode', { id: mode.id });
       }
@@ -622,36 +540,27 @@
 
     // Check for added/updated modes
     for (const mode of newModes) {
-      const existing = exitModes.find(m => m.id === mode.id);
+      const existing = currentModes.find(m => m.id === mode.id);
       if (!existing || existing.name !== mode.name || existing.instruction !== mode.instruction ||
           existing.color !== mode.color || existing.order !== mode.order) {
         await invoke('upsert_exit_mode', { mode });
       }
     }
 
-    exitModes = newModes;
-
-    // Update selectedModeIndex if mode was deleted
-    if (selectedModeIndex !== null && selectedModeIndex >= exitModes.length) {
-      selectedModeIndex = exitModes.length > 0 ? exitModes.length - 1 : null;
-    }
+    // Update composable state (handles index clamping)
+    exitModeState.setModes(newModes);
   }
 
   // Get annotation info for a specific display index (is it the last line of any annotation?)
   function getAnnotationAtLine(displayIdx: number): { key: string; content: JSONContent } | null {
-    for (const [key, content] of annotations) {
-      const range = keyToRange(key);
-      if (range.end === displayIdx) {
-        return { key, content };
-      }
-    }
-    return null;
+    return annotationState.getAtLine(displayIdx);
   }
 
   // Check if a display index is selected
   function isSelected(displayIdx: number): boolean {
-    if (!selection) return false;
-    return isLineInRange(displayIdx, selection);
+    const sel = selectionState.selection;
+    if (!sel) return false;
+    return isLineInRange(displayIdx, sel);
   }
 
   // Check if a line starts a mermaid code block
@@ -689,13 +598,7 @@
 
   // Check if a display index has an annotation
   function hasAnnotation(displayIdx: number): boolean {
-    for (const key of annotations.keys()) {
-      const range = keyToRange(key);
-      if (isLineInRange(displayIdx, range)) {
-        return true;
-      }
-    }
-    return false;
+    return annotationState.hasAnnotation(displayIdx);
   }
 
   /** Get display index (1-indexed) from a mouse event on a line element. */
@@ -707,158 +610,33 @@
     return Number.isNaN(idx) ? null : idx;
   }
 
-  // Mouse handlers for selection
-  function handleGutterMouseDown(displayIdx: number, e: MouseEvent) {
-    // Skip header lines
-    if (!isLineSelectable(displayIdx)) return;
-
-    e.preventDefault();
-    isDragging = true;
-    mouseDownHandled = true;
-    selection = { start: displayIdx, end: displayIdx };
-  }
-
-  function handleContentMouseDown(e: MouseEvent) {
-    if (!e.shiftKey) return;
-    const displayIdx = getDisplayIdxFromEvent(e);
-    if (displayIdx === null) return;
-
-    // Check if line is selectable
-    if (!isLineSelectable(displayIdx)) return;
-
-    e.preventDefault();
-    isDragging = true;
-    selection = { start: displayIdx, end: displayIdx };
-  }
-
-  function handleMouseMove(e: MouseEvent) {
-    if (!isDragging || !selection) return;
-    const displayIdx = getDisplayIdxFromEvent(e);
-    if (displayIdx === null) return;
-
-    // Constrain to selection bounds (hunk + portal)
-    const constrainedIdx = constrainToSelectionBounds(displayIdx, selection.start);
-    selection = { start: selection.start, end: constrainedIdx };
-  }
-
-  function handleMouseUp() {
-    isDragging = false;
-  }
-
-  function handleGutterClick(displayIdx: number) {
-    // Skip if mousedown already handled this interaction
-    if (mouseDownHandled) {
-      mouseDownHandled = false;
-      return;
-    }
-    // Skip header lines
-    if (!isLineSelectable(displayIdx)) return;
-
-    // Toggle off if clicking same single-line selection
-    if (selection?.start === displayIdx && selection?.end === displayIdx) {
-      selection = null;
-    } else {
-      selection = { start: displayIdx, end: displayIdx };
-    }
-  }
-
-  function handleKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Shift') {
-      isShiftHeld = true;
-    } else if (e.key === 'Tab') {
-      // Always prevent default Tab behavior
-      e.preventDefault();
-      // Only cycle exit modes when no editor is active
-      if (exitModes.length > 0 && !selection && !sessionEditorOpen && !commandPaletteOpen) {
-        if (e.shiftKey) {
-          // Cycle backward: 0 → null → last → ... → 1 → 0
-          if (selectedModeIndex === null) {
-            selectedModeIndex = exitModes.length - 1;
-          } else if (selectedModeIndex === 0) {
-            selectedModeIndex = null;
-          } else {
-            selectedModeIndex = selectedModeIndex - 1;
-          }
-        } else {
-          // Cycle forward: null → 0 → 1 → ... → last → null
-          if (selectedModeIndex === null) {
-            selectedModeIndex = 0;
-          } else if (selectedModeIndex === exitModes.length - 1) {
-            selectedModeIndex = null;
-          } else {
-            selectedModeIndex = selectedModeIndex + 1;
-          }
+  // Keyboard handling (composable)
+  const keyboard = useKeyboard(
+    {
+      onShiftDown: () => selectionState.handleShiftKeyDown(),
+      onShiftUp: () => selectionState.handleShiftKeyUp(),
+      onTabCycle: (dir) => dir === 'forward' ? exitModeState.cycleForward() : exitModeState.cycleBackward(),
+      onOpenSessionEditor: openSessionEditor,
+      onOpenCommandPalette: () => commandPaletteOpen = true,
+      onOpenSaveModal: openSaveModal,
+      onZoomIn: () => contentZoom = Math.min(contentZoom + 0.1, 3.0),
+      onZoomOut: () => contentZoom = Math.max(contentZoom - 0.1, 0.5),
+      onZoomReset: () => contentZoom = 1.0,
+      onCommentHoveredLine: () => {
+        if (selectionState.hoveredDisplayIdx !== null) {
+          selectionState.selectLine(selectionState.hoveredDisplayIdx);
         }
-        // Sync to backend
-        const modeId = selectedModeIndex !== null ? exitModes[selectedModeIndex].id : null;
-        invoke('set_exit_mode', { modeId });
-      }
-    } else if (e.key === 'c' && !e.metaKey && !e.ctrlKey && hoveredDisplayIdx !== null && !selection) {
-      // Open editor on hovered line (skip header lines)
-      // Only when 'c' is pressed alone - Cmd+C/Ctrl+C should copy text
-      // Skip if user is focused in an editor/input
-      const activeEl = document.activeElement;
-      const isInEditor = activeEl?.closest('.annotation-editor, .session-editor');
-      const isInInput = activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement;
-      const isContentEditable = activeEl instanceof HTMLElement && activeEl.isContentEditable;
-      if (isInEditor || isInInput || isContentEditable) return;
-      // Check if line is selectable
-      if (!isLineSelectable(hoveredDisplayIdx)) return;
-      e.preventDefault();
-      selection = { start: hoveredDisplayIdx, end: hoveredDisplayIdx };
-    } else if (e.key === 'g' && !selection && !sessionEditorOpen) {
-      // Open session comment editor (when not in any editor)
-      const activeEl = document.activeElement;
-      const isInEditor = activeEl?.closest('.annotation-editor, .session-editor');
-      const isInInput = activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement;
-      if (!isInEditor && !isInInput) {
-        e.preventDefault();
-        openSessionEditor();
-      }
-    } else if (e.key === ':' && !selection && !sessionEditorOpen && !commandPaletteOpen) {
-      // Open CommandPalette (when not in any editor)
-      const activeEl = document.activeElement;
-      const isInEditor = activeEl?.closest('.annotation-editor, .session-editor');
-      const isInInput = activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement;
-      if (!isInEditor && !isInInput && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        e.preventDefault();
-        commandPaletteOpen = true;
-      }
-    } else if (e.key === 's' && (e.metaKey || e.ctrlKey) && !saveModalOpen) {
-      // Cmd+S / Ctrl+S opens save modal
-      e.preventDefault();
-      openSaveModal();
-    } else if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '+')) {
-      // Cmd+Plus: zoom in content
-      e.preventDefault();
-      contentZoom = Math.min(contentZoom + 0.1, 3.0);
-    } else if ((e.metaKey || e.ctrlKey) && e.key === '-') {
-      // Cmd+Minus: zoom out content
-      e.preventDefault();
-      contentZoom = Math.max(contentZoom - 0.1, 0.5);
-    } else if ((e.metaKey || e.ctrlKey) && e.key === '0') {
-      // Cmd+0: reset zoom
-      e.preventDefault();
-      contentZoom = 1.0;
+      },
+    },
+    {
+      isEditorActive: () => !!selectionState.selection || sessionEditorOpen,
+      isCommandPaletteOpen: () => commandPaletteOpen,
+      isSaveModalOpen: () => saveModalOpen,
+      hasHoveredLine: () => selectionState.hoveredDisplayIdx !== null,
+      hasExitModes: () => exitModeState.modes.length > 0,
+      isHoveredLineSelectable: () => selectionState.hoveredDisplayIdx !== null && isLineSelectable(selectionState.hoveredDisplayIdx),
     }
-    // Escape is now handled by the editor's blur handler
-  }
-
-  function handleKeyUp(e: KeyboardEvent) {
-    if (e.key === 'Shift') {
-      isShiftHeld = false;
-    }
-  }
-
-  function handleAddMouseDown(displayIdx: number, e: MouseEvent) {
-    // Skip header lines
-    if (!isLineSelectable(displayIdx)) return;
-
-    e.preventDefault();
-    isDragging = true;
-    mouseDownHandled = true;
-    selection = { start: displayIdx, end: displayIdx };
-  }
+  );
 
   onMount(async () => {
     const window = getCurrentWindow();
@@ -867,22 +645,16 @@
       label = res.label;
       lines = res.lines;
       tags = res.tags;
-      exitModes = res.exit_modes;
+      exitModeState.initialize(res.exit_modes, res.selected_exit_mode_id);
       metadata = res.metadata;
       allowsImagePaste = res.allows_image_paste;
 
       // Build content trackers for scroll tracking
       if (res.metadata.type === 'diff') {
-        hunkTracker = buildHunkTracker(res.metadata);
+        contentTracking.initializeDiff(res.metadata);
       }
       if (res.metadata.type === 'markdown') {
-        sectionTracker = buildSectionTracker(res.metadata);
-      }
-
-      // Find index of initially selected mode (if any)
-      if (res.selected_exit_mode_id) {
-        const idx = exitModes.findIndex(m => m.id === res.selected_exit_mode_id);
-        if (idx >= 0) selectedModeIndex = idx;
+        contentTracking.initializeMarkdown(res.metadata);
       }
 
       // Hydrate session comment from backend
@@ -910,15 +682,15 @@
   });
 </script>
 
-<svelte:window onkeydown={handleKeyDown} onkeyup={handleKeyUp} />
+<svelte:window onkeydown={keyboard.handleKeyDown} onkeyup={keyboard.handleKeyUp} />
 
-<main class="viewer" style:--mode-color={selectedMode?.color ?? 'transparent'}>
+<main class="viewer" style:--mode-color={exitModeState.selectedMode?.color ?? 'transparent'}>
   <div class="sticky-header">
     <Header
       {label}
       {metadata}
       {currentFile}
-      {currentFileIndex}
+      currentFileIndex={contentTracking.currentFileIndex}
       {currentHunk}
       {sectionBreadcrumb}
       {headerRootSection}
@@ -951,13 +723,13 @@
   {:else}
     <div
       class="content"
-      class:shift-held={isShiftHeld}
+      class:shift-held={selectionState.isShiftHeld}
       class:diff-mode={diffMetadata !== null}
       bind:this={contentEl}
       onscroll={handleContentScroll}
-      onmousedown={handleContentMouseDown}
-      onmousemove={handleMouseMove}
-      onmouseup={handleMouseUp}
+      onmousedown={selectionState.handleContentMouseDown}
+      onmousemove={selectionState.handleMouseMove}
+      onmouseup={selectionState.handleMouseUp}
       role="presentation"
     >
       <div
@@ -969,29 +741,28 @@
         {#if segment.type === 'portal'}
           <Portal
             lines={segment.lines}
-            {selection}
-            {isDragging}
-            {hoveredDisplayIdx}
+            selection={selectionState.selection}
+            isDragging={selectionState.isDragging}
+            hoveredDisplayIdx={selectionState.hoveredDisplayIdx}
             {markdownMetadata}
-            {annotations}
+            annotations={annotationsMap}
             {lastSelectedLine}
-            onGutterMouseDown={handleGutterMouseDown}
-            onGutterClick={handleGutterClick}
-            onAddMouseDown={handleAddMouseDown}
-            onMouseEnter={(idx) => hoveredDisplayIdx = idx}
-            onMouseLeave={() => hoveredDisplayIdx = null}
+            onGutterMouseDown={selectionState.handleGutterMouseDown}
+            onGutterClick={selectionState.handleGutterClick}
+            onAddMouseDown={selectionState.handleAddMouseDown}
+            onMouseEnter={(idx) => selectionState.hoveredDisplayIdx = idx}
+            onMouseLeave={() => selectionState.hoveredDisplayIdx = null}
           >
             {#snippet annotationSlot(displayIndex, rangeKey)}
               {#if rangeKey}
                 {#key rangeKey}
                   <AnnotationEditor
-                    content={annotations.get(rangeKey)}
-                    sealed={sealedRanges.has(rangeKey)}
+                    content={annotationState.getByKey(rangeKey)?.content}
+                    sealed={annotationState.isSealed(rangeKey)}
                     onUpdate={updateAnnotation}
                     onUnseal={() => {
-                      selection = keyToRange(rangeKey);
-                      sealedRanges.delete(rangeKey);
-                      sealedRanges = new Set(sealedRanges);
+                      selectionState.selection = keyToRange(rangeKey);
+                      annotationState.unseal(rangeKey);
                     }}
                     onDismiss={sealCurrentAnnotation}
                     {tags}
@@ -1018,21 +789,21 @@
               class:diff-context={diffKind === 'context'}
               class:diff-header={diffKind === 'file_header' || diffKind === 'hunk_header'}
               data-display-idx={displayIndex}
-              onmouseenter={() => hoveredDisplayIdx = displayIndex}
-              onmouseleave={() => hoveredDisplayIdx = null}
+              onmouseenter={() => selectionState.hoveredDisplayIdx = displayIndex}
+              onmouseleave={() => selectionState.hoveredDisplayIdx = null}
               role="presentation"
             >
               <button
                 class="add-btn"
-                onmousedown={(e) => handleAddMouseDown(displayIndex, e)}
+                onmousedown={(e) => selectionState.handleAddMouseDown(displayIndex, e)}
                 aria-label="Add annotation"
               >+</button>
               <!-- svelte-ignore a11y_click_events_have_key_events -->
               <span
                 class="gutter"
                 class:selected={isSelected(displayIndex)}
-                onmousedown={(e) => handleGutterMouseDown(displayIndex, e)}
-                onclick={() => handleGutterClick(displayIndex)}
+                onmousedown={(e) => selectionState.handleGutterMouseDown(displayIndex, e)}
+                onclick={() => selectionState.handleGutterClick(displayIndex)}
                 role="button"
                 tabindex="-1"
               >
@@ -1057,18 +828,17 @@
               {/if}
             </div>
             {@const annotationAtLine = getAnnotationAtLine(displayIndex)}
-            {@const isLastSelectedLine = displayIndex === lastSelectedLine && selection && !isDragging}
-            {@const rangeKey = annotationAtLine?.key ?? (isLastSelectedLine && selection ? rangeToKey(selection) : null)}
+            {@const isLastSelectedLine = displayIndex === lastSelectedLine && selectionState.selection && !selectionState.isDragging}
+            {@const rangeKey = annotationAtLine?.key ?? (isLastSelectedLine && selectionState.selection ? rangeToKey(selectionState.selection) : null)}
             {#if rangeKey}
               {#key rangeKey}
                 <AnnotationEditor
-                  content={annotations.get(rangeKey)}
-                  sealed={sealedRanges.has(rangeKey)}
+                  content={annotationState.getByKey(rangeKey)?.content}
+                  sealed={annotationState.isSealed(rangeKey)}
                   onUpdate={updateAnnotation}
                   onUnseal={() => {
-                    selection = keyToRange(rangeKey);
-                    sealedRanges.delete(rangeKey);
-                    sealedRanges = new Set(sealedRanges);
+                    selectionState.selection = keyToRange(rangeKey);
+                    annotationState.unseal(rangeKey);
                   }}
                   onDismiss={sealCurrentAnnotation}
                   {tags}
@@ -1087,13 +857,13 @@
   {/if}
 
   <!-- Footer / Status Bar -->
-  <StatusBar {selectedMode} onCycleMode={cycleExitModeForward} />
+  <StatusBar selectedMode={exitModeState.selectedMode} onCycleMode={exitModeState.cycleForward} />
 </main>
 
 {#if commandPaletteOpen}
   <CommandPalette
     {tags}
-    {exitModes}
+    exitModes={exitModeState.modes}
     onClose={handleCommandPaletteClose}
     onSetExitMode={handleSetExitModeFromPalette}
     onTagsChange={handleTagsChange}
