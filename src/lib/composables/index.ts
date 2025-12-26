@@ -1,5 +1,5 @@
 export { useSelection, type UseSelectionOptions, type LineInfo } from './useSelection.svelte';
-export { useAnnotations } from './useAnnotations.svelte';
+export { useAnnotations, type AnnotationEntry, type UseAnnotationsOptions } from './useAnnotations.svelte';
 export { useExitModes } from './useExitModes.svelte';
 export { useKeyboard, type KeyboardHandlers, type KeyboardState } from './useKeyboard.svelte';
 export { useContentTracking } from './useContentTracking.svelte';
