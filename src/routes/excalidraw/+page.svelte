@@ -1,43 +1,108 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import type { ExcalidrawHandle } from './excalidraw-loader';
+  import { invoke } from '@tauri-apps/api/core';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
+  import type { ExcalidrawHandle } from '$lib/excalidraw-loader';
 
-  interface Props {
-    initialElements?: string; // JSON string
-    onSave: (elements: string, png: string) => void;
-    onCancel: () => void;
+  interface NodeRef {
+    type: 'Chip' | 'Placeholder';
+    id: string;
   }
 
-  let { initialElements = '[]', onSave, onCancel }: Props = $props();
+  interface ExcalidrawContext {
+    elements: string;
+    range_key: string;
+    node_ref: NodeRef;
+    parent_label: string;
+  }
 
   let containerEl: HTMLDivElement | undefined = $state();
-  let modalEl: HTMLDivElement | undefined = $state();
   let handle: ExcalidrawHandle | null = null;
   let loading = $state(true);
   let error = $state<string | null>(null);
   let showConfirmDialog = $state(false);
   let initialElementCount = 0;
+  let initialHash = '';
+
+  interface ExcalidrawElement {
+    id?: string;
+    isDeleted?: boolean;
+  }
+
+  function hashElements(elements: ExcalidrawElement[]): string {
+    const active = elements.filter((el) => !el.isDeleted);
+    const sorted = [...active].sort((a, b) => (a.id || '').localeCompare(b.id || ''));
+    return JSON.stringify(sorted);
+  }
 
   function hasUnsavedChanges(): boolean {
     if (!handle) return false;
-    const currentElements = handle.getElements();
-    // Check if there are any elements beyond what we started with
-    // Filter out deleted elements (Excalidraw marks deleted elements with isDeleted: true)
-    const activeElements = currentElements.filter((el: { isDeleted?: boolean }) => !el.isDeleted);
-    return activeElements.length > initialElementCount;
+    const currentElements = handle.getElements() as ExcalidrawElement[];
+    return hashElements(currentElements) !== initialHash;
+  }
+
+  async function handleSave() {
+    if (!handle) return;
+
+    const elements = handle.getElements();
+    const { exportToBlob } = await import('@excalidraw/excalidraw');
+
+    try {
+      const blob = await exportToBlob({
+        elements,
+        mimeType: 'image/png',
+        appState: handle.getAppState(),
+        files: {},
+      });
+
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        try {
+          await invoke('excalidraw_save', {
+            elements: JSON.stringify(elements),
+            png: reader.result as string,
+          });
+        } catch (e) {
+          console.error('Failed to save:', e);
+        }
+      };
+      reader.readAsDataURL(blob);
+    } catch (e) {
+      console.error('Failed to export PNG:', e);
+      // Save without PNG if export fails
+      try {
+        await invoke('excalidraw_save', {
+          elements: JSON.stringify(elements),
+          png: '',
+        });
+      } catch (err) {
+        console.error('Failed to save:', err);
+      }
+    }
+  }
+
+  async function handleCancel() {
+    try {
+      await invoke('excalidraw_cancel');
+    } catch (e) {
+      console.error('Failed to cancel:', e);
+      // Close window anyway
+      const win = getCurrentWindow();
+      await win.close();
+    }
   }
 
   function tryCancel() {
     if (hasUnsavedChanges()) {
       showConfirmDialog = true;
     } else {
-      onCancel();
+      handleCancel();
     }
   }
 
   function confirmCancel() {
     showConfirmDialog = false;
-    onCancel();
+    handleCancel();
   }
 
   function dismissConfirm() {
@@ -52,47 +117,49 @@
       (window as unknown as { EXCALIDRAW_ASSET_PATH: string }).EXCALIDRAW_ASSET_PATH =
         '/excalidraw-assets/';
 
-      const { mountExcalidraw } = await import('./excalidraw-loader');
+      // Get context from backend
+      const context = await invoke<ExcalidrawContext>('get_excalidraw_context');
 
-      let parsedElements = [];
+      const { mountExcalidraw } = await import('$lib/excalidraw-loader');
+
+      let parsedElements: ExcalidrawElement[] = [];
       try {
-        parsedElements = JSON.parse(initialElements || '[]');
+        parsedElements = JSON.parse(context.elements || '[]');
       } catch {
         console.warn('Failed to parse initial elements, using empty array');
       }
 
-      // Track initial element count for change detection
-      initialElementCount = parsedElements.filter((el: { isDeleted?: boolean }) => !el.isDeleted).length;
+      // Track initial state for change detection
+      initialElementCount = parsedElements.filter((el) => !el.isDeleted).length;
+      initialHash = hashElements(parsedElements);
 
       handle = await mountExcalidraw({
         container: containerEl,
         initialElements: parsedElements,
-        onSave: (elements, png) => {
-          onSave(JSON.stringify(elements), png);
-        },
+        onSave: handleSave,
         onCancel: tryCancel,
       });
 
       loading = false;
 
-      // Focus Excalidraw so it receives keyboard events
-      // Poll until .excalidraw wrapper appears (Excalidraw takes time to render)
+      // Focus Excalidraw
       const focusExcalidraw = () => {
         const excalidrawWrapper = containerEl?.querySelector('.excalidraw');
         if (excalidrawWrapper) {
-          const tabbableElement = excalidrawWrapper.querySelector('[tabindex]') as HTMLElement | null;
+          const tabbableElement = excalidrawWrapper.querySelector(
+            '[tabindex]'
+          ) as HTMLElement | null;
           if (tabbableElement) {
-            tabbableElement.focus();
+            tabbableElement.focus({ preventScroll: true });
           } else {
             (excalidrawWrapper as HTMLElement).setAttribute('tabindex', '-1');
-            (excalidrawWrapper as HTMLElement).focus();
+            (excalidrawWrapper as HTMLElement).focus({ preventScroll: true });
           }
           return true;
         }
         return false;
       };
 
-      // Try immediately, then poll every 50ms up to 1 second
       let attempts = 0;
       const maxAttempts = 20;
       const tryFocus = () => {
@@ -103,21 +170,22 @@
         setTimeout(tryFocus, 50);
       };
       tryFocus();
+
+      // Show the window
+      const win = getCurrentWindow();
+      await win.show();
     } catch (e) {
       error = String(e);
       loading = false;
+      // Still show window on error
+      const win = getCurrentWindow();
+      await win.show();
     }
   });
 
   onDestroy(() => {
     handle?.unmount();
   });
-
-  function handleBackdropClick(e: MouseEvent) {
-    if (e.target === e.currentTarget) {
-      tryCancel();
-    }
-  }
 
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
@@ -133,22 +201,28 @@
 
 <svelte:window onkeydown={handleKeyDown} />
 
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<div class="excalidraw-backdrop" onclick={handleBackdropClick} role="presentation">
-  <div bind:this={modalEl} class="excalidraw-modal" role="dialog" aria-modal="true" tabindex="-1">
-    {#if loading}
-      <div class="excalidraw-loading">Loading Excalidraw...</div>
-    {:else if error}
-      <div class="excalidraw-error">{error}</div>
-    {/if}
-    <div bind:this={containerEl} class="excalidraw-container"></div>
-  </div>
+<div class="excalidraw-window">
+  <header class="window-header" data-tauri-drag-region>
+    <span class="window-title">Excalidraw</span>
+  </header>
+  {#if loading}
+    <div class="excalidraw-loading">Loading Excalidraw...</div>
+  {:else if error}
+    <div class="excalidraw-error">{error}</div>
+  {/if}
+  <div bind:this={containerEl} class="excalidraw-container"></div>
 </div>
 
 {#if showConfirmDialog}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div class="confirm-backdrop" onclick={dismissConfirm} role="presentation">
-    <div class="confirm-dialog" role="alertdialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+    <div
+      class="confirm-dialog"
+      role="alertdialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+    >
       <p class="confirm-message">Discard unsaved drawing?</p>
       <div class="confirm-buttons">
         <button class="confirm-btn confirm-btn-cancel" onclick={dismissConfirm}>Keep editing</button>
@@ -159,32 +233,44 @@
 {/if}
 
 <style>
-  .excalidraw-backdrop {
-    position: fixed;
-    inset: 0;
-    background: var(--backdrop-dark);
+  .excalidraw-window {
+    width: 100vw;
+    height: 100vh;
+    background: var(--bg-window);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .window-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    -webkit-app-region: drag;
+    z-index: 100;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    /* Match main window header styling */
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    background: color-mix(in srgb, var(--bg-panel) 85%, transparent);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
   }
 
-  .excalidraw-modal {
-    width: 90vw;
-    height: 85vh;
-    background: var(--bg-window);
-    border-radius: var(--radius-xl);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    outline: none;
+  .window-title {
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
   }
 
   .excalidraw-container {
-    flex: 1;
+    width: 100%;
+    height: calc(100% - 40px);
+    margin-top: 40px;
     position: relative;
-    min-height: 0; /* Important for flex children */
   }
 
   /* Excalidraw wrapper needs explicit dimensions */
@@ -218,7 +304,7 @@
     color: var(--error-text);
   }
 
-  /* Control buttons positioned in modal */
+  /* Control buttons positioned in window */
   :global(.excalidraw-controls) {
     position: absolute;
     bottom: 16px;
@@ -298,7 +384,9 @@
     font-weight: 500;
     cursor: pointer;
     border: none;
-    transition: opacity var(--transition-normal), transform 0.1s;
+    transition:
+      opacity var(--transition-normal),
+      transform 0.1s;
   }
 
   .confirm-btn:hover {

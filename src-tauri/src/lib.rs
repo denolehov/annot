@@ -9,6 +9,7 @@ pub mod commands;
 pub mod config;
 pub mod diff;
 pub mod error;
+pub mod excalidraw_window;
 pub mod highlight;
 pub mod input;
 pub mod markdown;
@@ -24,6 +25,10 @@ use commands::{
     export_to_obsidian, finish_review, get_config, get_content, get_exit_modes, get_tags,
     reorder_exit_modes, save_config, save_content, set_exit_mode, set_session_comment,
     upsert_annotation, upsert_exit_mode, upsert_tag,
+};
+use excalidraw_window::{
+    excalidraw_cancel, excalidraw_save, get_excalidraw_context, open_excalidraw_window,
+    ExcalidrawWindowState,
 };
 use mermaid_window::{get_mermaid_source, open_mermaid_window, MermaidWindowState};
 
@@ -49,6 +54,10 @@ macro_rules! all_commands {
             save_content,
             open_mermaid_window,
             get_mermaid_source,
+            open_excalidraw_window,
+            get_excalidraw_context,
+            excalidraw_save,
+            excalidraw_cancel,
             get_config,
             save_config,
             export_to_obsidian
@@ -72,6 +81,7 @@ pub fn run(state: AppState, context: tauri::Context) {
         .manage::<ActiveReview>(Mutex::new(Some(review)))
         .manage::<ShouldExit>(Arc::new(AtomicBool::new(true))) // CLI mode: allow exit
         .manage(Mutex::new(MermaidWindowState::new()))
+        .manage(Mutex::new(ExcalidrawWindowState::new()))
         .invoke_handler(all_commands!())
         .setup(|app| {
             // Create window programmatically (not from config, for MCP compatibility)
@@ -113,6 +123,7 @@ pub fn run_mcp(context: tauri::Context) {
         .manage::<ActiveReview>(Mutex::new(None))
         .manage::<ShouldExit>(should_exit)
         .manage(Mutex::new(MermaidWindowState::new()))
+        .manage(Mutex::new(ExcalidrawWindowState::new()))
         .invoke_handler(all_commands!())
         .setup(|app| {
             // Set accessory mode on macOS (hide dock icon)

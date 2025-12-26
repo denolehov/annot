@@ -76,7 +76,7 @@
 		const win = getCurrentWindow();
 		const padding = 40; // Margin around diagram
 		const toolbarHeight = 60; // Space for zoom toolbar at bottom
-		const titleBarHeight = 44; // macOS title bar overlay
+		const titleBarHeight = 40; // Window header height
 
 		// Calculate window size to fit diagram at 100%
 		const windowWidth = Math.max(300, diagramWidth + padding);
@@ -202,7 +202,9 @@
 </script>
 
 <div class="mermaid-window">
-	<div class="drag-region" data-tauri-drag-region></div>
+	<header class="window-header" data-tauri-drag-region>
+		<span class="window-title">Mermaid</span>
+	</header>
 	{#if loading}
 		<div class="mermaid-loading">Rendering diagram...</div>
 	{:else if error}
@@ -230,19 +232,35 @@
 		position: relative;
 	}
 
-	.drag-region {
+	.window-header {
 		position: absolute;
 		top: 0;
 		left: 0;
 		right: 0;
-		height: 44px;
+		height: 40px;
 		-webkit-app-region: drag;
-		z-index: 50;
+		z-index: 100;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		/* Match main window header styling */
+		border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+		background: color-mix(in srgb, var(--bg-panel) 85%, transparent);
+		backdrop-filter: blur(20px) saturate(180%);
+		-webkit-backdrop-filter: blur(20px) saturate(180%);
+	}
+
+	.window-title {
+		font-family: var(--font-ui);
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--text-secondary);
 	}
 
 	.mermaid-canvas {
 		width: 100%;
-		height: 100%;
+		height: calc(100% - 40px);
+		margin-top: 40px;
 		cursor: grab;
 	}
 

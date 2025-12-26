@@ -69,6 +69,7 @@ dependencies = [
  "unicode-width",
  "unidiff",
  "urlencoding",
+ "uuid",
 ]
 
 [[package]]

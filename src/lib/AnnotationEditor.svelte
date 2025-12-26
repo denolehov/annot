@@ -4,6 +4,8 @@
   import StarterKit from '@tiptap/starter-kit';
   import Placeholder from '@tiptap/extension-placeholder';
   import type { SuggestionProps, SuggestionKeyDownProps } from '@tiptap/suggestion';
+  import { invoke } from '@tauri-apps/api/core';
+  import { listen, type UnlistenFn } from '@tauri-apps/api/event';
   import {
     trimContent,
     isContentEmpty,
@@ -18,7 +20,6 @@
     type SlashCommand,
   } from './tiptap';
   import type { Tag } from './types';
-  import ExcalidrawModal from './ExcalidrawModal.svelte';
 
   // Portal action: moves element to body so it's not clipped by scroll containers
   function portal(node: HTMLElement) {
@@ -41,9 +42,28 @@
     onImagePasteBlocked?: () => void;
     onRequestCreateTag?: (text: string, from: number, to: number) => void;
     pendingTagInsertion?: { from: number; to: number; tag: Tag } | null;
+    rangeKey?: string; // Annotation line range key like "45-52"
   }
 
-  let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], allowsImagePaste = false, onImagePasteBlocked, onRequestCreateTag, pendingTagInsertion }: Props = $props();
+  let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], allowsImagePaste = false, onImagePasteBlocked, onRequestCreateTag, pendingTagInsertion, rangeKey = '' }: Props = $props();
+
+  // Types for Excalidraw window communication
+  interface NodeRef {
+    type: 'Chip' | 'Placeholder';
+    id: string;
+  }
+
+  interface ExcalidrawOutcome {
+    type: 'Saved' | 'Cancelled';
+    elements?: string;
+    png?: string;
+  }
+
+  interface ExcalidrawResult {
+    range_key: string;
+    node_ref: NodeRef;
+    outcome: ExcalidrawOutcome;
+  }
 
   let container: HTMLDivElement | undefined = $state();
   let element: HTMLDivElement | undefined = $state();
@@ -77,10 +97,9 @@
     clientRect: null,
   });
 
-  // Excalidraw modal state
-  let excalidrawModalOpen = $state(false);
-  let excalidrawEditPos: number | null = $state(null);
-  let excalidrawEditElements = $state('[]');
+  // Excalidraw window state
+  let excalidrawWindowOpen = $state(false);
+  let unlistenExcalidraw: UnlistenFn | null = null;
 
   // Selection popover state (for "Create Tag from Selection")
   let selectionPopover = $state<{
@@ -316,8 +335,8 @@
         onUpdate(isContentEmpty(json) ? null : json);
       },
       onBlur: ({ editor }) => {
-        // Don't dismiss while Excalidraw modal is open - it will handle cleanup on close
-        if (!sealed && !suggestionState.active && !excalidrawModalOpen) {
+        // Don't dismiss while Excalidraw window is open - it will handle cleanup on close
+        if (!sealed && !suggestionState.active && !excalidrawWindowOpen) {
           // Trim trailing empty paragraphs before sealing
           const trimmed = trimContent(editor.getJSON());
           editor.commands.setContent(trimmed);
@@ -366,22 +385,45 @@
     });
 
     // Handle Excalidraw create/edit events
-    const handleExcalidrawCreate = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      excalidrawEditPos = detail.pos;
-      excalidrawEditElements = '[]';
-      excalidrawModalOpen = true;
+    const handleExcalidrawCreate = async (e: Event) => {
+      const detail = (e as CustomEvent).detail as { pos: number; placeholderId: string };
+      excalidrawWindowOpen = true;
+      try {
+        await invoke('open_excalidraw_window', {
+          elements: '[]',
+          rangeKey: rangeKey,
+          nodeRef: { type: 'Placeholder', id: detail.placeholderId },
+        });
+      } catch (err) {
+        console.error('Failed to open Excalidraw window:', err);
+        excalidrawWindowOpen = false;
+      }
     };
 
-    const handleExcalidrawEdit = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      excalidrawEditPos = detail.pos;
-      excalidrawEditElements = detail.elements || '[]';
-      excalidrawModalOpen = true;
+    const handleExcalidrawEdit = async (e: Event) => {
+      const detail = (e as CustomEvent).detail as { pos: number; nodeId: string; elements: string };
+      excalidrawWindowOpen = true;
+      try {
+        await invoke('open_excalidraw_window', {
+          elements: detail.elements || '[]',
+          rangeKey: rangeKey,
+          nodeRef: { type: 'Chip', id: detail.nodeId },
+        });
+      } catch (err) {
+        console.error('Failed to open Excalidraw window:', err);
+        excalidrawWindowOpen = false;
+      }
     };
 
     element?.addEventListener('excalidraw-create', handleExcalidrawCreate);
     element?.addEventListener('excalidraw-edit', handleExcalidrawEdit);
+
+    // Listen for Excalidraw results from child window
+    listen<ExcalidrawResult>('excalidraw-result', (event) => {
+      handleExcalidrawResult(event.payload);
+    }).then((unlisten) => {
+      unlistenExcalidraw = unlisten;
+    });
 
     // Scroll entire editor (including toolbar) into view after layout completes
     // Use setTimeout to run after TipTap's autofocus scroll
@@ -403,6 +445,7 @@
     return () => {
       element?.removeEventListener('excalidraw-create', handleExcalidrawCreate);
       element?.removeEventListener('excalidraw-edit', handleExcalidrawEdit);
+      unlistenExcalidraw?.();
     };
   });
 
@@ -411,6 +454,7 @@
     if (selectionDebounceTimer) {
       clearTimeout(selectionDebounceTimer);
     }
+    unlistenExcalidraw?.();
   });
 
   // Update editable state when sealed changes
@@ -470,75 +514,82 @@
     return () => document.removeEventListener('keydown', handleKeydown, true);
   });
 
-  // Excalidraw save handler
-  function handleExcalidrawSave(elements: string, png: string) {
-    if (excalidrawEditPos === null || !editorState.editor) return;
-
-    const editor = editorState.editor;
-    const pos = excalidrawEditPos;
-
-    // Find the node at position
-    const nodeAtPos = editor.state.doc.nodeAt(pos);
-
-    if (nodeAtPos?.type.name === 'excalidrawPlaceholder') {
-      // Replace placeholder with chip
-      editor
-        .chain()
-        .focus()
-        .deleteRange({ from: pos, to: pos + nodeAtPos.nodeSize })
-        .insertContentAt(pos, [
-          { type: 'excalidrawChip', attrs: { elements, image: png } },
-          { type: 'text', text: ' ' },
-        ])
-        .run();
-    } else if (nodeAtPos?.type.name === 'excalidrawChip') {
-      // Update existing chip - need to replace the node
-      editor
-        .chain()
-        .focus()
-        .deleteRange({ from: pos, to: pos + nodeAtPos.nodeSize })
-        .insertContentAt(pos, [
-          { type: 'excalidrawChip', attrs: { elements, image: png } },
-        ])
-        .run();
-    }
-
-    excalidrawModalOpen = false;
-    excalidrawEditPos = null;
+  // Helper to find a node by attribute
+  function findNodeByAttr(attrName: string, attrValue: string): { pos: number; node: import('@tiptap/pm/model').Node } | null {
+    if (!editorState.editor) return null;
+    let found: { pos: number; node: import('@tiptap/pm/model').Node } | null = null;
+    editorState.editor.state.doc.descendants((node, pos) => {
+      if (node.attrs[attrName] === attrValue) {
+        found = { pos, node };
+        return false;
+      }
+    });
+    return found;
   }
 
-  // Excalidraw cancel handler
-  function handleExcalidrawCancel() {
-    if (excalidrawEditPos !== null && editorState.editor) {
-      const editor = editorState.editor;
-      const nodeAtPos = editor.state.doc.nodeAt(excalidrawEditPos);
+  // Handle result from Excalidraw window
+  function handleExcalidrawResult(result: ExcalidrawResult) {
+    // Only handle results for our annotation
+    if (result.range_key !== rangeKey) return;
 
-      // If canceling from placeholder, delete it and the trailing space we inserted
-      if (nodeAtPos?.type.name === 'excalidrawPlaceholder') {
-        const from = excalidrawEditPos;
-        let to = from + nodeAtPos.nodeSize;
+    excalidrawWindowOpen = false;
 
-        // Check if there's a trailing space after the placeholder that we should also delete
-        const afterPlaceholder = editor.state.doc.textBetween(to, Math.min(to + 1, editor.state.doc.content.size), '', '');
-        if (afterPlaceholder === ' ') {
-          to += 1;
+    if (result.outcome.type === 'Cancelled') {
+      // Handle cancel
+      if (result.node_ref.type === 'Placeholder') {
+        const found = findNodeByAttr('placeholderId', result.node_ref.id);
+        if (found && editorState.editor) {
+          const { pos, node } = found;
+          let to = pos + node.nodeSize;
+          // Also delete trailing space
+          const afterPlaceholder = editorState.editor.state.doc.textBetween(to, Math.min(to + 1, editorState.editor.state.doc.content.size), '', '');
+          if (afterPlaceholder === ' ') {
+            to += 1;
+          }
+          editorState.editor.chain().deleteRange({ from: pos, to }).run();
+
+          const contentJson = trimContent(editorState.editor.getJSON());
+          if (isContentEmpty(contentJson)) {
+            onUpdate(null);
+            onDismiss?.();
+          } else {
+            editorState.editor.commands.focus();
+          }
         }
-
-        editor.chain().deleteRange({ from, to }).run();
-
-        // If editor is now empty, dismiss it; otherwise refocus for continued editing
-        const content = trimContent(editor.getJSON());
-        if (isContentEmpty(content)) {
-          onUpdate(null);
-          onDismiss?.();
-        } else {
-          editor.commands.focus();
+      } else {
+        // Editing existing chip - just refocus editor
+        editorState.editor?.commands.focus();
+      }
+    } else {
+      // Handle save
+      const { elements, png } = result.outcome;
+      if (result.node_ref.type === 'Placeholder') {
+        const found = findNodeByAttr('placeholderId', result.node_ref.id);
+        if (found && editorState.editor) {
+          editorState.editor
+            .chain()
+            .focus()
+            .deleteRange({ from: found.pos, to: found.pos + found.node.nodeSize })
+            .insertContentAt(found.pos, [
+              { type: 'excalidrawChip', attrs: { nodeId: crypto.randomUUID(), elements, image: png } },
+              { type: 'text', text: ' ' },
+            ])
+            .run();
+        }
+      } else {
+        const found = findNodeByAttr('nodeId', result.node_ref.id);
+        if (found && editorState.editor) {
+          editorState.editor
+            .chain()
+            .focus()
+            .deleteRange({ from: found.pos, to: found.pos + found.node.nodeSize })
+            .insertContentAt(found.pos, [
+              { type: 'excalidrawChip', attrs: { nodeId: crypto.randomUUID(), elements, image: png } },
+            ])
+            .run();
         }
       }
     }
-
-    excalidrawModalOpen = false;
-    excalidrawEditPos = null;
   }
 </script>
 
@@ -614,15 +665,6 @@
       </button>
     {/each}
   </div>
-{/if}
-
-<!-- Excalidraw modal -->
-{#if excalidrawModalOpen}
-  <ExcalidrawModal
-    initialElements={excalidrawEditElements}
-    onSave={handleExcalidrawSave}
-    onCancel={handleExcalidrawCancel}
-  />
 {/if}
 
 <!-- Selection popover for "Create Tag from Selection" -->

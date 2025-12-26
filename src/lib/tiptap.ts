@@ -227,6 +227,11 @@ export const ExcalidrawChip = Node.create({
 
   addAttributes() {
     return {
+      nodeId: {
+        default: null,
+        parseHTML: (element) =>
+          element.getAttribute('data-node-id') || crypto.randomUUID(),
+      },
       elements: { default: '[]' }, // JSON string of Excalidraw elements
       image: { default: null }, // base64 PNG for preview/export
     };
@@ -239,6 +244,7 @@ export const ExcalidrawChip = Node.create({
         getAttrs: (dom) => {
           const element = dom as HTMLElement;
           return {
+            nodeId: element.getAttribute('data-node-id') || crypto.randomUUID(),
             elements: element.getAttribute('data-elements') || '[]',
             image: element.getAttribute('data-image') || null,
           };
@@ -252,6 +258,7 @@ export const ExcalidrawChip = Node.create({
       'span',
       mergeAttributes(HTMLAttributes, {
         'data-excalidraw-chip': '',
+        'data-node-id': node.attrs.nodeId,
         'data-elements': node.attrs.elements,
         'data-image': node.attrs.image || '',
         class: 'tag-chip excalidraw-chip',
@@ -276,7 +283,11 @@ export const ExcalidrawChip = Node.create({
         if (pos !== null) {
           const event = new CustomEvent('excalidraw-edit', {
             bubbles: true,
-            detail: { pos, elements: node.attrs.elements },
+            detail: {
+              pos,
+              elements: node.attrs.elements,
+              nodeId: node.attrs.nodeId,
+            },
           });
           chip.dispatchEvent(event);
         }
@@ -320,15 +331,32 @@ export const ExcalidrawPlaceholder = Node.create({
   inline: true,
   atom: true,
 
-  parseHTML() {
-    return [{ tag: 'span[data-excalidraw-placeholder]' }];
+  addAttributes() {
+    return {
+      placeholderId: { default: () => crypto.randomUUID() },
+    };
   },
 
-  renderHTML({ HTMLAttributes }) {
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-excalidraw-placeholder]',
+        getAttrs: (dom) => {
+          const element = dom as HTMLElement;
+          return {
+            placeholderId: element.getAttribute('data-placeholder-id') || crypto.randomUUID(),
+          };
+        },
+      },
+    ];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
     return [
       'span',
       mergeAttributes(HTMLAttributes, {
         'data-excalidraw-placeholder': '',
+        'data-placeholder-id': node.attrs.placeholderId,
         class: 'tag-chip excalidraw-placeholder',
       }),
       '[📐 Drawing...]',
@@ -336,7 +364,7 @@ export const ExcalidrawPlaceholder = Node.create({
   },
 
   addNodeView() {
-    return ({ getPos }) => {
+    return ({ node, getPos }) => {
       const chip = document.createElement('span');
       chip.className = 'tag-chip excalidraw-placeholder';
       chip.innerHTML = `
@@ -344,13 +372,13 @@ export const ExcalidrawPlaceholder = Node.create({
         <span class="tag-content">Drawing...</span>
       `;
 
-      // Dispatch event to open modal immediately
+      // Dispatch event to open window immediately with placeholderId
       requestAnimationFrame(() => {
         const pos = typeof getPos === 'function' ? getPos() : null;
         if (pos !== null) {
           const event = new CustomEvent('excalidraw-create', {
             bubbles: true,
-            detail: { pos },
+            detail: { pos, placeholderId: node.attrs.placeholderId },
           });
           chip.dispatchEvent(event);
         }
@@ -576,7 +604,10 @@ export function createSlashSuggestion(): Omit<SuggestionOptions<SlashCommand>, '
           .chain()
           .focus()
           .insertContentAt(range, [
-            { type: 'excalidrawPlaceholder' },
+            {
+              type: 'excalidrawPlaceholder',
+              attrs: { placeholderId: crypto.randomUUID() },
+            },
             { type: 'text', text: ' ' },
           ])
           .run();
@@ -937,6 +968,7 @@ export function contentNodesToTipTap(nodes: ContentNode[] | null): JSONContent |
       currentParagraph.push({
         type: 'excalidrawChip',
         attrs: {
+          nodeId: crypto.randomUUID(),
           elements: node.elements,
           image: node.image,
         },
