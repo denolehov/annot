@@ -246,7 +246,7 @@ fn format_annotation_block(
     // Context line (1 line before, if exists and non-empty)
     if ann.start_line > 1 {
         let context_line_num = ann.start_line - 1;
-        if let Some(line) = content.lines.get((context_line_num - 1) as usize) {
+        if let Some(line) = content.find_line(file_path, context_line_num) {
             if !line.content.trim().is_empty() {
                 // Format: "    N | content" (3 extra spaces for ">" prefix alignment)
                 if is_diff {
@@ -265,7 +265,7 @@ fn format_annotation_block(
 
     // Selected lines with ">" prefix
     for line_num in ann.start_line..=ann.end_line {
-        if let Some(line) = content.lines.get((line_num - 1) as usize) {
+        if let Some(line) = content.find_line(file_path, line_num) {
             if is_diff {
                 format_diff_line(out, content, line_num, &line.content, true, line_num_width);
             } else {
@@ -942,5 +942,90 @@ mod tests {
         let legend_end = output.find("\n\n").unwrap();
         let legend = &output[..legend_end];
         assert_eq!(legend.matches("[# SECURITY]").count(), 1);
+    }
+
+    #[test]
+    fn portal_annotation_includes_source_lines() {
+        // Create lines: main doc lines 1-5, then portal lines (from "portal.rs" lines 100-102),
+        // then main doc lines 6-10. Portal lines are interleaved at index 5-7.
+        let mut lines: Vec<Line> = Vec::new();
+
+        // Main doc lines 1-5
+        for n in 1..=5 {
+            lines.push(Line {
+                content: format!("main line {}", n),
+                html: None,
+                origin: crate::state::LineOrigin::Source {
+                    path: "test.rs".to_string(),
+                    line: n,
+                },
+                semantics: crate::state::LineSemantics::Plain,
+            });
+        }
+
+        // Portal lines from "portal.rs" lines 100-102 (inserted at indices 5-7)
+        for n in 100..=102 {
+            lines.push(Line {
+                content: format!("portal code line {}", n),
+                html: None,
+                origin: crate::state::LineOrigin::Source {
+                    path: "/path/to/portal.rs".to_string(),
+                    line: n,
+                },
+                semantics: crate::state::LineSemantics::Plain,
+            });
+        }
+
+        // Main doc lines 6-10
+        for n in 6..=10 {
+            lines.push(Line {
+                content: format!("main line {}", n),
+                html: None,
+                origin: crate::state::LineOrigin::Source {
+                    path: "test.rs".to_string(),
+                    line: n,
+                },
+                semantics: crate::state::LineSemantics::Plain,
+            });
+        }
+
+        let source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from("test.rs"),
+        });
+        let content = ContentModel {
+            label: "test.rs".to_string(),
+            lines,
+            source,
+            metadata: ContentMetadata::Plain,
+            portals: Vec::new(),
+        };
+        let config = UserConfig::empty();
+        let mut review = Review::cli(content, config, "main".to_string());
+
+        // Register the portal file as an annotation target
+        let portal_key = FileKey::path("/path/to/portal.rs");
+        review.files.insert(portal_key.clone(), crate::review::AnnotationTarget::new());
+
+        // Add annotation on portal line 101 (which is at array index 6, not 100)
+        let portal_target = review.files.get_mut(&portal_key).unwrap();
+        portal_target.annotations.insert(
+            LineRange::new(101, 101),
+            Annotation {
+                start_line: 101,
+                end_line: 101,
+                content: vec![ContentNode::Text {
+                    text: "Check this portal line".to_string(),
+                }],
+            },
+        );
+
+        let output = format_output(&review, OutputMode::Cli).text;
+
+        // The output should contain the portal file path and line number
+        assert!(output.contains("/path/to/portal.rs:101"), "Should have portal file header");
+        // The output should contain the actual portal line content (found via find_line)
+        assert!(output.contains("portal code line 101"), "Should have portal line content");
+        // The annotation should be present
+        assert!(output.contains("Check this portal line"), "Should have annotation text");
     }
 }

@@ -734,6 +734,17 @@ impl ContentModel {
             portals: loaded_portals,
         }
     }
+
+    /// Find a line by its source path and line number.
+    ///
+    /// This searches the lines array by `LineOrigin` rather than by array index,
+    /// which is necessary because portal lines are interleaved at their markdown
+    /// insertion point, not at their source file line number position.
+    pub fn find_line(&self, path: &str, line_num: u32) -> Option<&Line> {
+        self.lines.iter().find(|l| {
+            matches!(&l.origin, LineOrigin::Source { path: p, line } if p == path && *line == line_num)
+        })
+    }
 }
 
 impl AppState {
