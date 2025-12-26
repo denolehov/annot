@@ -12,6 +12,7 @@
   import { CommandPalette } from "$lib/CommandPalette";
   import SaveModal from "$lib/SaveModal.svelte";
   import Portal from "$lib/components/embedded/Portal.svelte";
+  import { Header, StatusBar, SessionEditor } from "$lib/components";
   import type { SaveContentResponse } from "$lib/types";
 
   let lines: Line[] = $state([]);
@@ -363,6 +364,20 @@
   let selectedMode = $derived.by(() =>
     selectedModeIndex !== null && exitModes.length > 0 ? exitModes[selectedModeIndex] : null
   );
+
+  function cycleExitModeForward() {
+    if (exitModes.length === 0) return;
+    // Cycle forward including neutral: null → 0 → 1 → ... → last → null
+    if (selectedModeIndex === null) {
+      selectedModeIndex = 0;
+    } else if (selectedModeIndex === exitModes.length - 1) {
+      selectedModeIndex = null;
+    } else {
+      selectedModeIndex = selectedModeIndex + 1;
+    }
+    const modeId = selectedModeIndex !== null ? exitModes[selectedModeIndex].id : null;
+    invoke('set_exit_mode', { modeId });
+  }
 
   // Session comment state (global/file-level comment)
   let sessionComment: JSONContent | undefined = $state(undefined);
@@ -899,117 +914,34 @@
 
 <main class="viewer" style:--mode-color={selectedMode?.color ?? 'transparent'}>
   <div class="sticky-header">
-    <header class="header" data-tauri-drag-region>
-      <div class="header-left">
-        {#if diffMetadata && currentFile}
-          <!-- Diff mode: show hunk metadata -->
-          {@const fileName = currentFile.new_name ?? currentFile.old_name ?? 'unknown'}
-          {@const fileCount = diffMetadata.files.length}
-          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-          <span class="diff-header-info">
-            <span
-              class="diff-header-file"
-              class:has-comment={sessionComment !== undefined}
-              onclick={openSessionEditor}
-            >
-              {fileName}
-              {#if fileCount > 1}
-                <span class="diff-header-counter">({currentFileIndex + 1}/{fileCount})</span>
-              {/if}
-            </span>
-            {#if currentHunk}
-              <span class="diff-header-sep">·</span>
-              <span class="diff-header-range">
-                <span class="diff-header-old">-{currentHunk.old_start},{currentHunk.old_count}</span>
-                <span class="diff-header-new">+{currentHunk.new_start},{currentHunk.new_count}</span>
-              </span>
-              {#if currentHunk.function_context}
-                <span class="diff-header-fn">
-                  {#if currentHunk.function_context_html}
-                    {@html currentHunk.function_context_html}
-                  {:else}
-                    {currentHunk.function_context}
-                  {/if}
-                </span>
-              {/if}
-            {/if}
-          </span>
-        {:else if markdownMetadata && sectionBreadcrumb.length > 0}
-          <!-- Markdown mode: depth-based breadcrumb -->
-          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-          <span class="md-header-info">
-            <!-- Filename -->
-            <span
-              class="md-header-file"
-              class:has-comment={sessionComment !== undefined}
-              onclick={openSessionEditor}
-            ><span class="md-header-title">{label}</span></span>
-
-            <!-- H1 (root) - always shown -->
-            {#if headerRootSection}
-              <span class="md-header-sep">·</span>
-              <span class="md-header-section md-header-root">
-                <span class="md-header-level">#</span>
-                <span class="md-header-title">{headerRootSection.title}</span>
-              </span>
-            {/if}
-
-            <!-- H2 shown only when current depth is exactly 2 -->
-            {#if headerCurrentDepth === 2 && headerH2Section}
-              <span class="md-header-sep">·</span>
-              <span class="md-header-section md-header-current">
-                <span class="md-header-level">##</span>
-                <span class="md-header-title">{headerH2Section.title}</span>
-              </span>
-            {/if}
-
-            <!-- Ellipsis + current section when depth >= 3 -->
-            {#if headerCurrentDepth >= 3 && headerCurrentSection}
-              <span class="md-header-sep">·</span>
-              <span class="md-header-ellipsis">…</span>
-              <span class="md-header-sep">·</span>
-              <span class="md-header-section md-header-current">
-                <span class="md-header-level">{'#'.repeat(headerCurrentSection.level)}</span>
-                <span class="md-header-title">{headerCurrentSection.title}</span>
-              </span>
-            {/if}
-          </span>
-        {:else}
-          <!-- Normal mode: show filename -->
-          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-          <span
-            class="file-name"
-            class:has-comment={sessionComment !== undefined}
-            onclick={openSessionEditor}
-          >{label}</span>
-        {/if}
-      </div>
-      <div class="header-right">
-        <CopyDropdown {showToast} />
-        <button class="header-btn" onclick={openSaveModal} title="Save to file (Cmd+S)">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="16" height="16">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-          </svg>
-        </button>
-      </div>
-    </header>
-    <!-- Session editor slot -->
-    {#if sessionEditorOpen || sessionComment}
-      <div class="session-slot">
-        <AnnotationEditor
-          content={sessionComment}
-          sealed={!sessionEditorOpen}
-          onUpdate={updateSessionComment}
-          onUnseal={openSessionEditor}
-          onDismiss={closeSessionEditor}
-          {tags}
-          {allowsImagePaste}
-          onImagePasteBlocked={handleImagePasteBlocked}
-          onRequestCreateTag={(text, from, to) => handleRequestCreateTag('session', text, from, to)}
-          pendingTagInsertion={pendingTagInsertion?.editorKey === 'session' ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
-        />
-      </div>
-    {/if}
+    <Header
+      {label}
+      {metadata}
+      {currentFile}
+      {currentFileIndex}
+      {currentHunk}
+      {sectionBreadcrumb}
+      {headerRootSection}
+      {headerH2Section}
+      {headerCurrentSection}
+      {headerCurrentDepth}
+      hasSessionComment={sessionComment !== undefined}
+      onOpenSessionEditor={openSessionEditor}
+      onOpenSaveModal={openSaveModal}
+      {showToast}
+    />
+    <SessionEditor
+      content={sessionComment}
+      isOpen={sessionEditorOpen}
+      {tags}
+      {allowsImagePaste}
+      pendingTagInsertion={pendingTagInsertion?.editorKey === 'session' ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
+      onUpdate={updateSessionComment}
+      onOpen={openSessionEditor}
+      onClose={closeSessionEditor}
+      onRequestCreateTag={(text, from, to) => handleRequestCreateTag('session', text, from, to)}
+      onImagePasteBlocked={handleImagePasteBlocked}
+    />
   </div>
 
   {#if error}
@@ -1155,42 +1087,7 @@
   {/if}
 
   <!-- Footer / Status Bar -->
-  <footer class="status-bar" style:--mode-color={selectedMode?.color ?? 'transparent'}>
-    <div class="status-bar-left">
-      <button
-        class="exit-mode-btn"
-        class:neutral={!selectedMode}
-        onclick={() => {
-          if (exitModes.length > 0) {
-            // Cycle forward including neutral: null → 0 → 1 → ... → last → null
-            if (selectedModeIndex === null) {
-              selectedModeIndex = 0;
-            } else if (selectedModeIndex === exitModes.length - 1) {
-              selectedModeIndex = null;
-            } else {
-              selectedModeIndex = selectedModeIndex + 1;
-            }
-            const modeId = selectedModeIndex !== null ? exitModes[selectedModeIndex].id : null;
-            invoke('set_exit_mode', { modeId });
-          }
-        }}
-      >
-        <kbd>Tab</kbd>
-        <span class="exit-mode-label">
-          {#if selectedMode}
-            {selectedMode.name}
-            <span class="exit-mode-instruction">({selectedMode.instruction})</span>
-          {:else}
-            set exit mode
-          {/if}
-        </span>
-      </button>
-    </div>
-    <div class="status-bar-right">
-      <span class="kbd-hint"><kbd>g</kbd> global note</span>
-      <span class="kbd-hint"><kbd>⌘w</kbd> save and close</span>
-    </div>
-  </footer>
+  <StatusBar {selectedMode} onCycleMode={cycleExitModeForward} />
 </main>
 
 {#if commandPaletteOpen}
@@ -1227,7 +1124,7 @@
     overflow: hidden;
   }
 
-  .header-btn {
+  :global(.header-btn) {
     display: inline-flex;
     align-items: center;
     padding: 4px 6px;
@@ -1238,24 +1135,24 @@
     cursor: pointer;
   }
 
-  .header-btn:hover {
+  :global(.header-btn:hover) {
     background: var(--bg-window);
     border-color: var(--border-subtle);
     color: var(--text-primary);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   }
 
-  .header-btn:focus-visible {
+  :global(.header-btn:focus-visible) {
     outline: none;
     border-color: var(--focus-ring);
   }
 
-  .header-btn svg {
+  :global(.header-btn svg) {
     opacity: 0.7;
     display: block;
   }
 
-  .header-btn:hover svg {
+  :global(.header-btn:hover svg) {
     opacity: 1;
   }
 
