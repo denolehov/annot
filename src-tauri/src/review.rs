@@ -450,21 +450,7 @@ impl ContentModel {
     /// For file-based content, returns the actual path.
     /// For ephemeral/stdin content, returns a synthetic path.
     pub fn source_path(&self) -> PathBuf {
-        use crate::input::{CliSource, ContentSource, McpSource};
-        match &self.source {
-            ContentSource::Cli(CliSource::File { path }) => path.clone(),
-            ContentSource::Mcp(McpSource::File { path }) => path.clone(),
-            ContentSource::Cli(CliSource::Stdin { label }) => {
-                PathBuf::from(format!("__stdin__/{}", label))
-            }
-            ContentSource::Mcp(McpSource::Content { label }) => {
-                PathBuf::from(format!("__ephemeral__/{}", label))
-            }
-            ContentSource::Mcp(McpSource::Diff { label, .. }) => {
-                let name = label.as_deref().unwrap_or("diff");
-                PathBuf::from(format!("__diff__/{}", name))
-            }
-        }
+        PathBuf::from(self.source.annotation_path())
     }
 }
 

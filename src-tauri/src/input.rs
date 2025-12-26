@@ -134,6 +134,29 @@ impl ContentSource {
             _ => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
         }
     }
+
+    /// Canonical path for annotation routing.
+    ///
+    /// This path is used for line origins and must match the FileKey used in Review.
+    /// For file-based content, returns the actual path.
+    /// For ephemeral/stdin content, returns a synthetic path.
+    pub fn annotation_path(&self) -> String {
+        match self {
+            ContentSource::Cli(CliSource::File { path })
+            | ContentSource::Mcp(McpSource::File { path }) => {
+                path.to_string_lossy().to_string()
+            }
+            ContentSource::Cli(CliSource::Stdin { label }) => {
+                format!("__stdin__/{}", label)
+            }
+            ContentSource::Mcp(McpSource::Content { label }) => {
+                format!("__ephemeral__/{}", label)
+            }
+            ContentSource::Mcp(McpSource::Diff { label, .. }) => {
+                label.clone().unwrap_or_else(|| "diff".to_string())
+            }
+        }
+    }
 }
 
 // ============================================================================
