@@ -8,7 +8,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Core Concept
 
-annot interrupts LLM workflows to get human feedback, then resumes. It's designed to be:
+> **annot: ephemeral space for human-AI thinking**
+
+annot is a structured dialogue substrate — a medium in which human and AI take turns adding, questioning, and refining until something crystallizes. See `docs/manifesto.md` for the full philosophy.
+
+**Before planning or developing new features**, consult the manifesto to ensure alignment with:
+- The directional model (AI→Human vs Human→AI features)
+- The ephemeral identity (no persistence, zero exit cost)
+- The generative principle (humans add information, not just select)
+
+annot is designed to be:
 - **Ephemeral**: Opens, collects feedback, exits
 - **Keyboard-first**: /, g, Tab, Ctrl+K shortcuts
 - **LLM-aware**: Output format designed for Claude consumption
@@ -125,6 +134,7 @@ Tauri IPC commands replace the HTTP API from the Go version:
 
 ## Reference Materials
 
+- `docs/manifesto.md` — annot's philosophy, identity, and directional feature model
 - `HL_REFERENCE.md` — Original hl feature set, data models, output format
 - `COMPONENTS.md` — UI component inventory with files, styles, states
 - `src/styles/README.md` — Style system guide and token reference

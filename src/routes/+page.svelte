@@ -11,6 +11,7 @@
   import CopyDropdown from "$lib/CopyDropdown.svelte";
   import { CommandPalette } from "$lib/CommandPalette";
   import SaveModal from "$lib/SaveModal.svelte";
+  import Portal from "$lib/components/embedded/Portal.svelte";
   import type { SaveContentResponse } from "$lib/types";
 
   let lines: Line[] = $state([]);
@@ -101,16 +102,8 @@
   let headerCurrentDepth = $derived(headerCurrentSection?.level ?? 0);
 
   // =============================================================================
-  // Portal Helpers
+  // Line Segmentation (for portal-aware rendering)
   // =============================================================================
-
-  /** Get portal semantics from a line, if it's a portal line */
-  function getPortalSemantics(line: Line): { kind: 'header'; label: string; path: string; range: string } | { kind: 'content' } | { kind: 'footer' } | null {
-    if (line.semantics.type === 'portal') {
-      return line.semantics;
-    }
-    return null;
-  }
 
   /** Segment type for rendering: either regular lines or a portal group */
   type LineSegment =
@@ -1042,63 +1035,21 @@
       >
       {#each lineSegments as segment}
         {#if segment.type === 'portal'}
-          <div class="portal-group">
-            {#each segment.lines as { line, displayIndex }}
-              {@const sourceLineNum = getLineNumber(line)}
-              {@const portalSemantics = getPortalSemantics(line)}
-              <div
-                class="line"
-                class:portal-header={portalSemantics?.kind === 'header'}
-                class:portal-content={portalSemantics?.kind === 'content'}
-                class:portal-footer={portalSemantics?.kind === 'footer'}
-                class:selected={isSelected(displayIndex)}
-                class:annotated={hasAnnotation(displayIndex)}
-                data-display-idx={displayIndex}
-                onmouseenter={() => hoveredDisplayIdx = displayIndex}
-                onmouseleave={() => hoveredDisplayIdx = null}
-                role="presentation"
-              >
-                <button
-                  class="add-btn"
-                  onmousedown={(e) => handleAddMouseDown(displayIndex, e)}
-                  aria-label="Add annotation"
-                >+</button>
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <span
-                  class="gutter portal-gutter"
-                  class:selected={isSelected(displayIndex)}
-                  onmousedown={(e) => handleGutterMouseDown(displayIndex, e)}
-                  onclick={() => handleGutterClick(displayIndex)}
-                  role="button"
-                  tabindex="-1"
-                >
-                  {#if portalSemantics?.kind === 'header'}
-                    <svg class="portal-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-                      <polyline points="14 2 14 8 20 8"/>
-                      <line x1="16" y1="13" x2="8" y2="13"/>
-                      <line x1="16" y1="17" x2="8" y2="17"/>
-                    </svg>
-                  {:else if sourceLineNum !== null}
-                    {sourceLineNum}
-                  {/if}
-                </span>
-                <span class="code" class:md={markdownMetadata}>
-                  {#if portalSemantics?.kind === 'header'}
-                    <span class="portal-header-info">
-                      <span class="portal-label">{portalSemantics.label}</span>
-                      <span class="portal-path">{portalSemantics.path}#{portalSemantics.range}</span>
-                    </span>
-                  {:else if line.html}
-                    {@html line.html}
-                  {:else}
-                    {line.content}
-                  {/if}
-                </span>
-              </div>
-              {@const annotationAtLine = getAnnotationAtLine(displayIndex)}
-              {@const isLastSelectedLine = displayIndex === lastSelectedLine && selection && !isDragging}
-              {@const rangeKey = annotationAtLine?.key ?? (isLastSelectedLine && selection ? rangeToKey(selection) : null)}
+          <Portal
+            lines={segment.lines}
+            {selection}
+            {isDragging}
+            {hoveredDisplayIdx}
+            {markdownMetadata}
+            {annotations}
+            {lastSelectedLine}
+            onGutterMouseDown={handleGutterMouseDown}
+            onGutterClick={handleGutterClick}
+            onAddMouseDown={handleAddMouseDown}
+            onMouseEnter={(idx) => hoveredDisplayIdx = idx}
+            onMouseLeave={() => hoveredDisplayIdx = null}
+          >
+            {#snippet annotationSlot(displayIndex, rangeKey)}
               {#if rangeKey}
                 {#key rangeKey}
                   <AnnotationEditor
@@ -1119,8 +1070,8 @@
                   />
                 {/key}
               {/if}
-            {/each}
-          </div>
+            {/snippet}
+          </Portal>
         {:else}
           {#each segment.lines as { line, displayIndex }}
             {@const sourceLineNum = getLineNumber(line)}
@@ -1274,78 +1225,6 @@
 
   :global(body) {
     overflow: hidden;
-  }
-
-  /* ===========================================
-     Portal Styles
-     =========================================== */
-
-  .portal-group {
-    background:
-      var(--portal-checker-bg),
-      var(--bg-portal);
-    background-size: var(--portal-checker-size), auto;
-    border-top: 1px solid var(--border-portal);
-    border-bottom: 1px solid var(--border-portal);
-  }
-
-  .line.portal-header {
-    background: linear-gradient(to bottom, rgba(212, 200, 184, 0.25), transparent 25%);
-  }
-
-  .line.portal-footer {
-    height: 4px;
-    min-height: 4px;
-    background: linear-gradient(to top, rgba(212, 200, 184, 0.25), transparent);
-  }
-
-  .line.portal-footer .gutter {
-    visibility: hidden;
-  }
-
-  .line.portal-footer .code {
-    display: none;
-  }
-
-  .gutter.portal-gutter {
-    color: var(--text-muted);
-  }
-
-  .line.portal-header .gutter.portal-gutter {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-  }
-
-  .portal-header-info {
-    display: flex;
-    align-items: center;
-    gap: 0.5em;
-    font-size: 0.85em;
-    color: var(--text-muted);
-  }
-
-  .portal-icon {
-    color: var(--border-portal);
-  }
-
-  .portal-label {
-    font-weight: 600;
-    color: var(--text-primary);
-    font-family: var(--font-ui);
-  }
-
-  .portal-path {
-    color: var(--text-muted);
-    font-family: var(--font-mono);
-    font-size: 0.9em;
-    opacity: 0.8;
-  }
-
-  .portal-path::before {
-    content: "—";
-    margin-right: 0.5em;
-    opacity: 0.5;
   }
 
   .header-btn {
