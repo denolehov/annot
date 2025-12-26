@@ -135,6 +135,11 @@
 	--selection-active: rgb(251 191 36 / 0.3);
 	--selection-gutter-text: var(--light-amber-900);
 
+	/* Inline highlights (==text==, ===text===, ====text====) */
+	--hl-1: rgba(180, 83, 9, 0.08);    /* whisper - amber-700 at 8% */
+	--hl-2: rgba(180, 83, 9, 0.15);    /* gentle - amber-700 at 15% */
+	--hl-3: rgba(180, 83, 9, 0.25);    /* emphasis - amber-700 at 25% */
+
 	/* Tags */
 	--tag-bg: var(--light-zinc-50);
 	--tag-border: var(--light-zinc-300);

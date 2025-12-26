@@ -4,6 +4,10 @@
 
 This document outlines the authentication flow for our microservices architecture.
 
+## Highlight Demo
+
+Testing ==subtle==, ===default===, and ====strong==== highlight levels.
+
 Here's some **bold text**, *italic text*, and ***bold italic*** together. You can also use ~~strikethrough~~ for deleted content. Inline `code` looks like this, and here's a [link to docs](https://example.com/docs).
 
 ### Inline Formatting Examples

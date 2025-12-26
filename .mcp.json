@@ -2,7 +2,7 @@
   "mcpServers": {
     "annot-dev": {
       "type": "stdio",
-      "command": "annot",
+      "command": "./src-tauri/target/release/annot",
       "args": [
         "mcp"
       ],

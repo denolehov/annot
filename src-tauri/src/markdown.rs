@@ -703,6 +703,224 @@ fn filename_from_path(path: &str) -> &str {
         .unwrap_or(without_anchor)
 }
 
+/// Process highlight markers (==text==, ===text===, ====text====) in text.
+/// Returns HTML with <mark class="hl hl-N"> tags.
+///
+/// Levels: == = hl-1, === = hl-2, ==== = hl-3
+/// Edge cases handled:
+/// - Mismatch: use min(opener, closer) as effective level
+/// - Empty content: literal
+/// - Non-greedy: first valid closer wins
+/// - Greedy for nested: space before inner pattern → skip as content
+/// - Escaped: \== → literal ==
+/// - Adjacent: ==a====b== → <mark>a</mark><mark>b</mark>
+fn process_highlights(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let len = chars.len();
+    let mut result = String::new();
+    let mut i = 0;
+
+    while i < len {
+        // Check for escaped opener: \== or \=== or \====
+        if chars[i] == '\\' && i + 2 < len && chars[i + 1] == '=' && chars[i + 2] == '=' {
+            // Count the = signs after backslash
+            let mut eq_count = 0;
+            let mut j = i + 1;
+            while j < len && chars[j] == '=' && eq_count < 4 {
+                eq_count += 1;
+                j += 1;
+            }
+            if eq_count >= 2 {
+                // Emit literal = signs (skip the backslash)
+                for _ in 0..eq_count {
+                    result.push('=');
+                }
+                i = j;
+                continue;
+            }
+        }
+
+        // Check for opener: ={2,4}
+        if chars[i] == '=' {
+            let mut opener_count = 0;
+            while i < len && chars[i] == '=' {
+                opener_count += 1;
+                i += 1;
+            }
+
+            if opener_count < 2 || opener_count > 4 {
+                // Not a valid opener, emit as literal
+                for _ in 0..opener_count {
+                    result.push('=');
+                }
+                continue;
+            }
+
+            // Look for closer
+            if let Some((content, closer_end, effective_level, extra_before, extra_after)) =
+                find_closer(&chars, i, opener_count)
+            {
+                // Emit any extra = signs before the mark
+                for _ in 0..extra_before {
+                    result.push('=');
+                }
+
+                // Emit the highlight
+                result.push_str(&format!(
+                    "<mark class=\"hl hl-{}\">",
+                    effective_level
+                ));
+                result.push_str(&content);
+                result.push_str("</mark>");
+
+                // Emit any extra = signs after the mark
+                for _ in 0..extra_after {
+                    result.push('=');
+                }
+
+                i = closer_end;
+            } else {
+                // No closer found, emit opener as literal
+                for _ in 0..opener_count {
+                    result.push('=');
+                }
+            }
+        } else {
+            result.push(chars[i]);
+            i += 1;
+        }
+    }
+
+    result
+}
+
+/// Find a closer for an opener, handling nesting and mismatches.
+/// Returns (content, end_position, effective_level, extra_eq_before, extra_eq_after)
+fn find_closer(
+    chars: &[char],
+    start: usize,
+    opener_count: usize,
+) -> Option<(String, usize, usize, usize, usize)> {
+    let len = chars.len();
+    let mut i = start;
+    let mut content = String::new();
+
+    while i < len {
+        // Check for newline - aborts highlight
+        if chars[i] == '\n' {
+            return None;
+        }
+
+        // Check for potential closer: ={2,}
+        if chars[i] == '=' {
+            let closer_start = i;
+            let mut closer_count = 0;
+            while i < len && chars[i] == '=' {
+                closer_count += 1;
+                i += 1;
+            }
+
+            if closer_count < 2 {
+                // Not a valid closer, add to content
+                for _ in 0..closer_count {
+                    content.push('=');
+                }
+                continue;
+            }
+
+            // Check if this is a nested opener (space before and forms complete pattern)
+            let preceded_by_space = !content.is_empty()
+                && content.chars().last().map_or(false, |c| c == ' ');
+
+            if preceded_by_space && closer_count >= 2 && closer_count <= 4 {
+                // Check if this could be a nested highlight (has matching closer ahead)
+                if let Some(nested_end) = find_nested_closer(chars, i, closer_count) {
+                    // This is a nested pattern, add it to content and continue
+                    for _ in 0..closer_count {
+                        content.push('=');
+                    }
+                    // Add content until nested closer
+                    while i < nested_end {
+                        content.push(chars[i]);
+                        i += 1;
+                    }
+                    // Add the nested closer
+                    while i < len && chars[i] == '=' {
+                        content.push(chars[i]);
+                        i += 1;
+                    }
+                    continue;
+                }
+            }
+
+            // This is our closer
+            // Empty content check
+            if content.is_empty() {
+                return None;
+            }
+
+            // Calculate effective level and extra = signs
+            let effective_count = opener_count.min(closer_count);
+            let effective_level = effective_count - 1; // 2=1, 3=2, 4=3
+
+            // Handle mismatch
+            if opener_count < closer_count {
+                // Extra = should be left for next iteration (for adjacent highlights)
+                // Consume only opener_count = signs
+                let consume_end = closer_start + opener_count;
+                return Some((content, consume_end, effective_level, 0, 0));
+            } else if opener_count > closer_count {
+                // Extra = goes before the mark
+                let extra_before = opener_count - closer_count;
+                return Some((content, i, effective_level, extra_before, 0));
+            } else {
+                // Perfect match
+                return Some((content, i, effective_level, 0, 0));
+            }
+        } else {
+            content.push(chars[i]);
+            i += 1;
+        }
+    }
+
+    None
+}
+
+/// Find the end of a nested highlight pattern (the closer for the nested opener).
+/// Returns the position just before the nested closer starts.
+fn find_nested_closer(chars: &[char], start: usize, level: usize) -> Option<usize> {
+    let len = chars.len();
+    let mut i = start;
+
+    while i < len {
+        if chars[i] == '\n' {
+            return None;
+        }
+
+        if chars[i] == '=' {
+            let eq_start = i;
+            let mut eq_count = 0;
+            while i < len && chars[i] == '=' {
+                eq_count += 1;
+                i += 1;
+            }
+
+            // Check if followed by space or end (potential closer for nested)
+            let followed_by_space_or_end =
+                i >= len || chars[i] == ' ' || chars[i] == '\n';
+
+            if eq_count >= level && followed_by_space_or_end {
+                return Some(eq_start);
+            }
+            // Otherwise continue scanning
+        } else {
+            i += 1;
+        }
+    }
+
+    None
+}
+
 /// Render inline markdown (bold, italic, links, code) to HTML.
 pub fn render_inline(text: &str) -> String {
     if text.is_empty() {
@@ -717,9 +935,10 @@ pub fn render_inline(text: &str) -> String {
 
     for event in parser {
         match event {
-            // Text: escape and emit
+            // Text: escape, process highlights, and emit
             Event::Text(t) => {
-                output.push_str(&html_escape(&t));
+                let escaped = html_escape(&t);
+                output.push_str(&process_highlights(&escaped));
             }
 
             // Strong (bold): **text**
@@ -1287,5 +1506,80 @@ mod tests {
     fn render_portal_ref_without_label_nested_path() {
         let result = render_line("[](deeply/nested/path/file.go#L1-L5)");
         assert!(result.html.contains("file.go"), "Should extract just the filename from nested path");
+    }
+
+    // =========================================================================
+    // Highlight syntax tests (==text==, ===text===, ====text====)
+    // =========================================================================
+
+    #[test]
+    fn test_highlights_basic() {
+        assert_eq!(
+            process_highlights("==subtle=="),
+            "<mark class=\"hl hl-1\">subtle</mark>"
+        );
+        assert_eq!(
+            process_highlights("===default==="),
+            "<mark class=\"hl hl-2\">default</mark>"
+        );
+        assert_eq!(
+            process_highlights("====strong===="),
+            "<mark class=\"hl hl-3\">strong</mark>"
+        );
+    }
+
+    #[test]
+    fn test_highlight_edge_cases() {
+        // Mismatch (opener < closer)
+        assert_eq!(
+            process_highlights("==text==="),
+            "<mark class=\"hl hl-1\">text</mark>="
+        );
+        // Mismatch (opener > closer)
+        assert_eq!(
+            process_highlights("===text=="),
+            "=<mark class=\"hl hl-1\">text</mark>"
+        );
+        // Empty content
+        assert_eq!(process_highlights("===="), "====");
+        // Non-greedy
+        assert_eq!(
+            process_highlights("==a==b=="),
+            "<mark class=\"hl hl-1\">a</mark>b=="
+        );
+        // Greedy/outermost for nested
+        assert_eq!(
+            process_highlights("==a ==b== c=="),
+            "<mark class=\"hl hl-1\">a ==b== c</mark>"
+        );
+        // Single = in content ok
+        assert_eq!(
+            process_highlights("==a=b=="),
+            "<mark class=\"hl hl-1\">a=b</mark>"
+        );
+        // Escaped opener
+        assert_eq!(process_highlights("\\==text=="), "==text==");
+        // Adjacent highlights
+        assert_eq!(
+            process_highlights("==a====b=="),
+            "<mark class=\"hl hl-1\">a</mark><mark class=\"hl hl-1\">b</mark>"
+        );
+    }
+
+    #[test]
+    fn test_highlights_passthrough() {
+        // Plain text unchanged
+        assert_eq!(process_highlights("hello world"), "hello world");
+        // Single = unchanged
+        assert_eq!(process_highlights("a=b"), "a=b");
+        // Unclosed highlight - literal
+        assert_eq!(process_highlights("==unclosed"), "==unclosed");
+    }
+
+    #[test]
+    fn test_highlights_in_render_inline() {
+        assert!(render_inline("==this==").contains("<mark class=\"hl hl-1\">this</mark>"));
+        // Code spans should NOT have highlights processed
+        assert_eq!(render_inline("`==code==`"), "<code>==code==</code>");
     }
 }
