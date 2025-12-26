@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
 use crate::mcp::tools::SessionImage;
 use crate::review::{FileKey, Review};
@@ -145,8 +144,8 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
     }
 
     // Build list of (display_path, annotations) for files with annotations
-    // We collect display paths (PathBuf) for output formatting
-    let files_with_annotations: Vec<(PathBuf, &_)> = if let Some(diff_files) = review.root_view.diff_files() {
+    // We collect display paths (String) for output formatting
+    let files_with_annotations: Vec<(String, &_)> = if let Some(diff_files) = review.root_view.diff_files() {
         // Diff mode: use DiffFileView for display paths, enumerate for index
         diff_files
             .iter()
@@ -157,20 +156,21 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
                     if target.annotations.is_empty() {
                         None
                     } else {
-                        Some((df.path.clone(), target))
+                        Some((df.path.display().to_string(), target))
                     }
                 })
             })
             .collect()
     } else {
-        // File mode: extract path from FileKey
+        // File mode: extract display string from FileKey
         review
             .files
             .iter()
             .filter(|(_, target)| !target.annotations.is_empty())
             .filter_map(|(key, target)| {
                 match key {
-                    FileKey::Path(p) => Some((p.clone(), target)),
+                    FileKey::Path(p) => Some((p.display().to_string(), target)),
+                    FileKey::Ephemeral { label } => Some((label.clone(), target)),
                     FileKey::DiffFile { .. } => None, // Should not happen in file mode
                 }
             })
@@ -221,14 +221,14 @@ fn format_annotation_block(
     out: &mut String,
     content: &ContentModel,
     ann: &Annotation,
-    file_path: &std::path::PathBuf,
+    file_path: &str,
     line_num_width: usize,
     images: &mut Vec<SessionImage>,
     figure_counter: &mut usize,
     mode: OutputMode,
 ) {
     let is_diff = matches!(content.metadata, ContentMetadata::Diff(_));
-    let file_label = file_path.display();
+    let file_label = file_path;
 
     // File header: "file.rs:10-15" or "file.rs:10"
     // For diffs, include old/new line numbers if available
@@ -306,7 +306,7 @@ fn format_diff_header(
     out: &mut String,
     content: &ContentModel,
     ann: &Annotation,
-    file_path: &std::path::PathBuf,
+    file_path: &str,
 ) {
     let diff_meta = match &content.metadata {
         ContentMetadata::Diff(d) => d,
@@ -314,7 +314,7 @@ fn format_diff_header(
     };
 
     // Use the file path we already have (from Review.files key)
-    let file_name = file_path.display();
+    let file_name = file_path;
 
     // Collect old/new line ranges from the annotated lines
     let mut old_lines: Vec<u32> = Vec::new();

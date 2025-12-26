@@ -18,6 +18,7 @@ use std::path::PathBuf;
 
 use crate::diff;
 use crate::error::AnnotError;
+use crate::review::FileKey;
 use crate::markdown;
 
 /// How the content should be rendered/processed.
@@ -135,25 +136,18 @@ impl ContentSource {
         }
     }
 
-    /// Canonical path for annotation routing.
+    /// Generate FileKey for this content source.
     ///
-    /// This path is used for line origins and must match the FileKey used in Review.
-    /// For file-based content, returns the actual path.
-    /// For ephemeral/stdin content, returns a synthetic path.
-    pub fn annotation_path(&self) -> String {
+    /// This key is used for annotation routing in Review.files.
+    pub fn file_key(&self) -> FileKey {
         match self {
             ContentSource::Cli(CliSource::File { path })
-            | ContentSource::Mcp(McpSource::File { path }) => {
-                path.to_string_lossy().to_string()
-            }
-            ContentSource::Cli(CliSource::Stdin { label }) => {
-                format!("__stdin__/{}", label)
-            }
-            ContentSource::Mcp(McpSource::Content { label }) => {
-                format!("__ephemeral__/{}", label)
-            }
-            ContentSource::Mcp(McpSource::Diff { label, .. }) => {
-                label.clone().unwrap_or_else(|| "diff".to_string())
+            | ContentSource::Mcp(McpSource::File { path }) => FileKey::path(path.clone()),
+            ContentSource::Cli(CliSource::Stdin { label }) => FileKey::ephemeral(label.clone()),
+            ContentSource::Mcp(McpSource::Content { label }) => FileKey::ephemeral(label.clone()),
+            ContentSource::Mcp(McpSource::Diff { .. }) => {
+                // Diff mode uses DiffFile keys per file, not a single key for the whole diff
+                unreachable!("Diff mode uses DiffFile keys per file")
             }
         }
     }

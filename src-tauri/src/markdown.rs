@@ -760,8 +760,9 @@ pub fn render_inline(text: &str) -> String {
             }
             Event::End(TagEnd::Link) => {
                 if let Some(path) = portal_path.take() {
-                    // If span is empty (no link text), use filename as label
-                    if output.ends_with("\">") {
+                    // If no link text was provided, use filename as label
+                    // After the icon, output ends with "</svg>" if no text was added
+                    if output.ends_with("</svg>") {
                         output.push_str(filename_from_path(&path));
                     }
                     output.push_str("</span>");

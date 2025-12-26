@@ -23,7 +23,7 @@ use crate::output::FormatResult;
 use crate::state::{Annotation, ContentMetadata, ContentModel, ContentNode, ContentResponse, FileMetadata, LineRange, UserConfig};
 
 /// Key for annotation targets in Review.files.
-/// Distinguishes real file paths from synthetic diff file references.
+/// Distinguishes real file paths from ephemeral/synthetic content.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum FileKey {
@@ -31,6 +31,8 @@ pub enum FileKey {
     Path(PathBuf),
     /// A file within a diff, identified by index.
     DiffFile { index: usize },
+    /// Ephemeral content (MCP review_content, stdin pipe).
+    Ephemeral { label: String },
 }
 
 impl FileKey {
@@ -43,6 +45,24 @@ impl FileKey {
     pub fn diff_file(index: usize) -> Self {
         FileKey::DiffFile { index }
     }
+
+    /// Create a key for ephemeral content.
+    pub fn ephemeral(label: impl Into<String>) -> Self {
+        FileKey::Ephemeral { label: label.into() }
+    }
+
+    /// Get the routing path string for this key.
+    /// This is stored in LineOrigin.path and used for annotation routing.
+    pub fn routing_path(&self) -> String {
+        match self {
+            FileKey::Path(p) => p.to_string_lossy().to_string(),
+            FileKey::Ephemeral { label } => label.clone(),
+            FileKey::DiffFile { .. } => {
+                // Diff files use index-based routing, not path-based
+                unreachable!("DiffFile uses index-based routing via LineOrigin::Diff")
+            }
+        }
+    }
 }
 
 impl fmt::Display for FileKey {
@@ -50,6 +70,7 @@ impl fmt::Display for FileKey {
         match self {
             FileKey::Path(p) => write!(f, "{}", p.display()),
             FileKey::DiffFile { index } => write!(f, "diff file {}", index),
+            FileKey::Ephemeral { label } => write!(f, "{}", label),
         }
     }
 }
@@ -226,8 +247,7 @@ impl Review {
     fn build_file_state(
         content: ContentModel,
     ) -> (View, HashMap<FileKey, AnnotationTarget>, WindowView) {
-        let path = content.source_path();
-        let key = FileKey::path(path.clone());
+        let key = content.file_key();
 
         let mut files = HashMap::new();
         files.insert(key.clone(), AnnotationTarget::new());
@@ -240,10 +260,9 @@ impl Review {
             }
         }
 
-        let root_view = View::File {
-            path: path.clone(),
-            content,
-        };
+        // Note: View::File.path is not used anywhere, passing label as placeholder
+        let path = PathBuf::from(content.label.clone());
+        let root_view = View::File { path, content };
 
         let window_view = WindowView::File { key };
 
@@ -381,6 +400,15 @@ impl Review {
                 .ok_or_else(|| format!("File not found: {}", path));
         }
 
+        // Try ephemeral key (MCP review_content, stdin)
+        let ephemeral_key = FileKey::ephemeral(path);
+        if self.files.contains_key(&ephemeral_key) {
+            return self
+                .files
+                .get_mut(&ephemeral_key)
+                .ok_or_else(|| format!("Ephemeral content not found: {}", path));
+        }
+
         // For diff mode, find the file by path
         if let Some(diff_files) = self.root_view.diff_files() {
             for (index, diff_file) in diff_files.iter().enumerate() {
@@ -446,11 +474,9 @@ impl AnnotationTarget {
 }
 
 impl ContentModel {
-    /// Get a path for keying this content.
-    /// For file-based content, returns the actual path.
-    /// For ephemeral/stdin content, returns a synthetic path.
-    pub fn source_path(&self) -> PathBuf {
-        PathBuf::from(self.source.annotation_path())
+    /// Get the FileKey for this content.
+    pub fn file_key(&self) -> FileKey {
+        self.source.file_key()
     }
 }
 

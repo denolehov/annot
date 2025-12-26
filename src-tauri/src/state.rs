@@ -425,7 +425,7 @@ impl ContentModel {
     pub fn from_file(content: &str, source: ContentSource) -> Self {
         let label = source.label().to_string();
         let path_hint = source.path_hint().unwrap_or("");
-        let annotation_path = source.annotation_path();
+        let routing_path = source.file_key().routing_path();
 
         let highlighter = Highlighter::new();
         let html_lines = highlighter.highlight_lines(content, path_hint);
@@ -440,7 +440,7 @@ impl ContentModel {
                     content: line.to_string(),
                     html,
                     origin: LineOrigin::Source {
-                        path: annotation_path.clone(),
+                        path: routing_path.clone(),
                         line: line_num,
                     },
                     semantics: LineSemantics::Plain,
@@ -573,7 +573,7 @@ impl ContentModel {
     pub fn from_markdown(content: &str, source: ContentSource) -> Self {
         let label = source.label().to_string();
         let base_dir = source.base_dir();
-        let annotation_path = source.annotation_path();
+        let routing_path = source.file_key().routing_path();
 
         let md_metadata = markdown::parse_markdown(content);
         let highlighter = Highlighter::new();
@@ -623,7 +623,7 @@ impl ContentModel {
                     .unwrap_or_else(|| line_content.to_string());
 
                 let origin = LineOrigin::Source {
-                    path: annotation_path.clone(),
+                    path: routing_path.clone(),
                     line: line_num,
                 };
 
