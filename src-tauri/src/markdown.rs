@@ -97,6 +97,110 @@ pub struct RenderedLine {
     pub semantics: Option<MarkdownSemantics>,
 }
 
+// =============================================================================
+// Parser state management
+// =============================================================================
+
+/// A parsing context we're currently inside.
+#[derive(Debug, Clone)]
+enum ParseContext {
+    Heading { line: u32, level: u8, text: String },
+    CodeBlock { line: u32, lang: Option<String> },
+    Table { start_line: u32 },
+    PortalLink { line: u32, url: String, text: String },
+}
+
+/// Stack-based parser state tracker.
+#[derive(Debug, Default)]
+struct ParseState {
+    stack: Vec<ParseContext>,
+}
+
+impl ParseState {
+    fn push(&mut self, ctx: ParseContext) {
+        self.stack.push(ctx);
+    }
+
+    /// Pop heading context if it's on top.
+    fn pop_heading(&mut self) -> Option<(u32, u8, String)> {
+        match self.stack.last() {
+            Some(ParseContext::Heading { .. }) => {
+                if let Some(ParseContext::Heading { line, level, text }) = self.stack.pop() {
+                    return Some((line, level, text));
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
+    /// Pop code block context if it's on top.
+    fn pop_code_block(&mut self) -> Option<(u32, Option<String>)> {
+        match self.stack.last() {
+            Some(ParseContext::CodeBlock { .. }) => {
+                if let Some(ParseContext::CodeBlock { line, lang }) = self.stack.pop() {
+                    return Some((line, lang));
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
+    /// Pop table context if it's on top.
+    fn pop_table(&mut self) -> Option<u32> {
+        match self.stack.last() {
+            Some(ParseContext::Table { .. }) => {
+                if let Some(ParseContext::Table { start_line }) = self.stack.pop() {
+                    return Some(start_line);
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
+    /// Pop portal link context if it's on top.
+    fn pop_portal_link(&mut self) -> Option<(u32, String, String)> {
+        match self.stack.last() {
+            Some(ParseContext::PortalLink { .. }) => {
+                if let Some(ParseContext::PortalLink { line, url, text }) = self.stack.pop() {
+                    return Some((line, url, text));
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
+    /// Check if we're inside a code block.
+    fn in_code_block(&self) -> bool {
+        self.stack.iter().any(|ctx| matches!(ctx, ParseContext::CodeBlock { .. }))
+    }
+
+    /// Get mutable reference to current heading's text accumulator.
+    fn current_heading_text(&mut self) -> Option<&mut String> {
+        self.stack.iter_mut().rev().find_map(|ctx| {
+            if let ParseContext::Heading { text, .. } = ctx {
+                Some(text)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Get mutable reference to current portal link's text accumulator.
+    fn current_portal_text(&mut self) -> Option<&mut String> {
+        self.stack.iter_mut().rev().find_map(|ctx| {
+            if let ParseContext::PortalLink { text, .. } = ctx {
+                Some(text)
+            } else {
+                None
+            }
+        })
+    }
+}
+
 /// Check if a file is markdown based on extension.
 pub fn is_markdown(path: &str) -> bool {
     let ext = Path::new(path)
@@ -118,49 +222,31 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
     let mut tables = Vec::new();
     let mut portals = Vec::new();
 
-    // State for collecting text within headings
-    let mut current_heading: Option<(u32, u8)> = None; // (line, level)
-    let mut heading_text = String::new();
-
-    // State for code blocks
-    let mut current_code_block: Option<(u32, Option<String>)> = None; // (start_line, language)
-
-    // State for tables
-    let mut current_table_start: Option<u32> = None;
-
-    // State for portal link detection
-    // Stores: (source_line, dest_url) when inside a potential portal link
-    let mut current_portal_link: Option<(u32, String)> = None;
-    let mut portal_link_text = String::new();
-
-    // Track if we're inside a code block (portals in code blocks are literal)
-    let mut in_code_block = false;
+    let mut state = ParseState::default();
 
     for (event, range) in parser {
         let line = mapper.byte_to_line(range.start);
 
         match event {
             Event::Start(Tag::Heading { level, .. }) => {
-                current_heading = Some((line, heading_level_to_u8(level)));
-                heading_text.clear();
+                state.push(ParseContext::Heading {
+                    line,
+                    level: heading_level_to_u8(level),
+                    text: String::new(),
+                });
             }
             Event::End(TagEnd::Heading(_)) => {
-                if let Some((source_line, level)) = current_heading.take() {
+                if let Some((source_line, level, text)) = state.pop_heading() {
                     sections.push(SectionInfo {
                         source_line,
                         level,
-                        title: heading_text.trim().to_string(),
+                        title: text.trim().to_string(),
                         parent_index: None,
                     });
                 }
-                heading_text.clear();
-            }
-            Event::Text(text) | Event::Code(text) if current_heading.is_some() => {
-                heading_text.push_str(&text);
             }
 
             Event::Start(Tag::CodeBlock(kind)) => {
-                in_code_block = true;
                 let language = match kind {
                     CodeBlockKind::Fenced(info) => {
                         let lang = info.split(&[',', ' '][..]).next().unwrap_or("");
@@ -172,11 +258,10 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
                     }
                     CodeBlockKind::Indented => None,
                 };
-                current_code_block = Some((line, language));
+                state.push(ParseContext::CodeBlock { line, lang: language });
             }
             Event::End(TagEnd::CodeBlock) => {
-                in_code_block = false;
-                if let Some((start_line, language)) = current_code_block.take() {
+                if let Some((start_line, language)) = state.pop_code_block() {
                     code_blocks.push(CodeBlockInfo {
                         start_line,
                         end_line: mapper.byte_to_line(range.end.saturating_sub(1)),
@@ -186,10 +271,10 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
             }
 
             Event::Start(Tag::Table(_)) => {
-                current_table_start = Some(line);
+                state.push(ParseContext::Table { start_line: line });
             }
             Event::End(TagEnd::Table) => {
-                if let Some(start_line) = current_table_start.take() {
+                if let Some(start_line) = state.pop_table() {
                     let end_line = mapper.byte_to_line(range.end.saturating_sub(1));
                     let table_content = extract_table_lines(content, start_line, end_line);
                     let formatted = format_table(&table_content);
@@ -202,27 +287,22 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
             }
 
             // Portal link detection: [label](path#L42-L58)
-            Event::Start(Tag::Link { dest_url, .. }) if !in_code_block => {
-                // Check if URL has a line anchor
+            Event::Start(Tag::Link { dest_url, .. }) if !state.in_code_block() => {
                 if parse_line_anchor(&dest_url).is_some() {
-                    current_portal_link = Some((line, dest_url.to_string()));
-                    portal_link_text.clear();
+                    state.push(ParseContext::PortalLink {
+                        line,
+                        url: dest_url.to_string(),
+                        text: String::new(),
+                    });
                 }
             }
-            Event::Text(text) if current_portal_link.is_some() => {
-                portal_link_text.push_str(&text);
-                // Also collect for heading if inside one
-                if current_heading.is_some() {
-                    heading_text.push_str(&text);
-                }
-            }
-            Event::End(TagEnd::Link) if current_portal_link.is_some() => {
-                if let Some((source_line, url)) = current_portal_link.take() {
+            Event::End(TagEnd::Link) => {
+                if let Some((source_line, url, text)) = state.pop_portal_link() {
                     if let Some((path, start_line, end_line)) = parse_portal_url(&url) {
-                        let label = if portal_link_text.trim().is_empty() {
+                        let label = if text.trim().is_empty() {
                             None
                         } else {
-                            Some(portal_link_text.trim().to_string())
+                            Some(text.trim().to_string())
                         };
                         portals.push(PortalInfo {
                             source_line,
@@ -233,7 +313,16 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
                         });
                     }
                 }
-                portal_link_text.clear();
+            }
+
+            // Text accumulation for headings and portal links
+            Event::Text(text) | Event::Code(text) => {
+                if let Some(heading_text) = state.current_heading_text() {
+                    heading_text.push_str(&text);
+                }
+                if let Some(portal_text) = state.current_portal_text() {
+                    portal_text.push_str(&text);
+                }
             }
 
             _ => {}
