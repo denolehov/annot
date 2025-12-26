@@ -1,5 +1,5 @@
 import type { Line } from './types';
-import { getLineNumber, getFileIndex, getFilePath } from './line-utils';
+import { getLineNumber, getFilePath } from './line-utils';
 
 /**
  * A range of display indices (1-indexed positions in the lines array).
@@ -54,16 +54,18 @@ export function isLineInRange(displayIdx: number, range: Range): boolean {
 }
 
 /**
- * Extract source coordinates from a display index range.
- * Returns fileIndex, filePath, and source line numbers for backend API calls.
- * - fileIndex is used for diff mode (identifies which file in the diff)
- * - filePath is used for portal mode (identifies the external source file)
- * Returns null if the range spans virtual lines without source coordinates.
+ * Validate a range and extract source coordinates for backend API calls.
+ * Validates:
+ * 1. All lines in range have non-virtual origin
+ * 2. All lines share the same origin.path
+ * 3. No line number discontinuities (for portal boundary detection)
+ *
+ * Returns null if validation fails.
  */
-export function rangeToSourceCoords(
+export function validateRange(
   range: Range,
   lines: Line[]
-): { fileIndex: number | null; filePath: string | null; startLine: number; endLine: number } | null {
+): { path: string; startLine: number; endLine: number } | null {
   const min = Math.min(range.start, range.end);
   const max = Math.max(range.start, range.end);
 
@@ -71,16 +73,35 @@ export function rangeToSourceCoords(
   const endLine = lines[max - 1];
   if (!startLine || !endLine) return null;
 
-  const fileIndex = getFileIndex(startLine);
-  const filePath = getFilePath(startLine);
-  const startSource = getLineNumber(startLine);
-  const endSource = getLineNumber(endLine);
+  // Get path from start line - must be non-virtual
+  const path = getFilePath(startLine);
+  if (path === null) return null;
 
-  if (startSource === null || endSource === null) return null;
+  // Check all lines in range share the same path and have no gaps
+  let prevLineNum: number | null = null;
+  for (let i = min - 1; i < max; i++) {
+    const line = lines[i];
+    const linePath = getFilePath(line);
+    const lineNum = getLineNumber(line);
+
+    // All lines must have same path
+    if (linePath !== path) return null;
+
+    // All lines must have line numbers (non-virtual)
+    if (lineNum === null) return null;
+
+    // Check for line number discontinuity (gap > 1 indicates portal boundary)
+    if (prevLineNum !== null && Math.abs(lineNum - prevLineNum) > 1) {
+      return null;
+    }
+    prevLineNum = lineNum;
+  }
+
+  const startSource = getLineNumber(startLine)!;
+  const endSource = getLineNumber(endLine)!;
 
   return {
-    fileIndex,
-    filePath,
+    path,
     startLine: Math.min(startSource, endSource),
     endLine: Math.max(startSource, endSource),
   };

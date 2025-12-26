@@ -14,37 +14,28 @@ use crate::portal::{self, LoadedPortal, MAX_PORTALS};
 // Unified line model (LineOrigin + LineSemantics)
 // =============================================================================
 
-use std::path::PathBuf;
-
 /// Where this line's content originates from.
-/// Carries line number information for annotation routing and gutter display.
+/// Carries path and line number for annotation routing.
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum LineOrigin {
-    /// Line from the primary document being reviewed.
-    Document {
+    /// Line from a source file.
+    Source {
+        /// Path to the source file.
+        path: String,
         /// 1-indexed line number in the source file.
         line: u32,
     },
     /// Line from a diff (maps to old/new file versions).
     Diff {
+        /// Path to the file in the diff.
+        path: String,
         /// Line number in old file (None if added line or header).
         old_line: Option<u32>,
         /// Line number in new file (None if deleted line or header).
         new_line: Option<u32>,
-        /// Index into diff file list for annotation routing.
-        file_index: usize,
     },
-    /// Line from an external file (portal content).
-    External {
-        /// Path to the external file.
-        file: PathBuf,
-        /// 1-indexed line number in the external file.
-        line: u32,
-        /// Portal identifier for grouping and boundaries.
-        portal_id: String,
-    },
-    /// Synthetic line with no source (portal headers, decorators).
+    /// Synthetic line with no source (portal headers/footers, decorators).
     Virtual,
 }
 
@@ -433,10 +424,11 @@ impl ContentModel {
     #[must_use]
     pub fn from_file(content: &str, source: ContentSource) -> Self {
         let label = source.label().to_string();
-        let path = source.path_hint().unwrap_or("");
+        let path_hint = source.path_hint().unwrap_or("");
+        let path_str = path_hint.to_string();
 
         let highlighter = Highlighter::new();
-        let html_lines = highlighter.highlight_lines(content, path);
+        let html_lines = highlighter.highlight_lines(content, path_hint);
 
         let lines = content
             .lines()
@@ -447,7 +439,10 @@ impl ContentModel {
                 Line {
                     content: line.to_string(),
                     html,
-                    origin: LineOrigin::Document { line: line_num },
+                    origin: LineOrigin::Source {
+                        path: path_str.clone(),
+                        line: line_num,
+                    },
                     semantics: LineSemantics::Plain,
                 }
             })
@@ -528,10 +523,18 @@ impl ContentModel {
 
                 let (origin, semantics) = match diff_info {
                     Some(info) => {
+                        // Get the file path from the diff file info
+                        let file_path = diff_metadata
+                            .files
+                            .get(info.file_index)
+                            .and_then(|f| f.new_name.as_ref().or(f.old_name.as_ref()))
+                            .cloned()
+                            .unwrap_or_default();
+
                         let origin = LineOrigin::Diff {
+                            path: file_path,
                             old_line: info.old_line_num,
                             new_line: info.new_line_num,
-                            file_index: info.file_index,
                         };
                         let semantics = LineSemantics::Diff(match info.kind {
                             diff::DiffLineKind::Context => DiffSemantics::Context,
@@ -543,10 +546,7 @@ impl ContentModel {
                     }
                     None => {
                         // Lines not in diff metadata (shouldn't happen, but fallback)
-                        (
-                            LineOrigin::Document { line: line_num },
-                            LineSemantics::Plain,
-                        )
+                        (LineOrigin::Virtual, LineSemantics::Plain)
                     }
                 };
 
@@ -573,6 +573,8 @@ impl ContentModel {
     pub fn from_markdown(content: &str, source: ContentSource) -> Self {
         let label = source.label().to_string();
         let base_dir = source.base_dir();
+        // Use full path for file sources, label for ephemeral content
+        let path_str = source.path_hint().unwrap_or(&label).to_string();
 
         let md_metadata = markdown::parse_markdown(content);
         let highlighter = Highlighter::new();
@@ -621,7 +623,10 @@ impl ContentModel {
                     .cloned()
                     .unwrap_or_else(|| line_content.to_string());
 
-                let origin = LineOrigin::Document { line: line_num };
+                let origin = LineOrigin::Source {
+                    path: path_str.clone(),
+                    line: line_num,
+                };
 
                 // Determine HTML rendering strategy and semantics
                 if let Some(info) = code_block_lines.get(&line_num) {
@@ -696,16 +701,25 @@ impl ContentModel {
             }
         }
 
-        // Interleave in reverse order (highest insert_at first) to preserve indices
-        loaded_portals.sort_by_key(|p| std::cmp::Reverse(p.insert_at));
+        // Group portals by their insert_at line
+        use std::collections::BTreeMap;
+        let mut portals_by_line: BTreeMap<u32, Vec<&LoadedPortal>> = BTreeMap::new();
         for portal in &loaded_portals {
-            let idx = (portal.insert_at - 1) as usize;
+            portals_by_line.entry(portal.insert_at).or_default().push(portal);
+        }
+
+        // Interleave in reverse order (highest insert_at first) to preserve indices
+        // Keep the original line and insert portals after it
+        for (&line_num, portals) in portals_by_line.iter().rev() {
+            let idx = (line_num - 1) as usize;
             if idx < lines.len() {
-                // Remove the original markdown link line
-                lines.remove(idx);
-                // Insert portal lines at that position
-                for (offset, portal_line) in portal.lines.iter().enumerate() {
-                    lines.insert(idx + offset, portal_line.clone());
+                // Insert all portals for this line, in order, after the original line
+                let mut insert_pos = idx + 1;
+                for portal in portals {
+                    for portal_line in &portal.lines {
+                        lines.insert(insert_pos, portal_line.clone());
+                        insert_pos += 1;
+                    }
                 }
             }
         }
@@ -815,9 +829,9 @@ mod tests {
         let state = test_state("a\nb\nc", "test.rs");
         let response = state.to_response();
 
-        assert!(matches!(response.lines[0].origin, LineOrigin::Document { line: 1 }));
-        assert!(matches!(response.lines[1].origin, LineOrigin::Document { line: 2 }));
-        assert!(matches!(response.lines[2].origin, LineOrigin::Document { line: 3 }));
+        assert!(matches!(response.lines[0].origin, LineOrigin::Source { line: 1, .. }));
+        assert!(matches!(response.lines[1].origin, LineOrigin::Source { line: 2, .. }));
+        assert!(matches!(response.lines[2].origin, LineOrigin::Source { line: 3, .. }));
     }
 
     #[test]

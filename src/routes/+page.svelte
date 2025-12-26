@@ -3,8 +3,8 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
-  import { getLineNumber, getDiffKind, isSelectable, getPortalId, getFilePath } from "$lib/line-utils";
-  import { rangeToKey, keyToRange, isLineInRange, rangeToSourceCoords, type Range } from "$lib/range";
+  import { getLineNumber, getDiffKind, isSelectable, isPortalLine, getFilePath } from "$lib/line-utils";
+  import { rangeToKey, keyToRange, isLineInRange, validateRange, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap } from "$lib/tiptap";
   import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
   import AnnotationEditor from "$lib/AnnotationEditor.svelte";
@@ -28,8 +28,8 @@
   // All selection coordinates use display indices (1-indexed positions in the
   // lines array). Display indices are inherently unique across all files/content.
   //
-  // Source line numbers are only extracted at the backend boundary via
-  // rangeToSourceCoords() when calling Tauri commands.
+  // Source coordinates (path + line numbers) are extracted at the backend
+  // boundary via validateRange() when calling Tauri commands.
   // =============================================================================
 
   let markdownMetadata = $derived(metadata.type === 'markdown' ? metadata : null);
@@ -112,15 +112,10 @@
     return null;
   }
 
-  /** Check if a line is part of a portal (header, content, or footer) */
-  function isPortalLine(line: Line): boolean {
-    return line.semantics.type === 'portal';
-  }
-
   /** Segment type for rendering: either regular lines or a portal group */
   type LineSegment =
     | { type: 'regular'; lines: { line: Line; displayIndex: number }[] }
-    | { type: 'portal'; lines: { line: Line; displayIndex: number }[]; portalId: string };
+    | { type: 'portal'; lines: { line: Line; displayIndex: number }[] };
 
   /** Group lines into segments for portal-aware rendering */
   let lineSegments = $derived.by((): LineSegment[] => {
@@ -130,17 +125,17 @@
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const displayIndex = i + 1;
-      const portalId = getPortalId(line);
+      const isPortal = isPortalLine(line);
 
-      if (portalId) {
+      if (isPortal) {
         // Portal line
-        if (currentSegment?.type === 'portal' && currentSegment.portalId === portalId) {
+        if (currentSegment?.type === 'portal') {
           // Continue current portal segment
           currentSegment.lines.push({ line, displayIndex });
         } else {
           // Start new portal segment
           if (currentSegment) segments.push(currentSegment);
-          currentSegment = { type: 'portal', lines: [{ line, displayIndex }], portalId };
+          currentSegment = { type: 'portal', lines: [{ line, displayIndex }] };
         }
       } else {
         // Regular line
@@ -276,33 +271,57 @@
   }
 
   // Get portal bounds for a line (returns null if line is not in a portal)
+  // Boundary detection: uses semantics and line number discontinuity
   function getPortalBounds(lineNum: number): { start: number; end: number } | null {
     const line = lines[lineNum - 1];
     if (!line) return null;
 
-    const portalId = getPortalId(line);
-    if (!portalId) return null;
+    // Check if this line is in a portal
+    if (!isPortalLine(line)) return null;
 
-    // Find all lines with the same portal_id
+    const currentPath = getFilePath(line);
+    const currentLineNum = getLineNumber(line);
+
     let start = lineNum;
     let end = lineNum;
 
     // Scan backwards to find start
+    // Stop at: non-portal line, different path, or line number gap > 1
+    let prevLineNum = currentLineNum;
     for (let i = lineNum - 2; i >= 0; i--) {
-      if (getPortalId(lines[i]) === portalId) {
-        start = i + 1; // 1-indexed
-      } else {
-        break;
-      }
+      const prevLine = lines[i];
+      if (!isPortalLine(prevLine)) break;
+
+      const path = getFilePath(prevLine);
+      const num = getLineNumber(prevLine);
+
+      // Different path means different portal
+      if (path !== currentPath) break;
+
+      // Line number gap > 1 indicates portal boundary (unless virtual)
+      if (prevLineNum !== null && num !== null && Math.abs(prevLineNum - num) > 1) break;
+
+      start = i + 1; // 1-indexed
+      prevLineNum = num;
     }
 
     // Scan forwards to find end
+    prevLineNum = currentLineNum;
     for (let i = lineNum; i < lines.length; i++) {
-      if (getPortalId(lines[i]) === portalId) {
-        end = i + 1; // 1-indexed
-      } else {
-        break;
-      }
+      const nextLine = lines[i];
+      if (!isPortalLine(nextLine)) break;
+
+      const path = getFilePath(nextLine);
+      const num = getLineNumber(nextLine);
+
+      // Different path means different portal
+      if (path !== currentPath) break;
+
+      // Line number gap > 1 indicates portal boundary
+      if (prevLineNum !== null && num !== null && Math.abs(num - prevLineNum) > 1) break;
+
+      end = i + 1; // 1-indexed
+      prevLineNum = num;
     }
 
     return { start, end };
@@ -319,12 +338,13 @@
       constrained = Math.max(portalBounds.start, Math.min(portalBounds.end, constrained));
     }
 
-    // If target would cross into a portal from outside, clamp to before it
+    // If target would cross into a portal from outside, clamp to anchor
+    const anchorLine_ = lines[anchorLine - 1];
     const targetLine = lines[lineNum - 1];
-    const anchorPortalId = lines[anchorLine - 1] ? getPortalId(lines[anchorLine - 1]) : null;
-    const targetPortalId = targetLine ? getPortalId(targetLine) : null;
+    const anchorIsPortal = anchorLine_ ? isPortalLine(anchorLine_) : false;
+    const targetIsPortal = targetLine ? isPortalLine(targetLine) : false;
 
-    if (anchorPortalId !== targetPortalId) {
+    if (anchorIsPortal !== targetIsPortal) {
       // Crossing portal boundary - prevent it
       return anchorLine;
     }
@@ -433,29 +453,24 @@
   async function updateAnnotation(content: JSONContent | null) {
     if (!selection) return;
     const key = rangeToKey(selection);
-    const coords = rangeToSourceCoords(selection, lines);
+    const coords = validateRange(selection, lines);
     if (!coords) return;
-
-    const startIdx = Math.min(selection.start, selection.end);
-    const endIdx = Math.max(selection.start, selection.end);
 
     if (content && !isContentEmpty(content)) {
       annotations.set(key, content);
       const nodes = extractContentNodes(content);
       await invoke('upsert_annotation', {
-        fileIndex: coords.fileIndex,
-        filePath: coords.filePath,
-        startLine: startIdx,
-        endLine: endIdx,
+        path: coords.path,
+        startLine: coords.startLine,
+        endLine: coords.endLine,
         content: nodes
       });
     } else {
       annotations.delete(key);
       await invoke('delete_annotation', {
-        fileIndex: coords.fileIndex,
-        filePath: coords.filePath,
-        startLine: startIdx,
-        endLine: endIdx
+        path: coords.path,
+        startLine: coords.startLine,
+        endLine: coords.endLine
       });
     }
     annotations = new Map(annotations); // trigger reactivity
@@ -1273,27 +1288,28 @@
     background-size: var(--portal-checker-size), auto;
     border-top: 1px solid var(--border-portal);
     border-bottom: 1px solid var(--border-portal);
-    margin: 4px 0;
   }
 
   .line.portal-header {
-    padding-top: 6px;
-    padding-bottom: 6px;
-    background: linear-gradient(to bottom, rgba(212, 200, 184, 0.15), transparent);
-    border-bottom: 1px solid var(--border-portal);
+    background: linear-gradient(to bottom, rgba(212, 200, 184, 0.25), transparent 25%);
   }
 
-  .line.portal-header .gutter {
-    align-self: center;
+  .line.portal-header .gutter,
+  .line.portal-header .code {
+    padding-top: 6px;
+    padding-bottom: 6px;
   }
 
   .line.portal-footer {
     height: 4px;
     min-height: 4px;
+    background: linear-gradient(to top, rgba(212, 200, 184, 0.25), transparent);
   }
 
-  .line.portal-footer .add-btn,
-  .line.portal-footer .gutter,
+  .line.portal-footer .gutter {
+    visibility: hidden;
+  }
+
   .line.portal-footer .code {
     display: none;
   }

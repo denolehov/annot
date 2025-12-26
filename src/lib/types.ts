@@ -4,9 +4,8 @@
 
 /** Where this line's content originates from. */
 export type LineOrigin =
-  | { type: 'document'; line: number }
-  | { type: 'diff'; old_line: number | null; new_line: number | null; file_index: number }
-  | { type: 'external'; file: string; line: number; portal_id: string }
+  | { type: 'source'; path: string; line: number }
+  | { type: 'diff'; path: string; old_line: number | null; new_line: number | null }
   | { type: 'virtual' };
 
 /** Content classification: what kind of line is this? */

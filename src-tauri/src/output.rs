@@ -475,7 +475,10 @@ mod tests {
         Line {
             content: content.to_string(),
             html: None,
-            origin: crate::state::LineOrigin::Document { line: number },
+            origin: crate::state::LineOrigin::Source {
+                path: "test.rs".to_string(),
+                line: number,
+            },
             semantics: crate::state::LineSemantics::Plain,
         }
     }

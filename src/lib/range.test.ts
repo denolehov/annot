@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rangeToKey, keyToRange, isLineInRange, rangeToSourceCoords } from './range';
+import { rangeToKey, keyToRange, isLineInRange, validateRange } from './range';
 import type { Line } from './types';
 
 describe('rangeToKey', () => {
@@ -82,7 +82,7 @@ describe('isLineInRange', () => {
   });
 });
 
-describe('rangeToSourceCoords', () => {
+describe('validateRange', () => {
   // Helper to create mock lines
   function makeLine(origin: Line['origin']): Line {
     return {
@@ -95,14 +95,14 @@ describe('rangeToSourceCoords', () => {
 
   it('extracts source coordinates from file mode lines', () => {
     const lines: Line[] = [
-      makeLine({ type: 'document', line: 10 }),
-      makeLine({ type: 'document', line: 11 }),
-      makeLine({ type: 'document', line: 12 }),
+      makeLine({ type: 'source', path: 'test.rs', line: 10 }),
+      makeLine({ type: 'source', path: 'test.rs', line: 11 }),
+      makeLine({ type: 'source', path: 'test.rs', line: 12 }),
     ];
 
-    const coords = rangeToSourceCoords({ start: 1, end: 3 }, lines);
+    const coords = validateRange({ start: 1, end: 3 }, lines);
     expect(coords).toEqual({
-      fileIndex: null,
+      path: 'test.rs',
       startLine: 10,
       endLine: 12,
     });
@@ -110,14 +110,14 @@ describe('rangeToSourceCoords', () => {
 
   it('extracts source coordinates from diff mode lines', () => {
     const lines: Line[] = [
-      makeLine({ type: 'diff', old_line: null, new_line: 5, file_index: 0 }),
-      makeLine({ type: 'diff', old_line: null, new_line: 6, file_index: 0 }),
-      makeLine({ type: 'diff', old_line: null, new_line: 7, file_index: 0 }),
+      makeLine({ type: 'diff', path: 'file.rs', old_line: null, new_line: 5 }),
+      makeLine({ type: 'diff', path: 'file.rs', old_line: null, new_line: 6 }),
+      makeLine({ type: 'diff', path: 'file.rs', old_line: null, new_line: 7 }),
     ];
 
-    const coords = rangeToSourceCoords({ start: 1, end: 3 }, lines);
+    const coords = validateRange({ start: 1, end: 3 }, lines);
     expect(coords).toEqual({
-      fileIndex: 0,
+      path: 'file.rs',
       startLine: 5,
       endLine: 7,
     });
@@ -126,20 +126,40 @@ describe('rangeToSourceCoords', () => {
   it('returns null for virtual lines', () => {
     const lines: Line[] = [
       makeLine({ type: 'virtual' }),
-      makeLine({ type: 'document', line: 10 }),
+      makeLine({ type: 'source', path: 'test.rs', line: 10 }),
     ];
 
     // Range starts at virtual line
-    const coords = rangeToSourceCoords({ start: 1, end: 2 }, lines);
+    const coords = validateRange({ start: 1, end: 2 }, lines);
     expect(coords).toBeNull();
   });
 
   it('returns null for out of bounds range', () => {
     const lines: Line[] = [
-      makeLine({ type: 'document', line: 10 }),
+      makeLine({ type: 'source', path: 'test.rs', line: 10 }),
     ];
 
-    const coords = rangeToSourceCoords({ start: 1, end: 5 }, lines);
+    const coords = validateRange({ start: 1, end: 5 }, lines);
+    expect(coords).toBeNull();
+  });
+
+  it('returns null when lines have different paths', () => {
+    const lines: Line[] = [
+      makeLine({ type: 'source', path: 'file1.rs', line: 10 }),
+      makeLine({ type: 'source', path: 'file2.rs', line: 11 }),
+    ];
+
+    const coords = validateRange({ start: 1, end: 2 }, lines);
+    expect(coords).toBeNull();
+  });
+
+  it('returns null when line numbers have gap > 1', () => {
+    const lines: Line[] = [
+      makeLine({ type: 'source', path: 'test.rs', line: 10 }),
+      makeLine({ type: 'source', path: 'test.rs', line: 15 }), // gap of 5
+    ];
+
+    const coords = validateRange({ start: 1, end: 2 }, lines);
     expect(coords).toBeNull();
   });
 
@@ -147,14 +167,14 @@ describe('rangeToSourceCoords', () => {
     // Lines might be in display order but source lines could be reversed
     // (though unusual, the function handles it)
     const lines: Line[] = [
-      makeLine({ type: 'document', line: 15 }),
-      makeLine({ type: 'document', line: 10 }),
+      makeLine({ type: 'source', path: 'test.rs', line: 15 }),
+      makeLine({ type: 'source', path: 'test.rs', line: 14 }),
     ];
 
-    const coords = rangeToSourceCoords({ start: 1, end: 2 }, lines);
+    const coords = validateRange({ start: 1, end: 2 }, lines);
     expect(coords).toEqual({
-      fileIndex: null,
-      startLine: 10,
+      path: 'test.rs',
+      startLine: 14,
       endLine: 15,
     });
   });

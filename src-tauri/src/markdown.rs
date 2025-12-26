@@ -602,6 +602,15 @@ pub fn render_line(line: &str) -> RenderedLine {
     }
 }
 
+/// Extract filename from a path string (strips line anchor and directory components).
+fn filename_from_path(path: &str) -> &str {
+    let without_anchor = path.split('#').next().unwrap_or(path);
+    std::path::Path::new(without_anchor)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(without_anchor)
+}
+
 /// Render inline markdown (bold, italic, links, code) to HTML.
 pub fn render_inline(text: &str) -> String {
     if text.is_empty() {
@@ -612,6 +621,7 @@ pub fn render_inline(text: &str) -> String {
     let parser = Parser::new_ext(text, options);
 
     let mut output = String::new();
+    let mut portal_path: Option<String> = None; // Track if we're inside a portal link
 
     for event in parser {
         match event {
@@ -644,13 +654,27 @@ pub fn render_inline(text: &str) -> String {
             }
 
             // Links: [text](url)
+            // Portal links (with line anchors) get special styling as spans
             Event::Start(Tag::Link { dest_url, .. }) => {
-                output.push_str("<a href=\"");
-                output.push_str(&html_escape(&dest_url));
-                output.push_str("\">");
+                if parse_line_anchor(&dest_url).is_some() {
+                    portal_path = Some(dest_url.to_string());
+                    output.push_str("<span class=\"portal-ref\">");
+                } else {
+                    output.push_str("<a href=\"");
+                    output.push_str(&html_escape(&dest_url));
+                    output.push_str("\">");
+                }
             }
             Event::End(TagEnd::Link) => {
-                output.push_str("</a>");
+                if let Some(path) = portal_path.take() {
+                    // If span is empty (no link text), use filename as label
+                    if output.ends_with("\">") {
+                        output.push_str(filename_from_path(&path));
+                    }
+                    output.push_str("</span>");
+                } else {
+                    output.push_str("</a>");
+                }
             }
 
             // Strikethrough: ~~text~~
@@ -1149,5 +1173,25 @@ mod tests {
 
         assert_eq!(meta.portals.len(), 1);
         assert_eq!(meta.portals[0].source_line, 5);
+    }
+
+    #[test]
+    fn render_portal_ref_with_label() {
+        let result = render_line("See [auth](src/auth.rs#L10-L20) for details");
+        assert!(result.html.contains("portal-ref"), "Should have portal-ref class");
+        assert!(result.html.contains("auth"), "Should contain label text");
+    }
+
+    #[test]
+    fn render_portal_ref_without_label_uses_filename() {
+        let result = render_line("See [](src/auth.rs#L10-L20) for details");
+        assert!(result.html.contains("portal-ref"), "Should have portal-ref class");
+        assert!(result.html.contains("auth.rs"), "Should contain filename as fallback label");
+    }
+
+    #[test]
+    fn render_portal_ref_without_label_nested_path() {
+        let result = render_line("[](deeply/nested/path/file.go#L1-L5)");
+        assert!(result.html.contains("file.go"), "Should extract just the filename from nested path");
     }
 }

@@ -338,8 +338,10 @@ div.line.diff-header .code {
 	font-weight: 500;
 }
 
-/* Hide add button for non-selectable header lines */
-div.line.diff-header .add-btn {
+/* Hide add button for non-selectable lines */
+div.line.diff-header .add-btn,
+div.line.portal-header .add-btn,
+div.line.portal-footer .add-btn {
 	display: none !important;
 }
 
@@ -544,6 +546,24 @@ div.line.diff-context.annotated {
 	padding: 1px 4px;
 	border-radius: 3px;
 	font-family: var(--font-mono);
+}
+
+/* Portal references - bracket notation with code styling */
+.portal-ref {
+	font-family: var(--font-mono);
+	font-size: 0.9em;
+	color: var(--text-muted);
+	background: color-mix(in srgb, var(--border-portal) 15%, transparent);
+	padding: 1px 4px;
+	border-radius: 3px;
+}
+
+.portal-ref::before {
+	content: "[→ ";
+}
+
+.portal-ref::after {
+	content: "]";
 }
 
 /* Links */

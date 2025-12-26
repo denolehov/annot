@@ -18,6 +18,26 @@ use crate::review::{ActiveReview, Review};
 use crate::state::AppState;
 use tools::{ReviewContentInput, ReviewDiffInput, ReviewFileInput, SessionImage, SessionOutput};
 
+/// Instructions for AI agents using the MCP server.
+const MCP_INSTRUCTIONS: &str = r#"Annotation tool for human-in-the-loop AI workflows. Tools: review_file (opens a file for annotation), review_content (opens ephemeral content for annotation), review_diff (opens a unified diff for annotation).
+
+## Portals (Code Embeds)
+
+When reviewing markdown content, you can embed live code snippets using portal links:
+
+```markdown
+The validation logic in [validate_portal](src/portal.rs#L112-L155) handles security checks.
+```
+
+Portal syntax: `[label](path#L<start>-L<end>)` where:
+- `label` is displayed inline (use descriptive names like "auth middleware" not "code")
+- `path` is relative to the current working directory
+- `#L<start>-L<end>` specifies the line range (1-indexed)
+
+The original line stays visible with the portal content expanded below it. Multiple portals on one line each expand separately.
+
+Keep portals small for optimal annotation experience - prefer multiple focused portals over one sprawling embed."#;
+
 /// MCP server that exposes annotation tools.
 #[derive(Clone)]
 pub struct AnnotServer {
@@ -52,7 +72,7 @@ impl AnnotServer {
         Ok(build_mcp_response(output))
     }
 
-    #[tool(description = "Opens ephemeral (agent-generated) content for annotation. Use for reviewing plans, drafts, or other generated text. Blocks until the window closes.")]
+    #[tool(description = "Opens ephemeral (agent-generated) content for annotation. Use for reviewing plans, drafts, or other generated text. Blocks until the window closes. Supports markdown with portal links to embed live code snippets.")]
     async fn review_content(
         &self,
         params: Parameters<ReviewContentInput>,
@@ -98,7 +118,7 @@ impl ServerHandler for AnnotServer {
                 .enable_tools()
                 .build(),
             server_info: Implementation::from_build_env(),
-            instructions: Some("Annotation tool for human-in-the-loop AI workflows. Tools: review_file (opens a file for annotation), review_content (opens ephemeral content for annotation), review_diff (opens a unified diff for annotation).".into()),
+            instructions: Some(MCP_INSTRUCTIONS.into()),
         }
     }
 }

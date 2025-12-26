@@ -370,38 +370,31 @@ impl Review {
     }
 
     /// Resolve the annotation target for a command.
-    /// For diff windows, `file_index` specifies which file in the diff.
-    /// For file windows, `file_index` is ignored (uses the window's file).
-    pub fn resolve_target_mut(
-        &mut self,
-        window_label: &str,
-        file_index: Option<usize>,
-        file_path: Option<&str>,
-    ) -> Result<&mut AnnotationTarget, String> {
-        // If file_path is provided, use it directly (for portal annotations)
-        if let Some(path) = file_path {
-            let key = FileKey::path(PathBuf::from(path));
+    /// Uses path to identify the target file. For diff mode, maps path to file index.
+    pub fn resolve_target_mut(&mut self, path: &str) -> Result<&mut AnnotationTarget, String> {
+        // First try direct path lookup (file mode, portal files)
+        let path_key = FileKey::path(PathBuf::from(path));
+        if self.files.contains_key(&path_key) {
             return self
                 .files
-                .get_mut(&key)
+                .get_mut(&path_key)
                 .ok_or_else(|| format!("File not found: {}", path));
         }
 
-        let view = self.windows.get(window_label)
-            .ok_or_else(|| format!("Unknown window: {}", window_label))?;
-
-        let key = match view {
-            WindowView::File { key } => key.clone(),
-            WindowView::Diff { .. } => {
-                let idx = file_index.ok_or("file_index required for diff mode")?;
-                FileKey::diff_file(idx)
+        // For diff mode, find the file by path
+        if let Some(diff_files) = self.root_view.diff_files() {
+            for (index, diff_file) in diff_files.iter().enumerate() {
+                if diff_file.path.to_string_lossy() == path {
+                    let key = FileKey::diff_file(index);
+                    return self
+                        .files
+                        .get_mut(&key)
+                        .ok_or_else(|| format!("Diff file not found: {}", path));
+                }
             }
-            _ => return Err("Window type does not support annotations".into()),
-        };
+        }
 
-        self.files
-            .get_mut(&key)
-            .ok_or_else(|| format!("File not found: {}", key))
+        Err(format!("File not found: {}", path))
     }
 
     /// Check if image paste is allowed (MCP mode only).

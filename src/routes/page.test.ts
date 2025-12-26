@@ -22,7 +22,7 @@ function makeLine(num: number, content: string, html: string | null = null) {
   return {
     content,
     html,
-    origin: { type: 'document' as const, line: num },
+    origin: { type: 'source' as const, path: 'test.rs', line: num },
     semantics: { type: 'plain' as const },
   };
 }

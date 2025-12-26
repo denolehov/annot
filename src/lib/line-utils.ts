@@ -1,21 +1,19 @@
-import type { Line, LineOrigin, DiffSemantics } from './types';
+import type { Line, DiffSemantics } from './types';
 
 /** The kind of a diff line from semantics */
 export type DiffKind = DiffSemantics['kind'];
 
 /**
  * Get the display line number from a line's origin.
- * Returns null for virtual lines (portal headers, etc).
+ * Returns null for virtual lines (portal headers/footers, etc).
  */
 export function getLineNumber(line: Line): number | null {
   switch (line.origin.type) {
-    case 'document':
+    case 'source':
       return line.origin.line;
     case 'diff':
       // For diff lines, prefer new_line, fallback to old_line
       return line.origin.new_line ?? line.origin.old_line;
-    case 'external':
-      return line.origin.line;
     case 'virtual':
       return null;
   }
@@ -41,34 +39,31 @@ export function getDiffKind(line: Line): DiffKind | null {
 }
 
 /**
- * Get the file index for a line (diff mode only).
- * Returns null for non-diff lines.
- */
-export function getFileIndex(line: Line): number | null {
-  return line.origin.type === 'diff' ? line.origin.file_index : null;
-}
-
-/**
- * Get the file path for a line (external/portal lines only).
- * Returns null for non-external lines.
+ * Get the file path from a line's origin.
+ * Returns null for virtual lines.
  */
 export function getFilePath(line: Line): string | null {
-  return line.origin.type === 'external' ? line.origin.file : null;
+  switch (line.origin.type) {
+    case 'source':
+    case 'diff':
+      return line.origin.path;
+    case 'virtual':
+      return null;
+  }
 }
 
 /**
- * Get the portal ID for a line (external/portal lines only).
- * Returns null for non-external lines.
+ * Check if a line is part of a portal (has portal semantics).
  */
-export function getPortalId(line: Line): string | null {
-  return line.origin.type === 'external' ? line.origin.portal_id : null;
+export function isPortalLine(line: Line): boolean {
+  return line.semantics.type === 'portal';
 }
 
 /**
  * Check if a line can be selected/annotated.
  */
 export function isSelectable(line: Line): boolean {
-  // Virtual lines (portal headers) cannot be selected
+  // Virtual lines (portal headers/footers) cannot be selected
   if (line.origin.type === 'virtual') {
     return false;
   }
@@ -79,8 +74,8 @@ export function isSelectable(line: Line): boolean {
       return false;
     }
   }
-  // Portal headers cannot be selected
-  if (line.semantics.type === 'portal' && line.semantics.kind === 'header') {
+  // Portal headers and footers cannot be selected
+  if (line.semantics.type === 'portal' && (line.semantics.kind === 'header' || line.semantics.kind === 'footer')) {
     return false;
   }
   return true;

@@ -91,8 +91,6 @@ impl std::error::Error for PortalError {}
 /// A fully loaded portal ready for interleaving.
 #[derive(Clone, Debug)]
 pub struct LoadedPortal {
-    /// Unique identifier for this portal instance (12-char alphanumeric).
-    pub id: String,
     /// Canonical path to the source file.
     pub source_path: PathBuf,
     /// Display label (from link text or filename).
@@ -186,9 +184,6 @@ pub fn load_portal(info: &PortalInfo, base_dir: &Path) -> Result<LoadedPortal, P
         return Err(PortalError::TooManyLines);
     }
 
-    // Generate portal ID
-    let id = generate_id();
-
     // Resolve label (use filename if not provided)
     let label = info
         .label
@@ -248,10 +243,9 @@ pub fn load_portal(info: &PortalInfo, base_dir: &Path) -> Result<LoadedPortal, P
         lines.push(Line {
             content: raw_content,
             html: Some(html),
-            origin: LineOrigin::External {
-                file: source_path.clone(),
+            origin: LineOrigin::Source {
+                path: source_path.to_string_lossy().to_string(),
                 line: source_line,
-                portal_id: id.clone(),
             },
             semantics: LineSemantics::Portal(PortalSemantics::Content),
         });
@@ -266,7 +260,6 @@ pub fn load_portal(info: &PortalInfo, base_dir: &Path) -> Result<LoadedPortal, P
     });
 
     Ok(LoadedPortal {
-        id,
         source_path,
         label,
         start_line,
@@ -279,12 +272,6 @@ pub fn load_portal(info: &PortalInfo, base_dir: &Path) -> Result<LoadedPortal, P
 // =============================================================================
 // Helpers
 // =============================================================================
-
-/// Generate a 12-character alphanumeric ID.
-fn generate_id() -> String {
-    use rand::distributions::{Alphanumeric, DistString};
-    Alphanumeric.sample_string(&mut rand::thread_rng(), 12)
-}
 
 /// Truncate a path in the middle if it exceeds max length.
 fn truncate_path(path: &str, max_len: usize) -> String {
