@@ -1073,7 +1073,12 @@
                   tabindex="-1"
                 >
                   {#if portalSemantics?.kind === 'header'}
-                    <span class="portal-marker">&gt;</span>
+                    <svg class="portal-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                      <line x1="16" y1="13" x2="8" y2="13"/>
+                      <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
                   {:else if sourceLineNum !== null}
                     {sourceLineNum}
                   {/if}
@@ -1081,12 +1086,6 @@
                 <span class="code" class:md={markdownMetadata}>
                   {#if portalSemantics?.kind === 'header'}
                     <span class="portal-header-info">
-                      <svg class="portal-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-                        <polyline points="14 2 14 8 20 8"/>
-                        <line x1="16" y1="13" x2="8" y2="13"/>
-                        <line x1="16" y1="17" x2="8" y2="17"/>
-                      </svg>
                       <span class="portal-label">{portalSemantics.label}</span>
                       <span class="portal-path">{portalSemantics.path}#{portalSemantics.range}</span>
                     </span>
@@ -1294,12 +1293,6 @@
     background: linear-gradient(to bottom, rgba(212, 200, 184, 0.25), transparent 25%);
   }
 
-  .line.portal-header .gutter,
-  .line.portal-header .code {
-    padding-top: 6px;
-    padding-bottom: 6px;
-  }
-
   .line.portal-footer {
     height: 4px;
     min-height: 4px;
@@ -1316,13 +1309,12 @@
 
   .gutter.portal-gutter {
     color: var(--text-muted);
-    font-size: 0.85em;
   }
 
-  .portal-marker {
-    font-weight: 700;
-    font-size: 1.1em;
-    color: var(--border-portal);
+  .line.portal-header .gutter.portal-gutter {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
   }
 
   .portal-header-info {
@@ -1335,8 +1327,6 @@
 
   .portal-icon {
     color: var(--border-portal);
-    opacity: 0.8;
-    flex-shrink: 0;
   }
 
   .portal-label {

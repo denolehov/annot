@@ -559,7 +559,14 @@ div.line.diff-context.annotated {
 }
 
 .portal-ref::before {
-	content: "[→ ";
+	content: "[";
+}
+
+.portal-ref-icon {
+	vertical-align: -2px;
+	margin-right: 3px;
+	margin-left: 1px;
+	color: var(--border-portal);
 }
 
 .portal-ref::after {
