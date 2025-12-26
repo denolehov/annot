@@ -13,6 +13,7 @@
     "demo": "tauri dev -- -- $PWD/test-fixtures/sample.md",
     "demo:diff": "tauri dev -- -- $PWD/test-fixtures/sample.diff",
     "demo:large": "tauri dev -- -- $PWD/test-fixtures/large.md",
+    "demo:portals": "tauri dev -- -- $PWD/test-fixtures/portals.md",
     "generate:large": "bash scripts/generate-large-md.sh",
     "test": "vitest run",
     "test:watch": "vitest"

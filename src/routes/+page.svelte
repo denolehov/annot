@@ -3,7 +3,7 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
-  import { getLineNumber, getDiffKind, isSelectable } from "$lib/line-utils";
+  import { getLineNumber, getDiffKind, isSelectable, getPortalId, getFilePath } from "$lib/line-utils";
   import { rangeToKey, keyToRange, isLineInRange, rangeToSourceCoords, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap } from "$lib/tiptap";
   import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
@@ -99,6 +99,65 @@
   let headerH2Section = $derived(sectionBreadcrumb.find(s => s.level === 2) ?? null);
   let headerCurrentSection = $derived(sectionBreadcrumb.at(-1) ?? null);
   let headerCurrentDepth = $derived(headerCurrentSection?.level ?? 0);
+
+  // =============================================================================
+  // Portal Helpers
+  // =============================================================================
+
+  /** Get portal semantics from a line, if it's a portal line */
+  function getPortalSemantics(line: Line): { kind: 'header'; label: string; path: string; range: string } | { kind: 'content' } | { kind: 'footer' } | null {
+    if (line.semantics.type === 'portal') {
+      return line.semantics;
+    }
+    return null;
+  }
+
+  /** Check if a line is part of a portal (header, content, or footer) */
+  function isPortalLine(line: Line): boolean {
+    return line.semantics.type === 'portal';
+  }
+
+  /** Segment type for rendering: either regular lines or a portal group */
+  type LineSegment =
+    | { type: 'regular'; lines: { line: Line; displayIndex: number }[] }
+    | { type: 'portal'; lines: { line: Line; displayIndex: number }[]; portalId: string };
+
+  /** Group lines into segments for portal-aware rendering */
+  let lineSegments = $derived.by((): LineSegment[] => {
+    const segments: LineSegment[] = [];
+    let currentSegment: LineSegment | null = null;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const displayIndex = i + 1;
+      const portalId = getPortalId(line);
+
+      if (portalId) {
+        // Portal line
+        if (currentSegment?.type === 'portal' && currentSegment.portalId === portalId) {
+          // Continue current portal segment
+          currentSegment.lines.push({ line, displayIndex });
+        } else {
+          // Start new portal segment
+          if (currentSegment) segments.push(currentSegment);
+          currentSegment = { type: 'portal', lines: [{ line, displayIndex }], portalId };
+        }
+      } else {
+        // Regular line
+        if (currentSegment?.type === 'regular') {
+          // Continue current regular segment
+          currentSegment.lines.push({ line, displayIndex });
+        } else {
+          // Start new regular segment
+          if (currentSegment) segments.push(currentSegment);
+          currentSegment = { type: 'regular', lines: [{ line, displayIndex }] };
+        }
+      }
+    }
+
+    if (currentSegment) segments.push(currentSegment);
+    return segments;
+  });
 
   // Build ContentTracker for diff mode
   function buildHunkTracker(meta: DiffMetadata): ContentTracker<HunkPayload> {
@@ -216,6 +275,63 @@
     return Math.max(bounds.start, Math.min(bounds.end, lineNum));
   }
 
+  // Get portal bounds for a line (returns null if line is not in a portal)
+  function getPortalBounds(lineNum: number): { start: number; end: number } | null {
+    const line = lines[lineNum - 1];
+    if (!line) return null;
+
+    const portalId = getPortalId(line);
+    if (!portalId) return null;
+
+    // Find all lines with the same portal_id
+    let start = lineNum;
+    let end = lineNum;
+
+    // Scan backwards to find start
+    for (let i = lineNum - 2; i >= 0; i--) {
+      if (getPortalId(lines[i]) === portalId) {
+        start = i + 1; // 1-indexed
+      } else {
+        break;
+      }
+    }
+
+    // Scan forwards to find end
+    for (let i = lineNum; i < lines.length; i++) {
+      if (getPortalId(lines[i]) === portalId) {
+        end = i + 1; // 1-indexed
+      } else {
+        break;
+      }
+    }
+
+    return { start, end };
+  }
+
+  // Constrain a line number to valid selection bounds (combines hunk + portal bounds)
+  function constrainToSelectionBounds(lineNum: number, anchorLine: number): number {
+    // First apply hunk bounds (for diff mode)
+    let constrained = constrainToHunkBounds(lineNum, anchorLine);
+
+    // Then check portal bounds (if anchor is in a portal, stay within it)
+    const portalBounds = getPortalBounds(anchorLine);
+    if (portalBounds) {
+      constrained = Math.max(portalBounds.start, Math.min(portalBounds.end, constrained));
+    }
+
+    // If target would cross into a portal from outside, clamp to before it
+    const targetLine = lines[lineNum - 1];
+    const anchorPortalId = lines[anchorLine - 1] ? getPortalId(lines[anchorLine - 1]) : null;
+    const targetPortalId = targetLine ? getPortalId(targetLine) : null;
+
+    if (anchorPortalId !== targetPortalId) {
+      // Crossing portal boundary - prevent it
+      return anchorLine;
+    }
+
+    return constrained;
+  }
+
   // Selection state
   let selection: Range | null = $state(null);
   let isDragging = $state(false);
@@ -328,6 +444,7 @@
       const nodes = extractContentNodes(content);
       await invoke('upsert_annotation', {
         fileIndex: coords.fileIndex,
+        filePath: coords.filePath,
         startLine: startIdx,
         endLine: endIdx,
         content: nodes
@@ -336,6 +453,7 @@
       annotations.delete(key);
       await invoke('delete_annotation', {
         fileIndex: coords.fileIndex,
+        filePath: coords.filePath,
         startLine: startIdx,
         endLine: endIdx
       });
@@ -595,8 +713,8 @@
     const displayIdx = getDisplayIdxFromEvent(e);
     if (displayIdx === null) return;
 
-    // Constrain to hunk bounds
-    const constrainedIdx = constrainToHunkBounds(displayIdx, selection.start);
+    // Constrain to selection bounds (hunk + portal)
+    const constrainedIdx = constrainToSelectionBounds(displayIdx, selection.start);
     selection = { start: selection.start, end: constrainedIdx };
   }
 
@@ -907,80 +1025,164 @@
         style:transform="scale({contentZoom})"
         style:width="calc(100% / {contentZoom})"
       >
-      {#each lines as line, idx}
-        {@const sourceLineNum = getLineNumber(line)}
-        {@const displayIndex = idx + 1}
-        {@const diffKind = getDiffKind(line)}
-        {@const mermaidBlock = sourceLineNum !== null ? getMermaidBlockAt(sourceLineNum) : null}
-        <div
-          class="line"
-          class:selected={isSelected(displayIndex)}
-          class:annotated={hasAnnotation(displayIndex)}
-          class:diff-added={diffKind === 'added'}
-          class:diff-deleted={diffKind === 'deleted'}
-          class:diff-context={diffKind === 'context'}
-          class:diff-header={diffKind === 'file_header' || diffKind === 'hunk_header'}
-          data-display-idx={displayIndex}
-          onmouseenter={() => hoveredDisplayIdx = displayIndex}
-          onmouseleave={() => hoveredDisplayIdx = null}
-          role="presentation"
-        >
-          <button
-            class="add-btn"
-            onmousedown={(e) => handleAddMouseDown(displayIndex, e)}
-            aria-label="Add annotation"
-          >+</button>
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <span
-            class="gutter"
-            class:selected={isSelected(displayIndex)}
-            onmousedown={(e) => handleGutterMouseDown(displayIndex, e)}
-            onclick={() => handleGutterClick(displayIndex)}
-            role="button"
-            tabindex="-1"
-          >
-            {#if line.origin.type === 'diff'}
-              <span class="diff-gutter-old">{line.origin.old_line ?? ''}</span>
-              <span class="diff-gutter-new">{line.origin.new_line ?? ''}</span>
-            {:else if sourceLineNum !== null}
-              {sourceLineNum}
-            {/if}
-          </span>
-          <span class="code" class:md={markdownMetadata}>{#if line.html}{@html line.html}{:else}{line.content}{/if}</span>
-          {#if mermaidBlock}
-            <button
-              class="mermaid-view-btn"
-              onclick={() => openMermaidWindow(mermaidBlock)}
-              title="View diagram"
+      {#each lineSegments as segment}
+        {#if segment.type === 'portal'}
+          <div class="portal-group">
+            {#each segment.lines as { line, displayIndex }}
+              {@const sourceLineNum = getLineNumber(line)}
+              {@const portalSemantics = getPortalSemantics(line)}
+              <div
+                class="line"
+                class:portal-header={portalSemantics?.kind === 'header'}
+                class:portal-content={portalSemantics?.kind === 'content'}
+                class:portal-footer={portalSemantics?.kind === 'footer'}
+                class:selected={isSelected(displayIndex)}
+                class:annotated={hasAnnotation(displayIndex)}
+                data-display-idx={displayIndex}
+                onmouseenter={() => hoveredDisplayIdx = displayIndex}
+                onmouseleave={() => hoveredDisplayIdx = null}
+                role="presentation"
+              >
+                <button
+                  class="add-btn"
+                  onmousedown={(e) => handleAddMouseDown(displayIndex, e)}
+                  aria-label="Add annotation"
+                >+</button>
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <span
+                  class="gutter portal-gutter"
+                  class:selected={isSelected(displayIndex)}
+                  onmousedown={(e) => handleGutterMouseDown(displayIndex, e)}
+                  onclick={() => handleGutterClick(displayIndex)}
+                  role="button"
+                  tabindex="-1"
+                >
+                  {#if portalSemantics?.kind === 'header'}
+                    <span class="portal-marker">&gt;</span>
+                  {:else if sourceLineNum !== null}
+                    {sourceLineNum}
+                  {/if}
+                </span>
+                <span class="code" class:md={markdownMetadata}>
+                  {#if portalSemantics?.kind === 'header'}
+                    <span class="portal-header-info">
+                      <svg class="portal-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                      </svg>
+                      <span class="portal-label">{portalSemantics.label}</span>
+                      <span class="portal-path">{portalSemantics.path}#{portalSemantics.range}</span>
+                    </span>
+                  {:else if line.html}
+                    {@html line.html}
+                  {:else}
+                    {line.content}
+                  {/if}
+                </span>
+              </div>
+              {@const annotationAtLine = getAnnotationAtLine(displayIndex)}
+              {@const isLastSelectedLine = displayIndex === lastSelectedLine && selection && !isDragging}
+              {@const rangeKey = annotationAtLine?.key ?? (isLastSelectedLine && selection ? rangeToKey(selection) : null)}
+              {#if rangeKey}
+                {#key rangeKey}
+                  <AnnotationEditor
+                    content={annotations.get(rangeKey)}
+                    sealed={sealedRanges.has(rangeKey)}
+                    onUpdate={updateAnnotation}
+                    onUnseal={() => {
+                      selection = keyToRange(rangeKey);
+                      sealedRanges.delete(rangeKey);
+                      sealedRanges = new Set(sealedRanges);
+                    }}
+                    onDismiss={sealCurrentAnnotation}
+                    {tags}
+                    {allowsImagePaste}
+                    onImagePasteBlocked={handleImagePasteBlocked}
+                    onRequestCreateTag={(text, from, to) => handleRequestCreateTag(rangeKey, text, from, to)}
+                    pendingTagInsertion={pendingTagInsertion?.editorKey === rangeKey ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
+                  />
+                {/key}
+              {/if}
+            {/each}
+          </div>
+        {:else}
+          {#each segment.lines as { line, displayIndex }}
+            {@const sourceLineNum = getLineNumber(line)}
+            {@const diffKind = getDiffKind(line)}
+            {@const mermaidBlock = sourceLineNum !== null ? getMermaidBlockAt(sourceLineNum) : null}
+            <div
+              class="line"
+              class:selected={isSelected(displayIndex)}
+              class:annotated={hasAnnotation(displayIndex)}
+              class:diff-added={diffKind === 'added'}
+              class:diff-deleted={diffKind === 'deleted'}
+              class:diff-context={diffKind === 'context'}
+              class:diff-header={diffKind === 'file_header' || diffKind === 'hunk_header'}
+              data-display-idx={displayIndex}
+              onmouseenter={() => hoveredDisplayIdx = displayIndex}
+              onmouseleave={() => hoveredDisplayIdx = null}
+              role="presentation"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="14" height="14">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z" />
-              </svg>
-            </button>
-          {/if}
-        </div>
-        {@const annotationAtLine = getAnnotationAtLine(displayIndex)}
-        {@const isLastSelectedLine = displayIndex === lastSelectedLine && selection && !isDragging}
-        {@const rangeKey = annotationAtLine?.key ?? (isLastSelectedLine && selection ? rangeToKey(selection) : null)}
-        {#if rangeKey}
-          {#key rangeKey}
-            <AnnotationEditor
-              content={annotations.get(rangeKey)}
-              sealed={sealedRanges.has(rangeKey)}
-              onUpdate={updateAnnotation}
-              onUnseal={() => {
-                selection = keyToRange(rangeKey);
-                sealedRanges.delete(rangeKey);
-                sealedRanges = new Set(sealedRanges);
-              }}
-              onDismiss={sealCurrentAnnotation}
-              {tags}
-              {allowsImagePaste}
-              onImagePasteBlocked={handleImagePasteBlocked}
-              onRequestCreateTag={(text, from, to) => handleRequestCreateTag(rangeKey, text, from, to)}
-              pendingTagInsertion={pendingTagInsertion?.editorKey === rangeKey ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
-            />
-          {/key}
+              <button
+                class="add-btn"
+                onmousedown={(e) => handleAddMouseDown(displayIndex, e)}
+                aria-label="Add annotation"
+              >+</button>
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <span
+                class="gutter"
+                class:selected={isSelected(displayIndex)}
+                onmousedown={(e) => handleGutterMouseDown(displayIndex, e)}
+                onclick={() => handleGutterClick(displayIndex)}
+                role="button"
+                tabindex="-1"
+              >
+                {#if line.origin.type === 'diff'}
+                  <span class="diff-gutter-old">{line.origin.old_line ?? ''}</span>
+                  <span class="diff-gutter-new">{line.origin.new_line ?? ''}</span>
+                {:else if sourceLineNum !== null}
+                  {sourceLineNum}
+                {/if}
+              </span>
+              <span class="code" class:md={markdownMetadata}>{#if line.html}{@html line.html}{:else}{line.content}{/if}</span>
+              {#if mermaidBlock}
+                <button
+                  class="mermaid-view-btn"
+                  onclick={() => openMermaidWindow(mermaidBlock)}
+                  title="View diagram"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="14" height="14">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z" />
+                  </svg>
+                </button>
+              {/if}
+            </div>
+            {@const annotationAtLine = getAnnotationAtLine(displayIndex)}
+            {@const isLastSelectedLine = displayIndex === lastSelectedLine && selection && !isDragging}
+            {@const rangeKey = annotationAtLine?.key ?? (isLastSelectedLine && selection ? rangeToKey(selection) : null)}
+            {#if rangeKey}
+              {#key rangeKey}
+                <AnnotationEditor
+                  content={annotations.get(rangeKey)}
+                  sealed={sealedRanges.has(rangeKey)}
+                  onUpdate={updateAnnotation}
+                  onUnseal={() => {
+                    selection = keyToRange(rangeKey);
+                    sealedRanges.delete(rangeKey);
+                    sealedRanges = new Set(sealedRanges);
+                  }}
+                  onDismiss={sealCurrentAnnotation}
+                  {tags}
+                  {allowsImagePaste}
+                  onImagePasteBlocked={handleImagePasteBlocked}
+                  onRequestCreateTag={(text, from, to) => handleRequestCreateTag(rangeKey, text, from, to)}
+                  pendingTagInsertion={pendingTagInsertion?.editorKey === rangeKey ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
+                />
+              {/key}
+            {/if}
+          {/each}
         {/if}
       {/each}
       </div>
@@ -1058,6 +1260,86 @@
 
   :global(body) {
     overflow: hidden;
+  }
+
+  /* ===========================================
+     Portal Styles
+     =========================================== */
+
+  .portal-group {
+    background:
+      var(--portal-checker-bg),
+      var(--bg-portal);
+    background-size: var(--portal-checker-size), auto;
+    border-top: 1px solid var(--border-portal);
+    border-bottom: 1px solid var(--border-portal);
+    margin: 4px 0;
+  }
+
+  .line.portal-header {
+    padding-top: 6px;
+    padding-bottom: 6px;
+    background: linear-gradient(to bottom, rgba(212, 200, 184, 0.15), transparent);
+    border-bottom: 1px solid var(--border-portal);
+  }
+
+  .line.portal-header .gutter {
+    align-self: center;
+  }
+
+  .line.portal-footer {
+    height: 4px;
+    min-height: 4px;
+  }
+
+  .line.portal-footer .add-btn,
+  .line.portal-footer .gutter,
+  .line.portal-footer .code {
+    display: none;
+  }
+
+  .gutter.portal-gutter {
+    color: var(--text-muted);
+    font-size: 0.85em;
+  }
+
+  .portal-marker {
+    font-weight: 700;
+    font-size: 1.1em;
+    color: var(--border-portal);
+  }
+
+  .portal-header-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    font-size: 0.85em;
+    color: var(--text-muted);
+  }
+
+  .portal-icon {
+    color: var(--border-portal);
+    opacity: 0.8;
+    flex-shrink: 0;
+  }
+
+  .portal-label {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+  }
+
+  .portal-path {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    opacity: 0.8;
+  }
+
+  .portal-path::before {
+    content: "—";
+    margin-right: 0.5em;
+    opacity: 0.5;
   }
 
   .header-btn {

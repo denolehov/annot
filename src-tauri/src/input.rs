@@ -118,6 +118,22 @@ impl ContentSource {
             ContentSource::Mcp(McpSource::Diff { label, .. }) => label.as_deref(),
         }
     }
+
+    /// Base directory for resolving relative paths (e.g., portal links).
+    ///
+    /// Returns the parent directory of the source file, or current working directory
+    /// if the source doesn't have a file path.
+    pub fn base_dir(&self) -> PathBuf {
+        match self {
+            ContentSource::Cli(CliSource::File { path })
+            | ContentSource::Mcp(McpSource::File { path }) => {
+                path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| {
+                    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+                })
+            }
+            _ => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+        }
+    }
 }
 
 // ============================================================================

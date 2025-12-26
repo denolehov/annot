@@ -16,6 +16,8 @@ pub struct MarkdownMetadata {
     pub code_blocks: Vec<CodeBlockInfo>,
     /// Tables for column auto-alignment.
     pub tables: Vec<TableInfo>,
+    /// Portal links (links with line anchors like `#L42-L58`).
+    pub portals: Vec<PortalInfo>,
 }
 
 /// A heading section in the document.
@@ -51,6 +53,22 @@ pub struct TableInfo {
     pub end_line: u32,
     /// Reformatted lines with aligned columns.
     pub formatted_lines: Vec<String>,
+}
+
+/// A portal link detected in markdown.
+/// Portal links are markdown links with line anchors: `[label](path#L42-L58)`
+#[derive(Clone, Debug, Serialize, PartialEq)]
+pub struct PortalInfo {
+    /// 1-indexed line in markdown where the link appears.
+    pub source_line: u32,
+    /// Link text, or None to use filename as label.
+    pub label: Option<String>,
+    /// Raw path from the link (before `#`).
+    pub path: String,
+    /// Start line of the range (1-indexed).
+    pub start_line: u32,
+    /// End line of the range (1-indexed).
+    pub end_line: u32,
 }
 
 // =============================================================================
@@ -98,6 +116,7 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
     let mut sections = Vec::new();
     let mut code_blocks = Vec::new();
     let mut tables = Vec::new();
+    let mut portals = Vec::new();
 
     // State for collecting text within headings
     let mut current_heading: Option<(u32, u8)> = None; // (line, level)
@@ -108,6 +127,14 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
 
     // State for tables
     let mut current_table_start: Option<u32> = None;
+
+    // State for portal link detection
+    // Stores: (source_line, dest_url) when inside a potential portal link
+    let mut current_portal_link: Option<(u32, String)> = None;
+    let mut portal_link_text = String::new();
+
+    // Track if we're inside a code block (portals in code blocks are literal)
+    let mut in_code_block = false;
 
     for (event, range) in parser {
         let line = mapper.byte_to_line(range.start);
@@ -133,6 +160,7 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
             }
 
             Event::Start(Tag::CodeBlock(kind)) => {
+                in_code_block = true;
                 let language = match kind {
                     CodeBlockKind::Fenced(info) => {
                         let lang = info.split(&[',', ' '][..]).next().unwrap_or("");
@@ -147,6 +175,7 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
                 current_code_block = Some((line, language));
             }
             Event::End(TagEnd::CodeBlock) => {
+                in_code_block = false;
                 if let Some((start_line, language)) = current_code_block.take() {
                     code_blocks.push(CodeBlockInfo {
                         start_line,
@@ -172,6 +201,41 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
                 }
             }
 
+            // Portal link detection: [label](path#L42-L58)
+            Event::Start(Tag::Link { dest_url, .. }) if !in_code_block => {
+                // Check if URL has a line anchor
+                if parse_line_anchor(&dest_url).is_some() {
+                    current_portal_link = Some((line, dest_url.to_string()));
+                    portal_link_text.clear();
+                }
+            }
+            Event::Text(text) if current_portal_link.is_some() => {
+                portal_link_text.push_str(&text);
+                // Also collect for heading if inside one
+                if current_heading.is_some() {
+                    heading_text.push_str(&text);
+                }
+            }
+            Event::End(TagEnd::Link) if current_portal_link.is_some() => {
+                if let Some((source_line, url)) = current_portal_link.take() {
+                    if let Some((path, start_line, end_line)) = parse_portal_url(&url) {
+                        let label = if portal_link_text.trim().is_empty() {
+                            None
+                        } else {
+                            Some(portal_link_text.trim().to_string())
+                        };
+                        portals.push(PortalInfo {
+                            source_line,
+                            label,
+                            path,
+                            start_line,
+                            end_line,
+                        });
+                    }
+                }
+                portal_link_text.clear();
+            }
+
             _ => {}
         }
     }
@@ -183,6 +247,7 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
         sections,
         code_blocks,
         tables,
+        portals,
     }
 }
 
@@ -229,6 +294,75 @@ fn markdown_options() -> Options {
         | Options::ENABLE_STRIKETHROUGH
         | Options::ENABLE_TASKLISTS
         | Options::ENABLE_SMART_PUNCTUATION
+}
+
+/// Parse a line anchor from URL: `#L42` or `#L42-L58`
+///
+/// Returns `Some((start, end))` if valid, `None` otherwise.
+/// Handles:
+/// - Single line: `#L42` → (42, 42)
+/// - Range: `#L42-L58` → (42, 58)
+/// - Inverted: `#L58-L42` → normalized to (42, 58)
+/// - Case insensitive: `#l42-L58`
+/// - Invalid: `#L0` (1-indexed), no anchor, external URLs
+fn parse_line_anchor(url: &str) -> Option<(u32, u32)> {
+    // Find the anchor part
+    let anchor_start = url.rfind('#')?;
+    let anchor = &url[anchor_start + 1..];
+
+    // Must start with L or l
+    if !anchor.starts_with('L') && !anchor.starts_with('l') {
+        return None;
+    }
+
+    let rest = &anchor[1..]; // Skip the 'L'
+
+    // Parse first line number
+    let (start_str, remainder) = if let Some(dash_pos) = rest.find('-') {
+        (&rest[..dash_pos], Some(&rest[dash_pos + 1..]))
+    } else {
+        (rest, None)
+    };
+
+    let start: u32 = start_str.parse().ok()?;
+    if start == 0 {
+        return None; // 1-indexed, L0 is invalid
+    }
+
+    let end = if let Some(end_part) = remainder {
+        // Must start with L or l
+        let end_part = if end_part.starts_with('L') || end_part.starts_with('l') {
+            &end_part[1..]
+        } else {
+            end_part // Allow #L42-58 format too
+        };
+
+        let e: u32 = end_part.parse().ok()?;
+        if e == 0 {
+            return None;
+        }
+        e
+    } else {
+        start
+    };
+
+    // Normalize: ensure start <= end
+    Some((start.min(end), start.max(end)))
+}
+
+/// Parse a portal URL into (path, start_line, end_line).
+///
+/// Example: `path/to/file.rs#L42-L58` → ("path/to/file.rs", 42, 58)
+fn parse_portal_url(url: &str) -> Option<(String, u32, u32)> {
+    let anchor_start = url.rfind('#')?;
+    let path = &url[..anchor_start];
+
+    if path.is_empty() {
+        return None;
+    }
+
+    let (start, end) = parse_line_anchor(url)?;
+    Some((path.to_string(), start, end))
 }
 
 /// Extract table lines from content.
@@ -882,5 +1016,138 @@ mod tests {
     #[test]
     fn html_escape_special_chars() {
         assert_eq!(html_escape("<>&\"'"), "&lt;&gt;&amp;&quot;&#x27;");
+    }
+
+    // =========================================================================
+    // Portal detection tests
+    // =========================================================================
+
+    #[test]
+    fn parse_line_anchor_single_line() {
+        assert_eq!(parse_line_anchor("file.rs#L42"), Some((42, 42)));
+    }
+
+    #[test]
+    fn parse_line_anchor_range() {
+        assert_eq!(parse_line_anchor("file.rs#L42-L58"), Some((42, 58)));
+    }
+
+    #[test]
+    fn parse_line_anchor_inverted_range() {
+        // Should normalize to start <= end
+        assert_eq!(parse_line_anchor("file.rs#L58-L42"), Some((42, 58)));
+    }
+
+    #[test]
+    fn parse_line_anchor_case_insensitive() {
+        assert_eq!(parse_line_anchor("file.rs#l42-L58"), Some((42, 58)));
+        assert_eq!(parse_line_anchor("file.rs#L42-l58"), Some((42, 58)));
+        assert_eq!(parse_line_anchor("file.rs#l42-l58"), Some((42, 58)));
+    }
+
+    #[test]
+    fn parse_line_anchor_without_second_l() {
+        // Allow #L42-58 format (without L before second number)
+        assert_eq!(parse_line_anchor("file.rs#L42-58"), Some((42, 58)));
+    }
+
+    #[test]
+    fn parse_line_anchor_zero_is_invalid() {
+        assert_eq!(parse_line_anchor("file.rs#L0"), None);
+        assert_eq!(parse_line_anchor("file.rs#L0-L10"), None);
+        assert_eq!(parse_line_anchor("file.rs#L10-L0"), None);
+    }
+
+    #[test]
+    fn parse_line_anchor_no_anchor() {
+        assert_eq!(parse_line_anchor("file.rs"), None);
+        assert_eq!(parse_line_anchor("https://example.com"), None);
+    }
+
+    #[test]
+    fn parse_line_anchor_non_line_anchor() {
+        // Anchor without L prefix is not a portal
+        assert_eq!(parse_line_anchor("file.rs#section"), None);
+        assert_eq!(parse_line_anchor("file.rs#42"), None);
+    }
+
+    #[test]
+    fn parse_portal_url_extracts_path() {
+        let result = parse_portal_url("path/to/file.rs#L42-L58");
+        assert_eq!(result, Some(("path/to/file.rs".to_string(), 42, 58)));
+    }
+
+    #[test]
+    fn parse_portal_url_empty_path_is_invalid() {
+        assert_eq!(parse_portal_url("#L42"), None);
+    }
+
+    #[test]
+    fn parse_markdown_extracts_portals() {
+        let content = "Check this [code](src/main.rs#L10-L20)\n";
+        let meta = parse_markdown(content);
+
+        assert_eq!(meta.portals.len(), 1);
+        assert_eq!(meta.portals[0].path, "src/main.rs");
+        assert_eq!(meta.portals[0].label, Some("code".to_string()));
+        assert_eq!(meta.portals[0].start_line, 10);
+        assert_eq!(meta.portals[0].end_line, 20);
+    }
+
+    #[test]
+    fn parse_markdown_portal_without_label() {
+        let content = "[](src/main.rs#L42)\n";
+        let meta = parse_markdown(content);
+
+        assert_eq!(meta.portals.len(), 1);
+        assert_eq!(meta.portals[0].label, None);
+        assert_eq!(meta.portals[0].path, "src/main.rs");
+    }
+
+    #[test]
+    fn parse_markdown_portal_single_line() {
+        let content = "[func](lib.rs#L42)\n";
+        let meta = parse_markdown(content);
+
+        assert_eq!(meta.portals.len(), 1);
+        assert_eq!(meta.portals[0].start_line, 42);
+        assert_eq!(meta.portals[0].end_line, 42);
+    }
+
+    #[test]
+    fn parse_markdown_multiple_portals() {
+        let content = "See [auth](auth.go#L10-L20) and [db](db.go#L30-L40)\n";
+        let meta = parse_markdown(content);
+
+        assert_eq!(meta.portals.len(), 2);
+        assert_eq!(meta.portals[0].path, "auth.go");
+        assert_eq!(meta.portals[1].path, "db.go");
+    }
+
+    #[test]
+    fn parse_markdown_ignores_non_portal_links() {
+        let content = "See [docs](https://example.com) and [local](file.rs)\n";
+        let meta = parse_markdown(content);
+
+        // Links without line anchors are not portals
+        assert_eq!(meta.portals.len(), 0);
+    }
+
+    #[test]
+    fn parse_markdown_portal_in_code_block_is_literal() {
+        let content = "```\n[code](file.rs#L1-L10)\n```\n";
+        let meta = parse_markdown(content);
+
+        // Portal inside code block should be ignored (literal text)
+        assert_eq!(meta.portals.len(), 0);
+    }
+
+    #[test]
+    fn parse_markdown_portal_line_number_correct() {
+        let content = "# Header\n\nSome text\n\n[code](file.rs#L1-L10)\n";
+        let meta = parse_markdown(content);
+
+        assert_eq!(meta.portals.len(), 1);
+        assert_eq!(meta.portals[0].source_line, 5);
     }
 }

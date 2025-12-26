@@ -8,6 +8,7 @@ use crate::error::AnnotError;
 use crate::highlight::Highlighter;
 use crate::input::ContentSource;
 use crate::markdown::{self, html_escape, MarkdownMetadata, MarkdownSemantics};
+use crate::portal::{self, LoadedPortal, MAX_PORTALS};
 
 // =============================================================================
 // Unified line model (LineOrigin + LineSemantics)
@@ -85,7 +86,7 @@ pub enum PortalSemantics {
 }
 
 /// A single line of content.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Line {
     /// Raw text content of the line.
     pub content: String,
@@ -227,6 +228,8 @@ pub struct ContentModel {
     pub lines: Vec<Line>,
     pub source: ContentSource,
     pub metadata: ContentMetadata,
+    /// Loaded portals for file registration (empty for non-markdown content).
+    pub portals: Vec<LoadedPortal>,
 }
 
 /// Type-safe representation of content-specific metadata.
@@ -455,6 +458,7 @@ impl ContentModel {
             lines,
             source,
             metadata: ContentMetadata::Plain,
+            portals: Vec::new(),
         }
     }
 
@@ -560,6 +564,7 @@ impl ContentModel {
             lines,
             source,
             metadata: ContentMetadata::Diff(diff_metadata),
+            portals: Vec::new(),
         })
     }
 
@@ -567,6 +572,7 @@ impl ContentModel {
     #[must_use]
     pub fn from_markdown(content: &str, source: ContentSource) -> Self {
         let label = source.label().to_string();
+        let base_dir = source.base_dir();
 
         let md_metadata = markdown::parse_markdown(content);
         let highlighter = Highlighter::new();
@@ -603,7 +609,7 @@ impl ContentModel {
             }
         }
 
-        let lines: Vec<Line> = content
+        let mut lines: Vec<Line> = content
             .lines()
             .enumerate()
             .map(|(i, line_content)| {
@@ -675,11 +681,44 @@ impl ContentModel {
             })
             .collect();
 
+        // Load portals and interleave into lines
+        let mut loaded_portals = Vec::new();
+        for (i, portal_info) in md_metadata.portals.iter().enumerate() {
+            if i >= MAX_PORTALS {
+                break;
+            }
+            match portal::load_portal(portal_info, &base_dir) {
+                Ok(loaded) => loaded_portals.push(loaded),
+                Err(e) => {
+                    // Log warning and keep original markdown line
+                    eprintln!("Portal warning: {} for {}", e, portal_info.path);
+                }
+            }
+        }
+
+        // Interleave in reverse order (highest insert_at first) to preserve indices
+        loaded_portals.sort_by_key(|p| std::cmp::Reverse(p.insert_at));
+        for portal in &loaded_portals {
+            let idx = (portal.insert_at - 1) as usize;
+            if idx < lines.len() {
+                // Remove the original markdown link line
+                lines.remove(idx);
+                // Insert portal lines at that position
+                for (offset, portal_line) in portal.lines.iter().enumerate() {
+                    lines.insert(idx + offset, portal_line.clone());
+                }
+            }
+        }
+
+        // Restore original order for storage
+        loaded_portals.sort_by_key(|p| p.insert_at);
+
         Self {
             label,
             lines,
             source,
             metadata: ContentMetadata::Markdown(md_metadata),
+            portals: loaded_portals,
         }
     }
 }
@@ -705,6 +744,7 @@ impl AppState {
                     label: String::new(),
                 }),
                 metadata: ContentMetadata::Plain,
+                portals: Vec::new(),
             },
             session: SessionState::default(),
             config: UserConfig::empty(),

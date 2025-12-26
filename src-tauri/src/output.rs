@@ -100,6 +100,21 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
     if has_exit_mode || has_session_comment {
         output.push_str("SESSION:\n");
 
+        // If there are portals, show "Reviewing X with embedded files: Y, Z"
+        if !content.portals.is_empty() {
+            let root_name = &content.label;
+            let embedded_files: Vec<_> = content
+                .portals
+                .iter()
+                .map(|p| p.source_path.display().to_string())
+                .collect();
+            output.push_str(&format!(
+                "  Reviewing {} with embedded files: {}\n",
+                root_name,
+                embedded_files.join(", ")
+            ));
+        }
+
         // Session comment (no prefix, directly indented)
         if let Some(ref comment) = review.session_comment {
             if !comment.is_empty() {
@@ -474,6 +489,7 @@ mod tests {
             lines,
             source,
             metadata: ContentMetadata::Plain,
+            portals: Vec::new(),
         };
         let config = UserConfig::empty();
         let mut review = Review::cli(content, config, "main".to_string());
@@ -663,6 +679,7 @@ mod tests {
             lines: vec![],
             source,
             metadata: ContentMetadata::Plain,
+            portals: Vec::new(),
         };
         let mut review = Review::cli(content, config, "main".to_string());
         review.selected_exit_mode_id = Some("apply".to_string());
@@ -711,6 +728,7 @@ mod tests {
             lines,
             source,
             metadata: ContentMetadata::Plain,
+            portals: Vec::new(),
         };
         let mut review = Review::cli(content, config, "main".to_string());
         review.selected_exit_mode_id = Some("reject".to_string());
@@ -739,6 +757,7 @@ mod tests {
             lines: vec![],
             source,
             metadata: ContentMetadata::Plain,
+            portals: Vec::new(),
         };
         let mut review = Review::cli(content, UserConfig::empty(), "main".to_string());
         review.session_comment = Some(vec![ContentNode::Text {
@@ -772,6 +791,7 @@ mod tests {
             lines: vec![],
             source,
             metadata: ContentMetadata::Plain,
+            portals: Vec::new(),
         };
         let mut review = Review::cli(content, config, "main".to_string());
         review.session_comment = Some(vec![ContentNode::Text {
@@ -797,6 +817,7 @@ mod tests {
             lines: vec![],
             source,
             metadata: ContentMetadata::Plain,
+            portals: Vec::new(),
         };
         let mut review = Review::cli(content, UserConfig::empty(), "main".to_string());
         review.session_comment = Some(vec![]);

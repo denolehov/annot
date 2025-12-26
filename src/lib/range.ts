@@ -1,5 +1,5 @@
 import type { Line } from './types';
-import { getLineNumber, getFileIndex } from './line-utils';
+import { getLineNumber, getFileIndex, getFilePath } from './line-utils';
 
 /**
  * A range of display indices (1-indexed positions in the lines array).
@@ -55,13 +55,15 @@ export function isLineInRange(displayIdx: number, range: Range): boolean {
 
 /**
  * Extract source coordinates from a display index range.
- * Returns fileIndex and source line numbers for backend API calls.
+ * Returns fileIndex, filePath, and source line numbers for backend API calls.
+ * - fileIndex is used for diff mode (identifies which file in the diff)
+ * - filePath is used for portal mode (identifies the external source file)
  * Returns null if the range spans virtual lines without source coordinates.
  */
 export function rangeToSourceCoords(
   range: Range,
   lines: Line[]
-): { fileIndex: number | null; startLine: number; endLine: number } | null {
+): { fileIndex: number | null; filePath: string | null; startLine: number; endLine: number } | null {
   const min = Math.min(range.start, range.end);
   const max = Math.max(range.start, range.end);
 
@@ -70,6 +72,7 @@ export function rangeToSourceCoords(
   if (!startLine || !endLine) return null;
 
   const fileIndex = getFileIndex(startLine);
+  const filePath = getFilePath(startLine);
   const startSource = getLineNumber(startLine);
   const endSource = getLineNumber(endLine);
 
@@ -77,6 +80,7 @@ export function rangeToSourceCoords(
 
   return {
     fileIndex,
+    filePath,
     startLine: Math.min(startSource, endSource),
     endLine: Math.max(startSource, endSource),
   };

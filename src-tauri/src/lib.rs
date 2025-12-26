@@ -15,6 +15,7 @@ pub mod markdown;
 pub mod mcp;
 pub mod mermaid_window;
 pub mod output;
+pub mod portal;
 pub mod review;
 pub mod state;
 

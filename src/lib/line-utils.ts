@@ -49,6 +49,22 @@ export function getFileIndex(line: Line): number | null {
 }
 
 /**
+ * Get the file path for a line (external/portal lines only).
+ * Returns null for non-external lines.
+ */
+export function getFilePath(line: Line): string | null {
+  return line.origin.type === 'external' ? line.origin.file : null;
+}
+
+/**
+ * Get the portal ID for a line (external/portal lines only).
+ * Returns null for non-external lines.
+ */
+export function getPortalId(line: Line): string | null {
+  return line.origin.type === 'external' ? line.origin.portal_id : null;
+}
+
+/**
  * Check if a line can be selected/annotated.
  */
 export function isSelectable(line: Line): boolean {

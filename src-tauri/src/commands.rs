@@ -44,12 +44,13 @@ pub fn upsert_annotation(
     window: WebviewWindow,
     review_state: State<ActiveReview>,
     file_index: Option<usize>,
+    file_path: Option<String>,
     start_line: u32,
     end_line: u32,
     content: Vec<ContentNode>,
 ) -> Result<(), String> {
     with_review!(review_state, |review| {
-        let target = review.resolve_target_mut(window.label(), file_index)?;
+        let target = review.resolve_target_mut(window.label(), file_index, file_path.as_deref())?;
         target.upsert_annotation(start_line, end_line, content);
         Ok(())
     })
@@ -60,11 +61,12 @@ pub fn delete_annotation(
     window: WebviewWindow,
     review_state: State<ActiveReview>,
     file_index: Option<usize>,
+    file_path: Option<String>,
     start_line: u32,
     end_line: u32,
 ) -> Result<(), String> {
     with_review!(review_state, |review| {
-        let target = review.resolve_target_mut(window.label(), file_index)?;
+        let target = review.resolve_target_mut(window.label(), file_index, file_path.as_deref())?;
         target.delete_annotation(start_line, end_line);
         Ok(())
     })

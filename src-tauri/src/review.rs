@@ -229,13 +229,21 @@ impl Review {
         let path = content.source_path();
         let key = FileKey::path(path.clone());
 
+        let mut files = HashMap::new();
+        files.insert(key.clone(), AnnotationTarget::new());
+
+        // Register portal source files as annotation targets
+        for portal in &content.portals {
+            let portal_key = FileKey::path(portal.source_path.clone());
+            if !files.contains_key(&portal_key) {
+                files.insert(portal_key, AnnotationTarget::new());
+            }
+        }
+
         let root_view = View::File {
             path: path.clone(),
             content,
         };
-
-        let mut files = HashMap::new();
-        files.insert(key.clone(), AnnotationTarget::new());
 
         let window_view = WindowView::File { key };
 
@@ -368,7 +376,17 @@ impl Review {
         &mut self,
         window_label: &str,
         file_index: Option<usize>,
+        file_path: Option<&str>,
     ) -> Result<&mut AnnotationTarget, String> {
+        // If file_path is provided, use it directly (for portal annotations)
+        if let Some(path) = file_path {
+            let key = FileKey::path(PathBuf::from(path));
+            return self
+                .files
+                .get_mut(&key)
+                .ok_or_else(|| format!("File not found: {}", path));
+        }
+
         let view = self.windows.get(window_label)
             .ok_or_else(|| format!("Unknown window: {}", window_label))?;
 
