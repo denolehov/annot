@@ -1,7 +1,83 @@
 import { Node, Extension, mergeAttributes, type JSONContent } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
-import Suggestion, { type SuggestionOptions, type SuggestionProps } from '@tiptap/suggestion';
+import Suggestion, { type SuggestionOptions, type SuggestionProps, type SuggestionKeyDownProps } from '@tiptap/suggestion';
 import type { ContentNode, Tag } from './types';
+
+/**
+ * Generic suggestion state for autocomplete menus.
+ * Used by TagChip (#) and SlashCommands (/).
+ */
+export interface SuggestionState<T> {
+  active: boolean;
+  items: T[];
+  selectedIndex: number;
+  clientRect: (() => DOMRect | null) | null;
+}
+
+/**
+ * Factory to create suggestion render callbacks for TipTap suggestion plugins.
+ * Deduplicates the identical render logic between TagChip and SlashCommands.
+ */
+export function createSuggestionRender<T>(
+  getState: () => SuggestionState<T>,
+  setState: (state: SuggestionState<T>) => void,
+  getCommand: () => ((item: T) => void) | null,
+  setCommand: (cmd: ((item: T) => void) | null) => void
+) {
+  return () => ({
+    onStart: (props: SuggestionProps<T>) => {
+      setCommand(props.command);
+      setState({
+        active: true,
+        items: props.items,
+        selectedIndex: 0,
+        clientRect: props.clientRect ?? null,
+      });
+    },
+    onUpdate: (props: SuggestionProps<T>) => {
+      setCommand(props.command);
+      setState({
+        ...getState(),
+        items: props.items,
+        clientRect: props.clientRect ?? null,
+      });
+    },
+    onKeyDown: (props: SuggestionKeyDownProps) => {
+      const state = getState();
+      const command = getCommand();
+      if (props.event.key === 'ArrowUp') {
+        setState({
+          ...state,
+          selectedIndex: (state.selectedIndex - 1 + state.items.length) % state.items.length,
+        });
+        return true;
+      }
+      if (props.event.key === 'ArrowDown') {
+        setState({
+          ...state,
+          selectedIndex: (state.selectedIndex + 1) % state.items.length,
+        });
+        return true;
+      }
+      if (props.event.key === 'Enter') {
+        const item = state.items[state.selectedIndex];
+        if (item && command) {
+          command(item);
+        }
+        return true;
+      }
+      if (props.event.key === 'Escape') {
+        setState({ ...state, active: false });
+        return true;
+      }
+      return false;
+    },
+    onExit: () => {
+      setState({ ...getState(), active: false });
+      setCommand(null);
+    },
+  });
+}
 
 // Unique plugin keys for each suggestion type
 const TagSuggestionPluginKey = new PluginKey('tagSuggestion');

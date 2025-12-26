@@ -3,4 +3,5 @@ export { useAnnotations, type AnnotationEntry, type UseAnnotationsOptions } from
 export { useExitModes } from './useExitModes.svelte';
 export { useKeyboard, type KeyboardHandlers, type KeyboardState } from './useKeyboard.svelte';
 export { useContentTracking } from './useContentTracking.svelte';
-export { useAnnotationEditor, type AnnotationEditorOptions } from './useAnnotationEditor.svelte';
+// TODO: Add useAnnotationEditor once AnnotationEditor refactor is complete
+// export { useAnnotationEditor, type AnnotationEditorOptions } from './useAnnotationEditor.svelte';

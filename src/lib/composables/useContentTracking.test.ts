@@ -38,7 +38,6 @@ describe('useContentTracking', () => {
           ],
         },
       ],
-      lines: {},
     };
 
     flushSync(() => {
@@ -65,7 +64,6 @@ describe('useContentTracking', () => {
           ],
         },
       ],
-      lines: {},
     };
 
     flushSync(() => {
@@ -97,7 +95,6 @@ describe('useContentTracking', () => {
       ],
       code_blocks: [],
       tables: [],
-      portals: [],
     };
 
     flushSync(() => {
@@ -121,7 +118,6 @@ describe('useContentTracking', () => {
       ],
       code_blocks: [],
       tables: [],
-      portals: [],
     };
 
     flushSync(() => {
