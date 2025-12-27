@@ -354,7 +354,7 @@ export const ExcalidrawChip = Node.create({
   addAttributes() {
     return {
       nodeId: {
-        default: null,
+        default: () => crypto.randomUUID(),
         parseHTML: (element) =>
           element.getAttribute('data-node-id') || crypto.randomUUID(),
       },

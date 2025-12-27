@@ -130,7 +130,9 @@
 	z-index: 100;
 	min-width: 160px;
 	max-width: 300px;
-	overflow: hidden;
+	max-height: 280px;
+	overflow-y: auto;
+	scroll-padding-block: 40px;
 	padding: 4px;
 	font-family: var(--font-ui);
 }
@@ -182,7 +184,9 @@
 	z-index: 100;
 	min-width: 200px;
 	max-width: 300px;
-	overflow: hidden;
+	max-height: 280px;
+	overflow-y: auto;
+	scroll-padding-block: 40px;
 	padding: 4px;
 	font-family: var(--font-ui);
 }

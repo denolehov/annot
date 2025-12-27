@@ -147,10 +147,16 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
             editor?.commands.blur();
           },
           onDismiss: () => {
-            // Only dismiss if no suggestion menu is active
-            if (!tagSuggestion.active && !slashSuggestion.active) {
-              editor?.commands.blur();
+            // Close suggestion menu first, then dismiss editor on second Escape
+            if (tagSuggestion.active) {
+              tagSuggestion = { ...tagSuggestion, active: false };
+              return;
             }
+            if (slashSuggestion.active) {
+              slashSuggestion = { ...slashSuggestion, active: false };
+              return;
+            }
+            editor?.commands.blur();
           },
         }),
       ],

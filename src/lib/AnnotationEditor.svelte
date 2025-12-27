@@ -109,6 +109,26 @@
     };
   });
 
+  // Scroll selected tag suggestion into view on keyboard navigation
+  $effect(() => {
+    if (!ann.tagSuggestion.active) return;
+    const _idx = ann.tagSuggestion.selectedIndex; // Track changes
+    requestAnimationFrame(() => {
+      const selected = suggestionsEl?.querySelector('.tag-suggestion.selected') as HTMLElement | null;
+      selected?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  });
+
+  // Scroll selected slash suggestion into view on keyboard navigation
+  $effect(() => {
+    if (!ann.slashSuggestion.active) return;
+    const _idx = ann.slashSuggestion.selectedIndex; // Track changes
+    requestAnimationFrame(() => {
+      const selected = slashSuggestionsEl?.querySelector('.slash-suggestion.selected') as HTMLElement | null;
+      selected?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  });
+
   // Calculate optimal popup position (above or below cursor)
   function getSuggestionPosition(_tick: number, clientRect: (() => DOMRect | null) | null, menuEl?: HTMLDivElement): { left: number; top: number } {
     const rect = clientRect?.();
