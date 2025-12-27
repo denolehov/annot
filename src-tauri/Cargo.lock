@@ -54,6 +54,7 @@ dependencies = [
  "parking_lot",
  "pulldown-cmark",
  "rand 0.8.5",
+ "regex",
  "rmcp",
  "schemars 1.1.0",
  "serde",

@@ -604,32 +604,10 @@ div.line.diff-context.annotated {
 	background: transparent;
 	-webkit-box-decoration-break: clone;
 	box-decoration-break: clone;
-}
-
-.hl-1 {
 	background-image: linear-gradient(
 		to right,
-		rgba(180, 83, 9, 0.04),
-		rgba(180, 83, 9, 0.14) 4%,
-		rgba(180, 83, 9, 0.07)
-	);
-}
-
-.hl-2 {
-	background-image: linear-gradient(
-		to right,
-		rgba(180, 83, 9, 0.08),
-		rgba(180, 83, 9, 0.28) 4%,
-		rgba(180, 83, 9, 0.14)
-	);
-}
-
-.hl-3 {
-	font-weight: 500;
-	background-image: linear-gradient(
-		to right,
-		rgba(180, 83, 9, 0.10),
-		rgba(180, 83, 9, 0.30) 4%,
-		rgba(180, 83, 9, 0.15)
+		rgba(180, 83, 9, 0.06),
+		rgba(180, 83, 9, 0.20) 4%,
+		rgba(180, 83, 9, 0.10)
 	);
 }
