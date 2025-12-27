@@ -16,6 +16,7 @@ use crate::input::{ContentSource, DiffSource, McpSource};
 use crate::output::FormatResult;
 use crate::review::{ActiveReview, Review};
 use crate::state::AppState;
+use crate::SessionLock;
 use tools::{ReviewContentInput, ReviewDiffInput, ReviewFileInput, SessionImage, SessionOutput};
 
 /// Instructions for AI agents using the MCP server.
@@ -255,6 +256,12 @@ fn run_session_with_state(
     app_handle: &AppHandle,
     state: AppState,
 ) -> Result<SessionOutput, String> {
+    // Serialize MCP sessions: only one review window at a time.
+    // This lock is held for the entire session (window open → close → result returned).
+    // Subsequent MCP calls block here until the current session completes.
+    let session_lock = app_handle.state::<SessionLock>();
+    let _session_guard = session_lock.lock();
+
     // Show dock icon while window is open
     #[cfg(target_os = "macos")]
     {

@@ -70,6 +70,10 @@ use state::AppState;
 /// Shared flag to prevent app exit in MCP mode.
 pub type ShouldExit = Arc<AtomicBool>;
 
+/// Serializes MCP sessions so only one review runs at a time.
+/// Held for the entire session lifecycle (window open → user closes → result returned).
+pub type SessionLock = Mutex<()>;
+
 /// Run in CLI mode (file/stdin input, prints result, exits).
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run(state: AppState, context: tauri::Context) {
@@ -122,6 +126,7 @@ pub fn run_mcp(context: tauri::Context) {
         .plugin(tauri_plugin_opener::init())
         .manage::<ActiveReview>(Mutex::new(None))
         .manage::<ShouldExit>(should_exit)
+        .manage::<SessionLock>(Mutex::new(()))
         .manage(Mutex::new(MermaidWindowState::new()))
         .manage(Mutex::new(ExcalidrawWindowState::new()))
         .invoke_handler(all_commands!())
