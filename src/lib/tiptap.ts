@@ -84,8 +84,7 @@ const TagSuggestionPluginKey = new PluginKey('tagSuggestion');
 const SlashSuggestionPluginKey = new PluginKey('slashSuggestion');
 
 /**
- * TagChip node - an inline, atomic node representing a tag.
- * Rendered as [# TAG_NAME] in the editor.
+ * Escape HTML special characters in a string.
  */
 function escapeHtml(str: string): string {
   if (typeof str !== 'string') return '';
@@ -96,6 +95,57 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
+
+/**
+ * Compute a simple line-based diff using LCS (Longest Common Subsequence).
+ * Returns an array of diff operations: 'equal', 'insert', or 'delete'.
+ */
+interface DiffLine {
+  type: 'equal' | 'insert' | 'delete';
+  line: string;
+}
+
+function computeDiff(original: string[], replacement: string[]): DiffLine[] {
+  const m = original.length;
+  const n = replacement.length;
+
+  // Build LCS table
+  const lcs: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (original[i - 1] === replacement[j - 1]) {
+        lcs[i][j] = lcs[i - 1][j - 1] + 1;
+      } else {
+        lcs[i][j] = Math.max(lcs[i - 1][j], lcs[i][j - 1]);
+      }
+    }
+  }
+
+  // Backtrack to find diff
+  const result: DiffLine[] = [];
+  let i = m, j = n;
+
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && original[i - 1] === replacement[j - 1]) {
+      result.unshift({ type: 'equal', line: original[i - 1] });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || lcs[i][j - 1] >= lcs[i - 1][j])) {
+      result.unshift({ type: 'insert', line: replacement[j - 1] });
+      j--;
+    } else {
+      result.unshift({ type: 'delete', line: original[i - 1] });
+      i--;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * TagChip node - an inline, atomic node representing a tag.
+ * Rendered as [# TAG_NAME] in the editor.
+ */
 
 export const TagChip = Node.create({
   name: 'tagChip',
@@ -466,6 +516,275 @@ export const ExcalidrawPlaceholder = Node.create({
 });
 
 /**
+ * ReplaceBlock node - editable code block for proposing code replacements.
+ * Inserted via /replace slash command. Transforms to ReplacePreview on seal.
+ */
+export const ReplaceBlock = Node.create({
+  name: 'replaceBlock',
+  group: 'block',
+  content: 'text*',
+  code: true,
+  isolating: true,
+
+  addAttributes() {
+    return {
+      blockId: {
+        default: null,
+        parseHTML: (element) =>
+          element.getAttribute('data-block-id') || crypto.randomUUID(),
+      },
+      original: { default: '' }, // Original content captured at /replace time
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'div[data-replace-block]',
+        preserveWhitespace: 'full',
+        getAttrs: (dom) => {
+          const element = dom as HTMLElement;
+          return {
+            blockId: element.getAttribute('data-block-id') || crypto.randomUUID(),
+            original: element.getAttribute('data-original') || '',
+          };
+        },
+      },
+    ];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    return [
+      'div',
+      mergeAttributes(HTMLAttributes, {
+        'data-replace-block': '',
+        'data-block-id': node.attrs.blockId,
+        'data-original': node.attrs.original,
+        class: 'replace-block',
+      }),
+      ['pre', { class: 'replace-block-content' }, 0],
+    ];
+  },
+
+  addNodeView() {
+    return ({ node }) => {
+      const { original } = node.attrs;
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'replace-block';
+      wrapper.setAttribute('data-replace-block', '');
+
+      // Header
+      const header = document.createElement('div');
+      header.className = 'replace-block-header';
+      header.textContent = 'REPLACE';
+
+      // Original section (read-only)
+      const originalSection = document.createElement('div');
+      originalSection.className = 'replace-block-original';
+
+      const originalLabel = document.createElement('div');
+      originalLabel.className = 'replace-block-label';
+      originalLabel.textContent = 'Original:';
+
+      const originalPre = document.createElement('pre');
+      originalPre.className = 'replace-block-original-code';
+      originalPre.textContent = original || '(empty)';
+
+      originalSection.appendChild(originalLabel);
+      originalSection.appendChild(originalPre);
+
+      // Replacement section (editable)
+      const replacementSection = document.createElement('div');
+      replacementSection.className = 'replace-block-replacement';
+
+      const replacementLabel = document.createElement('div');
+      replacementLabel.className = 'replace-block-label';
+      replacementLabel.textContent = 'Replacement:';
+
+      const content = document.createElement('pre');
+      content.className = 'replace-block-content';
+
+      replacementSection.appendChild(replacementLabel);
+      replacementSection.appendChild(content);
+
+      wrapper.appendChild(header);
+      wrapper.appendChild(originalSection);
+      wrapper.appendChild(replacementSection);
+
+      return {
+        dom: wrapper,
+        contentDOM: content,
+      };
+    };
+  },
+
+  addKeyboardShortcuts() {
+    return {
+      // Exit the code block with arrow down at end
+      ArrowDown: ({ editor }) => {
+        const { state } = editor;
+        const { selection } = state;
+        const { $from, empty } = selection;
+
+        if (!empty) return false;
+
+        const node = $from.node();
+        if (node.type.name !== this.name) return false;
+
+        // Check if cursor is at the end of the block
+        const isAtEnd = $from.parentOffset === node.content.size;
+        if (!isAtEnd) return false;
+
+        // Move cursor after this block
+        const pos = $from.after();
+        editor.commands.setTextSelection(pos);
+        return true;
+      },
+      // Exit the code block with arrow up at start
+      ArrowUp: ({ editor }) => {
+        const { state } = editor;
+        const { selection } = state;
+        const { $from, empty } = selection;
+
+        if (!empty) return false;
+
+        const node = $from.node();
+        if (node.type.name !== this.name) return false;
+
+        // Check if cursor is at the start of the block
+        const isAtStart = $from.parentOffset === 0;
+        if (!isAtStart) return false;
+
+        // Move cursor before this block
+        const pos = $from.before();
+        editor.commands.setTextSelection(pos);
+        return true;
+      },
+      // Tab to exit after block
+      Tab: ({ editor }) => {
+        const { state } = editor;
+        const { selection } = state;
+        const { $from } = selection;
+
+        const node = $from.node();
+        if (node.type.name !== this.name) return false;
+
+        // Move cursor after this block
+        const pos = $from.after();
+        editor.commands.setTextSelection(pos);
+        return true;
+      },
+      // Shift+Tab to exit before block
+      'Shift-Tab': ({ editor }) => {
+        const { state } = editor;
+        const { selection } = state;
+        const { $from } = selection;
+
+        const node = $from.node();
+        if (node.type.name !== this.name) return false;
+
+        // Move cursor before this block
+        const pos = $from.before();
+        editor.commands.setTextSelection(pos);
+        return true;
+      },
+    };
+  },
+});
+
+/**
+ * ReplacePreview node - sealed atomic node showing a diff preview.
+ * Created from ReplaceBlock on annotation seal. Click to unseal.
+ */
+export const ReplacePreview = Node.create({
+  name: 'replacePreview',
+  group: 'block',
+  atom: true,
+
+  addAttributes() {
+    return {
+      blockId: { default: null },
+      original: { default: '' },
+      replacement: { default: '' },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'div[data-replace-preview]',
+        getAttrs: (dom) => {
+          const element = dom as HTMLElement;
+          return {
+            blockId: element.getAttribute('data-block-id') || null,
+            original: element.getAttribute('data-original') || '',
+            replacement: element.getAttribute('data-replacement') || '',
+          };
+        },
+      },
+    ];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    return [
+      'div',
+      mergeAttributes(HTMLAttributes, {
+        'data-replace-preview': '',
+        'data-block-id': node.attrs.blockId,
+        'data-original': node.attrs.original,
+        'data-replacement': node.attrs.replacement,
+        class: 'replace-preview',
+      }),
+      '[REPLACE]',
+    ];
+  },
+
+  addNodeView() {
+    return ({ node, getPos, editor }) => {
+      const { original, replacement } = node.attrs;
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'replace-preview';
+      wrapper.setAttribute('data-replace-preview', '');
+
+      const header = document.createElement('div');
+      header.className = 'replace-preview-header';
+      header.textContent = 'REPLACE';
+
+      const diffContainer = document.createElement('pre');
+      diffContainer.className = 'replace-preview-diff';
+
+      // Generate diff display using LCS algorithm
+      const originalLines = original.split('\n');
+      const replacementLines = replacement.split('\n');
+      const diff = computeDiff(originalLines, replacementLines);
+
+      let diffHtml = '';
+      for (const { type, line } of diff) {
+        if (type === 'equal') {
+          diffHtml += `<div class="diff-line diff-context">  ${escapeHtml(line)}</div>`;
+        } else if (type === 'delete') {
+          diffHtml += `<div class="diff-line diff-removed">- ${escapeHtml(line)}</div>`;
+        } else {
+          diffHtml += `<div class="diff-line diff-added">+ ${escapeHtml(line)}</div>`;
+        }
+      }
+      diffContainer.innerHTML = diffHtml;
+
+      wrapper.appendChild(header);
+      wrapper.appendChild(diffContainer);
+
+      // No click handler here - clicks bubble up to the sealed editor container,
+      // which calls onUnseal(). The unseal effect in useAnnotationEditor transforms
+      // all ReplacePreview nodes to ReplaceBlock and focuses the editor.
+
+      return { dom: wrapper };
+    };
+  },
+});
+
+/**
  * EditorShortcuts extension - handles keyboard shortcuts at the TipTap level
  * to prevent default behavior from firing first.
  */
@@ -666,9 +985,21 @@ export const SlashCommands = Extension.create<SlashCommandsOptions>({
 });
 
 /**
+ * Options for creating slash command suggestions.
+ */
+export interface SlashSuggestionOptions {
+  /** Callback to get the original lines content for /replace command */
+  getOriginalLines?: () => string;
+}
+
+/**
  * Create the suggestion configuration for slash commands.
  */
-export function createSlashSuggestion(): Omit<SuggestionOptions<SlashCommand>, 'editor'> {
+export function createSlashSuggestion(
+  options: SlashSuggestionOptions = {}
+): Omit<SuggestionOptions<SlashCommand>, 'editor'> {
+  const { getOriginalLines } = options;
+
   const commands: SlashCommand[] = [
     {
       id: 'excalidraw',
@@ -686,6 +1017,47 @@ export function createSlashSuggestion(): Omit<SuggestionOptions<SlashCommand>, '
             },
             { type: 'text', text: ' ' },
           ])
+          .run();
+      },
+    },
+    {
+      id: 'replace',
+      name: 'replace',
+      description: 'Propose code replacement',
+      icon: '✏️',
+      action: (editor, range) => {
+        // Check if there's already a replace block (limit to one per annotation)
+        let hasReplaceBlock = false;
+        editor.state.doc.descendants((node) => {
+          if (node.type.name === 'replaceBlock' || node.type.name === 'replacePreview') {
+            hasReplaceBlock = true;
+            return false;
+          }
+        });
+        if (hasReplaceBlock) {
+          editor.chain().focus().deleteRange(range).run();
+          return;
+        }
+
+        const original = getOriginalLines?.() ?? '';
+        if (!original) {
+          editor.chain().focus().deleteRange(range).run();
+          return;
+        }
+
+        // Insert ReplaceBlock node with original stored in attrs
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .insertContent({
+            type: 'replaceBlock',
+            attrs: {
+              blockId: crypto.randomUUID(),
+              original: original,
+            },
+            content: [{ type: 'text', text: original }],
+          })
           .run();
       },
     },
@@ -788,10 +1160,43 @@ export function extractContentNodes(json: JSONContent): ContentNode[] {
   const listStack: ListContext[] = [];
 
   function flushText() {
-    if (pendingText) {
-      nodes.push({ type: 'text', text: pendingText });
-      pendingText = '';
+    if (!pendingText) return;
+
+    // Parse for ```replace blocks
+    // Format: ```replace\n{original}\n---\n{replacement}\n```
+    const replacePattern = /```replace\n([\s\S]*?)\n---\n([\s\S]*?)\n```/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = replacePattern.exec(pendingText)) !== null) {
+      // Add text before the match
+      if (match.index > lastIndex) {
+        const beforeText = pendingText.slice(lastIndex, match.index);
+        if (beforeText.trim()) {
+          nodes.push({ type: 'text', text: beforeText });
+        }
+      }
+
+      // Add the replace node
+      const original = match[1];
+      const replacement = match[2];
+      nodes.push({ type: 'replace', original, replacement });
+
+      lastIndex = match.index + match[0].length;
     }
+
+    // Add remaining text after last match
+    if (lastIndex < pendingText.length) {
+      const afterText = pendingText.slice(lastIndex);
+      if (afterText.trim()) {
+        nodes.push({ type: 'text', text: afterText });
+      }
+    } else if (lastIndex === 0) {
+      // No matches found, add as plain text
+      nodes.push({ type: 'text', text: pendingText });
+    }
+
+    pendingText = '';
   }
 
   function getListPrefix(): string {
@@ -862,6 +1267,13 @@ export function extractContentNodes(json: JSONContent): ContentNode[] {
         type: 'excalidraw',
         elements: node.attrs.elements,
         image: node.attrs.image,
+      });
+    } else if (node.type === 'replacePreview' && node.attrs) {
+      flushText();
+      nodes.push({
+        type: 'replace',
+        original: node.attrs.original,
+        replacement: node.attrs.replacement,
       });
     } else if (node.type === 'bulletList') {
       // Push bullet list context
@@ -1047,6 +1459,20 @@ export function contentNodesToTipTap(nodes: ContentNode[] | null): JSONContent |
           nodeId: crypto.randomUUID(),
           elements: node.elements,
           image: node.image,
+        },
+      });
+    } else if (node.type === 'replace') {
+      // Flush current paragraph before block-level node
+      if (currentParagraph.length > 0) {
+        flushParagraph();
+      }
+      // Insert replace preview as block-level node
+      paragraphs.push({
+        type: 'replacePreview',
+        attrs: {
+          blockId: crypto.randomUUID(),
+          original: node.original,
+          replacement: node.replacement,
         },
       });
     }

@@ -125,6 +125,7 @@ pub enum ContentNode {
     Tag { id: String, name: String, instruction: String },
     Media { image: String, mime_type: String },
     Excalidraw { elements: String, image: Option<String> },
+    Replace { original: String, replacement: String },
 }
 
 /// A normalized line range (start ≤ end).

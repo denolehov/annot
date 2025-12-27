@@ -231,3 +231,127 @@
 		transform: translateY(0);
 	}
 }
+
+/* ===========================================
+   COMPONENT: REPLACE ERROR STATE
+   Editor-level error when replace block is unchanged
+   =========================================== */
+.ProseMirror.has-replace-error {
+	background: var(--error-bg);
+	border-color: var(--error-border) !important;
+}
+
+/* ===========================================
+   COMPONENT: REPLACE PREVIEW (sealed)
+   =========================================== */
+.replace-preview {
+	display: block;
+	background: var(--bg-panel);
+	border: 1px solid var(--border-strong);
+	border-radius: 6px;
+	margin: 8px 0;
+	overflow: hidden;
+	/* No cursor/hover here - parent sealed editor handles click affordance */
+}
+
+.replace-preview-header {
+	background: var(--bg-window);
+	border-bottom: 1px solid var(--border-subtle);
+	padding: 4px 8px;
+	font-family: var(--font-ui);
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.replace-preview-diff {
+	padding: 8px;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	margin: 0;
+}
+
+.diff-line {
+	padding: 1px 4px;
+	border-radius: 2px;
+}
+
+.diff-line.diff-context {
+	color: var(--text-secondary);
+}
+
+.diff-line.diff-removed {
+	background: rgba(239, 68, 68, 0.15);
+	color: rgb(239, 68, 68);
+}
+
+.diff-line.diff-added {
+	background: rgba(34, 197, 94, 0.15);
+	color: rgb(34, 197, 94);
+}
+
+/* ===========================================
+   COMPONENT: REPLACE BLOCK (editable)
+   =========================================== */
+.replace-block {
+	display: block;
+	background: var(--bg-panel);
+	border: 1px solid var(--border-strong);
+	border-radius: 6px;
+	margin: 8px 0;
+	overflow: hidden;
+}
+
+.replace-block-header {
+	background: var(--bg-window);
+	border-bottom: 1px solid var(--border-subtle);
+	padding: 4px 8px;
+	font-family: var(--font-ui);
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.replace-block-original {
+	background: rgba(239, 68, 68, 0.05);
+	border-bottom: 1px solid var(--border-subtle);
+	padding: 8px;
+}
+
+.replace-block-label {
+	font-family: var(--font-ui);
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	margin-bottom: 4px;
+}
+
+.replace-block-original-code {
+	font-family: var(--font-mono);
+	font-size: 12px;
+	color: var(--text-secondary);
+	margin: 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.replace-block-replacement {
+	background: rgba(34, 197, 94, 0.05);
+	padding: 8px;
+}
+
+.replace-block-content {
+	font-family: var(--font-mono);
+	font-size: 12px;
+	margin: 0;
+	min-height: 1.5em;
+	white-space: pre-wrap;
+	word-break: break-word;
+	outline: none;
+}

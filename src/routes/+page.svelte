@@ -601,6 +601,20 @@
     return annotationState.hasAnnotation(displayIdx);
   }
 
+  // Get original lines content for a given range (for /replace command)
+  function getOriginalLinesForRange(range: Range): string {
+    const start = Math.min(range.start, range.end);
+    const end = Math.max(range.start, range.end);
+    const rangeLines: string[] = [];
+    for (let i = start; i <= end; i++) {
+      const line = lines[i - 1]; // Convert to 0-indexed
+      if (line) {
+        rangeLines.push(line.content);
+      }
+    }
+    return rangeLines.join('\n');
+  }
+
   /** Get display index (1-indexed) from a mouse event on a line element. */
   function getDisplayIdxFromEvent(e: MouseEvent): number | null {
     const el = e.target as Element;
@@ -770,6 +784,7 @@
                     onImagePasteBlocked={handleImagePasteBlocked}
                     onRequestCreateTag={(text, from, to) => handleRequestCreateTag(rangeKey, text, from, to)}
                     pendingTagInsertion={pendingTagInsertion?.editorKey === rangeKey ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
+                    getOriginalLines={() => getOriginalLinesForRange(keyToRange(rangeKey))}
                   />
                 {/key}
               {/if}
@@ -846,6 +861,7 @@
                   onImagePasteBlocked={handleImagePasteBlocked}
                   onRequestCreateTag={(text, from, to) => handleRequestCreateTag(rangeKey, text, from, to)}
                   pendingTagInsertion={pendingTagInsertion?.editorKey === rangeKey ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
+                  getOriginalLines={() => getOriginalLinesForRange(keyToRange(rangeKey))}
                 />
               {/key}
             {/if}

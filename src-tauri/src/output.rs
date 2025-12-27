@@ -458,6 +458,21 @@ fn render_content(
                     }
                 }
             }
+            ContentNode::Replace {
+                original,
+                replacement,
+            } => {
+                // Format as a diff block
+                let mut diff = String::from("[REPLACE]\n```diff\n");
+                for line in original.lines() {
+                    diff.push_str(&format!("- {}\n", line));
+                }
+                for line in replacement.lines() {
+                    diff.push_str(&format!("+ {}\n", line));
+                }
+                diff.push_str("```");
+                diff
+            }
         })
         .collect::<Vec<_>>()
         .join("")

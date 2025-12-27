@@ -44,9 +44,10 @@
     onRequestCreateTag?: (text: string, from: number, to: number) => void;
     pendingTagInsertion?: { from: number; to: number; tag: Tag } | null;
     rangeKey?: string; // Annotation line range key like "45-52"
+    getOriginalLines?: () => string; // Returns original lines content for /replace
   }
 
-  let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], allowsImagePaste = false, onImagePasteBlocked, onRequestCreateTag, pendingTagInsertion, rangeKey = '' }: Props = $props();
+  let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], allowsImagePaste = false, onImagePasteBlocked, onRequestCreateTag, pendingTagInsertion, rangeKey = '', getOriginalLines }: Props = $props();
 
   let container: HTMLDivElement | undefined = $state();
   let element: HTMLDivElement | undefined = $state();
@@ -61,6 +62,7 @@
     getOnUpdate: () => onUpdate,
     getOnDismiss: () => () => onDismiss?.(),
     getOnImagePasteBlocked: () => onImagePasteBlocked,
+    getOriginalLines: () => getOriginalLines?.() ?? '',
   });
 
   // Excalidraw window state (tracks if window is open to prevent blur dismiss)

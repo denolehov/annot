@@ -141,7 +141,7 @@ export interface Tag {
 }
 
 // Content node types for structured annotation content (output format)
-export type ContentNode = TextNode | TagNode | MediaNode | ExcalidrawNode;
+export type ContentNode = TextNode | TagNode | MediaNode | ExcalidrawNode | ReplaceNode;
 
 export interface TextNode {
   type: 'text';
@@ -165,6 +165,12 @@ export interface ExcalidrawNode {
   type: 'excalidraw';
   elements: string; // JSON string of Excalidraw elements
   image?: string; // base64 PNG data URL for MCP export
+}
+
+export interface ReplaceNode {
+  type: 'replace';
+  original: string; // Original line(s) content
+  replacement: string; // User's proposed replacement
 }
 
 // TipTap JSON content type for internal storage

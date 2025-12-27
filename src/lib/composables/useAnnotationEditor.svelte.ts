@@ -10,6 +10,8 @@ import {
   ImagePasteHandler,
   ExcalidrawChip,
   ExcalidrawPlaceholder,
+  ReplaceBlock,
+  ReplacePreview,
   SlashCommands,
   createSlashSuggestion,
   EditorShortcuts,
@@ -36,6 +38,8 @@ export interface AnnotationEditorOptions {
   getOnDismiss: () => () => void;
   /** Returns the onImagePasteBlocked callback */
   getOnImagePasteBlocked: () => (() => void) | undefined;
+  /** Returns the original lines content for /replace command */
+  getOriginalLines?: () => string;
 }
 
 function createInitialSuggestionState<T>(): SuggestionState<T> {
@@ -119,13 +123,17 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
         MediaChip,
         ExcalidrawChip,
         ExcalidrawPlaceholder,
+        ReplaceBlock,
+        ReplacePreview,
         ImagePasteHandler.configure({
           allowsImagePaste: initialAllowsImagePaste,
           onPasteBlocked: initialOnImagePasteBlocked,
         }),
         SlashCommands.configure({
           suggestion: {
-            ...createSlashSuggestion(),
+            ...createSlashSuggestion({
+              getOriginalLines: options.getOriginalLines,
+            }),
             render: createSuggestionRender<SlashCommand>(
               () => slashSuggestion,
               (state) => { slashSuggestion = state; },
@@ -150,14 +158,68 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
       editable: !initialSealed,
       autofocus: false, // Don't autofocus - we'll focus manually without scrolling
       onUpdate: ({ editor }) => {
+        // Clear any replace validation errors when content changes
+        editor.view.dom.classList.remove('has-replace-error');
+
         const json = trimContent(editor.getJSON());
         getOnUpdate()(isContentEmpty(json) ? null : json);
       },
-      onBlur: ({ editor }) => {
+      onBlur: ({ editor: blurEditor }) => {
         // Don't dismiss while Excalidraw modal is open or suggestion menus are active
         if (!getSealed() && !tagSuggestion.active && !excalidrawModalOpen) {
-          const trimmed = trimContent(editor.getJSON());
-          editor.commands.setContent(trimmed);
+          // Find ReplaceBlock nodes and validate/transform them
+          const replaceBlocks: Array<{ pos: number; node: import('@tiptap/pm/model').Node }> = [];
+          blurEditor.state.doc.descendants((node, pos) => {
+            if (node.type.name === 'replaceBlock') {
+              replaceBlocks.push({ pos, node });
+            }
+          });
+
+          // Validate each replace block
+          for (const { node } of replaceBlocks) {
+            const original = node.attrs.original || '';
+            const replacement = node.textContent || '';
+
+            if (original === replacement) {
+              // Validation error - content unchanged
+              const editorDom = blurEditor.view.dom as HTMLElement;
+              editorDom.classList.add('has-replace-error', 'shake');
+              setTimeout(() => editorDom.classList.remove('shake'), 400);
+              blurEditor.commands.focus();
+              return;
+            }
+          }
+
+          // Clear any previous error state
+          const editorDom = blurEditor.view.dom as HTMLElement;
+          editorDom.classList.remove('has-replace-error');
+
+          // Transform ReplaceBlock nodes to ReplacePreview nodes for sealed display
+          if (replaceBlocks.length > 0 && blurEditor.schema.nodes.replacePreview) {
+            const tr = blurEditor.state.tr;
+            let offset = 0;
+
+            for (const { pos, node } of replaceBlocks) {
+              const original = node.attrs.original || '';
+              const replacement = node.textContent || '';
+              const preview = blurEditor.schema.nodes.replacePreview.create({
+                blockId: node.attrs.blockId || crypto.randomUUID(),
+                original,
+                replacement,
+              });
+
+              const mappedPos = pos + offset;
+              tr.replaceWith(mappedPos, mappedPos + node.nodeSize, preview);
+              offset += preview.nodeSize - node.nodeSize;
+            }
+
+            if (tr.docChanged) {
+              blurEditor.view.dispatch(tr);
+            }
+          }
+
+          const trimmed = trimContent(blurEditor.getJSON());
+          blurEditor.commands.setContent(trimmed);
           getOnUpdate()(isContentEmpty(trimmed) ? null : trimmed);
           getOnDismiss()();
         }
@@ -177,6 +239,31 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
       if (editor) {
         editor.setEditable(!isSealed);
         if (!isSealed) {
+          // When unsealing, transform ReplacePreviews back to ReplaceBlock for editing
+          if (editor.state && editor.schema && editor.schema.nodes.replaceBlock) {
+            const doc = editor.state.doc;
+            const tr = editor.state.tr;
+            let offset = 0;
+
+            doc.descendants((node, pos) => {
+              if (node.type.name !== 'replacePreview') return;
+
+              const { blockId, original, replacement } = node.attrs;
+              const replaceBlock = editor!.schema.nodes.replaceBlock.create(
+                { blockId, original },
+                replacement ? editor!.schema.text(replacement) : null
+              );
+
+              const mappedPos = pos + offset;
+              tr.replaceWith(mappedPos, mappedPos + node.nodeSize, replaceBlock);
+              offset += replaceBlock.nodeSize - node.nodeSize;
+            });
+
+            if (tr.docChanged) {
+              editor.view.dispatch(tr);
+            }
+          }
+
           editor.commands.focus('end', { scrollIntoView: false });
         }
       }

@@ -51,11 +51,22 @@
 .annotation-editor.sealed {
 	border-style: solid;
 	cursor: pointer;
+	transition: border-color 0.15s ease;
+}
+
+.annotation-editor.sealed:hover {
+	border-color: var(--accent-primary);
 }
 
 .annotation-editor.sealed::after {
 	border-left-style: solid;
 	border-top-style: solid;
+	transition: border-color 0.15s ease;
+}
+
+.annotation-editor.sealed:hover::after {
+	border-left-color: var(--accent-primary);
+	border-top-color: var(--accent-primary);
 }
 
 /* ===========================================

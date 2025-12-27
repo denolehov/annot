@@ -48,6 +48,8 @@ vi.mock('../tiptap', () => ({
   MediaChip: {},
   ExcalidrawChip: {},
   ExcalidrawPlaceholder: {},
+  ReplaceBlock: {},
+  ReplacePreview: {},
   ImagePasteHandler: { configure: vi.fn(() => ({})) },
   SlashCommands: { configure: vi.fn(() => ({})) },
   EditorShortcuts: { configure: vi.fn(() => ({})) },
