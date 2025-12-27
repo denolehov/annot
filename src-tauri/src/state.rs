@@ -662,10 +662,10 @@ impl ContentModel {
                         semantics,
                     }
                 } else if table_lines.contains(&line_num) {
-                    // Table row
+                    // Table row: render inline formatting (highlights, bold, etc.)
                     Line {
                         content: display_content.clone(),
-                        html: Some(html_escape(&display_content)),
+                        html: Some(markdown::render_inline(&display_content)),
                         origin,
                         semantics: LineSemantics::Markdown(MarkdownSemantics::TableRow),
                     }
@@ -820,6 +820,14 @@ mod tests {
             path: PathBuf::from(path),
         });
         let content_model = ContentModel::from_file(content, source);
+        AppState::new(content_model, UserConfig::empty())
+    }
+
+    fn test_markdown_state(content: &str, path: &str) -> AppState {
+        let source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from(path),
+        });
+        let content_model = ContentModel::from_markdown(content, source);
         AppState::new(content_model, UserConfig::empty())
     }
 
@@ -1048,5 +1056,31 @@ mod tests {
 
         // HTML should start with the prefix
         assert!(html.starts_with('-'), "HTML should start with '-' prefix. Got: {:?}", html);
+    }
+
+    #[test]
+    fn markdown_table_cells_render_highlights() {
+        let markdown_with_table = r#"| Column A | Column B |
+|----------|----------|
+| Normal   | ==highlighted== |
+"#;
+
+        let state = test_markdown_state(markdown_with_table, "test.md");
+        let response = state.to_response();
+
+        // Find the data row (row with "highlighted")
+        let data_row = response
+            .lines
+            .iter()
+            .find(|l| l.content.contains("highlighted"))
+            .expect("Should have a row with 'highlighted'");
+
+        let html = data_row.html.as_ref().expect("Table row should have HTML");
+
+        assert!(
+            html.contains(r#"<mark class="hl">"#),
+            "Table cells should render ==highlights== as <mark> tags. Got: {:?}",
+            html
+        );
     }
 }
