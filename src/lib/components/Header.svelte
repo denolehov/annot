@@ -38,6 +38,9 @@
 
   const diffMetadata = $derived(metadata.type === 'diff' ? metadata : null);
   const markdownMetadata = $derived(metadata.type === 'markdown' ? metadata : null);
+
+  // Extract filename from path for display (label is full path for consistency with LineOrigin)
+  const displayLabel = $derived(label.includes('/') ? label.split('/').pop() ?? label : label);
 </script>
 
 <header class="header" data-tauri-drag-region>
@@ -84,7 +87,8 @@
           class="md-header-file"
           class:has-comment={hasSessionComment}
           onclick={onOpenSessionEditor}
-        ><span class="md-header-title">{label}</span></span>
+          title={label}
+        ><span class="md-header-title">{displayLabel}</span></span>
 
         <!-- H1 (root) - always shown -->
         {#if headerRootSection}
@@ -122,7 +126,8 @@
         class="file-name"
         class:has-comment={hasSessionComment}
         onclick={onOpenSessionEditor}
-      >{label}</span>
+        title={label}
+      >{displayLabel}</span>
     {/if}
   </div>
   <div class="header-right">

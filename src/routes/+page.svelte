@@ -138,8 +138,9 @@
 
       if (isPortal) {
         // Portal line - portals take priority over code blocks and tables
-        if (currentSegment?.type === 'portal') {
-          // Continue current portal segment
+        const isPortalHeader = line.semantics.type === 'portal' && line.semantics.kind === 'header';
+        if (currentSegment?.type === 'portal' && !isPortalHeader) {
+          // Continue current portal segment (unless this is a new portal header)
           currentSegment.lines.push({ line, displayIndex });
         } else {
           // Start new portal segment
@@ -148,8 +149,9 @@
         }
       } else if (isCodeBlock) {
         // Code block line
-        if (currentSegment?.type === 'codeblock') {
-          // Continue current code block segment
+        const isCodeBlockStart = line.semantics.type === 'markdown' && line.semantics.kind === 'code_block_start';
+        if (currentSegment?.type === 'codeblock' && !isCodeBlockStart) {
+          // Continue current code block segment (unless this is a new code block)
           currentSegment.lines.push({ line, displayIndex });
         } else {
           // Start new code block segment
