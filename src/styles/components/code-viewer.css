@@ -118,7 +118,7 @@ header.header {
 div.line {
 	position: relative;
 	display: flex;
-	white-space: pre;
+	white-space: pre-wrap;
 	tab-size: 4;
 }
 
