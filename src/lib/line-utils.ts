@@ -60,6 +60,35 @@ export function isPortalLine(line: Line): boolean {
 }
 
 /**
+ * Check if a line is a code block fence line (``` markers).
+ */
+export function isCodeBlockFence(line: Line): boolean {
+  if (line.semantics.type === 'markdown') {
+    const kind = line.semantics.kind;
+    return kind === 'code_block_start' || kind === 'code_block_end';
+  }
+  return false;
+}
+
+/**
+ * Check if a line is inside a code block (content, not fence).
+ */
+export function isCodeBlockContent(line: Line): boolean {
+  return line.semantics.type === 'markdown' && line.semantics.kind === 'code_block_content';
+}
+
+/**
+ * Check if a line is any part of a code block (fence or content).
+ */
+export function isCodeBlockLine(line: Line): boolean {
+  if (line.semantics.type === 'markdown') {
+    const kind = line.semantics.kind;
+    return kind === 'code_block_start' || kind === 'code_block_content' || kind === 'code_block_end';
+  }
+  return false;
+}
+
+/**
  * Check if a line can be selected/annotated.
  */
 export function isSelectable(line: Line): boolean {
@@ -76,6 +105,10 @@ export function isSelectable(line: Line): boolean {
   }
   // Portal headers and footers cannot be selected
   if (line.semantics.type === 'portal' && (line.semantics.kind === 'header' || line.semantics.kind === 'footer')) {
+    return false;
+  }
+  // Code block fence lines (``` markers) cannot be selected
+  if (isCodeBlockFence(line)) {
     return false;
   }
   return true;

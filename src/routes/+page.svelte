@@ -3,7 +3,7 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
-  import { getLineNumber, getDiffKind, isSelectable, isPortalLine, getFilePath } from "$lib/line-utils";
+  import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, getFilePath } from "$lib/line-utils";
   import { rangeToKey, keyToRange, isLineInRange, validateRange, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap } from "$lib/tiptap";
   import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
@@ -12,6 +12,7 @@
   import { CommandPalette } from "$lib/CommandPalette";
   import SaveModal from "$lib/SaveModal.svelte";
   import Portal from "$lib/components/embedded/Portal.svelte";
+  import CodeBlock from "$lib/components/embedded/CodeBlock.svelte";
   import { Header, StatusBar, SessionEditor } from "$lib/components";
   import { useExitModes } from "$lib/composables/useExitModes.svelte";
   import { useContentTracking } from "$lib/composables/useContentTracking.svelte";
@@ -104,15 +105,24 @@
   let headerCurrentDepth = $derived(headerCurrentSection?.level ?? 0);
 
   // =============================================================================
-  // Line Segmentation (for portal-aware rendering)
+  // Line Segmentation (for portal/codeblock-aware rendering)
   // =============================================================================
 
-  /** Segment type for rendering: either regular lines or a portal group */
+  /** Segment type for rendering: regular lines, portal group, or code block group */
   type LineSegment =
     | { type: 'regular'; lines: { line: Line; displayIndex: number }[] }
-    | { type: 'portal'; lines: { line: Line; displayIndex: number }[] };
+    | { type: 'portal'; lines: { line: Line; displayIndex: number }[] }
+    | { type: 'codeblock'; lines: { line: Line; displayIndex: number }[]; language: string | null };
 
-  /** Group lines into segments for portal-aware rendering */
+  /** Get the language from a code block start line */
+  function getCodeBlockLanguage(line: Line): string | null {
+    if (line.semantics.type === 'markdown' && line.semantics.kind === 'code_block_start') {
+      return line.semantics.language;
+    }
+    return null;
+  }
+
+  /** Group lines into segments for portal/codeblock-aware rendering */
   let lineSegments = $derived.by((): LineSegment[] => {
     const segments: LineSegment[] = [];
     let currentSegment: LineSegment | null = null;
@@ -121,9 +131,10 @@
       const line = lines[i];
       const displayIndex = i + 1;
       const isPortal = isPortalLine(line);
+      const isCodeBlock = isCodeBlockLine(line);
 
       if (isPortal) {
-        // Portal line
+        // Portal line - portals take priority over code blocks
         if (currentSegment?.type === 'portal') {
           // Continue current portal segment
           currentSegment.lines.push({ line, displayIndex });
@@ -131,6 +142,17 @@
           // Start new portal segment
           if (currentSegment) segments.push(currentSegment);
           currentSegment = { type: 'portal', lines: [{ line, displayIndex }] };
+        }
+      } else if (isCodeBlock) {
+        // Code block line
+        if (currentSegment?.type === 'codeblock') {
+          // Continue current code block segment
+          currentSegment.lines.push({ line, displayIndex });
+        } else {
+          // Start new code block segment
+          if (currentSegment) segments.push(currentSegment);
+          const language = getCodeBlockLanguage(line);
+          currentSegment = { type: 'codeblock', lines: [{ line, displayIndex }], language };
         }
       } else {
         // Regular line
@@ -278,6 +300,46 @@
 
       end = i + 1; // 1-indexed
       prevLineNum = num;
+    }
+
+    return { start, end };
+  }
+
+  // Get code block bounds for a line (returns null if line is not in a code block)
+  function getCodeBlockBounds(lineNum: number): { start: number; end: number } | null {
+    const line = lines[lineNum - 1];
+    if (!line) return null;
+
+    // Check if this line is in a code block
+    if (!isCodeBlockLine(line)) return null;
+
+    let start = lineNum;
+    let end = lineNum;
+
+    // Scan backwards to find start (code_block_start fence)
+    for (let i = lineNum - 2; i >= 0; i--) {
+      const prevLine = lines[i];
+      if (!isCodeBlockLine(prevLine)) break;
+
+      start = i + 1; // 1-indexed
+
+      // If we hit the start fence, stop
+      if (prevLine.semantics.type === 'markdown' && prevLine.semantics.kind === 'code_block_start') {
+        break;
+      }
+    }
+
+    // Scan forwards to find end (code_block_end fence)
+    for (let i = lineNum; i < lines.length; i++) {
+      const nextLine = lines[i];
+      if (!isCodeBlockLine(nextLine)) break;
+
+      end = i + 1; // 1-indexed
+
+      // If we hit the end fence, stop
+      if (nextLine.semantics.type === 'markdown' && nextLine.semantics.kind === 'code_block_end') {
+        break;
+      }
     }
 
     return { start, end };
@@ -790,6 +852,48 @@
               {/if}
             {/snippet}
           </Portal>
+        {:else if segment.type === 'codeblock'}
+          {@const firstLineNum = getLineNumber(segment.lines[0]?.line)}
+          {@const mermaidBlock = firstLineNum !== null ? getMermaidBlockAt(firstLineNum) : null}
+          <CodeBlock
+            lines={segment.lines}
+            language={segment.language}
+            selection={selectionState.selection}
+            isDragging={selectionState.isDragging}
+            hoveredDisplayIdx={selectionState.hoveredDisplayIdx}
+            {markdownMetadata}
+            annotations={annotationsMap}
+            {lastSelectedLine}
+            onGutterMouseDown={selectionState.handleGutterMouseDown}
+            onGutterClick={selectionState.handleGutterClick}
+            onAddMouseDown={selectionState.handleAddMouseDown}
+            onMouseEnter={(idx) => selectionState.hoveredDisplayIdx = idx}
+            onMouseLeave={() => selectionState.hoveredDisplayIdx = null}
+            onMermaidOpen={mermaidBlock ? () => openMermaidWindow(mermaidBlock) : undefined}
+          >
+            {#snippet annotationSlot(displayIndex, rangeKey)}
+              {#if rangeKey}
+                {#key rangeKey}
+                  <AnnotationEditor
+                    content={annotationState.getByKey(rangeKey)?.content}
+                    sealed={annotationState.isSealed(rangeKey)}
+                    onUpdate={updateAnnotation}
+                    onUnseal={() => {
+                      selectionState.selection = keyToRange(rangeKey);
+                      annotationState.unseal(rangeKey);
+                    }}
+                    onDismiss={sealCurrentAnnotation}
+                    {tags}
+                    {allowsImagePaste}
+                    onImagePasteBlocked={handleImagePasteBlocked}
+                    onRequestCreateTag={(text, from, to) => handleRequestCreateTag(rangeKey, text, from, to)}
+                    pendingTagInsertion={pendingTagInsertion?.editorKey === rangeKey ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
+                    getOriginalLines={() => getOriginalLinesForRange(keyToRange(rangeKey))}
+                  />
+                {/key}
+              {/if}
+            {/snippet}
+          </CodeBlock>
         {:else}
           {#each segment.lines as { line, displayIndex }}
             {@const sourceLineNum = getLineNumber(line)}
