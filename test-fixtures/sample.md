@@ -27,6 +27,17 @@ Here's some **bold text**, *italic text*, and ***bold italic*** together. You ca
 4. User record created in database
 5. Confirmation email sent
 
+```
+13 │ This is some markdown document content.
+14 │ With an inline [portal link](src/main.rs#L78-79)
+   ├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┤
+ > │ portal link — src/main.rs#L78-79                │
+78 │ fn main() {                                     │
+79 │     // some rust code                           │
+   ├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┤
+15 │ And the main content continues here.
+```
+
 ## Architecture Diagram
 
 ```mermaid
