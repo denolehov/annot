@@ -204,7 +204,8 @@
 
           {#if rangeKey}
             <tr class="annotation-row">
-              <td colspan={columnCount} class="annotation-cell">
+              <td class="gutter-cell annotation-gutter"></td>
+              <td colspan={columnCount - 1} class="annotation-cell">
                 {@render annotationSlot(displayIndex, rangeKey)}
               </td>
             </tr>
@@ -344,8 +345,21 @@
     background-size: var(--chip-pattern-size), auto;
   }
 
+  .annotation-gutter {
+    vertical-align: top;
+  }
+
   .annotation-cell {
+    position: sticky;
+    left: var(--gutter-width);
+    width: calc(100vw - var(--gutter-width) - 24px);
+    max-width: calc(100vw - var(--gutter-width) - 24px);
     padding: 0;
+    background: inherit;
+  }
+
+  .annotation-cell :global(.annotation-editor) {
+    margin-left: 8px;
   }
 
   /* Add button */
