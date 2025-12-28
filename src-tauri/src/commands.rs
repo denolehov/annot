@@ -233,8 +233,7 @@ pub fn copy_to_clipboard(
 ) -> Result<(), String> {
     let guard = review_state.lock();
     let review = guard.as_ref().ok_or("No active review")?;
-    // Verify window exists
-    let _ = review.target_for_window(window.label())?;
+    review.verify_window(window.label())?;
 
     // Get content from root_view
     let content = review.root_view.content();
@@ -286,8 +285,7 @@ pub fn save_content(
 ) -> Result<SaveContentResponse, String> {
     let guard = review_state.lock();
     let review = guard.as_ref().ok_or("No active review")?;
-    // Verify window exists
-    let _ = review.target_for_window(window.label())?;
+    review.verify_window(window.label())?;
 
     // Get content from root_view
     let content = review.root_view.content();
@@ -360,8 +358,7 @@ pub fn export_to_obsidian(
 ) -> Result<ObsidianExportResponse, String> {
     let guard = review_state.lock();
     let review = guard.as_ref().ok_or("No active review")?;
-    // Verify window exists
-    let _ = review.target_for_window(window.label())?;
+    review.verify_window(window.label())?;
 
     // Get content from root_view
     let content_model = review.root_view.content();

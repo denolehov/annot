@@ -341,6 +341,16 @@ impl Review {
         self.windows.keys().map(|s| s.as_str())
     }
 
+    /// Verify a window exists in this review.
+    /// Use this for commands that work on any window type (copy, save, export).
+    pub fn verify_window(&self, window_label: &str) -> Result<(), String> {
+        if self.windows.contains_key(window_label) {
+            Ok(())
+        } else {
+            Err(format!("Unknown window: {}", window_label))
+        }
+    }
+
     /// Get the annotation target for a single-file window.
     /// Returns None for diff/mermaid windows — use resolve_target_mut() for commands.
     pub fn get_target_for_window(&self, window_label: &str) -> Option<&AnnotationTarget> {
