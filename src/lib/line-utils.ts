@@ -89,6 +89,13 @@ export function isCodeBlockLine(line: Line): boolean {
 }
 
 /**
+ * Check if a line is a table row.
+ */
+export function isTableLine(line: Line): boolean {
+  return line.semantics.type === 'markdown' && line.semantics.kind === 'table_row';
+}
+
+/**
  * Check if a line can be selected/annotated.
  */
 export function isSelectable(line: Line): boolean {

@@ -3,7 +3,7 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
-  import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, getFilePath } from "$lib/line-utils";
+  import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, getFilePath } from "$lib/line-utils";
   import { rangeToKey, keyToRange, isLineInRange, validateRange, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap } from "$lib/tiptap";
   import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
@@ -13,6 +13,7 @@
   import SaveModal from "$lib/SaveModal.svelte";
   import Portal from "$lib/components/embedded/Portal.svelte";
   import CodeBlock from "$lib/components/embedded/CodeBlock.svelte";
+  import Table from "$lib/components/embedded/Table.svelte";
   import { Header, StatusBar, SessionEditor } from "$lib/components";
   import { useExitModes } from "$lib/composables/useExitModes.svelte";
   import { useContentTracking } from "$lib/composables/useContentTracking.svelte";
@@ -108,11 +109,12 @@
   // Line Segmentation (for portal/codeblock-aware rendering)
   // =============================================================================
 
-  /** Segment type for rendering: regular lines, portal group, or code block group */
+  /** Segment type for rendering: regular lines, portal group, code block group, or table group */
   type LineSegment =
     | { type: 'regular'; lines: { line: Line; displayIndex: number }[] }
     | { type: 'portal'; lines: { line: Line; displayIndex: number }[] }
-    | { type: 'codeblock'; lines: { line: Line; displayIndex: number }[]; language: string | null };
+    | { type: 'codeblock'; lines: { line: Line; displayIndex: number }[]; language: string | null }
+    | { type: 'table'; lines: { line: Line; displayIndex: number }[] };
 
   /** Get the language from a code block start line */
   function getCodeBlockLanguage(line: Line): string | null {
@@ -122,7 +124,7 @@
     return null;
   }
 
-  /** Group lines into segments for portal/codeblock-aware rendering */
+  /** Group lines into segments for portal/codeblock/table-aware rendering */
   let lineSegments = $derived.by((): LineSegment[] => {
     const segments: LineSegment[] = [];
     let currentSegment: LineSegment | null = null;
@@ -132,9 +134,10 @@
       const displayIndex = i + 1;
       const isPortal = isPortalLine(line);
       const isCodeBlock = isCodeBlockLine(line);
+      const isTable = isTableLine(line);
 
       if (isPortal) {
-        // Portal line - portals take priority over code blocks
+        // Portal line - portals take priority over code blocks and tables
         if (currentSegment?.type === 'portal') {
           // Continue current portal segment
           currentSegment.lines.push({ line, displayIndex });
@@ -153,6 +156,16 @@
           if (currentSegment) segments.push(currentSegment);
           const language = getCodeBlockLanguage(line);
           currentSegment = { type: 'codeblock', lines: [{ line, displayIndex }], language };
+        }
+      } else if (isTable) {
+        // Table row line
+        if (currentSegment?.type === 'table') {
+          // Continue current table segment
+          currentSegment.lines.push({ line, displayIndex });
+        } else {
+          // Start new table segment
+          if (currentSegment) segments.push(currentSegment);
+          currentSegment = { type: 'table', lines: [{ line, displayIndex }] };
         }
       } else {
         // Regular line
@@ -894,6 +907,44 @@
               {/if}
             {/snippet}
           </CodeBlock>
+        {:else if segment.type === 'table'}
+          <Table
+            lines={segment.lines}
+            selection={selectionState.selection}
+            isDragging={selectionState.isDragging}
+            hoveredDisplayIdx={selectionState.hoveredDisplayIdx}
+            {markdownMetadata}
+            annotations={annotationsMap}
+            {lastSelectedLine}
+            onGutterMouseDown={selectionState.handleGutterMouseDown}
+            onGutterClick={selectionState.handleGutterClick}
+            onAddMouseDown={selectionState.handleAddMouseDown}
+            onMouseEnter={(idx) => selectionState.hoveredDisplayIdx = idx}
+            onMouseLeave={() => selectionState.hoveredDisplayIdx = null}
+          >
+            {#snippet annotationSlot(displayIndex, rangeKey)}
+              {#if rangeKey}
+                {#key rangeKey}
+                  <AnnotationEditor
+                    content={annotationState.getByKey(rangeKey)?.content}
+                    sealed={annotationState.isSealed(rangeKey)}
+                    onUpdate={updateAnnotation}
+                    onUnseal={() => {
+                      selectionState.selection = keyToRange(rangeKey);
+                      annotationState.unseal(rangeKey);
+                    }}
+                    onDismiss={sealCurrentAnnotation}
+                    {tags}
+                    {allowsImagePaste}
+                    onImagePasteBlocked={handleImagePasteBlocked}
+                    onRequestCreateTag={(text, from, to) => handleRequestCreateTag(rangeKey, text, from, to)}
+                    pendingTagInsertion={pendingTagInsertion?.editorKey === rangeKey ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
+                    getOriginalLines={() => getOriginalLinesForRange(keyToRange(rangeKey))}
+                  />
+                {/key}
+              {/if}
+            {/snippet}
+          </Table>
         {:else}
           {#each segment.lines as { line, displayIndex }}
             {@const sourceLineNum = getLineNumber(line)}
