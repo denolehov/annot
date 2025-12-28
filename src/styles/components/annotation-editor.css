@@ -107,6 +107,14 @@
 	margin: 0;
 }
 
+/* Inline code - matches .md code in code-viewer.css */
+.editor-content .tiptap code {
+	background: color-mix(in srgb, var(--accent) 10%, transparent);
+	padding: 1px 4px;
+	border-radius: 3px;
+	font-family: var(--font-mono);
+}
+
 /* ===========================================
    EDITOR TOOLBAR
    =========================================== */
