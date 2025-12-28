@@ -107,11 +107,15 @@
 	margin: 0;
 }
 
-/* Inline code - matches .md code in code-viewer.css */
+/* Inline code - dithered background matching code blocks */
 .editor-content .tiptap code {
-	background: color-mix(in srgb, var(--accent) 10%, transparent);
-	padding: 1px 4px;
-	border-radius: 3px;
+	background:
+		var(--codeblock-pattern-bg),
+		var(--bg-code-block);
+	background-size: var(--codeblock-pattern-size), auto;
+	border: 1px solid var(--border-code);
+	padding: 1px 5px;
+	border-radius: 4px;
 	font-family: var(--font-mono);
 }
 
