@@ -43,6 +43,31 @@
     annotationSlot,
   }: Props = $props();
 
+  // Scroll state for edge shadows
+  let canScrollLeft = $state(false);
+  let canScrollRight = $state(false);
+
+  function setupScrollIndicators(node: HTMLDivElement) {
+    const updateScrollState = () => {
+      const { scrollLeft, scrollWidth, clientWidth } = node;
+      canScrollLeft = scrollLeft > 0;
+      canScrollRight = scrollLeft + clientWidth < scrollWidth - 1;
+    };
+
+    updateScrollState();
+    node.addEventListener('scroll', updateScrollState, { passive: true });
+
+    const ro = new ResizeObserver(updateScrollState);
+    ro.observe(node);
+
+    return {
+      destroy() {
+        node.removeEventListener('scroll', updateScrollState);
+        ro.disconnect();
+      }
+    };
+  }
+
   // Analyze table structure
   let tableInfo = $derived(
     analyzeTable(lines.map((l) => ({ content: l.line.content, displayIndex: l.displayIndex })))
@@ -125,73 +150,112 @@
   let lastDisplayIndex = $derived(visibleLines[visibleLines.length - 1]?.displayIndex ?? -1);
 </script>
 
-<div class="table-container">
-  <table class="content-table">
-    <tbody>
-      {#each visibleLines as { line, displayIndex, lineIndex }, rowIdx}
-        {@const sourceLineNum = getLineNumber(line)}
-        {@const rangeKey = computeRangeKey(displayIndex)}
-        {@const cells = splitTableRow(line.content)}
-        {@const isHeader = isHeaderRow(lineIndex)}
-        {@const isFirst = displayIndex === firstDisplayIndex}
-        {@const isLast = displayIndex === lastDisplayIndex}
+<div class="table-wrapper" class:can-scroll-left={canScrollLeft} class:can-scroll-right={canScrollRight}>
+  <div class="table-scroller" use:setupScrollIndicators>
+    <table class="content-table">
+      <tbody>
+        {#each visibleLines as { line, displayIndex, lineIndex }, rowIdx}
+          {@const sourceLineNum = getLineNumber(line)}
+          {@const rangeKey = computeRangeKey(displayIndex)}
+          {@const cells = splitTableRow(line.content)}
+          {@const isHeader = isHeaderRow(lineIndex)}
+          {@const isFirst = displayIndex === firstDisplayIndex}
+          {@const isLast = displayIndex === lastDisplayIndex}
 
-        <tr
-          class="content-row"
-          class:selected={isSelected(displayIndex)}
-          class:annotated={hasAnnotation(displayIndex)}
-          class:table-header-row={isHeader}
-          class:table-first-row={isFirst}
-          class:table-last-row={isLast}
-          data-display-idx={displayIndex}
-          onmouseenter={() => onMouseEnter(displayIndex)}
-          onmouseleave={onMouseLeave}
-        >
-          <td class="gutter-cell">
-            <button
-              class="add-btn"
-              onmousedown={(e) => onAddMouseDown(displayIndex, e)}
-              aria-label="Add annotation"
-            >+</button>
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <span
-              class="gutter"
-              class:selected={isSelected(displayIndex)}
-              onmousedown={(e) => onGutterMouseDown(displayIndex, e)}
-              onclick={() => onGutterClick(displayIndex)}
-              role="button"
-              tabindex="-1"
-            >
-              {#if sourceLineNum !== null}
-                {sourceLineNum}
-              {/if}
-            </span>
-          </td>
-          {#each cells as cell, colIndex}
-            {#if isHeader}
-              <th class="table-cell" style:text-align={getAlignStyle(colIndex)}>{cell}</th>
-            {:else}
-              <td class="table-cell" style:text-align={getAlignStyle(colIndex)}>{cell}</td>
-            {/if}
-          {/each}
-        </tr>
-
-        {#if rangeKey}
-          <tr class="annotation-row">
-            <td colspan={columnCount} class="annotation-cell">
-              {@render annotationSlot(displayIndex, rangeKey)}
+          <tr
+            class="content-row"
+            class:selected={isSelected(displayIndex)}
+            class:annotated={hasAnnotation(displayIndex)}
+            class:table-header-row={isHeader}
+            class:table-first-row={isFirst}
+            class:table-last-row={isLast}
+            data-display-idx={displayIndex}
+            onmouseenter={() => onMouseEnter(displayIndex)}
+            onmouseleave={onMouseLeave}
+          >
+            <td class="gutter-cell">
+              <button
+                class="add-btn"
+                onmousedown={(e) => onAddMouseDown(displayIndex, e)}
+                aria-label="Add annotation"
+              >+</button>
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <span
+                class="gutter"
+                class:selected={isSelected(displayIndex)}
+                onmousedown={(e) => onGutterMouseDown(displayIndex, e)}
+                onclick={() => onGutterClick(displayIndex)}
+                role="button"
+                tabindex="-1"
+              >
+                {#if sourceLineNum !== null}
+                  {sourceLineNum}
+                {/if}
+              </span>
             </td>
+            {#each cells as cell, colIndex}
+              {#if isHeader}
+                <th class="table-cell" style:text-align={getAlignStyle(colIndex)}>{cell}</th>
+              {:else}
+                <td class="table-cell" style:text-align={getAlignStyle(colIndex)}>{cell}</td>
+              {/if}
+            {/each}
           </tr>
-        {/if}
-      {/each}
-    </tbody>
-  </table>
+
+          {#if rangeKey}
+            <tr class="annotation-row">
+              <td colspan={columnCount} class="annotation-cell">
+                {@render annotationSlot(displayIndex, rangeKey)}
+              </td>
+            </tr>
+          {/if}
+        {/each}
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <style>
-  .table-container {
-    overflow-x: auto;
+  .table-wrapper {
     position: relative;
+  }
+
+  .table-scroller {
+    overflow-x: auto;
+    overscroll-behavior-x: none;
+
+    /* Hide native scrollbar */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+
+    /* Scroll fade masks - left fade starts after gutter */
+    --fade-size: 40px;
+    --gutter: var(--gutter-width);
+    --mask-left: linear-gradient(to right, black var(--gutter), transparent var(--gutter), black calc(var(--gutter) + var(--fade-size)));
+    --mask-right: linear-gradient(to left, transparent, black var(--fade-size));
+    --mask-both: linear-gradient(to right, black var(--gutter), transparent var(--gutter), black calc(var(--gutter) + var(--fade-size)), black calc(100% - var(--fade-size)), transparent);
+    --mask-none: linear-gradient(black, black);
+
+    mask-image: var(--mask-none);
+    -webkit-mask-image: var(--mask-none);
+  }
+  .table-scroller::-webkit-scrollbar {
+    display: none;
+  }
+
+  .table-wrapper.can-scroll-right:not(.can-scroll-left) .table-scroller {
+    mask-image: var(--mask-right);
+    -webkit-mask-image: var(--mask-right);
+  }
+
+  .table-wrapper.can-scroll-left:not(.can-scroll-right) .table-scroller {
+    mask-image: var(--mask-left);
+    -webkit-mask-image: var(--mask-left);
+  }
+
+  .table-wrapper.can-scroll-left.can-scroll-right .table-scroller {
+    mask-image: var(--mask-both);
+    -webkit-mask-image: var(--mask-both);
   }
 
   .content-table {
