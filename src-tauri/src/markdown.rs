@@ -737,32 +737,50 @@ pub fn render_inline(text: &str) -> String {
     let mut output = String::new();
     let mut portal_path: Option<String> = None; // Track if we're inside a portal link
 
+    // Buffer for accumulating consecutive Text events.
+    // Smart punctuation splits text at quotes, breaking ==highlight== detection.
+    // We accumulate text and flush on structural boundaries.
+    let mut text_buffer = String::new();
+
+    // Flush accumulated text buffer, processing highlights
+    let flush_text = |buffer: &mut String, output: &mut String| {
+        if !buffer.is_empty() {
+            let escaped = html_escape(buffer);
+            output.push_str(&process_highlights(&escaped));
+            buffer.clear();
+        }
+    };
+
     for event in parser {
         match event {
-            // Text: escape, process highlights, and emit
+            // Text: accumulate into buffer (don't emit yet)
             Event::Text(t) => {
-                let escaped = html_escape(&t);
-                output.push_str(&process_highlights(&escaped));
+                text_buffer.push_str(&t);
             }
 
             // Strong (bold): **text**
             Event::Start(Tag::Strong) => {
+                flush_text(&mut text_buffer, &mut output);
                 output.push_str("<strong>");
             }
             Event::End(TagEnd::Strong) => {
+                flush_text(&mut text_buffer, &mut output);
                 output.push_str("</strong>");
             }
 
             // Emphasis (italic): *text*
             Event::Start(Tag::Emphasis) => {
+                flush_text(&mut text_buffer, &mut output);
                 output.push_str("<em>");
             }
             Event::End(TagEnd::Emphasis) => {
+                flush_text(&mut text_buffer, &mut output);
                 output.push_str("</em>");
             }
 
             // Inline code: `code`
             Event::Code(code) => {
+                flush_text(&mut text_buffer, &mut output);
                 output.push_str("<code>");
                 output.push_str(&html_escape(&code));
                 output.push_str("</code>");
@@ -771,6 +789,7 @@ pub fn render_inline(text: &str) -> String {
             // Links: [text](url)
             // Portal links (with line anchors) get special styling as spans
             Event::Start(Tag::Link { dest_url, .. }) => {
+                flush_text(&mut text_buffer, &mut output);
                 if parse_line_anchor(&dest_url).is_some() {
                     portal_path = Some(dest_url.to_string());
                     output.push_str("<span class=\"portal-ref\">");
@@ -782,6 +801,7 @@ pub fn render_inline(text: &str) -> String {
                 }
             }
             Event::End(TagEnd::Link) => {
+                flush_text(&mut text_buffer, &mut output);
                 if let Some(path) = portal_path.take() {
                     // If no link text was provided, use filename as label
                     // After the icon, output ends with "</svg>" if no text was added
@@ -796,14 +816,17 @@ pub fn render_inline(text: &str) -> String {
 
             // Strikethrough: ~~text~~
             Event::Start(Tag::Strikethrough) => {
+                flush_text(&mut text_buffer, &mut output);
                 output.push_str("<del>");
             }
             Event::End(TagEnd::Strikethrough) => {
+                flush_text(&mut text_buffer, &mut output);
                 output.push_str("</del>");
             }
 
             // Soft/hard breaks
             Event::SoftBreak | Event::HardBreak => {
+                flush_text(&mut text_buffer, &mut output);
                 output.push(' ');
             }
 
@@ -823,6 +846,9 @@ pub fn render_inline(text: &str) -> String {
             _ => {}
         }
     }
+
+    // Flush any remaining text
+    flush_text(&mut text_buffer, &mut output);
 
     output
 }
@@ -1355,5 +1381,30 @@ mod tests {
         assert!(render_inline("==this==").contains("<mark class=\"hl\">this</mark>"));
         // Code spans should NOT have highlights processed
         assert_eq!(render_inline("`==code==`"), "<code>==code==</code>");
+    }
+
+    #[test]
+    fn test_highlight_with_quotes_regression() {
+        // Regression: smart punctuation splits text at quotes, breaking ==highlight== detection.
+        // The parser emits separate Text events for smart quotes, so ==..."...== becomes:
+        //   Text("=="), Text("""), Text("content"), Text("""), Text("==")
+        // We must accumulate text across these events before processing highlights.
+        let input = r#"The left border says: =="This indented region is human-added, belonging to the lines above."=="#;
+
+        // Direct process_highlights works (no parser involvement)
+        let direct = process_highlights(input);
+        assert!(
+            direct.contains("<mark class=\"hl\">"),
+            "process_highlights should work directly. Got: {:?}",
+            direct
+        );
+
+        // render_inline must also work (parser + text accumulation)
+        let result = render_inline(input);
+        assert!(
+            result.contains("<mark class=\"hl\">"),
+            "Highlight with quotes should be rendered. Got: {:?}",
+            result
+        );
     }
 }
