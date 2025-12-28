@@ -1317,57 +1317,9 @@ export function extractContentNodes(json: JSONContent): ContentNode[] {
           }
         }
       }
-    } else if (node.type === 'heading') {
-      // Add newline before heading (except first)
-      if (pendingText || nodes.length > 0) {
-        pendingText += '\n';
-      }
-      // Add markdown heading marker based on level
-      const level = node.attrs?.level ?? 1;
-      pendingText += '#'.repeat(level) + ' ';
-      if (node.content) {
-        node.content.forEach(walkNode);
-      }
-    } else if (node.type === 'blockquote') {
-      // Add newline before blockquote (except first)
-      if (pendingText || nodes.length > 0) {
-        pendingText += '\n';
-      }
-      // Collect blockquote content, then prefix each line with >
-      const savedText = pendingText;
-      pendingText = '';
-      if (node.content) {
-        node.content.forEach(walkNode);
-      }
-      const quotedContent = pendingText;
-      pendingText = savedText;
-      // Prefix each line with >
-      const lines = quotedContent.split('\n');
-      pendingText += lines.map(line => `> ${line}`).join('\n');
-    } else if (node.type === 'codeBlock') {
-      // Add newline before code block (except first)
-      if (pendingText || nodes.length > 0) {
-        pendingText += '\n';
-      }
-      const language = node.attrs?.language ?? '';
-      pendingText += '```' + language + '\n';
-      // Code blocks contain text directly, not paragraphs
-      if (node.content) {
-        for (const child of node.content) {
-          if (child.type === 'text' && child.text) {
-            pendingText += child.text;
-          }
-        }
-      }
-      pendingText += '\n```';
     } else if (node.type === 'hardBreak') {
       // Hard break within a paragraph - preserve as newline
       pendingText += '\n';
-    } else if (node.type === 'horizontalRule') {
-      if (pendingText || nodes.length > 0) {
-        pendingText += '\n';
-      }
-      pendingText += '---';
     } else if (node.type === 'paragraph') {
       // Add newline between paragraphs (except first)
       if (pendingText || nodes.length > 0) {

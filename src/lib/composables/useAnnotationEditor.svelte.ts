@@ -84,7 +84,12 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
     editor = new Editor({
       element: el,
       extensions: [
-        StarterKit,
+        StarterKit.configure({
+          heading: false,
+          blockquote: false,
+          codeBlock: false,
+          horizontalRule: false,
+        }),
         Placeholder.configure({
           placeholder: 'Type annotation…',
         }),

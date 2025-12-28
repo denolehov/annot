@@ -446,60 +446,6 @@ describe('extractContentNodes', () => {
     });
   });
 
-  it('preserves heading formatting', () => {
-    const input: JSONContent = {
-      type: 'doc',
-      content: [
-        { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Heading 1' }] },
-        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Heading 2' }] },
-        { type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: 'Heading 3' }] },
-        { type: 'paragraph', content: [{ type: 'text', text: 'Regular text' }] },
-      ],
-    };
-    const nodes = extractContentNodes(input);
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0]).toEqual({
-      type: 'text',
-      text: '# Heading 1\n## Heading 2\n### Heading 3\nRegular text',
-    });
-  });
-
-  it('preserves blockquote formatting', () => {
-    const input: JSONContent = {
-      type: 'doc',
-      content: [
-        {
-          type: 'blockquote',
-          content: [
-            { type: 'paragraph', content: [{ type: 'text', text: 'Quoted text' }] },
-          ],
-        },
-      ],
-    };
-    const nodes = extractContentNodes(input);
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0]).toEqual({ type: 'text', text: '> Quoted text' });
-  });
-
-  it('preserves code block formatting', () => {
-    const input: JSONContent = {
-      type: 'doc',
-      content: [
-        {
-          type: 'codeBlock',
-          attrs: { language: 'typescript' },
-          content: [{ type: 'text', text: 'const x = 1;' }],
-        },
-      ],
-    };
-    const nodes = extractContentNodes(input);
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0]).toEqual({
-      type: 'text',
-      text: '```typescript\nconst x = 1;\n```',
-    });
-  });
-
   it('preserves hard breaks', () => {
     const input: JSONContent = {
       type: 'doc',
@@ -519,17 +465,4 @@ describe('extractContentNodes', () => {
     expect(nodes[0]).toEqual({ type: 'text', text: 'Line one\nLine two' });
   });
 
-  it('preserves horizontal rule', () => {
-    const input: JSONContent = {
-      type: 'doc',
-      content: [
-        { type: 'paragraph', content: [{ type: 'text', text: 'Above' }] },
-        { type: 'horizontalRule' },
-        { type: 'paragraph', content: [{ type: 'text', text: 'Below' }] },
-      ],
-    };
-    const nodes = extractContentNodes(input);
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0]).toEqual({ type: 'text', text: 'Above\n---\nBelow' });
-  });
 });

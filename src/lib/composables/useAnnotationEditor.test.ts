@@ -33,7 +33,7 @@ vi.mock('@tiptap/core', () => {
 });
 
 vi.mock('@tiptap/starter-kit', () => ({
-  default: {},
+  default: { configure: vi.fn(() => ({})) },
 }));
 
 vi.mock('@tiptap/extension-placeholder', () => ({
