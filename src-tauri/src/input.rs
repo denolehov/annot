@@ -93,13 +93,14 @@ impl ContentSource {
         self.is_mcp()
     }
 
-    /// Display label for headers.
+    /// Label for content identification.
+    /// Returns full path for files (matches LineOrigin.path for consistency).
+    /// Frontend truncates for display.
     pub fn label(&self) -> &str {
         match self {
             ContentSource::Cli(CliSource::File { path })
             | ContentSource::Mcp(McpSource::File { path }) => path
-                .file_name()
-                .and_then(|n| n.to_str())
+                .to_str()
                 .unwrap_or("file"),
             ContentSource::Cli(CliSource::Stdin { label })
             | ContentSource::Mcp(McpSource::Content { label }) => label,
@@ -266,7 +267,8 @@ mod tests {
         let mode = InputMode::File { path: file_path.clone() };
         let resolved = mode.resolve().unwrap();
 
-        assert_eq!(resolved.content_source.label(), "test.rs");
+        // Label is full path (matches LineOrigin.path for consistency)
+        assert_eq!(resolved.content_source.label(), file_path.to_str().unwrap());
         assert_eq!(resolved.content, "fn main() {}");
         assert!(resolved.content_source.path_hint().unwrap().ends_with("test.rs"));
     }
@@ -285,16 +287,17 @@ mod tests {
     }
 
     #[test]
-    fn file_mode_extracts_filename_as_label() {
+    fn file_mode_uses_full_path_as_label() {
         let dir = tempfile::tempdir().unwrap();
         let file_path = dir.path().join("deeply").join("nested").join("file.go");
         std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
         std::fs::write(&file_path, "package main").unwrap();
 
-        let mode = InputMode::File { path: file_path };
+        let mode = InputMode::File { path: file_path.clone() };
         let resolved = mode.resolve().unwrap();
 
-        assert_eq!(resolved.content_source.label(), "file.go");
+        // Label is full path (matches LineOrigin.path for consistency)
+        assert_eq!(resolved.content_source.label(), file_path.to_str().unwrap());
     }
 
     // Note: Stdin mode tests require subprocess spawning or mock injection,
