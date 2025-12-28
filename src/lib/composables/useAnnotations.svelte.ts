@@ -42,8 +42,15 @@ export function useAnnotations(options: UseAnnotationsOptions) {
     }
 
     if (content && !isContentEmpty(content)) {
+      // Store display indices (from range param), not source line numbers (from coords)
+      // Display indices are used for UI lookups (getAtLine, hasAnnotation)
+      // Source coords are only for the backend API call
+      const normalizedRange = {
+        start: Math.min(range.start, range.end),
+        end: Math.max(range.start, range.end)
+      };
       annotations[key] = {
-        range: { start: coords.startLine, end: coords.endLine },
+        range: normalizedRange,
         content,
         sealed: annotations[key]?.sealed ?? false
       };
