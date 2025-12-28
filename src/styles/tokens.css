@@ -113,6 +113,10 @@
 	--codeblock-pattern-bg: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='2' height='2' fill='rgba(160,140,100,0.15)'/%3E%3Crect x='2' y='2' width='2' height='2' fill='rgba(160,140,100,0.15)'/%3E%3C/svg%3E");
 	--codeblock-pattern-size: 4px 4px;
 
+	/* Chips: dot pattern (warmer, more tactile) */
+	--chip-pattern-bg: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1' cy='1' r='0.75' fill='rgba(160,140,100,0.18)'/%3E%3Ccircle cx='3' cy='3' r='0.75' fill='rgba(160,140,100,0.18)'/%3E%3C/svg%3E");
+	--chip-pattern-size: 4px 4px;
+
 	/* Borders */
 	--border-subtle: var(--light-zinc-200);
 	--border-strong: var(--light-zinc-300);
@@ -236,6 +240,9 @@
      --codeblock-header-bg: #232220;
      --codeblock-pattern-bg: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='2' height='2' fill='rgba(140,125,90,0.12)'/%3E%3Crect x='2' y='2' width='2' height='2' fill='rgba(140,125,90,0.12)'/%3E%3C/svg%3E");
      --codeblock-pattern-size: 4px 4px;
+
+     --chip-pattern-bg: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1' cy='1' r='0.75' fill='rgba(140,125,90,0.15)'/%3E%3Ccircle cx='3' cy='3' r='0.75' fill='rgba(140,125,90,0.15)'/%3E%3C/svg%3E");
+     --chip-pattern-size: 4px 4px;
 
      --border-subtle: var(--dark-zinc-200);
      --border-strong: var(--dark-zinc-300);
