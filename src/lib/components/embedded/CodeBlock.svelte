@@ -197,12 +197,24 @@
      =========================================== */
 
   .codeblock-group {
+    position: relative;
     background:
       var(--codeblock-pattern-bg),
       var(--bg-code-block);
     background-size: var(--codeblock-pattern-size), auto;
+  }
+
+  /* Borders only on code area, not gutter */
+  .codeblock-group::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--gutter-width);
+    right: 0;
     border-top: 1px solid var(--border-code);
     border-bottom: 1px solid var(--border-code);
+    pointer-events: none;
   }
 
   /* Make pipe characters taller so they connect across lines */
@@ -211,11 +223,11 @@
     transform: scaleY(1.5);
   }
 
-  .line.codeblock-header {
+  .line.codeblock-header .code {
     border-bottom: 1px solid var(--border-subtle);
   }
 
-  .line.codeblock-footer {
+  .line.codeblock-footer .code {
     border-top: 1px solid var(--border-subtle);
   }
 
@@ -243,6 +255,7 @@
 
   .gutter.codeblock-gutter {
     color: var(--text-muted);
+    background: var(--bg-main);
   }
 
   .line.codeblock-header .gutter.codeblock-gutter {
