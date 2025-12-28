@@ -123,15 +123,11 @@ div.line {
 }
 
 div.line:hover {
-	background-color: var(--bg-main);
+	background-image: linear-gradient(rgba(0,0,0,0.04), rgba(0,0,0,0.04));
 }
 
 /* Selection (amber family - matches hl) */
 div.line.selected {
-	background-color: var(--selection-bg);
-}
-
-div.line.selected:hover {
 	background-color: var(--selection-bg);
 }
 
@@ -296,10 +292,6 @@ div.line.diff-added {
 	background-color: rgba(34, 197, 94, 0.1);
 }
 
-div.line.diff-added:hover {
-	background-color: rgba(34, 197, 94, 0.15);
-}
-
 div.line.diff-added .diff-gutter-new {
 	color: rgb(34, 197, 94);
 }
@@ -307,10 +299,6 @@ div.line.diff-added .diff-gutter-new {
 /* Deleted lines (red) */
 div.line.diff-deleted {
 	background-color: rgba(239, 68, 68, 0.1);
-}
-
-div.line.diff-deleted:hover {
-	background-color: rgba(239, 68, 68, 0.15);
 }
 
 div.line.diff-deleted .diff-gutter-old {
@@ -325,7 +313,7 @@ div.line.diff-header {
 
 div.line.diff-header:hover {
 	/* No hover highlight for non-selectable lines */
-	background-color: var(--bg-panel);
+	background-image: none;
 }
 
 div.line.diff-header .gutter {
@@ -354,12 +342,6 @@ div.line.diff-context {
 div.line.diff-added.selected,
 div.line.diff-deleted.selected,
 div.line.diff-context.selected {
-	background-color: var(--selection-bg);
-}
-
-div.line.diff-added.selected:hover,
-div.line.diff-deleted.selected:hover,
-div.line.diff-context.selected:hover {
 	background-color: var(--selection-bg);
 }
 

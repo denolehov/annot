@@ -276,6 +276,10 @@
     height: 22px;
   }
 
+  .content-row:hover {
+    background-image: linear-gradient(rgba(0,0,0,0.04), rgba(0,0,0,0.04));
+  }
+
   .content-row.selected,
   .content-row.annotated {
     background: var(--selection-bg);
