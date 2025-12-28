@@ -386,11 +386,64 @@ pub fn export_to_obsidian(
         .unwrap_or(&content_model.label);
 
     // Build Obsidian URI with clipboard parameter
+    // Sanitize note name to remove characters invalid in filenames (\ / :)
+    let sanitized_name = sanitize_obsidian_filename(note_name);
     let url = format!(
         "obsidian://new?vault={}&name={}&clipboard=true",
         urlencoding::encode(&vault_name),
-        urlencoding::encode(note_name)
+        urlencoding::encode(&sanitized_name)
     );
 
     Ok(ObsidianExportResponse { url })
+}
+
+/// Sanitize a filename for Obsidian by removing characters that are invalid in filenames.
+/// Obsidian (and most filesystems) don't allow: \ / :
+fn sanitize_obsidian_filename(name: &str) -> String {
+    name.chars().filter(|c| !matches!(c, '\\' | '/' | ':')).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_obsidian_filename_removes_backslash() {
+        assert_eq!(
+            sanitize_obsidian_filename(r"Title\with\backslashes"),
+            "Titlewithbackslashes"
+        );
+    }
+
+    #[test]
+    fn sanitize_obsidian_filename_removes_forward_slash() {
+        assert_eq!(
+            sanitize_obsidian_filename("Title/with/slashes"),
+            "Titlewithslashes"
+        );
+    }
+
+    #[test]
+    fn sanitize_obsidian_filename_removes_colon() {
+        assert_eq!(
+            sanitize_obsidian_filename("Title: An example"),
+            "Title An example"
+        );
+    }
+
+    #[test]
+    fn sanitize_obsidian_filename_removes_all_special_chars() {
+        assert_eq!(
+            sanitize_obsidian_filename(r"C:\path/to:file"),
+            "Cpathtofile"
+        );
+    }
+
+    #[test]
+    fn sanitize_obsidian_filename_preserves_normal_text() {
+        assert_eq!(
+            sanitize_obsidian_filename("Normal Title Here"),
+            "Normal Title Here"
+        );
+    }
 }
