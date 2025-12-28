@@ -215,14 +215,22 @@
     border-bottom: 1px solid var(--border-subtle);
   }
 
-  /* Language-less fence lines: minimal height */
-  .line.codeblock-fence {
-    height: 4px;
-    min-height: 4px;
+  .line.codeblock-footer {
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  /* Fence lines (header/footer with language, or any fence without): minimal height */
+  .line.codeblock-fence,
+  .line.codeblock-header,
+  .line.codeblock-footer {
+    height: auto;
+    min-height: 0;
   }
 
   .line.codeblock-fence .gutter,
-  .line.codeblock-fence .code {
+  .line.codeblock-fence .code,
+  .line.codeblock-footer .gutter,
+  .line.codeblock-footer .code {
     display: none;
   }
 
@@ -248,7 +256,6 @@
     align-items: center;
     gap: 0.5em;
     font-size: 0.85em;
-    padding: 2px 0;
     width: 100%;
   }
 
