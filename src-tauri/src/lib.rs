@@ -12,6 +12,7 @@ pub mod error;
 pub mod excalidraw_window;
 pub mod highlight;
 pub mod input;
+pub mod lang;
 pub mod markdown;
 pub mod mcp;
 pub mod mermaid_window;

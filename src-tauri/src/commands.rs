@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 use crate::config::{self, Config};
-use crate::output::{format_output, OutputMode};
+use crate::output::{export_content, format_output, OutputMode};
 use crate::review::ActiveReview;
 use crate::state::{ContentNode, ContentResponse, ExitMode, Tag};
 use crate::ShouldExit;
@@ -235,16 +235,9 @@ pub fn copy_to_clipboard(
     let review = guard.as_ref().ok_or("No active review")?;
     review.verify_window(window.label())?;
 
-    // Get content from root_view
+    // Get content from root_view and export with portals embedded as code blocks
     let content = review.root_view.content();
-
-    // Reconstruct raw content from lines
-    let raw_content: String = content
-        .lines
-        .iter()
-        .map(|l| l.content.as_str())
-        .collect::<Vec<_>>()
-        .join("\n");
+    let raw_content = export_content(content);
 
     let text = match mode {
         CopyMode::Content => raw_content,
@@ -287,16 +280,9 @@ pub fn save_content(
     let review = guard.as_ref().ok_or("No active review")?;
     review.verify_window(window.label())?;
 
-    // Get content from root_view
+    // Get content from root_view and export with portals embedded as code blocks
     let content = review.root_view.content();
-
-    // Reconstruct raw content from lines
-    let raw_content: String = content
-        .lines
-        .iter()
-        .map(|l| l.content.as_str())
-        .collect::<Vec<_>>()
-        .join("\n");
+    let raw_content = export_content(content);
 
     // Resolve path (relative to cwd if not absolute)
     let path = PathBuf::from(&path);
@@ -360,16 +346,9 @@ pub fn export_to_obsidian(
     let review = guard.as_ref().ok_or("No active review")?;
     review.verify_window(window.label())?;
 
-    // Get content from root_view
+    // Get content from root_view and export with portals embedded as code blocks
     let content_model = review.root_view.content();
-
-    // Reconstruct raw content from lines
-    let content: String = content_model
-        .lines
-        .iter()
-        .map(|l| l.content.as_str())
-        .collect::<Vec<_>>()
-        .join("\n");
+    let content = export_content(content_model);
 
     // Copy content to clipboard (Rust-side to avoid permission issues)
     arboard::Clipboard::new()

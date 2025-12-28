@@ -1,8 +1,12 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
+use crate::lang;
 use crate::mcp::tools::SessionImage;
+use crate::portal::LoadedPortal;
 use crate::review::{FileKey, Review};
-use crate::state::{Annotation, ContentMetadata, ContentModel, ContentNode};
+use crate::state::{
+    Annotation, ContentMetadata, ContentModel, ContentNode, LineSemantics, PortalSemantics,
+};
 
 /// Output mode determines how content is formatted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -20,6 +24,123 @@ pub enum OutputMode {
 pub struct FormatResult {
     pub text: String,
     pub images: Vec<SessionImage>,
+}
+
+/// Reconstructs content for export, with portals embedded as code blocks.
+///
+/// When content contains portal links (e.g., `[label](file.rs#L10-L20)`),
+/// the exported text includes the portal content as fenced code blocks
+/// immediately after the source line containing the link.
+///
+/// Example output:
+/// ```markdown
+/// Check the [validation logic](src/auth.rs#L42-L58).
+///
+/// <!-- portal: src/auth.rs#L42-L58 -->
+/// ```rust
+/// pub fn validate(token: &str) -> bool {
+///     // code from lines 42-58
+/// }
+/// ```
+/// ```
+pub fn export_content(content: &ContentModel) -> String {
+    // If no portals, just join all lines
+    if content.portals.is_empty() {
+        return content
+            .lines
+            .iter()
+            .filter(|line| !matches!(line.semantics, LineSemantics::Portal(_)))
+            .map(|l| l.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
+
+    // Build a map: insert_at (1-indexed line in original markdown) -> portals to insert after
+    let mut portal_inserts: HashMap<u32, Vec<&LoadedPortal>> = HashMap::new();
+    for portal in &content.portals {
+        portal_inserts
+            .entry(portal.insert_at)
+            .or_default()
+            .push(portal);
+    }
+
+    let mut result = String::new();
+    let mut original_line_num: u32 = 0;
+
+    for line in &content.lines {
+        // Skip portal lines (they're interleaved; we'll re-emit them as code blocks)
+        if matches!(line.semantics, LineSemantics::Portal(_)) {
+            continue;
+        }
+
+        // This is an original markdown line
+        original_line_num += 1;
+
+        // Emit the line
+        result.push_str(&line.content);
+        result.push('\n');
+
+        // If there are portals to insert after this line, emit them as code blocks
+        if let Some(portals) = portal_inserts.get(&original_line_num) {
+            for portal in portals {
+                let code_block = format_portal_code_block(portal);
+                if !code_block.is_empty() {
+                    result.push_str(&code_block);
+                }
+            }
+        }
+    }
+
+    // Remove trailing newline if present (to match original behavior)
+    if result.ends_with('\n') {
+        result.pop();
+    }
+
+    result
+}
+
+/// Format a portal as a fenced code block with language hint.
+fn format_portal_code_block(portal: &LoadedPortal) -> String {
+    // Collect only content lines (skip header/footer)
+    let content_lines: Vec<&str> = portal
+        .lines
+        .iter()
+        .filter_map(|line| {
+            if matches!(line.semantics, LineSemantics::Portal(PortalSemantics::Content)) {
+                Some(line.content.as_str())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // Skip empty portals (per user feedback)
+    if content_lines.is_empty() {
+        return String::new();
+    }
+
+    // Detect language from file extension
+    let fence_lang = portal
+        .source_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(lang::extension_to_fence_language)
+        .unwrap_or("");
+
+    // Build the code block
+    let path_display = portal.source_path.display();
+    let range = format!("L{}-L{}", portal.start_line, portal.end_line);
+
+    let mut block = String::new();
+    block.push_str(&format!("\n<!-- portal: {}#{} -->\n", path_display, range));
+    block.push_str(&format!("```{}\n", fence_lang));
+    for line in content_lines {
+        block.push_str(line);
+        block.push('\n');
+    }
+    block.push_str("```\n");
+
+    block
 }
 
 /// Collect unique tags from all content nodes (session comment + annotations).
@@ -1042,5 +1163,268 @@ mod tests {
         assert!(output.contains("portal code line 101"), "Should have portal line content");
         // The annotation should be present
         assert!(output.contains("Check this portal line"), "Should have annotation text");
+    }
+
+    // ========== export_content tests ==========
+
+    fn make_portal_line(content: &str, semantics: PortalSemantics) -> Line {
+        Line {
+            content: content.to_string(),
+            html: None,
+            origin: crate::state::LineOrigin::Source {
+                path: "portal.rs".to_string(),
+                line: 1,
+            },
+            semantics: LineSemantics::Portal(semantics),
+        }
+    }
+
+    #[test]
+    fn export_content_without_portals() {
+        let content = ContentModel {
+            label: "test.md".to_string(),
+            lines: vec![
+                make_line(1, "# Title"),
+                make_line(2, "Some text"),
+                make_line(3, "More text"),
+            ],
+            source: ContentSource::Cli(CliSource::File {
+                path: PathBuf::from("test.md"),
+            }),
+            metadata: ContentMetadata::Plain,
+            portals: Vec::new(),
+        };
+
+        let output = export_content(&content);
+        assert_eq!(output, "# Title\nSome text\nMore text");
+    }
+
+    #[test]
+    fn export_content_with_single_portal() {
+        // Simulate markdown with a portal link on line 2
+        // Line 1: "# Title"
+        // Line 2: "Check [code](src/lib.rs#L10-L12)"
+        // Then portal lines (header, content, footer) are interleaved
+        // Line 3: "More text"
+
+        let mut lines = vec![
+            make_line(1, "# Title"),
+            make_line(2, "Check [code](src/lib.rs#L10-L12)"),
+        ];
+
+        // Portal lines (interleaved after line 2)
+        lines.push(make_portal_line(
+            "src/lib.rs#L10-L12",
+            PortalSemantics::Header {
+                label: "code".to_string(),
+                path: "src/lib.rs".to_string(),
+                range: "L10-L12".to_string(),
+            },
+        ));
+        lines.push(make_portal_line("fn hello() {", PortalSemantics::Content));
+        lines.push(make_portal_line("    println!(\"hi\");", PortalSemantics::Content));
+        lines.push(make_portal_line("}", PortalSemantics::Content));
+        lines.push(make_portal_line("", PortalSemantics::Footer));
+
+        lines.push(make_line(3, "More text"));
+
+        let portal = LoadedPortal {
+            source_path: PathBuf::from("src/lib.rs"),
+            label: "code".to_string(),
+            start_line: 10,
+            end_line: 12,
+            insert_at: 2, // Insert after line 2 (the portal link line)
+            lines: vec![
+                make_portal_line(
+                    "src/lib.rs#L10-L12",
+                    PortalSemantics::Header {
+                        label: "code".to_string(),
+                        path: "src/lib.rs".to_string(),
+                        range: "L10-L12".to_string(),
+                    },
+                ),
+                make_portal_line("fn hello() {", PortalSemantics::Content),
+                make_portal_line("    println!(\"hi\");", PortalSemantics::Content),
+                make_portal_line("}", PortalSemantics::Content),
+                make_portal_line("", PortalSemantics::Footer),
+            ],
+        };
+
+        let content = ContentModel {
+            label: "test.md".to_string(),
+            lines,
+            source: ContentSource::Cli(CliSource::File {
+                path: PathBuf::from("test.md"),
+            }),
+            metadata: ContentMetadata::Plain,
+            portals: vec![portal],
+        };
+
+        let output = export_content(&content);
+
+        // Should contain original markdown lines
+        assert!(output.contains("# Title"), "Should have title");
+        assert!(output.contains("Check [code](src/lib.rs#L10-L12)"), "Should have portal link");
+        assert!(output.contains("More text"), "Should have text after portal");
+
+        // Should contain portal comment and code fence
+        assert!(
+            output.contains("<!-- portal: src/lib.rs#L10-L12 -->"),
+            "Should have portal comment"
+        );
+        assert!(output.contains("```rust"), "Should have rust code fence");
+        assert!(output.contains("fn hello() {"), "Should have portal code content");
+        assert!(output.contains("```\n"), "Should close code fence");
+    }
+
+    #[test]
+    fn export_content_skips_empty_portal() {
+        let mut lines = vec![
+            make_line(1, "# Title"),
+            make_line(2, "Check [code](empty.rs#L1-L1)"),
+        ];
+
+        // Portal with only header/footer, no content lines
+        lines.push(make_portal_line(
+            "empty.rs#L1-L1",
+            PortalSemantics::Header {
+                label: "code".to_string(),
+                path: "empty.rs".to_string(),
+                range: "L1-L1".to_string(),
+            },
+        ));
+        lines.push(make_portal_line("", PortalSemantics::Footer));
+
+        let portal = LoadedPortal {
+            source_path: PathBuf::from("empty.rs"),
+            label: "code".to_string(),
+            start_line: 1,
+            end_line: 1,
+            insert_at: 2,
+            lines: vec![
+                make_portal_line(
+                    "empty.rs#L1-L1",
+                    PortalSemantics::Header {
+                        label: "code".to_string(),
+                        path: "empty.rs".to_string(),
+                        range: "L1-L1".to_string(),
+                    },
+                ),
+                // No content lines - empty portal
+                make_portal_line("", PortalSemantics::Footer),
+            ],
+        };
+
+        let content = ContentModel {
+            label: "test.md".to_string(),
+            lines,
+            source: ContentSource::Cli(CliSource::File {
+                path: PathBuf::from("test.md"),
+            }),
+            metadata: ContentMetadata::Plain,
+            portals: vec![portal],
+        };
+
+        let output = export_content(&content);
+
+        // Should NOT contain portal code block for empty portal
+        assert!(!output.contains("<!-- portal:"), "Should not have portal comment for empty portal");
+        assert!(!output.contains("```"), "Should not have code fence for empty portal");
+    }
+
+    #[test]
+    fn export_content_with_multiple_portals() {
+        let mut lines = vec![
+            make_line(1, "# Title"),
+            make_line(2, "[first](a.rs#L1-L2)"),
+        ];
+
+        // First portal lines
+        lines.push(make_portal_line("a.rs#L1-L2", PortalSemantics::Header {
+            label: "first".to_string(),
+            path: "a.rs".to_string(),
+            range: "L1-L2".to_string(),
+        }));
+        lines.push(make_portal_line("line1", PortalSemantics::Content));
+        lines.push(make_portal_line("line2", PortalSemantics::Content));
+        lines.push(make_portal_line("", PortalSemantics::Footer));
+
+        lines.push(make_line(3, "[second](b.go#L5-L6)"));
+
+        // Second portal lines
+        lines.push(make_portal_line("b.go#L5-L6", PortalSemantics::Header {
+            label: "second".to_string(),
+            path: "b.go".to_string(),
+            range: "L5-L6".to_string(),
+        }));
+        lines.push(make_portal_line("func main() {", PortalSemantics::Content));
+        lines.push(make_portal_line("}", PortalSemantics::Content));
+        lines.push(make_portal_line("", PortalSemantics::Footer));
+
+        let portal1 = LoadedPortal {
+            source_path: PathBuf::from("a.rs"),
+            label: "first".to_string(),
+            start_line: 1,
+            end_line: 2,
+            insert_at: 2,
+            lines: vec![
+                make_portal_line("a.rs#L1-L2", PortalSemantics::Header {
+                    label: "first".to_string(),
+                    path: "a.rs".to_string(),
+                    range: "L1-L2".to_string(),
+                }),
+                make_portal_line("line1", PortalSemantics::Content),
+                make_portal_line("line2", PortalSemantics::Content),
+                make_portal_line("", PortalSemantics::Footer),
+            ],
+        };
+
+        let portal2 = LoadedPortal {
+            source_path: PathBuf::from("b.go"),
+            label: "second".to_string(),
+            start_line: 5,
+            end_line: 6,
+            insert_at: 3,
+            lines: vec![
+                make_portal_line("b.go#L5-L6", PortalSemantics::Header {
+                    label: "second".to_string(),
+                    path: "b.go".to_string(),
+                    range: "L5-L6".to_string(),
+                }),
+                make_portal_line("func main() {", PortalSemantics::Content),
+                make_portal_line("}", PortalSemantics::Content),
+                make_portal_line("", PortalSemantics::Footer),
+            ],
+        };
+
+        let content = ContentModel {
+            label: "test.md".to_string(),
+            lines,
+            source: ContentSource::Cli(CliSource::File {
+                path: PathBuf::from("test.md"),
+            }),
+            metadata: ContentMetadata::Plain,
+            portals: vec![portal1, portal2],
+        };
+
+        let output = export_content(&content);
+
+        // Both portals should be present with correct language hints
+        assert!(output.contains("```rust"), "Should have rust code fence");
+        assert!(output.contains("```go"), "Should have go code fence");
+        assert!(output.contains("<!-- portal: a.rs#L1-L2 -->"), "Should have first portal comment");
+        assert!(output.contains("<!-- portal: b.go#L5-L6 -->"), "Should have second portal comment");
+    }
+
+    #[test]
+    fn export_content_language_detection() {
+        // Test various file extensions produce correct fence languages
+        assert_eq!(lang::extension_to_fence_language("rs"), "rust");
+        assert_eq!(lang::extension_to_fence_language("go"), "go");
+        assert_eq!(lang::extension_to_fence_language("ts"), "typescript");
+        assert_eq!(lang::extension_to_fence_language("tsx"), "typescript");
+        assert_eq!(lang::extension_to_fence_language("py"), "python");
+        assert_eq!(lang::extension_to_fence_language("js"), "javascript");
+        assert_eq!(lang::extension_to_fence_language("unknown"), "");
     }
 }
