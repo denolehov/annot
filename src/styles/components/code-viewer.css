@@ -233,7 +233,7 @@ div.line:not(.selected):hover .add-btn {
 /* Code content */
 .code {
 	flex: 1;
-	padding-left: 16px;
+	padding-left: 8px;
 	-webkit-user-select: text;
 	user-select: text;
 	font-family: var(--font-mono);
