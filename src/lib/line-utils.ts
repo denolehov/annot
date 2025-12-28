@@ -96,6 +96,32 @@ export function isTableLine(line: Line): boolean {
 }
 
 /**
+ * Extract content from a code block in a specific file.
+ * Filters by source line numbers AND file path to exclude portal content.
+ *
+ * @param lines - All lines in the document
+ * @param startLine - Source line number of the opening fence (exclusive)
+ * @param endLine - Source line number of the closing fence (exclusive)
+ * @param filePath - Path of the file containing the code block
+ * @returns The code block content as a single string
+ */
+export function extractCodeBlockContent(
+  lines: Line[],
+  startLine: number,
+  endLine: number,
+  filePath: string
+): string {
+  return lines
+    .filter(l => {
+      const num = getLineNumber(l);
+      const path = getFilePath(l);
+      return num !== null && num > startLine && num < endLine && path === filePath;
+    })
+    .map(l => l.content)
+    .join('\n');
+}
+
+/**
  * Check if a line can be selected/annotated.
  */
 export function isSelectable(line: Line): boolean {

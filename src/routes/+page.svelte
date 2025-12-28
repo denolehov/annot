@@ -3,7 +3,7 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
-  import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, getFilePath } from "$lib/line-utils";
+  import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, getFilePath, extractCodeBlockContent } from "$lib/line-utils";
   import { rangeToKey, keyToRange, isLineInRange, validateRange, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap } from "$lib/tiptap";
   import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
@@ -648,13 +648,7 @@
 
   // Extract mermaid content from a code block (excluding fence lines)
   function getMermaidContent(startLine: number, endLine: number): string {
-    return lines
-      .filter(l => {
-        const num = getLineNumber(l);
-        return num !== null && num > startLine && num < endLine;
-      })
-      .map(l => l.content)
-      .join('\n');
+    return extractCodeBlockContent(lines, startLine, endLine, label);
   }
 
   async function openMermaidWindow(block: { start_line: number; end_line: number }) {
