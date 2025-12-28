@@ -102,6 +102,22 @@
   function isEndFence(line: Line): boolean {
     return line.semantics.type === 'markdown' && line.semantics.kind === 'code_block_end';
   }
+
+  // Wrap box-drawing characters in a span for CSS scaling
+  // Covers: | │ ├ ┤ ┬ ┴ ┼ ┌ ┐ └ ┘ and dashed variants ┄ ┆ ┊
+  function wrapPipes(text: string): string {
+    return text.replace(/[|│├┤┬┴┼┌┐└┘┄┆┊]/g, '<span class="pipe">$&</span>');
+  }
+
+  // Escape HTML entities for safe rendering
+  function escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
 </script>
 
 <div class="codeblock-group">
@@ -162,9 +178,9 @@
           <span class="codeblock-footer-info"></span>
         {:else}
           {#if line.html}
-            {@html line.html}
+            {@html wrapPipes(line.html)}
           {:else}
-            {line.content}
+            {@html wrapPipes(escapeHtml(line.content))}
           {/if}
         {/if}
       </span>
@@ -187,6 +203,12 @@
     background-size: var(--codeblock-pattern-size), auto;
     border-top: 1px solid var(--border-code);
     border-bottom: 1px solid var(--border-code);
+  }
+
+  /* Make pipe characters taller so they connect across lines */
+  .codeblock-group :global(.pipe) {
+    display: inline-block;
+    transform: scaleY(1.5);
   }
 
   .line.codeblock-header {
