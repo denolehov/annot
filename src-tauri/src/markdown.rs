@@ -181,6 +181,11 @@ impl ParseState {
         self.stack.iter().any(|ctx| matches!(ctx, ParseContext::CodeBlock { .. }))
     }
 
+    /// Check if we're inside a table.
+    fn in_table(&self) -> bool {
+        self.stack.iter().any(|ctx| matches!(ctx, ParseContext::Table { .. }))
+    }
+
     /// Get mutable reference to current heading's text accumulator.
     fn current_heading_text(&mut self) -> Option<&mut String> {
         self.stack.iter_mut().rev().find_map(|ctx| {
@@ -290,7 +295,8 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
             }
 
             // Portal link detection: [label](path#L42-L58)
-            Event::Start(Tag::Link { dest_url, .. }) if !state.in_code_block() => {
+            // Portals are forbidden in code blocks (literal text) and tables (can't expand inline)
+            Event::Start(Tag::Link { dest_url, .. }) if !state.in_code_block() && !state.in_table() => {
                 if parse_line_anchor(&dest_url).is_some() {
                     state.push(ParseContext::PortalLink {
                         line,
@@ -1327,6 +1333,15 @@ mod tests {
         let meta = parse_markdown(content);
 
         // Portal inside code block should be ignored (literal text)
+        assert_eq!(meta.portals.len(), 0);
+    }
+
+    #[test]
+    fn parse_markdown_portal_in_table_cell_is_forbidden() {
+        let content = "| Module | Entry Point |\n|---|---|\n| Auth | [auth](src/auth.rs#L42-L55) |\n";
+        let meta = parse_markdown(content);
+
+        // Portal inside table cell should be ignored (tables can't expand portals)
         assert_eq!(meta.portals.len(), 0);
     }
 
