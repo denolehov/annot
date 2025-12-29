@@ -4,6 +4,7 @@
   import type { Range } from '$lib/range';
   import { getLineNumber, isCodeBlockFence } from '$lib/line-utils';
   import { rangeToKey, isLineInRange } from '$lib/range';
+  import Icon from '$lib/CommandPalette/Icon.svelte';
 
   interface Props {
     lines: Array<{ line: Line; displayIndex: number }>;
@@ -44,6 +45,33 @@
   }: Props = $props();
 
   let isMermaid = $derived(language === 'mermaid');
+  let copied = $state(false);
+
+  // Extract code content (excluding fence lines) for copying
+  function getCodeContent(): string {
+    return lines
+      .filter(({ line }) => !isFence(line))
+      .map(({ line }) => line.content)
+      .join('\n');
+  }
+
+  // Copy code block content to clipboard
+  async function copyCodeBlock() {
+    const content = getCodeContent();
+    try {
+      await navigator.clipboard.writeText(content);
+      copied = true;
+      setTimeout(() => (copied = false), 1500);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  }
+
+  // Check if this is the first content line (for no-language blocks)
+  function isFirstContentLine(displayIndex: number): boolean {
+    const contentLines = lines.filter(({ line }) => !isFence(line));
+    return contentLines.length > 0 && contentLines[0].displayIndex === displayIndex;
+  }
 
   // Check if a display index is selected
   function isSelected(displayIdx: number): boolean {
@@ -162,17 +190,25 @@
         {#if startFence && language}
           <span class="codeblock-header-info">
             <span class="lang-badge">{language}</span>
-            {#if isMermaid && onMermaidOpen}
+            <span class="codeblock-actions">
+              {#if isMermaid && onMermaidOpen}
+                <button
+                  class="codeblock-action-btn"
+                  onclick={onMermaidOpen}
+                  title="View diagram"
+                >
+                  <Icon name="view-finder" />
+                </button>
+              {/if}
               <button
-                class="mermaid-view-btn"
-                onclick={onMermaidOpen}
-                title="View diagram"
+                class="codeblock-action-btn"
+                class:copied
+                onclick={copyCodeBlock}
+                title={copied ? 'Copied!' : 'Copy code'}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="18" height="18">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.75H6A2.25 2.25 0 0 0 3.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0 1 20.25 6v1.5m0 9V18A2.25 2.25 0 0 1 18 20.25h-1.5m-9 0H6A2.25 2.25 0 0 1 3.75 18v-1.5M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                </svg>
+                <Icon name={copied ? 'check' : 'copy-code'} />
               </button>
-            {/if}
+            </span>
           </span>
         {:else if startFence || endFence}
           <span class="codeblock-footer-info"></span>
@@ -181,6 +217,18 @@
             {@html wrapPipes(line.html)}
           {:else}
             {@html wrapPipes(escapeHtml(line.content))}
+          {/if}
+          {#if !language && isFirstContentLine(displayIndex)}
+            <span class="codeblock-inline-actions">
+              <button
+                class="codeblock-action-btn"
+                class:copied
+                onclick={copyCodeBlock}
+                title={copied ? 'Copied!' : 'Copy code'}
+              >
+                <Icon name={copied ? 'check' : 'copy-code'} />
+              </button>
+            </span>
           {/if}
         {/if}
       </span>
@@ -291,30 +339,55 @@
     background: var(--accent);
   }
 
-  .mermaid-view-btn {
+  .codeblock-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: auto;
+    margin-right: 4px;
+  }
+
+  .codeblock-action-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     padding: 2px;
-    margin-left: auto;
-    margin-right: 4px;
     background: transparent;
     border: none;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     cursor: pointer;
-    transition: color 0.15s ease;
+    border-radius: 4px;
+    font-size: 16px;
+    transition: color 0.15s ease, background 0.15s ease;
   }
 
-  .mermaid-view-btn:hover {
-    color: var(--accent);
+  .codeblock-action-btn:hover {
+    color: var(--text-secondary);
+    background: var(--bg-hover);
   }
 
-  .mermaid-view-btn:focus-visible {
+  .codeblock-action-btn.copied {
+    color: var(--success, #22c55e);
+  }
+
+  .codeblock-action-btn:focus-visible {
     outline: 1px solid var(--focus-ring);
     outline-offset: 2px;
   }
 
-  .mermaid-view-btn svg {
-    display: block;
+  /* Positioning wrapper for inline actions (code blocks without language) */
+  .codeblock-inline-actions {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  /* Ensure content lines have relative positioning for inline actions */
+  .line.codeblock-content .code {
+    position: relative;
   }
 </style>
