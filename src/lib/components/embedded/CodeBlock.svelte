@@ -155,6 +155,7 @@
     {@const fence = isFence(line)}
     {@const startFence = isStartFence(line)}
     {@const endFence = isEndFence(line)}
+    {@const isPreview = hoveredDisplayIdx === displayIndex && !isDragging}
     <div
       class="line"
       class:codeblock-header={startFence && language}
@@ -163,6 +164,7 @@
       class:codeblock-footer={endFence && language}
       class:selected={isSelected(displayIndex)}
       class:annotated={hasAnnotation(displayIndex)}
+      class:preview={isPreview}
       data-display-idx={displayIndex}
       onmouseenter={() => onMouseEnter(displayIndex)}
       onmouseleave={onMouseLeave}
@@ -304,6 +306,17 @@
   .gutter.codeblock-gutter {
     color: var(--text-muted);
     background: var(--bg-main);
+  }
+
+  /* Gutter highlight for selected/preview lines */
+  .line.selected .gutter.codeblock-gutter {
+    background: var(--selection-bg);
+    color: var(--text-secondary);
+  }
+
+  .line.preview .gutter.codeblock-gutter {
+    background: var(--selection-bg-preview);
+    color: var(--text-secondary);
   }
 
   .line.codeblock-header .gutter.codeblock-gutter {

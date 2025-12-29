@@ -17,7 +17,7 @@
   import { Header, StatusBar, SessionEditor } from "$lib/components";
   import { useExitModes } from "$lib/composables/useExitModes.svelte";
   import { useContentTracking } from "$lib/composables/useContentTracking.svelte";
-  import { useSelection } from "$lib/composables/useSelection.svelte";
+  import { useInteraction } from "$lib/composables/useInteraction.svelte";
   import { useAnnotations } from "$lib/composables/useAnnotations.svelte";
   import { useKeyboard } from "$lib/composables/useKeyboard.svelte";
   import type { SaveContentResponse } from "$lib/types";
@@ -392,12 +392,25 @@
     return constrained;
   }
 
-  // Selection state (composable)
-  const selectionState = useSelection({
+  // Interaction state (composable) — unified hover/selection state machine
+  const interaction = useInteraction({
     isLineSelectable,
     constrainToBounds: constrainToSelectionBounds,
-    getDisplayIdxFromEvent,
   });
+
+  // Derived values for component compatibility (temporary during migration)
+  let interactionSelection = $derived(interaction.range);
+  let interactionIsDragging = $derived(interaction.phase === 'selecting');
+  let interactionHoveredIdx = $derived(interaction.hoverLine);
+
+  // Adapter handlers for embedded components (MouseEvent → PointerEvent)
+  function handleGutterPointerDown(displayIdx: number, e: MouseEvent) {
+    interaction.handlePointerDown(displayIdx, e as PointerEvent);
+  }
+
+  function handleAddPointerDown(displayIdx: number, e: MouseEvent) {
+    interaction.handlePointerDown(displayIdx, e as PointerEvent);
+  }
 
   // Annotation state (composable)
   const annotationState = useAnnotations({
@@ -463,8 +476,8 @@
 
   // Active editor range (for positioning the editor overlay)
   let activeEditorRange = $derived.by(() => {
-    const sel = selectionState.selection;
-    if (!sel || selectionState.isDragging) return null;
+    const sel = interaction.range;
+    if (!sel || interaction.phase === 'selecting') return null;
     // Check if there's an existing annotation at the last selected line
     const lastLine = Math.max(sel.start, sel.end);
     const existing = annotationState.getAtLine(lastLine);
@@ -480,19 +493,19 @@
 
   // Derived: last line of current selection (for positioning editor)
   let lastSelectedLine = $derived.by(() => {
-    const sel = selectionState.selection;
+    const sel = interaction.range;
     if (!sel) return null;
     return Math.max(sel.start, sel.end);
   });
 
   async function updateAnnotation(content: JSONContent | null) {
-    const sel = selectionState.selection;
+    const sel = interaction.range;
     if (!sel) return;
     await annotationState.upsert(sel, content);
   }
 
   function sealCurrentAnnotation() {
-    const sel = selectionState.selection;
+    const sel = interaction.range;
     if (!sel) return;
 
     // Don't seal if we're creating a tag from this editor - user will return after CP closes
@@ -506,7 +519,7 @@
       // Remove empty annotation
       annotationState.remove(key);
     }
-    selectionState.clearSelection();
+    interaction.clearSelection();
   }
 
   // Session comment handlers
@@ -640,11 +653,19 @@
     return annotationState.getAtLine(displayIdx);
   }
 
-  // Check if a display index is selected
+  // Check if a display index is selected (full selection highlight)
   function isSelected(displayIdx: number): boolean {
-    const sel = selectionState.selection;
+    const sel = interaction.range;
     if (!sel) return false;
+    // Show selection highlight for selecting/committed/editing phases
+    const phase = interaction.phase;
+    if (phase === 'idle' || phase === 'hovering') return false;
     return isLineInRange(displayIdx, sel);
+  }
+
+  // Check if a display index is in preview state (hover - lighter highlight)
+  function isPreview(displayIdx: number): boolean {
+    return interaction.isLinePreview(displayIdx);
   }
 
   // Check if a line starts a mermaid code block
@@ -693,20 +714,11 @@
     return rangeLines.join('\n');
   }
 
-  /** Get display index (1-indexed) from a mouse event on a line element. */
-  function getDisplayIdxFromEvent(e: MouseEvent): number | null {
-    const el = e.target as Element;
-    const row = el.closest('.line') as HTMLElement | null;
-    if (!row) return null;
-    const idx = parseInt(row.dataset.displayIdx ?? '', 10);
-    return Number.isNaN(idx) ? null : idx;
-  }
-
   // Keyboard handling (composable)
   const keyboard = useKeyboard(
     {
-      onShiftDown: () => selectionState.handleShiftKeyDown(),
-      onShiftUp: () => selectionState.handleShiftKeyUp(),
+      onShiftDown: () => interaction.handleShiftKeyDown(),
+      onShiftUp: () => interaction.handleShiftKeyUp(),
       onTabCycle: (dir) => dir === 'forward' ? exitModeState.cycleForward() : exitModeState.cycleBackward(),
       onOpenSessionEditor: openSessionEditor,
       onOpenCommandPalette: () => commandPaletteOpen = true,
@@ -715,18 +727,18 @@
       onZoomOut: () => contentZoom = Math.max(contentZoom - 0.1, 0.5),
       onZoomReset: () => contentZoom = 1.0,
       onCommentHoveredLine: () => {
-        if (selectionState.hoveredDisplayIdx !== null) {
-          selectionState.selectLine(selectionState.hoveredDisplayIdx);
+        if (interaction.hoverLine !== null) {
+          interaction.selectLine(interaction.hoverLine);
         }
       },
     },
     {
-      isEditorActive: () => !!selectionState.selection || sessionEditorOpen,
+      isEditorActive: () => !!interaction.range || sessionEditorOpen,
       isCommandPaletteOpen: () => commandPaletteOpen,
       isSaveModalOpen: () => saveModalOpen,
-      hasHoveredLine: () => selectionState.hoveredDisplayIdx !== null,
+      hasHoveredLine: () => interaction.hoverLine !== null,
       hasExitModes: () => exitModeState.modes.length > 0,
-      isHoveredLineSelectable: () => selectionState.hoveredDisplayIdx !== null && isLineSelectable(selectionState.hoveredDisplayIdx),
+      isHoveredLineSelectable: () => interaction.hoverLine !== null && isLineSelectable(interaction.hoverLine),
     }
   );
 
@@ -815,13 +827,19 @@
   {:else}
     <div
       class="content"
-      class:shift-held={selectionState.isShiftHeld}
+      class:shift-held={interaction.isShiftHeld}
+      class:phase-idle={interaction.phase === 'idle'}
+      class:phase-hovering={interaction.phase === 'hovering'}
+      class:phase-selecting={interaction.phase === 'selecting'}
+      class:phase-committed={interaction.phase === 'committed'}
+      class:phase-editing={interaction.phase === 'editing'}
       class:diff-mode={diffMetadata !== null}
       bind:this={contentEl}
       onscroll={handleContentScroll}
-      onmousedown={selectionState.handleContentMouseDown}
-      onmousemove={selectionState.handleMouseMove}
-      onmouseup={selectionState.handleMouseUp}
+      onpointerdown={interaction.handleContentPointerDown}
+      onpointermove={interaction.handlePointerMove}
+      onpointerup={interaction.handleGlobalPointerUp}
+      onmouseleave={interaction.handleContentLeave}
       role="presentation"
     >
       <div
@@ -833,17 +851,17 @@
         {#if segment.type === 'portal'}
           <Portal
             lines={segment.lines}
-            selection={selectionState.selection}
-            isDragging={selectionState.isDragging}
-            hoveredDisplayIdx={selectionState.hoveredDisplayIdx}
+            selection={interactionSelection}
+            isDragging={interactionIsDragging}
+            hoveredDisplayIdx={interactionHoveredIdx}
             {markdownMetadata}
             annotations={annotationsMap}
             {lastSelectedLine}
-            onGutterMouseDown={selectionState.handleGutterMouseDown}
-            onGutterClick={selectionState.handleGutterClick}
-            onAddMouseDown={selectionState.handleAddMouseDown}
-            onMouseEnter={(idx) => selectionState.hoveredDisplayIdx = idx}
-            onMouseLeave={() => selectionState.hoveredDisplayIdx = null}
+            onGutterMouseDown={handleGutterPointerDown}
+            onGutterClick={interaction.handleGutterClick}
+            onAddMouseDown={handleAddPointerDown}
+            onMouseEnter={interaction.handleLineEnter}
+            onMouseLeave={interaction.handleLineLeave}
           >
             {#snippet annotationSlot(displayIndex, rangeKey)}
               {#if rangeKey}
@@ -853,7 +871,7 @@
                     sealed={annotationState.isSealed(rangeKey)}
                     onUpdate={updateAnnotation}
                     onUnseal={() => {
-                      selectionState.selection = keyToRange(rangeKey);
+                      interaction.setSelection(keyToRange(rangeKey));
                       annotationState.unseal(rangeKey);
                     }}
                     onDismiss={sealCurrentAnnotation}
@@ -874,17 +892,17 @@
           <CodeBlock
             lines={segment.lines}
             language={segment.language}
-            selection={selectionState.selection}
-            isDragging={selectionState.isDragging}
-            hoveredDisplayIdx={selectionState.hoveredDisplayIdx}
+            selection={interactionSelection}
+            isDragging={interactionIsDragging}
+            hoveredDisplayIdx={interactionHoveredIdx}
             {markdownMetadata}
             annotations={annotationsMap}
             {lastSelectedLine}
-            onGutterMouseDown={selectionState.handleGutterMouseDown}
-            onGutterClick={selectionState.handleGutterClick}
-            onAddMouseDown={selectionState.handleAddMouseDown}
-            onMouseEnter={(idx) => selectionState.hoveredDisplayIdx = idx}
-            onMouseLeave={() => selectionState.hoveredDisplayIdx = null}
+            onGutterMouseDown={handleGutterPointerDown}
+            onGutterClick={interaction.handleGutterClick}
+            onAddMouseDown={handleAddPointerDown}
+            onMouseEnter={interaction.handleLineEnter}
+            onMouseLeave={interaction.handleLineLeave}
             onMermaidOpen={mermaidBlock ? () => openMermaidWindow(mermaidBlock) : undefined}
           >
             {#snippet annotationSlot(displayIndex, rangeKey)}
@@ -895,7 +913,7 @@
                     sealed={annotationState.isSealed(rangeKey)}
                     onUpdate={updateAnnotation}
                     onUnseal={() => {
-                      selectionState.selection = keyToRange(rangeKey);
+                      interaction.setSelection(keyToRange(rangeKey));
                       annotationState.unseal(rangeKey);
                     }}
                     onDismiss={sealCurrentAnnotation}
@@ -913,17 +931,17 @@
         {:else if segment.type === 'table'}
           <Table
             lines={segment.lines}
-            selection={selectionState.selection}
-            isDragging={selectionState.isDragging}
-            hoveredDisplayIdx={selectionState.hoveredDisplayIdx}
+            selection={interactionSelection}
+            isDragging={interactionIsDragging}
+            hoveredDisplayIdx={interactionHoveredIdx}
             {markdownMetadata}
             annotations={annotationsMap}
             {lastSelectedLine}
-            onGutterMouseDown={selectionState.handleGutterMouseDown}
-            onGutterClick={selectionState.handleGutterClick}
-            onAddMouseDown={selectionState.handleAddMouseDown}
-            onMouseEnter={(idx) => selectionState.hoveredDisplayIdx = idx}
-            onMouseLeave={() => selectionState.hoveredDisplayIdx = null}
+            onGutterMouseDown={handleGutterPointerDown}
+            onGutterClick={interaction.handleGutterClick}
+            onAddMouseDown={handleAddPointerDown}
+            onMouseEnter={interaction.handleLineEnter}
+            onMouseLeave={interaction.handleLineLeave}
           >
             {#snippet annotationSlot(displayIndex, rangeKey)}
               {#if rangeKey}
@@ -933,7 +951,7 @@
                     sealed={annotationState.isSealed(rangeKey)}
                     onUpdate={updateAnnotation}
                     onUnseal={() => {
-                      selectionState.selection = keyToRange(rangeKey);
+                      interaction.setSelection(keyToRange(rangeKey));
                       annotationState.unseal(rangeKey);
                     }}
                     onDismiss={sealCurrentAnnotation}
@@ -962,26 +980,27 @@
               class="line"
               class:selected={isSelected(displayIndex)}
               class:annotated={hasAnnotation(displayIndex)}
+              class:preview={isPreview(displayIndex)}
               class:diff-added={diffKind === 'added'}
               class:diff-deleted={diffKind === 'deleted'}
               class:diff-context={diffKind === 'context'}
               class:diff-header={diffKind === 'file_header' || diffKind === 'hunk_header'}
               data-display-idx={displayIndex}
-              onmouseenter={() => selectionState.hoveredDisplayIdx = displayIndex}
-              onmouseleave={() => selectionState.hoveredDisplayIdx = null}
+              onmouseenter={() => interaction.handleLineEnter(displayIndex)}
+              onmouseleave={() => interaction.handleLineLeave()}
               role="presentation"
             >
               <button
                 class="add-btn"
-                onmousedown={(e) => selectionState.handleAddMouseDown(displayIndex, e)}
+                onpointerdown={(e) => interaction.handlePointerDown(displayIndex, e)}
                 aria-label="Add annotation"
               >+</button>
               <!-- svelte-ignore a11y_click_events_have_key_events -->
               <span
                 class="gutter"
                 class:selected={isSelected(displayIndex)}
-                onmousedown={(e) => selectionState.handleGutterMouseDown(displayIndex, e)}
-                onclick={() => selectionState.handleGutterClick(displayIndex)}
+                onpointerdown={(e) => interaction.handlePointerDown(displayIndex, e)}
+                onclick={() => interaction.handleGutterClick(displayIndex)}
                 role="button"
                 tabindex="-1"
               >
@@ -1006,8 +1025,8 @@
               {/if}
             </div>
             {@const annotationAtLine = getAnnotationAtLine(displayIndex)}
-            {@const isLastSelectedLine = displayIndex === lastSelectedLine && selectionState.selection && !selectionState.isDragging}
-            {@const rangeKey = annotationAtLine?.key ?? (isLastSelectedLine && selectionState.selection ? rangeToKey(selectionState.selection) : null)}
+            {@const isLastSelectedLine = displayIndex === lastSelectedLine && interaction.range && interaction.phase !== 'selecting'}
+            {@const rangeKey = annotationAtLine?.key ?? (isLastSelectedLine && interaction.range ? rangeToKey(interaction.range) : null)}
             {#if rangeKey}
               {#key rangeKey}
                 <AnnotationEditor
@@ -1015,7 +1034,7 @@
                   sealed={annotationState.isSealed(rangeKey)}
                   onUpdate={updateAnnotation}
                   onUnseal={() => {
-                    selectionState.selection = keyToRange(rangeKey);
+                    interaction.setSelection(keyToRange(rangeKey));
                     annotationState.unseal(rangeKey);
                   }}
                   onDismiss={sealCurrentAnnotation}

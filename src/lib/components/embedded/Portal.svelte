@@ -96,6 +96,7 @@
     {@const sourceLineNum = getLineNumber(line)}
     {@const portalSemantics = getPortalSemantics(line)}
     {@const rangeKey = computeRangeKey(displayIndex)}
+    {@const isPreview = hoveredDisplayIdx === displayIndex && !isDragging}
     <div
       class="line"
       class:portal-header={portalSemantics?.kind === 'header'}
@@ -103,6 +104,7 @@
       class:portal-footer={portalSemantics?.kind === 'footer'}
       class:selected={isSelected(displayIndex)}
       class:annotated={hasAnnotation(displayIndex)}
+      class:preview={isPreview}
       data-display-idx={displayIndex}
       onmouseenter={() => onMouseEnter(displayIndex)}
       onmouseleave={onMouseLeave}
@@ -184,6 +186,17 @@
 
   .gutter.portal-gutter {
     color: var(--text-muted);
+  }
+
+  /* Gutter highlight for selected/preview lines */
+  .line.selected .gutter.portal-gutter {
+    background: var(--selection-bg);
+    color: var(--text-secondary);
+  }
+
+  .line.preview .gutter.portal-gutter {
+    background: var(--selection-bg-preview);
+    color: var(--text-secondary);
   }
 
   .line.portal-header .gutter.portal-gutter {

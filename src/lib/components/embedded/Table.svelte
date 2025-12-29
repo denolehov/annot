@@ -150,7 +150,7 @@
   let lastDisplayIndex = $derived(visibleLines[visibleLines.length - 1]?.displayIndex ?? -1);
 </script>
 
-<div class="table-wrapper" class:can-scroll-left={canScrollLeft} class:can-scroll-right={canScrollRight}>
+<div class="table-wrapper" class:can-scroll-left={canScrollLeft} class:can-scroll-right={canScrollRight} class:is-dragging={isDragging}>
   <div class="table-scroller" use:setupScrollIndicators>
     <table class="content-table">
       <tbody>
@@ -162,10 +162,12 @@
           {@const isFirst = displayIndex === firstDisplayIndex}
           {@const isLast = displayIndex === lastDisplayIndex}
 
+          {@const isPreview = hoveredDisplayIdx === displayIndex && !isDragging}
           <tr
             class="content-row"
             class:selected={isSelected(displayIndex)}
             class:annotated={hasAnnotation(displayIndex)}
+            class:preview={isPreview}
             class:table-header-row={isHeader}
             class:table-first-row={isFirst}
             class:table-last-row={isLast}
@@ -283,8 +285,9 @@
     height: 22px;
   }
 
-  .content-row:hover {
-    background-image: linear-gradient(rgba(0,0,0,0.04), rgba(0,0,0,0.04));
+  /* Preview highlight (hover state - lighter than selection) */
+  .content-row.preview {
+    background-color: var(--selection-bg-preview);
   }
 
   .content-row.selected,
@@ -405,7 +408,8 @@
     box-shadow: 0 3px 6px rgba(0,0,0,0.15);
   }
 
-  .content-row:not(.selected):hover .add-btn {
+  /* Show add button on preview rows (hover state) */
+  .content-row.preview .add-btn {
     display: flex;
   }
 </style>

@@ -122,8 +122,20 @@ div.line {
 	tab-size: 4;
 }
 
-div.line:hover {
-	background-image: linear-gradient(rgba(0,0,0,0.04), rgba(0,0,0,0.04));
+/* Preview highlight (hover state - lighter than selection) */
+div.line.preview {
+	background-color: var(--selection-bg-preview);
+}
+
+div.line.preview::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 3px;
+	background: var(--selection-border);
+	opacity: 0.5;
 }
 
 /* Selection (amber family - matches hl) */
@@ -199,7 +211,8 @@ div.line.annotated::before {
 	box-shadow: 0 3px 6px rgba(0,0,0,0.15);
 }
 
-div.line:not(.selected):hover .add-btn {
+/* Show add button on preview lines (hover state) */
+div.line.preview .add-btn {
 	display: flex;
 }
 
@@ -222,7 +235,8 @@ div.line:not(.selected):hover .add-btn {
 	pointer-events: auto;
 }
 
-.gutter:hover {
+/* Gutter styling in preview state */
+div.line.preview .gutter {
 	color: var(--text-secondary);
 }
 
