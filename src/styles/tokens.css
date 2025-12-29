@@ -244,6 +244,18 @@
 }
 
 /* ===========================================
+   ICON UTILITIES
+   =========================================== */
+
+.cp-icon {
+	width: 1em;
+	height: 1em;
+	display: inline-block;
+	vertical-align: -0.125em;
+	flex-shrink: 0;
+}
+
+/* ===========================================
    DARK MODE - "Midnight Study"
 
    Warm, not cold. Deep zinc backgrounds let content float.
