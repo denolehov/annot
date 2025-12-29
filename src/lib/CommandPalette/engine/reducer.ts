@@ -4,13 +4,6 @@
 import type { State, Action, Command, QueryContext, ReduceResult, Namespace, Item, PendingItem } from './types';
 
 /**
- * Clamp a number between min and max (inclusive)
- */
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-/**
  * Compute the item list for ITEM_FILTER state
  * Returns matches, whether to show Create option, and Create's index
  */
@@ -89,20 +82,30 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
       }
 
       if (action.type === 'ARROW_DOWN' || action.type === 'ARROW_UP') {
-        // First arrow down from filtering mode: just switch to navigating (keep index)
-        if (state.inputMode === 'filtering' && action.type === 'ARROW_DOWN') {
-          return { state: { ...state, inputMode: 'navigating' }, commands };
-        }
-
         const matches = ctx.filterNamespaces(state.query);
         const maxIndex = Math.max(0, matches.length - 1);
-        const delta = action.type === 'ARROW_DOWN' ? 1 : -1;
-        const nextIndex = clamp(state.selectedIndex + delta, 0, maxIndex);
 
-        // Arrow up at top returns to filtering mode
+        // Cycle: filtering ↔ nav[0] ... nav[n] ↔ filtering
+        if (state.inputMode === 'filtering') {
+          if (action.type === 'ARROW_DOWN') {
+            return { state: { ...state, selectedIndex: 0, inputMode: 'navigating' }, commands };
+          }
+          // Arrow up from filtering: go to last item
+          return { state: { ...state, selectedIndex: maxIndex, inputMode: 'navigating' }, commands };
+        }
+
+        // Arrow up at first item: return to filtering
         if (action.type === 'ARROW_UP' && state.selectedIndex === 0) {
           return { state: { ...state, inputMode: 'filtering' }, commands };
         }
+
+        // Arrow down at last item: return to filtering
+        if (action.type === 'ARROW_DOWN' && state.selectedIndex === maxIndex) {
+          return { state: { ...state, inputMode: 'filtering' }, commands };
+        }
+
+        const delta = action.type === 'ARROW_DOWN' ? 1 : -1;
+        const nextIndex = state.selectedIndex + delta;
 
         return { state: { ...state, selectedIndex: nextIndex, inputMode: 'navigating' }, commands };
       }
@@ -200,21 +203,31 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
       }
 
       if (action.type === 'ARROW_DOWN' || action.type === 'ARROW_UP') {
-        // First arrow down from filtering mode: just switch to navigating (keep index)
-        if (state.inputMode === 'filtering' && action.type === 'ARROW_DOWN') {
-          return { state: clearPending({ ...state, inputMode: 'navigating' }), commands };
-        }
-
         const { matches, showCreate } = computeItemList(state, ctx);
         const totalItems = matches.length + (showCreate ? 1 : 0);
         const maxIndex = Math.max(0, totalItems - 1);
-        const delta = action.type === 'ARROW_DOWN' ? 1 : -1;
-        const nextIndex = clamp(state.selectedIndex + delta, 0, maxIndex);
 
-        // Arrow up at top returns to filtering mode
+        // Cycle: filtering ↔ nav[0] ... nav[n] ↔ filtering
+        if (state.inputMode === 'filtering') {
+          if (action.type === 'ARROW_DOWN') {
+            return { state: clearPending({ ...state, selectedIndex: 0, inputMode: 'navigating' }), commands };
+          }
+          // Arrow up from filtering: go to last item
+          return { state: clearPending({ ...state, selectedIndex: maxIndex, inputMode: 'navigating' }), commands };
+        }
+
+        // Arrow up at first item: return to filtering
         if (action.type === 'ARROW_UP' && state.selectedIndex === 0) {
           return { state: clearPending({ ...state, inputMode: 'filtering' }), commands };
         }
+
+        // Arrow down at last item: return to filtering
+        if (action.type === 'ARROW_DOWN' && state.selectedIndex === maxIndex) {
+          return { state: clearPending({ ...state, inputMode: 'filtering' }), commands };
+        }
+
+        const delta = action.type === 'ARROW_DOWN' ? 1 : -1;
+        const nextIndex = state.selectedIndex + delta;
 
         // Arrow navigation in navigating mode
         return { state: clearPending({ ...state, selectedIndex: nextIndex, inputMode: 'navigating' }), commands };

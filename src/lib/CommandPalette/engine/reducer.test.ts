@@ -362,6 +362,209 @@ describe('reducer: obsidian namespace special handling', () => {
   });
 });
 
+describe('reducer: arrow navigation cycling', () => {
+  const ctx = createMockContext(
+    [tagsNamespace, copyNamespace, saveNamespace],
+    { tags: regularItems, copy: actionItems, save: singleActionItem }
+  );
+
+  describe('NAMESPACE_FILTER cycling', () => {
+    it('arrow down from filtering goes to first item', () => {
+      const state: State = {
+        type: 'NAMESPACE_FILTER',
+        query: '',
+        selectedIndex: 0,
+        inputMode: 'filtering',
+      };
+
+      const result = reduce(state, { type: 'ARROW_DOWN' }, ctx);
+
+      expect(result.state.type).toBe('NAMESPACE_FILTER');
+      if (result.state.type === 'NAMESPACE_FILTER') {
+        expect(result.state.selectedIndex).toBe(0);
+        expect(result.state.inputMode).toBe('navigating');
+      }
+    });
+
+    it('arrow up from filtering goes to last item', () => {
+      const state: State = {
+        type: 'NAMESPACE_FILTER',
+        query: '',
+        selectedIndex: 0,
+        inputMode: 'filtering',
+      };
+
+      const result = reduce(state, { type: 'ARROW_UP' }, ctx);
+
+      expect(result.state.type).toBe('NAMESPACE_FILTER');
+      if (result.state.type === 'NAMESPACE_FILTER') {
+        expect(result.state.selectedIndex).toBe(2); // Last namespace (save)
+        expect(result.state.inputMode).toBe('navigating');
+      }
+    });
+
+    it('arrow up at first item returns to filtering', () => {
+      const state: State = {
+        type: 'NAMESPACE_FILTER',
+        query: '',
+        selectedIndex: 0,
+        inputMode: 'navigating',
+      };
+
+      const result = reduce(state, { type: 'ARROW_UP' }, ctx);
+
+      expect(result.state.type).toBe('NAMESPACE_FILTER');
+      if (result.state.type === 'NAMESPACE_FILTER') {
+        expect(result.state.inputMode).toBe('filtering');
+      }
+    });
+
+    it('arrow down at last item returns to filtering', () => {
+      const state: State = {
+        type: 'NAMESPACE_FILTER',
+        query: '',
+        selectedIndex: 2, // Last item
+        inputMode: 'navigating',
+      };
+
+      const result = reduce(state, { type: 'ARROW_DOWN' }, ctx);
+
+      expect(result.state.type).toBe('NAMESPACE_FILTER');
+      if (result.state.type === 'NAMESPACE_FILTER') {
+        expect(result.state.inputMode).toBe('filtering');
+      }
+    });
+
+    it('arrow down in middle moves to next item', () => {
+      const state: State = {
+        type: 'NAMESPACE_FILTER',
+        query: '',
+        selectedIndex: 1,
+        inputMode: 'navigating',
+      };
+
+      const result = reduce(state, { type: 'ARROW_DOWN' }, ctx);
+
+      expect(result.state.type).toBe('NAMESPACE_FILTER');
+      if (result.state.type === 'NAMESPACE_FILTER') {
+        expect(result.state.selectedIndex).toBe(2);
+        expect(result.state.inputMode).toBe('navigating');
+      }
+    });
+
+    it('arrow up in middle moves to previous item', () => {
+      const state: State = {
+        type: 'NAMESPACE_FILTER',
+        query: '',
+        selectedIndex: 1,
+        inputMode: 'navigating',
+      };
+
+      const result = reduce(state, { type: 'ARROW_UP' }, ctx);
+
+      expect(result.state.type).toBe('NAMESPACE_FILTER');
+      if (result.state.type === 'NAMESPACE_FILTER') {
+        expect(result.state.selectedIndex).toBe(0);
+        expect(result.state.inputMode).toBe('navigating');
+      }
+    });
+  });
+
+  describe('ITEM_FILTER cycling', () => {
+    it('arrow down from filtering goes to first item', () => {
+      const state: State = {
+        type: 'ITEM_FILTER',
+        namespace: copyNamespace,
+        query: '',
+        selectedIndex: 0,
+        pendingDelete: false,
+        inputMode: 'filtering',
+      };
+
+      const result = reduce(state, { type: 'ARROW_DOWN' }, ctx);
+
+      expect(result.state.type).toBe('ITEM_FILTER');
+      if (result.state.type === 'ITEM_FILTER') {
+        expect(result.state.selectedIndex).toBe(0);
+        expect(result.state.inputMode).toBe('navigating');
+      }
+    });
+
+    it('arrow up from filtering goes to last item', () => {
+      const state: State = {
+        type: 'ITEM_FILTER',
+        namespace: copyNamespace,
+        query: '',
+        selectedIndex: 0,
+        pendingDelete: false,
+        inputMode: 'filtering',
+      };
+
+      const result = reduce(state, { type: 'ARROW_UP' }, ctx);
+
+      expect(result.state.type).toBe('ITEM_FILTER');
+      if (result.state.type === 'ITEM_FILTER') {
+        expect(result.state.selectedIndex).toBe(2); // Last item (3 items: 0, 1, 2)
+        expect(result.state.inputMode).toBe('navigating');
+      }
+    });
+
+    it('arrow up at first item returns to filtering', () => {
+      const state: State = {
+        type: 'ITEM_FILTER',
+        namespace: copyNamespace,
+        query: '',
+        selectedIndex: 0,
+        pendingDelete: false,
+        inputMode: 'navigating',
+      };
+
+      const result = reduce(state, { type: 'ARROW_UP' }, ctx);
+
+      expect(result.state.type).toBe('ITEM_FILTER');
+      if (result.state.type === 'ITEM_FILTER') {
+        expect(result.state.inputMode).toBe('filtering');
+      }
+    });
+
+    it('arrow down at last item returns to filtering', () => {
+      const state: State = {
+        type: 'ITEM_FILTER',
+        namespace: copyNamespace,
+        query: '',
+        selectedIndex: 2, // Last item
+        pendingDelete: false,
+        inputMode: 'navigating',
+      };
+
+      const result = reduce(state, { type: 'ARROW_DOWN' }, ctx);
+
+      expect(result.state.type).toBe('ITEM_FILTER');
+      if (result.state.type === 'ITEM_FILTER') {
+        expect(result.state.inputMode).toBe('filtering');
+      }
+    });
+
+    it('arrow navigation clears pendingDelete', () => {
+      const state: State = {
+        type: 'ITEM_FILTER',
+        namespace: tagsNamespace,
+        query: '',
+        selectedIndex: 0,
+        pendingDelete: true,
+        inputMode: 'navigating',
+      };
+
+      const result = reduce(state, { type: 'ARROW_DOWN' }, ctx);
+
+      expect(result.state.type).toBe('ITEM_FILTER');
+      if (result.state.type === 'ITEM_FILTER') {
+        expect(result.state.pendingDelete).toBe(false);
+      }
+    });
+  });
+});
+
 describe('reducer: single-action namespace auto-execute', () => {
   // Context with save namespace (single action item, no fields)
   const ctx = createMockContext(
