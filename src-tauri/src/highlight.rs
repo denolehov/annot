@@ -26,12 +26,13 @@ impl Highlighter {
         }
     }
 
-    /// Map markdown code fence language names to file extensions.
-    /// Many languages use their full name in code fences but syntect needs the extension.
+    /// Map markdown code fence language names to file extensions for syntect.
     ///
-    /// This is a convenience wrapper around [`crate::lang::fence_language_to_extension`].
+    /// Uses [`crate::lang::fence_language_to_extension`] then applies syntect-specific
+    /// fallbacks (e.g., TypeScript → JavaScript since syntect lacks TS grammar).
     pub fn language_to_extension(lang: &str) -> String {
-        crate::lang::fence_language_to_extension(lang)
+        let ext = crate::lang::fence_language_to_extension(lang);
+        Self::extension_fallback(&ext).to_string()
     }
 
     /// Detect language from file extension.
@@ -348,9 +349,10 @@ function greet(name) {
 
     #[test]
     fn mermaid_language_to_extension_mapping() {
-        assert_eq!(Highlighter::language_to_extension("mermaid"), "mermaid");
-        assert_eq!(Highlighter::language_to_extension("mmd"), "mermaid");
-        assert_eq!(Highlighter::language_to_extension("MERMAID"), "mermaid");
+        // languages crate returns "mmd" as primary extension for Mermaid
+        assert_eq!(Highlighter::language_to_extension("mermaid"), "mmd");
+        assert_eq!(Highlighter::language_to_extension("mmd"), "mmd");
+        assert_eq!(Highlighter::language_to_extension("MERMAID"), "mmd");
     }
 
     #[test]

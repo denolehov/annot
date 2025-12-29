@@ -1422,7 +1422,7 @@ mod tests {
         assert_eq!(lang::extension_to_fence_language("rs"), "rust");
         assert_eq!(lang::extension_to_fence_language("go"), "go");
         assert_eq!(lang::extension_to_fence_language("ts"), "typescript");
-        assert_eq!(lang::extension_to_fence_language("tsx"), "typescript");
+        assert_eq!(lang::extension_to_fence_language("tsx"), "tsx"); // TSX is its own language
         assert_eq!(lang::extension_to_fence_language("py"), "python");
         assert_eq!(lang::extension_to_fence_language("js"), "javascript");
         assert_eq!(lang::extension_to_fence_language("unknown"), "");
