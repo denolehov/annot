@@ -949,7 +949,10 @@
             {/snippet}
           </Table>
         {:else if segment.type === 'separator'}
-          <hr class="separator" />
+          <div class="line separator-line">
+            <span class="gutter"></span>
+            <span class="code"><hr class="separator" /></span>
+          </div>
         {:else}
           {#each segment.lines as { line, displayIndex }}
             {@const sourceLineNum = getLineNumber(line)}

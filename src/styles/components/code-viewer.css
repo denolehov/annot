@@ -518,6 +518,14 @@ div.line.diff-context.annotated {
 }
 
 /* Horizontal rules / separators */
+div.line.separator-line {
+	pointer-events: none;
+}
+
+div.line.separator-line:hover {
+	background-image: none;
+}
+
 .separator {
 	border: none;
 	height: 1px;
