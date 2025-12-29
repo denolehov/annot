@@ -103,10 +103,14 @@
 			smoothScroll: false,
 		});
 
-		// Center diagram in canvas (canvas already offset by title bar via CSS margin-top)
+		// Position diagram in canvas (canvas already offset by title bar via CSS margin-top)
 		const canvasHeight = finalHeight - TITLE_BAR_HEIGHT;
+		const availableHeight = canvasHeight - TOOLBAR_HEIGHT;
 		const offsetX = (finalWidth - diagramWidth) / 2;
-		const offsetY = (canvasHeight - TOOLBAR_HEIGHT - diagramHeight) / 2;
+		// For tall diagrams, show from top; otherwise center vertically
+		const offsetY = diagramHeight > availableHeight
+			? DIAGRAM_PADDING / 2
+			: (availableHeight - diagramHeight) / 2;
 		panzoomInstance.zoomAbs(0, 0, 1);
 		panzoomInstance.moveTo(offsetX, offsetY);
 
@@ -193,12 +197,15 @@
 		const nativeWidth = parseFloat(svgEl.style.width) || svgEl.clientWidth;
 		const nativeHeight = parseFloat(svgEl.style.height) || svgEl.clientHeight;
 
-		// Set to 100% and center (canvas already offset by title bar, account for toolbar)
+		// Set to 100% and position (canvas already offset by title bar, account for toolbar)
 		panzoomInstance.zoomAbs(0, 0, 1);
 		const offsetX = (window.innerWidth - nativeWidth) / 2;
 		const canvasHeight = window.innerHeight - TITLE_BAR_HEIGHT;
 		const availableHeight = canvasHeight - TOOLBAR_HEIGHT;
-		const offsetY = (availableHeight - nativeHeight) / 2;
+		// For tall diagrams, show from top; otherwise center vertically
+		const offsetY = nativeHeight > availableHeight
+			? DIAGRAM_PADDING / 2
+			: (availableHeight - nativeHeight) / 2;
 		panzoomInstance.moveTo(offsetX, offsetY);
 	}
 
