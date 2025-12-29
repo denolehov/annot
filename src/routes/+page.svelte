@@ -1115,6 +1115,7 @@
     border-radius: 6px;
     color: var(--text-secondary);
     cursor: pointer;
+    font-size: 18px;
   }
 
   :global(.header-btn:hover) {
@@ -1130,12 +1131,7 @@
   }
 
   :global(.header-btn svg) {
-    opacity: 0.7;
     display: block;
-  }
-
-  :global(.header-btn:hover svg) {
-    opacity: 1;
   }
 
   .toast {

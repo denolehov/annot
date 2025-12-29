@@ -1,5 +1,6 @@
 <script lang="ts">
   import CopyDropdown from '$lib/CopyDropdown.svelte';
+  import Icon from '$lib/CommandPalette/Icon.svelte';
   import type { DiffMetadata, MarkdownMetadata, DiffFileInfo, HunkInfo, SectionInfo, JSONContent } from '$lib/types';
 
   interface Props {
@@ -133,9 +134,7 @@
   <div class="header-right">
     <CopyDropdown {showToast} />
     <button class="header-btn" onclick={onOpenSaveModal} title="Save to file (Cmd+S)">
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="16" height="16">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-      </svg>
+      <Icon name="save" />
     </button>
   </div>
 </header>
