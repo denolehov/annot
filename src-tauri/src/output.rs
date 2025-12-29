@@ -5,7 +5,8 @@ use crate::mcp::tools::SessionImage;
 use crate::portal::LoadedPortal;
 use crate::review::{FileKey, Review};
 use crate::state::{
-    Annotation, ContentMetadata, ContentModel, ContentNode, LineSemantics, PortalSemantics,
+    Annotation, ContentMetadata, ContentModel, ContentNode, LineOrigin, LineSemantics,
+    PortalSemantics,
 };
 
 /// Output mode determines how content is formatted.
@@ -371,7 +372,7 @@ fn format_annotation_block(
             if !line.content.trim().is_empty() {
                 // Format: "    N | content" (3 extra spaces for ">" prefix alignment)
                 if is_diff {
-                    format_diff_line(out, content, context_line_num, &line.content, false, line_num_width);
+                    format_diff_line(out, content, file_path, context_line_num, &line.content, false, line_num_width);
                 } else {
                     out.push_str(&format!(
                         "{:>width$} | {}\n",
@@ -388,7 +389,7 @@ fn format_annotation_block(
     for line_num in ann.start_line..=ann.end_line {
         if let Some(line) = content.find_line(file_path, line_num) {
             if is_diff {
-                format_diff_line(out, content, line_num, &line.content, true, line_num_width);
+                format_diff_line(out, content, file_path, line_num, &line.content, true, line_num_width);
             } else {
                 // Format: ">  N | content"
                 out.push_str(&format!(
@@ -429,25 +430,23 @@ fn format_diff_header(
     ann: &Annotation,
     file_path: &str,
 ) {
-    let diff_meta = match &content.metadata {
-        ContentMetadata::Diff(d) => d,
-        _ => return,
-    };
-
     // Use the file path we already have (from Review.files key)
     let file_name = file_path;
 
     // Collect old/new line ranges from the annotated lines
+    // Look up each line by path and source line number, extract info from Line.origin
     let mut old_lines: Vec<u32> = Vec::new();
     let mut new_lines: Vec<u32> = Vec::new();
 
     for line_num in ann.start_line..=ann.end_line {
-        if let Some(info) = diff_meta.lines.get(&line_num) {
-            if let Some(old) = info.old_line_num {
-                old_lines.push(old);
-            }
-            if let Some(new) = info.new_line_num {
-                new_lines.push(new);
+        if let Some(line) = content.find_line(file_path, line_num) {
+            if let LineOrigin::Diff { old_line, new_line, .. } = &line.origin {
+                if let Some(old) = old_line {
+                    old_lines.push(*old);
+                }
+                if let Some(new) = new_line {
+                    new_lines.push(*new);
+                }
             }
         }
     }
@@ -482,33 +481,27 @@ fn format_line_range(lines: &[u32]) -> String {
 fn format_diff_line(
     out: &mut String,
     content_model: &ContentModel,
+    file_path: &str,
     line_num: u32,
     content: &str,
     is_selected: bool,
     line_num_width: usize,
 ) {
-    let diff_meta = match &content_model.metadata {
-        ContentMetadata::Diff(d) => d,
-        _ => return,
-    };
-    let info = diff_meta.lines.get(&line_num);
-
     let prefix = if is_selected { "> " } else { "  " };
 
-    let (old_str, new_str) = match info {
-        Some(i) => {
-            let old = i
-                .old_line_num
-                .map(|n| n.to_string())
-                .unwrap_or_default();
-            let new = i
-                .new_line_num
-                .map(|n| n.to_string())
-                .unwrap_or_default();
-            (old, new)
-        }
-        None => (String::new(), String::new()),
-    };
+    // Look up line by path and source line number, extract old/new from origin
+    let (old_str, new_str) = content_model
+        .find_line(file_path, line_num)
+        .and_then(|line| {
+            if let LineOrigin::Diff { old_line, new_line, .. } = &line.origin {
+                let old = old_line.map(|n| n.to_string()).unwrap_or_default();
+                let new = new_line.map(|n| n.to_string()).unwrap_or_default();
+                Some((old, new))
+            } else {
+                None
+            }
+        })
+        .unwrap_or_default();
 
     // Format: "> old:new | content" or "  old:new | content"
     out.push_str(&format!(
@@ -1426,5 +1419,166 @@ mod tests {
         assert_eq!(lang::extension_to_fence_language("py"), "python");
         assert_eq!(lang::extension_to_fence_language("js"), "javascript");
         assert_eq!(lang::extension_to_fence_language("unknown"), "");
+    }
+
+    // ========== Diff annotation output tests ==========
+
+    /// Regression test: diff annotations must include line numbers in output.
+    /// Previously, find_line() only matched LineOrigin::Source, causing diff
+    /// annotations to show just "file.rs:" without old/new line numbers.
+    #[test]
+    fn diff_annotation_includes_line_numbers() {
+        use crate::input::{DiffSource, McpSource};
+
+        const SIMPLE_DIFF: &str = r#"diff --git a/file.rs b/file.rs
+--- a/file.rs
++++ b/file.rs
+@@ -1,3 +1,4 @@
+ fn main() {
+-    old_code();
++    new_code();
++    more_code();
+ }
+"#;
+
+        // Create diff content model
+        let source = ContentSource::Mcp(McpSource::Diff {
+            label: Some("test.diff".to_string()),
+            source: DiffSource::Raw,
+        });
+        let content = ContentModel::from_diff(SIMPLE_DIFF, source).unwrap();
+        let config = UserConfig::empty();
+        let mut review = Review::cli(content, config, "main".to_string());
+
+        // The added line "+    more_code();" is at new_line=3 in file.rs (unambiguous)
+        // Find the correct FileKey for the diff file
+        let diff_file_key = FileKey::diff_file(0);
+        let target = review.files.get_mut(&diff_file_key).unwrap();
+
+        // Add annotation at line 3 (the more_code line - only has new_line, no old_line)
+        target.upsert_annotation(
+            3,
+            3,
+            vec![ContentNode::Text {
+                text: "Review this change".to_string(),
+            }],
+        );
+
+        let output = format_output(&review, OutputMode::Cli).text;
+
+        // The output should include the file name with line number info
+        // Format: "file.rs (new:3):" for an added line
+        assert!(
+            output.contains("file.rs (new:3):"),
+            "Diff annotation header should include new line number. Got:\n{}",
+            output
+        );
+
+        // The output should include the line content with old:new format
+        assert!(
+            output.contains("more_code"),
+            "Diff annotation should include the line content. Got:\n{}",
+            output
+        );
+
+        // The annotation text should be present
+        assert!(
+            output.contains("Review this change"),
+            "Diff annotation should include annotation text. Got:\n{}",
+            output
+        );
+    }
+
+    /// Test that deleted lines in diff annotations show old line numbers.
+    #[test]
+    fn diff_annotation_deleted_line_shows_old_number() {
+        use crate::input::{DiffSource, McpSource};
+
+        const SIMPLE_DIFF: &str = r#"diff --git a/file.rs b/file.rs
+--- a/file.rs
++++ b/file.rs
+@@ -1,3 +1,3 @@
+ fn main() {
+-    old_code();
++    new_code();
+ }
+"#;
+
+        let source = ContentSource::Mcp(McpSource::Diff {
+            label: Some("test.diff".to_string()),
+            source: DiffSource::Raw,
+        });
+        let content = ContentModel::from_diff(SIMPLE_DIFF, source).unwrap();
+        let config = UserConfig::empty();
+        let mut review = Review::cli(content, config, "main".to_string());
+
+        // The deleted line "-    old_code();" is at old_line=2
+        let diff_file_key = FileKey::diff_file(0);
+        let target = review.files.get_mut(&diff_file_key).unwrap();
+
+        // Add annotation at line 2 (the deleted line - matched by old_line)
+        target.upsert_annotation(
+            2,
+            2,
+            vec![ContentNode::Text {
+                text: "This was removed".to_string(),
+            }],
+        );
+
+        let output = format_output(&review, OutputMode::Cli).text;
+
+        // For a deleted line, should show old line number
+        assert!(
+            output.contains("file.rs (old:2):"),
+            "Diff annotation header should include old line number for deleted line. Got:\n{}",
+            output
+        );
+    }
+
+    /// Test that context lines in diff annotations show both old and new line numbers.
+    #[test]
+    fn diff_annotation_context_line_shows_both_numbers() {
+        use crate::input::{DiffSource, McpSource};
+
+        const SIMPLE_DIFF: &str = r#"diff --git a/file.rs b/file.rs
+--- a/file.rs
++++ b/file.rs
+@@ -1,3 +1,4 @@
+ fn main() {
+-    old_code();
++    new_code();
++    more_code();
+ }
+"#;
+
+        let source = ContentSource::Mcp(McpSource::Diff {
+            label: Some("test.diff".to_string()),
+            source: DiffSource::Raw,
+        });
+        let content = ContentModel::from_diff(SIMPLE_DIFF, source).unwrap();
+        let config = UserConfig::empty();
+        let mut review = Review::cli(content, config, "main".to_string());
+
+        // The context line " fn main() {" is at old_line=1, new_line=1
+        let diff_file_key = FileKey::diff_file(0);
+        let target = review.files.get_mut(&diff_file_key).unwrap();
+
+        // Add annotation at line 1 (the context line)
+        target.upsert_annotation(
+            1,
+            1,
+            vec![ContentNode::Text {
+                text: "Check function signature".to_string(),
+            }],
+        );
+
+        let output = format_output(&review, OutputMode::Cli).text;
+
+        // For a context line, should show both old and new line numbers
+        assert!(
+            output.contains("file.rs (old:1 new:1):"),
+            "Diff annotation header should include both line numbers for context line. Got:\n{}",
+            output
+        );
     }
 }

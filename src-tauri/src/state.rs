@@ -742,8 +742,17 @@ impl ContentModel {
     /// which is necessary because portal lines are interleaved at their markdown
     /// insertion point, not at their source file line number position.
     pub fn find_line(&self, path: &str, line_num: u32) -> Option<&Line> {
-        self.lines.iter().find(|l| {
-            matches!(&l.origin, LineOrigin::Source { path: p, line } if p == path && *line == line_num)
+        self.lines.iter().find(|l| match &l.origin {
+            LineOrigin::Source { path: p, line } => p == path && *line == line_num,
+            LineOrigin::Diff {
+                path: p,
+                new_line,
+                old_line,
+            } => {
+                // Match by path and line number (prefer new_line, fallback to old_line)
+                p == path && (new_line == &Some(line_num) || old_line == &Some(line_num))
+            }
+            LineOrigin::Virtual => false,
         })
     }
 }
