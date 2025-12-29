@@ -228,35 +228,42 @@
     /* Hide native scrollbar */
     scrollbar-width: none;
     -ms-overflow-style: none;
-
-    /* Scroll fade masks - left fade starts after gutter */
-    --fade-size: 40px;
-    --gutter: var(--gutter-width);
-    --mask-left: linear-gradient(to right, black var(--gutter), transparent var(--gutter), black calc(var(--gutter) + var(--fade-size)));
-    --mask-right: linear-gradient(to left, transparent, black var(--fade-size));
-    --mask-both: linear-gradient(to right, black var(--gutter), transparent var(--gutter), black calc(var(--gutter) + var(--fade-size)), black calc(100% - var(--fade-size)), transparent);
-    --mask-none: linear-gradient(black, black);
-
-    mask-image: var(--mask-none);
-    -webkit-mask-image: var(--mask-none);
   }
   .table-scroller::-webkit-scrollbar {
     display: none;
   }
 
-  .table-wrapper.can-scroll-right:not(.can-scroll-left) .table-scroller {
-    mask-image: var(--mask-right);
-    -webkit-mask-image: var(--mask-right);
+  /* Fade effects using pseudo-elements instead of mask-image
+     This keeps the add button visible above the fade */
+  .table-wrapper::before,
+  .table-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    z-index: 3;
   }
 
-  .table-wrapper.can-scroll-left:not(.can-scroll-right) .table-scroller {
-    mask-image: var(--mask-left);
-    -webkit-mask-image: var(--mask-left);
+  .table-wrapper::before {
+    left: var(--gutter-width);
+    background: linear-gradient(to right, var(--bg-code-block), transparent);
   }
 
-  .table-wrapper.can-scroll-left.can-scroll-right .table-scroller {
-    mask-image: var(--mask-both);
-    -webkit-mask-image: var(--mask-both);
+  .table-wrapper::after {
+    right: 0;
+    background: linear-gradient(to left, var(--bg-code-block), transparent);
+  }
+
+  .table-wrapper.can-scroll-left::before {
+    opacity: 1;
+  }
+
+  .table-wrapper.can-scroll-right::after {
+    opacity: 1;
   }
 
   .content-table {
@@ -285,11 +292,11 @@
     background: var(--selection-bg);
   }
 
-  /* Sticky gutter cell */
+  /* Sticky gutter cell - z-index: 4 to stay above scroll fade (z-index: 3) */
   .gutter-cell {
     position: sticky;
     left: 0;
-    z-index: 1;
+    z-index: 4;
     width: var(--gutter-width);
     min-width: var(--gutter-width);
     padding: 0;
