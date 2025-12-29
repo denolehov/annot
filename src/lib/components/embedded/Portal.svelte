@@ -165,13 +165,13 @@
   }
 
   .line.portal-header {
-    background: linear-gradient(to bottom, rgba(212, 200, 184, 0.25), transparent 25%);
+    background: linear-gradient(to bottom, var(--bg-portal-glow), transparent 25%);
   }
 
   .line.portal-footer {
     height: 4px;
     min-height: 4px;
-    background: linear-gradient(to top, rgba(212, 200, 184, 0.25), transparent);
+    background: linear-gradient(to top, var(--bg-portal-glow), transparent);
   }
 
   .line.portal-footer .gutter {

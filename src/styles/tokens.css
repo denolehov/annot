@@ -71,20 +71,39 @@
 	   PRIMITIVE VALUES (Dark Palette)
 	   Ready for dark mode - not active yet
 	   =========================================== */
-	--dark-zinc-50: #18181b;
-	--dark-zinc-100: #27272a;
-	--dark-zinc-200: #3f3f46;
-	--dark-zinc-300: #52525b;
-	--dark-zinc-400: #71717a;
-	--dark-zinc-500: #a1a1aa;
-	--dark-zinc-600: #d4d4d8;
-	--dark-zinc-700: #e4e4e7;
-	--dark-zinc-800: #f4f4f5;
-	--dark-zinc-900: #fafaf9;
+	/* Deep Zincs (Warm Dark Base) - "Midnight Study" */
+	--dark-zinc-950: #09090b; /* Page BG - deepest */
+	--dark-zinc-900: #18181b; /* Window BG */
+	--dark-zinc-800: #27272a; /* Panels */
+	--dark-zinc-700: #3f3f46; /* Borders */
+	--dark-zinc-600: #52525b; /* Strong Borders */
+	--dark-zinc-500: #71717a; /* Muted Text */
+	--dark-zinc-400: #a1a1aa; /* Secondary Text */
+	--dark-zinc-100: #f4f4f5; /* Primary Text */
 
+	/* Dark warm surfaces */
 	--dark-warm-white: #1a1a1d;
 	--dark-warm-cream: #1f1f23;
 	--dark-warm-cream-alpha: rgba(31, 31, 35, 0.8);
+
+	/* Dark Accents - "Bioluminescence" amber */
+	--dark-amber-900: #451a03; /* Selection bg base */
+	--dark-amber-500: #f59e0b; /* Focus rings */
+	--dark-amber-400: #fbbf24; /* Text accents */
+
+	/* Dark functional colors */
+	--dark-red-900: #7f1d1d;   /* Error bg base */
+	--dark-red-400: #f87171;   /* Error text */
+	--dark-blue-500: #60a5fa;  /* Action blue */
+
+	/* Dark code syntax (GitHub Dark Dimmed style) */
+	--dark-code-keyword: #ff7b72;  /* Soft Red */
+	--dark-code-func: #d2a8ff;     /* Soft Purple */
+	--dark-code-string: #a5d6ff;   /* Pale Blue */
+	--dark-code-comment: #8b949e;  /* Zinc Gray */
+	--dark-code-variable: #ffa657; /* Soft Orange */
+	--dark-code-constant: #79c0ff; /* Cyan/Blue */
+	--dark-code-tag: #7ee787;      /* Soft Green */
 
 	/* ===========================================
 	   SEMANTIC TOKENS
@@ -101,7 +120,7 @@
 
 	/* Portal: A different material */
 	--bg-portal: var(--light-warm-cream);
-	--bg-portal-glow: var(--light-warm-cream-alpha);
+	--bg-portal-glow: rgba(212, 200, 184, 0.25);
 	--border-portal: #d4c8b8;
 	--portal-checker-bg: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='2' height='2' fill='rgba(212,200,184,0.3)'/%3E%3Crect x='2' y='2' width='2' height='2' fill='rgba(212,200,184,0.3)'/%3E%3C/svg%3E");
 	--portal-checker-size: 4px 4px;
@@ -141,13 +160,17 @@
 
 	/* Selection (amber family - warm gold, whisper not scream) */
 	--selection-bg: var(--light-amber-50);
+	--selection-bg-preview: rgb(251 191 36 / 0.12);  /* Lighter preview for hover */
 	--selection-border: var(--light-amber-300);
 	--selection-hover: rgb(251 191 36 / 0.15);
 	--selection-active: rgb(251 191 36 / 0.3);
 	--selection-gutter-text: var(--light-amber-900);
 
-	/* Inline highlights (==text==) */
-	--hl: rgba(180, 83, 9, 0.08);      /* amber-700 at 8% - subtle */
+	/* Inline highlights (==text==) - gradient stops for pen effect */
+	--hl: rgba(180, 83, 9, 0.08);
+	--hl-edge: rgba(180, 83, 9, 0.06);
+	--hl-peak: rgba(180, 83, 9, 0.20);
+	--hl-mid: rgba(180, 83, 9, 0.10);
 
 	/* Tags */
 	--tag-bg: var(--light-zinc-50);
@@ -220,39 +243,109 @@
 }
 
 /* ===========================================
-   DARK MODE (Future)
+   DARK MODE - "Midnight Study"
 
-   Uncomment when implementing dark mode:
-
-   [data-theme="dark"] {
-     --bg-main: var(--dark-zinc-50);
-     --bg-window: var(--dark-warm-white);
-     --bg-panel: var(--dark-zinc-100);
-     --bg-hover: var(--dark-zinc-200);
-     --bg-portal: var(--dark-warm-cream);
-     --bg-portal-glow: var(--dark-warm-cream-alpha);
-     --border-portal: #5a5248;
-     --portal-checker-bg: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='2' height='2' fill='rgba(90,82,72,0.3)'/%3E%3Crect x='2' y='2' width='2' height='2' fill='rgba(90,82,72,0.3)'/%3E%3C/svg%3E");
-     --portal-checker-size: 4px 4px;
-
-     --bg-code-block: #1c1b19;
-     --border-code: #3d3a35;
-     --codeblock-header-bg: #232220;
-     --codeblock-pattern-bg: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='2' height='2' fill='rgba(140,125,90,0.12)'/%3E%3Crect x='2' y='2' width='2' height='2' fill='rgba(140,125,90,0.12)'/%3E%3C/svg%3E");
-     --codeblock-pattern-size: 4px 4px;
-
-     --chip-pattern-bg: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1' cy='1' r='0.75' fill='rgba(140,125,90,0.15)'/%3E%3Ccircle cx='3' cy='3' r='0.75' fill='rgba(140,125,90,0.15)'/%3E%3C/svg%3E");
-     --chip-pattern-size: 4px 4px;
-
-     --border-subtle: var(--dark-zinc-200);
-     --border-strong: var(--dark-zinc-300);
-     --border-hover: var(--dark-zinc-400);
-     --border-active: var(--dark-zinc-500);
-
-     --text-primary: var(--dark-zinc-900);
-     --text-secondary: var(--dark-zinc-600);
-     --text-muted: var(--dark-zinc-500);
-
-     // ... add dark code syntax, selection colors, etc.
-   }
+   Warm, not cold. Deep zinc backgrounds let content float.
+   Amber shifts from honey to bioluminescence.
    =========================================== */
+
+[data-theme="dark"] {
+	/* --- BACKGROUNDS --- */
+	/* Warm dark grays - slight brown undertone like light theme's zinc */
+	--bg-main: #13120f;
+	--bg-window: #1a1916;
+	--bg-panel: #21201c;
+	--bg-hover: #292824;
+	--bg-selected: #3d3a32;
+	--bg-input: #1a1916;
+
+	/* Portal dimension: warm dark cream */
+	--bg-portal: #1c1b18;
+	--bg-portal-glow: rgba(90, 82, 72, 0.15);
+	--border-portal: #5a5248;
+	--portal-checker-bg: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='2' height='2' fill='rgba(90,82,72,0.3)'/%3E%3Crect x='2' y='2' width='2' height='2' fill='rgba(90,82,72,0.3)'/%3E%3C/svg%3E");
+
+	/* Code blocks: warm */
+	--bg-code-block: #1a1916;
+	--border-code: #3d3930;
+	--codeblock-header-bg: #21201c;
+	--codeblock-pattern-bg: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='2' height='2' fill='rgba(200,180,140,0.04)'/%3E%3Crect x='2' y='2' width='2' height='2' fill='rgba(200,180,140,0.04)'/%3E%3C/svg%3E");
+
+	/* Chips: warm cream dots */
+	--chip-pattern-bg: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1' cy='1' r='0.75' fill='rgba(200,180,140,0.06)'/%3E%3Ccircle cx='3' cy='3' r='0.75' fill='rgba(200,180,140,0.06)'/%3E%3C/svg%3E");
+
+	/* --- TEXT --- */
+	/* Warm off-white - cream tint like light theme */
+	--text-primary: #e8e4dc;
+	--text-secondary: #a8a49c;
+	--text-muted: #78746c;      /* WCAG AA compliant */
+
+	/* --- BORDERS --- */
+	--border-subtle: #2a2924;
+	--border-strong: #3d3a32;
+	--border-hover: #524e44;
+	--border-active: #6b665c;
+
+	/* --- CODE SYNTAX (GitHub Dark Dimmed) --- */
+	--code-keyword: var(--dark-code-keyword);
+	--code-func: var(--dark-code-func);
+	--code-string: var(--dark-code-string);
+	--code-comment: var(--dark-code-comment);
+	--code-variable: var(--dark-code-variable);
+	--code-constant: var(--dark-code-constant);
+	--code-tag: var(--dark-code-tag);
+	--code-op: var(--dark-code-keyword);
+	--code-support: var(--dark-code-func);
+
+	/* --- SELECTION & FOCUS --- */
+	/* Subtle amber glow */
+	--selection-bg: rgba(245, 158, 11, 0.15);
+	--selection-bg-preview: rgba(245, 158, 11, 0.08);  /* Lighter preview for hover */
+	--selection-border: var(--dark-amber-500);
+	--selection-hover: rgba(245, 158, 11, 0.1);
+	--selection-active: rgba(245, 158, 11, 0.25);
+	--selection-gutter-text: var(--dark-amber-400);
+
+	/* Inline highlights - brighter gradient for dark bg */
+	--hl: rgba(251, 191, 36, 0.30);
+	--hl-edge: rgba(251, 191, 36, 0.15);
+	--hl-peak: rgba(251, 191, 36, 0.50);
+	--hl-mid: rgba(251, 191, 36, 0.30);
+
+	/* Focus */
+	--focus-ring: var(--dark-amber-500);
+	--focus-glow: rgba(245, 158, 11, 0.15);
+
+	/* --- TAGS --- */
+	--tag-bg: #21201c;
+	--tag-border: #524e44;
+	--tag-text: #a8a49c;
+
+	/* --- ERRORS & DANGER --- */
+	--error-bg: rgba(127, 29, 29, 0.4);
+	--error-border: var(--dark-red-400);
+	--error-text: var(--dark-red-400);
+	--danger: var(--dark-red-400);
+	--danger-hover: #fca5a5; /* red-300 */
+
+	/* --- ACCENTS --- */
+	--accent: var(--dark-amber-400);
+	--accent-bg: rgba(69, 26, 3, 0.5);
+	--accent-bg-hover: rgba(69, 26, 3, 0.7);
+	--accent-border: var(--dark-amber-500);
+	--accent-text: var(--dark-amber-400);
+
+	/* Primary action - blue */
+	--accent-blue: var(--dark-blue-500);
+	--accent-blue-hover: #93c5fd; /* blue-300 */
+	--accent-primary: var(--accent-blue);
+
+	/* --- OVERLAYS --- */
+	--backdrop-light: rgba(19, 18, 15, 0.4);
+	--backdrop-dark: rgba(10, 9, 7, 0.85);
+
+	/* --- SHADOWS (softer in dark mode) --- */
+	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.1);
+	--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+	--shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.5);
+}

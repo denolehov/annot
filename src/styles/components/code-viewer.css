@@ -594,7 +594,8 @@ div.line.separator-line:hover {
 }
 
 /* Inline highlights - highlighter pen effect */
-.hl {
+.hl,
+.md mark {
 	margin: 0 -0.4em;
 	padding: 0.1em 0.4em;
 	border-radius: 0.4em 0.2em;
@@ -603,8 +604,8 @@ div.line.separator-line:hover {
 	box-decoration-break: clone;
 	background-image: linear-gradient(
 		to right,
-		rgba(180, 83, 9, 0.06),
-		rgba(180, 83, 9, 0.20) 4%,
-		rgba(180, 83, 9, 0.10)
+		var(--hl-edge),
+		var(--hl-peak) 4%,
+		var(--hl-mid)
 	);
 }
