@@ -96,6 +96,13 @@ export function isTableLine(line: Line): boolean {
 }
 
 /**
+ * Check if a line is a horizontal rule.
+ */
+export function isHorizontalRule(line: Line): boolean {
+  return line.semantics.type === 'markdown' && line.semantics.kind === 'horizontal_rule';
+}
+
+/**
  * Extract content from a code block in a specific file.
  * Filters by source line numbers AND file path to exclude portal content.
  *

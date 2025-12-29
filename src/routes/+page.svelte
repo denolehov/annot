@@ -3,7 +3,7 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
-  import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, getFilePath, extractCodeBlockContent } from "$lib/line-utils";
+  import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, isHorizontalRule, getFilePath, extractCodeBlockContent } from "$lib/line-utils";
   import { rangeToKey, keyToRange, isLineInRange, validateRange, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap } from "$lib/tiptap";
   import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
@@ -109,12 +109,13 @@
   // Line Segmentation (for portal/codeblock-aware rendering)
   // =============================================================================
 
-  /** Segment type for rendering: regular lines, portal group, code block group, or table group */
+  /** Segment type for rendering: regular lines, portal group, code block group, table group, or separator */
   type LineSegment =
     | { type: 'regular'; lines: { line: Line; displayIndex: number }[] }
     | { type: 'portal'; lines: { line: Line; displayIndex: number }[] }
     | { type: 'codeblock'; lines: { line: Line; displayIndex: number }[]; language: string | null }
-    | { type: 'table'; lines: { line: Line; displayIndex: number }[] };
+    | { type: 'table'; lines: { line: Line; displayIndex: number }[] }
+    | { type: 'separator'; lines: { line: Line; displayIndex: number }[] };
 
   /** Get the language from a code block start line */
   function getCodeBlockLanguage(line: Line): string | null {
@@ -135,8 +136,14 @@
       const isPortal = isPortalLine(line);
       const isCodeBlock = isCodeBlockLine(line);
       const isTable = isTableLine(line);
+      const isSeparator = isHorizontalRule(line);
 
-      if (isPortal) {
+      if (isSeparator) {
+        // Horizontal rule - standalone separator segment
+        if (currentSegment) segments.push(currentSegment);
+        segments.push({ type: 'separator', lines: [{ line, displayIndex }] });
+        currentSegment = null;
+      } else if (isPortal) {
         // Portal line - portals take priority over code blocks and tables
         const isPortalHeader = line.semantics.type === 'portal' && line.semantics.kind === 'header';
         if (currentSegment?.type === 'portal' && !isPortalHeader) {
@@ -941,6 +948,8 @@
               {/if}
             {/snippet}
           </Table>
+        {:else if segment.type === 'separator'}
+          <hr class="separator" />
         {:else}
           {#each segment.lines as { line, displayIndex }}
             {@const sourceLineNum = getLineNumber(line)}

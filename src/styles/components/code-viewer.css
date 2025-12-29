@@ -517,9 +517,12 @@ div.line.diff-context.annotated {
 	font-style: italic;
 }
 
-/* Horizontal rules */
-.md.md-hr {
-	color: var(--text-muted);
+/* Horizontal rules / separators */
+.separator {
+	border: none;
+	height: 1px;
+	background: var(--border-subtle);
+	margin: 0;
 }
 
 /* Inline code - dithered background matching code blocks */
