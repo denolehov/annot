@@ -3,6 +3,12 @@
    =========================================== */
 * { box-sizing: border-box; }
 
+/* Disable transitions during theme initialization to prevent flash */
+.no-transitions,
+.no-transitions * {
+	transition: none !important;
+}
+
 body {
 	background-color: var(--bg-main);
 	color: var(--text-primary);

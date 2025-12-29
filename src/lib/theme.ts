@@ -16,21 +16,39 @@ export function resolveTheme(preference: ThemePreference): EffectiveTheme {
   return preference;
 }
 
+interface ApplyThemeOptions {
+  /** Temporarily disable CSS transitions to prevent visual flash */
+  suppressTransitions?: boolean;
+}
+
 /**
  * Apply theme to the document by setting the data-theme attribute.
  */
-export function applyTheme(theme: EffectiveTheme): void {
+export function applyTheme(theme: EffectiveTheme, options: ApplyThemeOptions = {}): void {
+  const { suppressTransitions } = options;
+
+  if (suppressTransitions) {
+    document.documentElement.classList.add('no-transitions');
+  }
+
   document.documentElement.setAttribute('data-theme', theme);
+
+  if (suppressTransitions) {
+    // Force reflow to ensure styles are applied before removing the class
+    document.documentElement.offsetHeight;
+    document.documentElement.classList.remove('no-transitions');
+  }
 }
 
 /**
  * Load theme preference from backend and apply it.
  * Returns the effective theme that was applied.
+ * Suppresses transitions to prevent flash on initial load.
  */
 export async function initTheme(): Promise<EffectiveTheme> {
   const preference = await invoke<ThemePreference>('get_theme');
   const effective = resolveTheme(preference);
-  applyTheme(effective);
+  applyTheme(effective, { suppressTransitions: true });
   return effective;
 }
 
