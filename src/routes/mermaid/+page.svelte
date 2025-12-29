@@ -21,6 +21,11 @@
 	let panzoomInstance: PanZoom | null = null;
 	let currentScale = $state(1);
 
+	// Layout constants
+	const TITLE_BAR_HEIGHT = 40;
+	const TOOLBAR_HEIGHT = 60;
+	const DIAGRAM_PADDING = 40;
+
 	onMount(async () => {
 		try {
 			// Get mermaid source from backend
@@ -74,13 +79,10 @@
 
 		// Resize window to fit diagram content
 		const win = getCurrentWindow();
-		const padding = 40; // Margin around diagram
-		const toolbarHeight = 60; // Space for zoom toolbar at bottom
-		const titleBarHeight = 40; // Window header height
 
 		// Calculate window size to fit diagram at 100%
-		const windowWidth = Math.max(300, diagramWidth + padding);
-		const windowHeight = Math.max(200, diagramHeight + padding + toolbarHeight + titleBarHeight);
+		const windowWidth = Math.max(300, diagramWidth + DIAGRAM_PADDING);
+		const windowHeight = Math.max(200, diagramHeight + DIAGRAM_PADDING + TOOLBAR_HEIGHT + TITLE_BAR_HEIGHT);
 
 		// Cap to screen size
 		const maxWidth = window.screen.availWidth * 0.9;
@@ -101,9 +103,10 @@
 			smoothScroll: false,
 		});
 
-		// Center diagram in window (account for title bar)
+		// Center diagram in canvas (canvas already offset by title bar via CSS margin-top)
+		const canvasHeight = finalHeight - TITLE_BAR_HEIGHT;
 		const offsetX = (finalWidth - diagramWidth) / 2;
-		const offsetY = titleBarHeight + (finalHeight - titleBarHeight - toolbarHeight - diagramHeight) / 2;
+		const offsetY = (canvasHeight - TOOLBAR_HEIGHT - diagramHeight) / 2;
 		panzoomInstance.zoomAbs(0, 0, 1);
 		panzoomInstance.moveTo(offsetX, offsetY);
 
@@ -150,9 +153,10 @@
 		const nativeWidth = parseFloat(svgEl.style.width) || svgEl.clientWidth;
 		const nativeHeight = parseFloat(svgEl.style.height) || svgEl.clientHeight;
 
-		const padding = 40;
-		const availWidth = window.innerWidth - padding;
-		const availHeight = window.innerHeight - padding;
+		// Canvas is already offset by title bar (CSS margin-top), just account for toolbar
+		const availWidth = window.innerWidth - DIAGRAM_PADDING;
+		const canvasHeight = window.innerHeight - TITLE_BAR_HEIGHT;
+		const availHeight = canvasHeight - TOOLBAR_HEIGHT - DIAGRAM_PADDING;
 
 		// Smart fit: compare aspect ratios
 		const diagramAspect = nativeWidth / nativeHeight;
@@ -165,13 +169,14 @@
 		if (diagramAspect > windowAspect) {
 			// Diagram is wider → fit to width, center vertically
 			fitScale = availWidth / nativeWidth;
-			offsetX = padding / 2;
-			offsetY = (window.innerHeight - nativeHeight * fitScale) / 2;
+			offsetX = DIAGRAM_PADDING / 2;
+			// Center in available vertical space (above toolbar)
+			offsetY = (availHeight - nativeHeight * fitScale) / 2 + DIAGRAM_PADDING / 2;
 		} else {
 			// Diagram is taller → fit to height, center horizontally
 			fitScale = availHeight / nativeHeight;
 			offsetX = (window.innerWidth - nativeWidth * fitScale) / 2;
-			offsetY = padding / 2;
+			offsetY = DIAGRAM_PADDING / 2;
 		}
 
 		panzoomInstance.zoomAbs(0, 0, fitScale);
@@ -188,10 +193,12 @@
 		const nativeWidth = parseFloat(svgEl.style.width) || svgEl.clientWidth;
 		const nativeHeight = parseFloat(svgEl.style.height) || svgEl.clientHeight;
 
-		// Set to 100% and center
+		// Set to 100% and center (canvas already offset by title bar, account for toolbar)
 		panzoomInstance.zoomAbs(0, 0, 1);
 		const offsetX = (window.innerWidth - nativeWidth) / 2;
-		const offsetY = (window.innerHeight - nativeHeight) / 2;
+		const canvasHeight = window.innerHeight - TITLE_BAR_HEIGHT;
+		const availableHeight = canvasHeight - TOOLBAR_HEIGHT;
+		const offsetY = (availableHeight - nativeHeight) / 2;
 		panzoomInstance.moveTo(offsetX, offsetY);
 	}
 
