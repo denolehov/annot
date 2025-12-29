@@ -1150,6 +1150,10 @@
     animation: toast-in 0.2s ease forwards;
   }
 
+  :global([data-theme="dark"]) .toast {
+    color: var(--bg-main);
+  }
+
   .toast.exiting {
     animation: toast-out 0.2s ease forwards;
   }
