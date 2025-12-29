@@ -87,7 +87,7 @@
 		var(--chip-pattern-bg),
 		color-mix(in srgb, var(--bg-code-block) 95%, #22c55e 5%);
 	background-size: var(--chip-pattern-size), auto;
-	color: var(--text-secondary);
+	color: var(--text-primary);
 	cursor: pointer;
 }
 

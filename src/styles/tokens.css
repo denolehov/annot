@@ -253,7 +253,7 @@
 [data-theme="dark"] {
 	/* --- BACKGROUNDS --- */
 	/* Warm dark grays - slight brown undertone like light theme's zinc */
-	--bg-main: #13120f;
+	--bg-main: #1d1b16;
 	--bg-window: #1a1916;
 	--bg-panel: #21201c;
 	--bg-hover: #292824;
@@ -321,7 +321,7 @@
 	/* --- TAGS --- */
 	--tag-bg: #21201c;
 	--tag-border: #524e44;
-	--tag-text: #a8a49c;
+	--tag-text: var(--text-primary);
 
 	/* --- ERRORS & DANGER --- */
 	--error-bg: rgba(127, 29, 29, 0.4);
