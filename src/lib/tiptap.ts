@@ -1144,6 +1144,62 @@ export function isContentEmpty(json: JSONContent): boolean {
 }
 
 /**
+ * Find the first excalidrawChip node in TipTap JSON content.
+ * Returns the chip's attributes if found, null otherwise.
+ */
+export function findExcalidrawChip(json: JSONContent): {
+  nodeId: string;
+  elements: string;
+  image?: string;
+} | null {
+  function walk(node: JSONContent): ReturnType<typeof findExcalidrawChip> {
+    if (node.type === 'excalidrawChip' && node.attrs) {
+      return {
+        // Fallback to generated UUID if nodeId is missing (legacy chips)
+        nodeId: node.attrs.nodeId || crypto.randomUUID(),
+        elements: node.attrs.elements,
+        image: node.attrs.image,
+      };
+    }
+    if (node.content) {
+      for (const child of node.content) {
+        const found = walk(child);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+  return walk(json);
+}
+
+/**
+ * Replace the first excalidrawChip node in TipTap JSON content.
+ * Returns a new JSONContent with the chip replaced, preserving other content.
+ */
+export function replaceExcalidrawChip(
+  json: JSONContent,
+  newChip: { type: 'excalidrawChip'; attrs: { elements: string; image: string } }
+): JSONContent {
+  let replaced = false;
+
+  function walk(node: JSONContent): JSONContent {
+    if (node.type === 'excalidrawChip' && !replaced) {
+      replaced = true;
+      return newChip;
+    }
+    if (node.content) {
+      return {
+        ...node,
+        content: node.content.map(walk),
+      };
+    }
+    return node;
+  }
+
+  return walk(json);
+}
+
+/**
  * Extract ContentNode array from TipTap JSON.
  * Handles text, tagChip, and mediaChip nodes.
  */

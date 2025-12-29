@@ -68,6 +68,7 @@
   // Excalidraw window state (tracks if window is open to prevent blur dismiss)
   let excalidrawWindowOpen = $state(false);
   let excalidrawResultUnlisten: UnlistenFn | null = null;
+  let mermaidOpenUnlisten: UnlistenFn | null = null;
 
   // Selection popover state (for "Create Tag from Selection")
   let selectionPopover = $state<{
@@ -287,6 +288,26 @@
       excalidrawResultUnlisten = unlisten;
     });
 
+    // Listen for mermaid button requests to open excalidraw
+    // This allows mermaid to tap into TipTap's fresh state instead of stale annotationState
+    listen<{ rangeKey: string }>('mermaid-open-excalidraw', (event) => {
+      if (event.payload.rangeKey !== rangeKey) return;
+
+      // Find excalidraw chip in TipTap's current state
+      if (!ann.editor) return;
+      let chipFound = false;
+      ann.editor.state.doc.descendants((node, pos) => {
+        if (chipFound) return false;
+        if (node.type.name === 'excalidrawChip' && node.attrs.nodeId) {
+          chipFound = true;
+          openExcalidrawEdit(node.attrs.nodeId, node.attrs.elements);
+          return false;
+        }
+      });
+    }).then((unlisten) => {
+      mermaidOpenUnlisten = unlisten;
+    });
+
     // Scroll entire editor into view after layout completes
     setTimeout(() => {
       if (!container) return;
@@ -313,6 +334,7 @@
       clearTimeout(selectionDebounceTimer);
     }
     excalidrawResultUnlisten?.();
+    mermaidOpenUnlisten?.();
   });
 
   // Handle pending tag insertion (after tag is created via CommandPalette)

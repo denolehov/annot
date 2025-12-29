@@ -15,6 +15,16 @@ pub enum NodeRef {
     Placeholder(String),
 }
 
+/// Origin of the Excalidraw window - determines where results are routed.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ExcalidrawOrigin {
+    /// Opened from TipTap annotation editor (default)
+    Annotation,
+    /// Opened from a mermaid code block
+    CodeBlock { start_line: u32, end_line: u32 },
+}
+
 /// Context for an Excalidraw editor window.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExcalidrawContext {
@@ -26,6 +36,8 @@ pub struct ExcalidrawContext {
     pub node_ref: NodeRef,
     /// Parent window label for emitting results
     pub parent_label: String,
+    /// Origin of this window - determines result routing
+    pub origin: ExcalidrawOrigin,
 }
 
 /// Outcome of an Excalidraw editing session.
@@ -38,7 +50,7 @@ pub enum ExcalidrawOutcome {
     Cancelled,
 }
 
-/// Result emitted back to the main window.
+/// Result emitted back to the main window (for Annotation origin).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExcalidrawResult {
     /// Annotation identifier
@@ -47,6 +59,19 @@ pub struct ExcalidrawResult {
     pub node_ref: NodeRef,
     /// Outcome of the session
     pub outcome: ExcalidrawOutcome,
+}
+
+/// Result emitted for CodeBlock origin (mermaid → excalidraw flow).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CodeBlockExcalidrawResult {
+    /// Start line of the mermaid code block
+    pub start_line: u32,
+    /// End line of the mermaid code block
+    pub end_line: u32,
+    /// JSON array of Excalidraw elements
+    pub elements: String,
+    /// Base64 PNG data URL
+    pub png: String,
 }
 
 /// State tracking open Excalidraw windows.
@@ -77,6 +102,7 @@ pub fn open_excalidraw_window(
     elements: String,
     range_key: String,
     node_ref: NodeRef,
+    origin: Option<ExcalidrawOrigin>,
 ) -> Result<String, String> {
     // Each Excalidraw window gets a unique label
     let label = format!("excalidraw-{}", Uuid::new_v4().simple());
@@ -89,6 +115,7 @@ pub fn open_excalidraw_window(
         range_key,
         node_ref,
         parent_label,
+        origin: origin.unwrap_or(ExcalidrawOrigin::Annotation),
     };
 
     // Calculate window size (75% of screen, min 600x400)
@@ -146,16 +173,19 @@ pub fn open_excalidraw_window(
             let mut state = state.lock();
             // If context still exists, user closed without save/cancel - treat as cancel
             if let Some(ctx) = state.contexts.remove(&label_for_cleanup) {
-                // Emit cancel result to parent
-                if let Some(parent) = app_for_cleanup.get_webview_window(&ctx.parent_label) {
-                    let _ = parent.emit(
-                        "excalidraw-result",
-                        ExcalidrawResult {
-                            range_key: ctx.range_key,
-                            node_ref: ctx.node_ref,
-                            outcome: ExcalidrawOutcome::Cancelled,
-                        },
-                    );
+                // Only emit cancel for Annotation origin (TipTap needs to clean up placeholder)
+                // CodeBlock origin doesn't need cancel notification - nothing to clean up
+                if matches!(ctx.origin, ExcalidrawOrigin::Annotation) {
+                    if let Some(parent) = app_for_cleanup.get_webview_window(&ctx.parent_label) {
+                        let _ = parent.emit(
+                            "excalidraw-result",
+                            ExcalidrawResult {
+                                range_key: ctx.range_key,
+                                node_ref: ctx.node_ref,
+                                outcome: ExcalidrawOutcome::Cancelled,
+                            },
+                        );
+                    }
                 }
             }
         }
@@ -200,18 +230,38 @@ pub fn excalidraw_save(
             .ok_or_else(|| format!("No context found for window: {}", label))?
     };
 
-    // Emit result to parent window
+    // Emit result to parent window based on origin
     if let Some(parent) = app.get_webview_window(&ctx.parent_label) {
-        parent
-            .emit(
-                "excalidraw-result",
-                ExcalidrawResult {
-                    range_key: ctx.range_key,
-                    node_ref: ctx.node_ref,
-                    outcome: ExcalidrawOutcome::Saved { elements, png },
-                },
-            )
-            .map_err(|e| format!("Failed to emit result: {}", e))?;
+        match ctx.origin {
+            ExcalidrawOrigin::Annotation => {
+                parent
+                    .emit(
+                        "excalidraw-result",
+                        ExcalidrawResult {
+                            range_key: ctx.range_key,
+                            node_ref: ctx.node_ref,
+                            outcome: ExcalidrawOutcome::Saved {
+                                elements,
+                                png,
+                            },
+                        },
+                    )
+                    .map_err(|e| format!("Failed to emit result: {}", e))?;
+            }
+            ExcalidrawOrigin::CodeBlock { start_line, end_line } => {
+                parent
+                    .emit(
+                        "codeblock-excalidraw-result",
+                        CodeBlockExcalidrawResult {
+                            start_line,
+                            end_line,
+                            elements,
+                            png,
+                        },
+                    )
+                    .map_err(|e| format!("Failed to emit result: {}", e))?;
+            }
+        }
     }
 
     // Close the window

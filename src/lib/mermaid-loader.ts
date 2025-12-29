@@ -13,10 +13,28 @@ export function preloadMermaid(): void {
 }
 
 /**
- * Render a mermaid diagram.
- * @param source - The mermaid source code
- * @param theme - The effective theme ('light' or 'dark')
+ * Supported mermaid diagram types for Excalidraw conversion.
+ * The @excalidraw/mermaid-to-excalidraw library only supports:
+ * - Flowchart (flowchart, graph)
+ * - Sequence (sequenceDiagram)
+ * - Class (classDiagram)
+ *
+ * Pattern skips leading whitespace, comments (%% ...), and directives (%%{...}%%)
+ * before matching the diagram type.
  */
+const EXCALIDRAW_SUPPORTED_TYPES =
+	/^\s*(?:%%.*\n\s*)*(flowchart|graph|sequenceDiagram|classDiagram)\b/;
+
+/**
+ * Check if a mermaid diagram can be converted to Excalidraw.
+ * Only Flowchart, Sequence, and Class diagrams are supported.
+ * Handles diagrams with leading comments or directives.
+ * @param source - The mermaid source code
+ */
+export function isMermaidExcalidrawSupported(source: string): boolean {
+	return EXCALIDRAW_SUPPORTED_TYPES.test(source);
+}
+
 export async function renderMermaid(source: string, theme: EffectiveTheme = 'light'): Promise<string> {
 	if (!loadPromise) {
 		loadPromise = import('mermaid');

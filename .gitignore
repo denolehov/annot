@@ -29,3 +29,6 @@ vite.config.ts.timestamp-*
 # Tauri build outputs (in addition to src-tauri/.gitignore)
 src-tauri/target/
 src-tauri/gen/schemas
+
+# Excalidraw fonts (copied from node_modules at install time)
+static/excalidraw-assets/fonts/

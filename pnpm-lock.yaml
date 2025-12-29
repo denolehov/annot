@@ -8,6 +8,9 @@ dependencies:
   '@excalidraw/excalidraw':
     specifier: ^0.18.0
     version: 0.18.0(@types/react-dom@19.2.3)(@types/react@19.2.7)(react-dom@18.3.1)(react@18.3.1)
+  '@excalidraw/mermaid-to-excalidraw':
+    specifier: ^2.0.0
+    version: 2.0.0
   '@fontsource/inter':
     specifier: ^5.2.8
     version: 5.2.8
@@ -530,6 +533,15 @@ packages:
       nanoid: 4.0.2
     transitivePeerDependencies:
       - supports-color
+    dev: false
+
+  /@excalidraw/mermaid-to-excalidraw@2.0.0:
+    resolution: {integrity: sha512-CheLVxrBEf9mDHX8O9rSeF7epANZxNDo8FckTo2khqFN9gbcyUrn9p0ZYyZ8iJ/X3cVk3TZwv9h3HS30PjRFGg==}
+    dependencies:
+      '@excalidraw/markdown-to-text': 0.1.2
+      '@mermaid-js/parser': 0.6.3
+      mermaid: 11.12.2
+      nanoid: 4.0.2
     dev: false
 
   /@excalidraw/random-username@1.1.0:

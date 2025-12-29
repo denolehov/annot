@@ -1,11 +1,12 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { listen, emit } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
   import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, isHorizontalRule, getFilePath, extractCodeBlockContent } from "$lib/line-utils";
   import { rangeToKey, keyToRange, isLineInRange, validateRange, type Range } from "$lib/range";
-  import { extractContentNodes, isContentEmpty, contentNodesToTipTap } from "$lib/tiptap";
+  import { extractContentNodes, isContentEmpty, contentNodesToTipTap, findExcalidrawChip } from "$lib/tiptap";
   import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
   import AnnotationEditor from "$lib/AnnotationEditor.svelte";
   import CopyDropdown from "$lib/CopyDropdown.svelte";
@@ -22,6 +23,8 @@
   import { useKeyboard } from "$lib/composables/useKeyboard.svelte";
   import type { SaveContentResponse } from "$lib/types";
   import { initTheme, setTheme, type ThemePreference } from "$lib/theme";
+  import { convertMermaidToExcalidraw } from "$lib/mermaid-to-excalidraw";
+  import { isMermaidExcalidrawSupported } from "$lib/mermaid-loader";
 
   let lines: Line[] = $state([]);
   let label = $state("");
@@ -704,6 +707,37 @@
     }
   }
 
+  async function openExcalidrawFromMermaid(
+    sourceBlock: { start_line: number; end_line: number },
+    annotationRange: { start: number; end: number }
+  ) {
+    // sourceBlock has source line numbers for extracting mermaid content
+    // annotationRange has display indices for creating the annotation
+    const rangeKey = `${annotationRange.start}-${annotationRange.end}`;
+    const existing = annotationState.getByKey(rangeKey);
+
+    // If annotation exists with a chip, ask AnnotationEditor to open it
+    // This reads from TipTap directly, avoiding stale annotationState reads
+    if (existing?.content && findExcalidrawChip(existing.content)) {
+      await emit('mermaid-open-excalidraw', { rangeKey });
+      return;
+    }
+
+    // No existing chip - convert mermaid fresh
+    const source = getMermaidContent(sourceBlock.start_line, sourceBlock.end_line);
+    try {
+      const elements = await convertMermaidToExcalidraw(source);
+      await invoke('open_excalidraw_window', {
+        elements,
+        rangeKey,
+        nodeRef: { type: 'Placeholder', id: `mermaid-${Date.now()}` },
+        origin: { type: 'CodeBlock', start_line: annotationRange.start, end_line: annotationRange.end },
+      });
+    } catch (e) {
+      showToast(`Failed to convert mermaid: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   // Check if a display index has an annotation
   function hasAnnotation(displayIdx: number): boolean {
     return annotationState.hasAnnotation(displayIdx);
@@ -790,6 +824,39 @@
           console.error('Failed to finish review:', e);
           await window.destroy(); // Fallback
         }
+      });
+
+      // Listen for Excalidraw results from CodeBlock origin (mermaid → excalidraw)
+      interface CodeBlockExcalidrawResult {
+        start_line: number;
+        end_line: number;
+        elements: string;
+        png: string;
+      }
+
+      // This handler is for FIRST creation from mermaid only.
+      // Re-edits use Annotation origin and go through AnnotationEditor → excalidraw-result.
+      await listen<CodeBlockExcalidrawResult>('codeblock-excalidraw-result', (event) => {
+        const { start_line, end_line, elements, png } = event.payload;
+        const range = { start: start_line, end: end_line };
+        const rangeKey = rangeToKey(range);
+
+        // Create excalidraw chip node
+        const chipNode = {
+          type: 'excalidrawChip',
+          attrs: { nodeId: crypto.randomUUID(), elements, image: png }
+        };
+
+        // Create new annotation with chip
+        const newContent: JSONContent = {
+          type: 'doc',
+          content: [
+            { type: 'paragraph', content: [chipNode] }
+          ]
+        };
+        annotationState.upsert(range, newContent);
+        annotationState.seal(rangeKey);
+        showToast('Diagram saved as annotation');
       });
     } catch (e) {
       error = String(e);
@@ -880,6 +947,7 @@
               {#if rangeKey}
                 {#key rangeKey}
                   <AnnotationEditor
+                    {rangeKey}
                     content={annotationState.getByKey(rangeKey)?.content}
                     sealed={annotationState.isSealed(rangeKey)}
                     onUpdate={updateAnnotation}
@@ -902,6 +970,8 @@
         {:else if segment.type === 'codeblock'}
           {@const firstLineNum = getLineNumber(segment.lines[0]?.line)}
           {@const mermaidBlock = firstLineNum !== null ? getMermaidBlockAt(firstLineNum) : null}
+          {@const mermaidSource = mermaidBlock ? getMermaidContent(mermaidBlock.start_line, mermaidBlock.end_line) : null}
+          {@const excalidrawSupported = mermaidSource ? isMermaidExcalidrawSupported(mermaidSource) : true}
           <CodeBlock
             lines={segment.lines}
             language={segment.language}
@@ -917,11 +987,20 @@
             onMouseEnter={interaction.handleLineEnter}
             onMouseLeave={interaction.handleLineLeave}
             onMermaidOpen={mermaidBlock ? () => openMermaidWindow(mermaidBlock) : undefined}
+            onExcalidrawOpen={mermaidBlock ? () => openExcalidrawFromMermaid(
+              mermaidBlock,  // source block for content extraction
+              {  // annotation range: content lines only (exclude fences)
+                start: segment.lines[1]?.displayIndex ?? segment.lines[0].displayIndex,
+                end: segment.lines[segment.lines.length - 2]?.displayIndex ?? segment.lines[segment.lines.length - 1].displayIndex
+              }
+            ) : undefined}
+            {excalidrawSupported}
           >
             {#snippet annotationSlot(displayIndex, rangeKey)}
               {#if rangeKey}
                 {#key rangeKey}
                   <AnnotationEditor
+                    {rangeKey}
                     content={annotationState.getByKey(rangeKey)?.content}
                     sealed={annotationState.isSealed(rangeKey)}
                     onUpdate={updateAnnotation}
@@ -960,6 +1039,7 @@
               {#if rangeKey}
                 {#key rangeKey}
                   <AnnotationEditor
+                    {rangeKey}
                     content={annotationState.getByKey(rangeKey)?.content}
                     sealed={annotationState.isSealed(rangeKey)}
                     onUpdate={updateAnnotation}
@@ -1043,6 +1123,7 @@
             {#if rangeKey}
               {#key rangeKey}
                 <AnnotationEditor
+                  {rangeKey}
                   content={annotationState.getByKey(rangeKey)?.content}
                   sealed={annotationState.isSealed(rangeKey)}
                   onUpdate={updateAnnotation}

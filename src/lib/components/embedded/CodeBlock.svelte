@@ -22,6 +22,8 @@
     onMouseEnter: (displayIdx: number) => void;
     onMouseLeave: () => void;
     onMermaidOpen?: () => void;
+    onExcalidrawOpen?: () => void;
+    excalidrawSupported?: boolean;
 
     annotationSlot: Snippet<[displayIndex: number, rangeKey: string | null]>;
   }
@@ -41,6 +43,8 @@
     onMouseEnter,
     onMouseLeave,
     onMermaidOpen,
+    onExcalidrawOpen,
+    excalidrawSupported = true,
     annotationSlot,
   }: Props = $props();
 
@@ -200,6 +204,16 @@
                   title="View diagram"
                 >
                   <Icon name="view-finder" />
+                </button>
+              {/if}
+              {#if isMermaid}
+                <button
+                  class="codeblock-action-btn"
+                  onclick={onExcalidrawOpen}
+                  disabled={!excalidrawSupported}
+                  title={excalidrawSupported ? "Edit in Excalidraw" : "Only flowchart, sequence, and class diagrams can be edited in Excalidraw"}
+                >
+                  <Icon name="excalidraw" />
                 </button>
               {/if}
               <button
@@ -381,6 +395,16 @@
 
   .codeblock-action-btn.copied {
     color: var(--success, #22c55e);
+  }
+
+  .codeblock-action-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .codeblock-action-btn:disabled:hover {
+    color: var(--text-muted);
+    background: transparent;
   }
 
   .codeblock-action-btn:focus-visible {
