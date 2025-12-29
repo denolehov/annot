@@ -88,6 +88,15 @@ export async function mountExcalidraw(
         },
         excalidrawAPI: (api: ExcalidrawAPI) => {
           excalidrawAPI = api;
+          // Center diagram in viewport after canvas renders
+          if (options.initialElements?.length) {
+            requestAnimationFrame(() => {
+              api.scrollToContent(options.initialElements!, {
+                fitToViewport: true,
+                viewportZoomFactor: 0.9,
+              });
+            });
+          }
         },
       }),
       // Control buttons - positioned via CSS
