@@ -29,6 +29,7 @@
     </button>
   </div>
   <div class="status-bar-right">
+    <span class="kbd-hint"><kbd>:</kbd> command palette</span>
     <span class="kbd-hint"><kbd>g</kbd> global note</span>
     <span class="kbd-hint"><kbd>⌘w</kbd> save and close</span>
   </div>
