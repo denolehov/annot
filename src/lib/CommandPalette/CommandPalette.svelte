@@ -26,9 +26,10 @@
     onOpenSaveModal?: () => void;
     initialState?: InitialState;
     onItemCreated?: (item: Item, namespace: string) => void;
+    onEvent?: (event: string, payload: unknown) => void;
   }
 
-  let { tags, exitModes, onClose, onSetExitMode, onTagsChange, onExitModesChange, showToast, onOpenSaveModal, initialState, onItemCreated }: Props = $props();
+  let { tags, exitModes, onClose, onSetExitMode, onTagsChange, onExitModesChange, showToast, onOpenSaveModal, initialState, onItemCreated, onEvent }: Props = $props();
 
   // Convert domain types to Item format
   function tagToItem(tag: Tag): Item {
@@ -67,10 +68,31 @@
   let machineState: State = $state({ type: 'IDLE' });
   let ctx = $derived(createQueryContext());
 
+  // Get icon for namespace (theme namespace shows sun/moon based on current theme)
+  function getNamespaceIcon(namespace: Namespace): string {
+    if (namespace.id === 'theme') {
+      const currentTheme = document.documentElement.getAttribute('data-theme');
+      return currentTheme === 'dark' ? 'moon' : 'sun';
+    }
+    return namespace.icon;
+  }
+
   // Modal element reference
   let modalEl: HTMLDivElement | undefined = $state(undefined);
   let inputEl: HTMLInputElement | undefined = $state(undefined);
   let listEl: HTMLUListElement | undefined = $state(undefined);
+
+  // Current theme preference (for showing checkmark in theme namespace)
+  let currentThemePreference: string = $state('system');
+
+  // Fetch current theme on mount
+  onMount(() => {
+    invoke<string>('get_theme').then((theme) => {
+      currentThemePreference = theme;
+    }).catch(() => {
+      // Ignore errors, default to 'system'
+    });
+  });
 
   function dispatch(action: Action) {
     const result = reduce(machineState, action, ctx);
@@ -186,7 +208,7 @@
       }
 
       case 'EMIT_EVENT':
-        // Events are for external listeners (not implemented yet)
+        onEvent?.(cmd.event, cmd.payload);
         break;
     }
 
@@ -535,7 +557,7 @@
             onclick={() => dispatch({ type: 'SELECT', index: i })}
             onkeydown={() => {}}
           >
-            <span class="icon"><Icon name={ns.icon} /></span>
+            <span class="icon"><Icon name={getNamespaceIcon(ns)} /></span>
             <span class="label">{ns.label}</span>
           </li>
         {/each}
@@ -546,14 +568,14 @@
     <div class="filter-view">
       <div class="input-row">
         <span class="search-icon"><Icon name="search" /></span>
-        <span class="ns-prefix"><Icon name={machineState.namespace.icon} /> {machineState.namespace.label}</span>
+        <span class="ns-prefix"><Icon name={getNamespaceIcon(machineState.namespace)} /> {machineState.namespace.label}</span>
         <span class="separator">›</span>
         <input
           bind:this={inputEl}
           type="text"
           class="inline-input"
           class:navigating={isNavigating}
-          placeholder={itemListData.totalItems === 0 ? 'Type to create...' : 'Filter or create...'}
+          placeholder={machineState.namespace.fields.length === 0 ? 'Filter...' : (itemListData.totalItems === 0 ? 'Type to create...' : 'Filter or create...')}
           value={currentQuery}
           oninput={handleInput}
         />
@@ -574,6 +596,8 @@
               <span class="name">{item.name}</span>
               {#if item.isEphemeral}
                 <span class="ephemeral-badge">session</span>
+              {:else if machineState.namespace.id === 'theme' && item.id === `theme-${currentThemePreference}`}
+                <span class="current-indicator"><Icon name="check" /></span>
               {/if}
             </li>
           {/each}
@@ -598,7 +622,7 @@
     <div class="reorder-view">
       <div class="input-row">
         <span class="search-icon"><Icon name="reorder" /></span>
-        <span class="ns-prefix"><Icon name={machineState.namespace.icon} /> {machineState.namespace.label}</span>
+        <span class="ns-prefix"><Icon name={getNamespaceIcon(machineState.namespace)} /> {machineState.namespace.label}</span>
         <span class="separator">›</span>
         <span class="mode-prefix">Reorder</span>
       </div>
@@ -619,7 +643,7 @@
     <div class="form-view">
       <div class="input-row">
         <span class="search-icon"><Icon name={machineState.type === 'CREATE_FORM' ? 'plus' : 'edit'} /></span>
-        <span class="ns-prefix"><Icon name={machineState.namespace.icon} /> {machineState.namespace.label}</span>
+        <span class="ns-prefix"><Icon name={getNamespaceIcon(machineState.namespace)} /> {machineState.namespace.label}</span>
         <span class="separator">›</span>
         <span class="mode-prefix">{machineState.type === 'CREATE_FORM' ? 'New' : 'Edit'}</span>
       </div>

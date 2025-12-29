@@ -4,7 +4,7 @@ use std::sync::atomic::Ordering;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 
-use crate::config::{self, Config};
+use crate::config::{self, Config, Theme};
 use crate::output::{export_content, format_output, OutputMode};
 use crate::review::ActiveReview;
 use crate::state::{ContentNode, ContentResponse, ExitMode, Tag};
@@ -380,6 +380,20 @@ pub fn export_to_obsidian(
 /// Obsidian (and most filesystems) don't allow: \ / :
 fn sanitize_obsidian_filename(name: &str) -> String {
     name.chars().filter(|c| !matches!(c, '\\' | '/' | ':')).collect()
+}
+
+// --- Theme commands ---
+
+#[tauri::command]
+pub fn get_theme() -> Theme {
+    config::load_config().theme
+}
+
+#[tauri::command]
+pub fn set_theme(theme: Theme) -> Result<(), String> {
+    let mut cfg = config::load_config();
+    cfg.theme = theme;
+    config::save_config(&cfg).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

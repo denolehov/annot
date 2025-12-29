@@ -12,12 +12,24 @@ use crate::state::{ExitMode, Tag};
 /// Current config version. Bump when making breaking changes.
 pub const CONFIG_VERSION: u32 = 1;
 
+/// User's theme preference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Theme {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
 /// Application configuration stored in config.json.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// Schema version for forward compatibility.
     #[serde(default = "default_version")]
     pub version: u32,
+    #[serde(default)]
+    pub theme: Theme,
     #[serde(default)]
     pub obsidian: ObsidianConfig,
 }
@@ -30,6 +42,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             version: CONFIG_VERSION,
+            theme: Theme::default(),
             obsidian: ObsidianConfig::default(),
         }
     }
@@ -364,6 +377,7 @@ mod tests {
     fn config_roundtrip() {
         let config = Config {
             version: CONFIG_VERSION,
+            theme: Theme::Dark,
             obsidian: ObsidianConfig {
                 vaults: vec!["Work Notes".into(), "Personal".into()],
             },
@@ -373,9 +387,24 @@ mod tests {
         let loaded: Config = serde_json::from_str(&json).unwrap();
 
         assert_eq!(loaded.version, CONFIG_VERSION);
+        assert_eq!(loaded.theme, Theme::Dark);
         assert_eq!(loaded.obsidian.vaults.len(), 2);
         assert_eq!(loaded.obsidian.vaults[0], "Work Notes");
         assert_eq!(loaded.obsidian.vaults[1], "Personal");
+    }
+
+    #[test]
+    fn config_theme_defaults_to_system() {
+        let config = Config::default();
+        assert_eq!(config.theme, Theme::System);
+    }
+
+    #[test]
+    fn config_deserializes_without_theme() {
+        // Old configs without theme field should default to System
+        let json = r#"{"version": 1, "obsidian": {}}"#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(config.theme, Theme::System);
     }
 
     #[test]

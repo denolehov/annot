@@ -3,6 +3,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import type { ExcalidrawHandle } from '$lib/excalidraw-loader';
+  import { initTheme } from '$lib/theme';
 
   interface NodeRef {
     type: 'Chip' | 'Placeholder';
@@ -113,6 +114,9 @@
     if (!containerEl) return;
 
     try {
+      // Initialize theme before mounting
+      const effectiveTheme = await initTheme();
+
       // Set asset path for offline fonts
       (window as unknown as { EXCALIDRAW_ASSET_PATH: string }).EXCALIDRAW_ASSET_PATH =
         '/excalidraw-assets/';
@@ -136,6 +140,7 @@
       handle = await mountExcalidraw({
         container: containerEl,
         initialElements: parsedElements,
+        theme: effectiveTheme,
         onSave: handleSave,
         onCancel: tryCancel,
       });

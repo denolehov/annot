@@ -3,6 +3,8 @@
  * Uses React island pattern for Svelte integration.
  */
 
+import type { EffectiveTheme } from './theme';
+
 // Use generic types to avoid import issues with @excalidraw/excalidraw internals
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ExcalidrawElement = any;
@@ -20,6 +22,7 @@ export interface ExcalidrawHandle {
 export interface ExcalidrawLoaderOptions {
   container: HTMLElement;
   initialElements?: ExcalidrawElement[];
+  theme?: EffectiveTheme;
   onSave?: (elements: readonly ExcalidrawElement[], png: string) => void;
   onCancel?: () => void;
 }
@@ -79,9 +82,9 @@ export async function mountExcalidraw(
       null,
       // Excalidraw - renders directly, will fill container
       React.createElement(Excalidraw, {
+        theme: options.theme === 'dark' ? 'dark' : 'light',
         initialData: {
           elements: options.initialElements || [],
-          appState: { viewBackgroundColor: '#ffffff' },
         },
         excalidrawAPI: (api: ExcalidrawAPI) => {
           excalidrawAPI = api;

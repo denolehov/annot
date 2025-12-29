@@ -614,6 +614,7 @@ div.line.separator-line:hover {
 	padding: 0.1em 0.4em;
 	border-radius: 0.4em 0.2em;
 	background: transparent;
+	color: var(--hl-text);
 	-webkit-box-decoration-break: clone;
 	box-decoration-break: clone;
 	background-image: linear-gradient(

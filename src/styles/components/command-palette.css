@@ -184,6 +184,12 @@
 	color: var(--text-muted);
 }
 
+.current-indicator {
+	color: var(--accent);
+	display: flex;
+	align-items: center;
+}
+
 /* Create option */
 .create-item {
 	color: var(--text-muted);

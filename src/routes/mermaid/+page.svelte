@@ -3,6 +3,7 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 	import { renderMermaid } from '$lib/mermaid-loader';
+	import { initTheme, type EffectiveTheme } from '$lib/theme';
 	import panzoom from 'panzoom';
 	import type { PanZoom } from 'panzoom';
 
@@ -28,9 +29,12 @@
 
 	onMount(async () => {
 		try {
+			// Initialize theme before rendering
+			const effectiveTheme = await initTheme();
+
 			// Get mermaid source from backend
 			context = await invoke<MermaidContext>('get_mermaid_source');
-			svg = await renderMermaid(context.source);
+			svg = await renderMermaid(context.source, effectiveTheme);
 			loading = false;
 
 			// Wait for DOM update

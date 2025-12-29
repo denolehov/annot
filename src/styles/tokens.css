@@ -171,6 +171,7 @@
 	--hl-edge: rgba(180, 83, 9, 0.06);
 	--hl-peak: rgba(180, 83, 9, 0.20);
 	--hl-mid: rgba(180, 83, 9, 0.10);
+	--hl-text: inherit;
 
 	/* Tags */
 	--tag-bg: var(--light-zinc-50);
@@ -311,6 +312,7 @@
 	--hl-edge: rgba(251, 191, 36, 0.15);
 	--hl-peak: rgba(251, 191, 36, 0.50);
 	--hl-mid: rgba(251, 191, 36, 0.30);
+	--hl-text: var(--text-primary);
 
 	/* Focus */
 	--focus-ring: var(--dark-amber-500);

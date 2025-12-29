@@ -6,8 +6,9 @@ import { exitModesNamespace, getExitModeItems, filterExitModeItems } from './exi
 import { copyNamespace, getCopyItems, filterCopyItems } from './copy';
 import { saveNamespace, getSaveItems, filterSaveItems } from './save';
 import { obsidianNamespace, getObsidianItems, filterObsidianItems } from './obsidian';
+import { themeNamespace, getThemeItems, filterThemeItems } from './theme';
 
-const namespaces: Namespace[] = [tagsNamespace, exitModesNamespace, copyNamespace, obsidianNamespace, saveNamespace];
+const namespaces: Namespace[] = [tagsNamespace, exitModesNamespace, copyNamespace, obsidianNamespace, saveNamespace, themeNamespace];
 
 export function createQueryContext(): QueryContext {
   return {
@@ -25,6 +26,7 @@ export function createQueryContext(): QueryContext {
       if (namespace.id === 'copy') return getCopyItems();
       if (namespace.id === 'save') return getSaveItems();
       if (namespace.id === 'obsidian') return getObsidianItems();
+      if (namespace.id === 'theme') return getThemeItems();
       return [];
     },
 
@@ -34,6 +36,7 @@ export function createQueryContext(): QueryContext {
       if (namespace.id === 'copy') return filterCopyItems(query);
       if (namespace.id === 'save') return filterSaveItems(query);
       if (namespace.id === 'obsidian') return filterObsidianItems(query);
+      if (namespace.id === 'theme') return filterThemeItems(query);
       return [];
     },
   };
@@ -45,3 +48,4 @@ export { exitModesNamespace, getExitModeItems, setExitModeItems, filterExitModeI
 export { copyNamespace, getCopyItems, filterCopyItems } from './copy';
 export { saveNamespace, getSaveItems, filterSaveItems } from './save';
 export { obsidianNamespace, getObsidianItems, filterObsidianItems, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId, getRawVaultItems } from './obsidian';
+export { themeNamespace, getThemeItems, filterThemeItems } from './theme';

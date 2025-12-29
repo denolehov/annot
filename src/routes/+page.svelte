@@ -21,6 +21,7 @@
   import { useAnnotations } from "$lib/composables/useAnnotations.svelte";
   import { useKeyboard } from "$lib/composables/useKeyboard.svelte";
   import type { SaveContentResponse } from "$lib/types";
+  import { initTheme, setTheme, type ThemePreference } from "$lib/theme";
 
   let lines: Line[] = $state([]);
   let label = $state("");
@@ -564,6 +565,14 @@
     pendingTagCreation = null;
   }
 
+  // Handle events from CommandPalette (e.g., theme change)
+  function handleCommandPaletteEvent(event: string, payload: unknown) {
+    if (event === 'SET_THEME') {
+      setTheme(payload as ThemePreference);
+      commandPaletteOpen = false;
+    }
+  }
+
   // Handle request to create tag from selected text in an editor
   function handleRequestCreateTag(editorKey: string, text: string, from: number, to: number) {
     pendingTagCreation = { editorKey, text, from, to };
@@ -744,6 +753,10 @@
 
   onMount(async () => {
     const window = getCurrentWindow();
+
+    // Apply theme before any content renders (prevents flash)
+    await initTheme();
+
     try {
       const res = await invoke<ContentResponse>("get_content");
       label = res.label;
@@ -1070,6 +1083,7 @@
     onOpenSaveModal={openSaveModal}
     initialState={pendingTagCreation ? { namespace: 'tags', mode: 'create', prefill: { instruction: pendingTagCreation.text } } : undefined}
     onItemCreated={handleItemCreated}
+    onEvent={handleCommandPaletteEvent}
   />
 {/if}
 

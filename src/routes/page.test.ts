@@ -2,6 +2,21 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/svelte";
 import Page from "./+page.svelte";
 
+// Mock matchMedia (not available in jsdom)
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+});
+
 // Mock @tauri-apps/api/core
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -101,7 +116,11 @@ describe("+page.svelte", () => {
   });
 
   it("shows error when IPC fails", async () => {
-    vi.mocked(invoke).mockRejectedValue(new Error("IPC failed"));
+    // get_theme succeeds, get_content fails
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === 'get_theme') return Promise.resolve('system');
+      return Promise.reject(new Error("IPC failed"));
+    });
 
     render(Page);
 
