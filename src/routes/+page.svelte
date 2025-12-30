@@ -8,7 +8,7 @@
   import { rangeToKey, keyToRange, isLineInRange, validateRange, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap, findExcalidrawChip } from "$lib/tiptap";
   import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
-  import AnnotationEditor from "$lib/AnnotationEditor.svelte";
+  import AnnotationSlot from "$lib/components/AnnotationSlot.svelte";
   import CopyDropdown from "$lib/CopyDropdown.svelte";
   import { CommandPalette } from "$lib/CommandPalette";
   import SaveModal from "$lib/SaveModal.svelte";
@@ -624,6 +624,20 @@
     return rangeLines.join('\n');
   }
 
+  // Shared props for AnnotationSlot component (avoids repeating in template)
+  let annotationSlotProps = $derived({
+    annotationState,
+    interaction,
+    tags,
+    allowsImagePaste,
+    pendingTagInsertion,
+    onUpdate: updateAnnotation,
+    onDismiss: sealCurrentAnnotation,
+    onRequestCreateTag: handleRequestCreateTag,
+    onImagePasteBlocked: handleImagePasteBlocked,
+    getOriginalLinesForRange,
+  });
+
   // Keyboard handling (composable)
   const keyboard = useKeyboard(
     {
@@ -811,27 +825,7 @@
             onMouseLeave={interaction.handleLineLeave}
           >
             {#snippet annotationSlot(displayIndex, rangeKey)}
-              {#if rangeKey}
-                {#key rangeKey}
-                  <AnnotationEditor
-                    {rangeKey}
-                    content={annotationState.getByKey(rangeKey)?.content}
-                    sealed={annotationState.isSealed(rangeKey)}
-                    onUpdate={updateAnnotation}
-                    onUnseal={() => {
-                      interaction.setSelection(keyToRange(rangeKey));
-                      annotationState.unseal(rangeKey);
-                    }}
-                    onDismiss={sealCurrentAnnotation}
-                    {tags}
-                    {allowsImagePaste}
-                    onImagePasteBlocked={handleImagePasteBlocked}
-                    onRequestCreateTag={(text, from, to) => handleRequestCreateTag(rangeKey, text, from, to)}
-                    pendingTagInsertion={pendingTagInsertion?.editorKey === rangeKey ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
-                    getOriginalLines={() => getOriginalLinesForRange(keyToRange(rangeKey))}
-                  />
-                {/key}
-              {/if}
+              <AnnotationSlot {rangeKey} {...annotationSlotProps} />
             {/snippet}
           </Portal>
         {:else if segment.type === 'codeblock'}
@@ -868,27 +862,7 @@
             onReportMermaidError={annotationRange ? (error) => handleReportMermaidError(annotationRange, error) : undefined}
           >
             {#snippet annotationSlot(displayIndex, rangeKey)}
-              {#if rangeKey}
-                {#key rangeKey}
-                  <AnnotationEditor
-                    {rangeKey}
-                    content={annotationState.getByKey(rangeKey)?.content}
-                    sealed={annotationState.isSealed(rangeKey)}
-                    onUpdate={updateAnnotation}
-                    onUnseal={() => {
-                      interaction.setSelection(keyToRange(rangeKey));
-                      annotationState.unseal(rangeKey);
-                    }}
-                    onDismiss={sealCurrentAnnotation}
-                    {tags}
-                    {allowsImagePaste}
-                    onImagePasteBlocked={handleImagePasteBlocked}
-                    onRequestCreateTag={(text, from, to) => handleRequestCreateTag(rangeKey, text, from, to)}
-                    pendingTagInsertion={pendingTagInsertion?.editorKey === rangeKey ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
-                    getOriginalLines={() => getOriginalLinesForRange(keyToRange(rangeKey))}
-                  />
-                {/key}
-              {/if}
+              <AnnotationSlot {rangeKey} {...annotationSlotProps} />
             {/snippet}
           </CodeBlock>
         {:else if segment.type === 'table'}
@@ -907,27 +881,7 @@
             onMouseLeave={interaction.handleLineLeave}
           >
             {#snippet annotationSlot(displayIndex, rangeKey)}
-              {#if rangeKey}
-                {#key rangeKey}
-                  <AnnotationEditor
-                    {rangeKey}
-                    content={annotationState.getByKey(rangeKey)?.content}
-                    sealed={annotationState.isSealed(rangeKey)}
-                    onUpdate={updateAnnotation}
-                    onUnseal={() => {
-                      interaction.setSelection(keyToRange(rangeKey));
-                      annotationState.unseal(rangeKey);
-                    }}
-                    onDismiss={sealCurrentAnnotation}
-                    {tags}
-                    {allowsImagePaste}
-                    onImagePasteBlocked={handleImagePasteBlocked}
-                    onRequestCreateTag={(text, from, to) => handleRequestCreateTag(rangeKey, text, from, to)}
-                    pendingTagInsertion={pendingTagInsertion?.editorKey === rangeKey ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
-                    getOriginalLines={() => getOriginalLinesForRange(keyToRange(rangeKey))}
-                  />
-                {/key}
-              {/if}
+              <AnnotationSlot {rangeKey} {...annotationSlotProps} />
             {/snippet}
           </Table>
         {:else if segment.type === 'separator'}
@@ -991,27 +945,7 @@
             {@const annotationAtLine = getAnnotationAtLine(displayIndex)}
             {@const isLastSelectedLine = displayIndex === lastSelectedLine && interaction.range && interaction.phase !== 'selecting'}
             {@const rangeKey = annotationAtLine?.key ?? (isLastSelectedLine && interaction.range ? rangeToKey(interaction.range) : null)}
-            {#if rangeKey}
-              {#key rangeKey}
-                <AnnotationEditor
-                  {rangeKey}
-                  content={annotationState.getByKey(rangeKey)?.content}
-                  sealed={annotationState.isSealed(rangeKey)}
-                  onUpdate={updateAnnotation}
-                  onUnseal={() => {
-                    interaction.setSelection(keyToRange(rangeKey));
-                    annotationState.unseal(rangeKey);
-                  }}
-                  onDismiss={sealCurrentAnnotation}
-                  {tags}
-                  {allowsImagePaste}
-                  onImagePasteBlocked={handleImagePasteBlocked}
-                  onRequestCreateTag={(text, from, to) => handleRequestCreateTag(rangeKey, text, from, to)}
-                  pendingTagInsertion={pendingTagInsertion?.editorKey === rangeKey ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
-                  getOriginalLines={() => getOriginalLinesForRange(keyToRange(rangeKey))}
-                />
-              {/key}
-            {/if}
+            <AnnotationSlot {rangeKey} {...annotationSlotProps} />
           {/each}
         {/if}
       {/each}
