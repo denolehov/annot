@@ -195,8 +195,9 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
         .as_ref()
         .map(|c| !c.is_empty())
         .unwrap_or(false);
+    let has_saved_to = review.saved_to.is_some();
 
-    if !has_exit_mode && !has_annotations && !has_session_comment {
+    if !has_exit_mode && !has_annotations && !has_session_comment && !has_saved_to {
         return FormatResult {
             text: String::new(),
             images: Vec::new(),
@@ -259,6 +260,13 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
     }
 
     if !has_annotations {
+        // Add saved_to line before returning
+        if let Some(ref saved_path) = review.saved_to {
+            if !output.is_empty() {
+                output.push('\n');
+            }
+            output.push_str(&format!("Saved to {}\n", saved_path.display()));
+        }
         return FormatResult {
             text: output,
             images,
@@ -330,6 +338,14 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
                 mode,
             );
         }
+    }
+
+    // Add saved_to line at the end if content was saved
+    if let Some(ref saved_path) = review.saved_to {
+        if !output.is_empty() {
+            output.push('\n');
+        }
+        output.push_str(&format!("Saved to {}\n", saved_path.display()));
     }
 
     FormatResult {
@@ -1583,5 +1599,103 @@ mod tests {
             "Diff annotation header should include both line numbers for context line. Got:\n{}",
             output
         );
+    }
+
+    // ========== saved_to output tests ==========
+
+    #[test]
+    fn saved_to_only_produces_output() {
+        let mut review = make_review("test.rs", vec![], HashMap::new());
+        review.saved_to = Some(PathBuf::from("/tmp/saved-file.md"));
+
+        let output = format_output(&review, OutputMode::Cli).text;
+
+        assert_eq!(output, "Saved to /tmp/saved-file.md\n");
+    }
+
+    #[test]
+    fn saved_to_with_annotations() {
+        let mut annotations = HashMap::new();
+        annotations.insert(
+            LineRange::new(5, 5),
+            Annotation {
+                start_line: 5,
+                end_line: 5,
+                content: vec![ContentNode::Text {
+                    text: "Fix this".to_string(),
+                }],
+            },
+        );
+
+        let lines: Vec<Line> = (1..=10)
+            .map(|n| make_line(n, &format!("line {}", n)))
+            .collect();
+
+        let mut review = make_review("test.rs", lines, annotations);
+        review.saved_to = Some(PathBuf::from("/tmp/output.md"));
+
+        let output = format_output(&review, OutputMode::Cli).text;
+
+        // Should have annotation content
+        assert!(output.contains("test.rs:5"), "Should have annotation header");
+        assert!(output.contains("Fix this"), "Should have annotation text");
+        // Should end with saved_to line
+        assert!(
+            output.ends_with("Saved to /tmp/output.md\n"),
+            "Should end with saved_to. Got:\n{}",
+            output
+        );
+    }
+
+    #[test]
+    fn saved_to_with_session_comment() {
+        let source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from("test.rs"),
+        });
+        let content = ContentModel {
+            label: "test.rs".to_string(),
+            lines: vec![],
+            source,
+            metadata: ContentMetadata::Plain,
+            portals: Vec::new(),
+        };
+        let mut review = Review::cli(content, UserConfig::empty(), "main".to_string());
+        review.session_comment = Some(vec![ContentNode::Text {
+            text: "Overall looks good".to_string(),
+        }]);
+        review.saved_to = Some(PathBuf::from("/tmp/review.md"));
+
+        let output = format_output(&review, OutputMode::Cli).text;
+
+        assert!(output.contains("SESSION:"), "Should have session block");
+        assert!(output.contains("Overall looks good"), "Should have session comment");
+        assert!(
+            output.ends_with("Saved to /tmp/review.md\n"),
+            "Should end with saved_to. Got:\n{}",
+            output
+        );
+    }
+
+    #[test]
+    fn no_saved_to_no_extra_line() {
+        let source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from("test.rs"),
+        });
+        let content = ContentModel {
+            label: "test.rs".to_string(),
+            lines: vec![],
+            source,
+            metadata: ContentMetadata::Plain,
+            portals: Vec::new(),
+        };
+        let mut review = Review::cli(content, UserConfig::empty(), "main".to_string());
+        review.session_comment = Some(vec![ContentNode::Text {
+            text: "Comment only".to_string(),
+        }]);
+        // No saved_to
+
+        let output = format_output(&review, OutputMode::Cli).text;
+
+        assert!(!output.contains("Saved to"), "Should not have saved_to line");
     }
 }

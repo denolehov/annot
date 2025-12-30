@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 
@@ -103,6 +104,7 @@ pub fn finish_review(
         // CLI mode: print and exit
         if !result.text.is_empty() {
             print!("{}", result.text);
+            let _ = std::io::stdout().flush();
         }
         should_exit.store(true, Ordering::SeqCst);
         app.exit(0);
@@ -276,8 +278,8 @@ pub fn save_content(
     review_state: State<ActiveReview>,
     path: String,
 ) -> Result<SaveContentResponse, String> {
-    let guard = review_state.lock();
-    let review = guard.as_ref().ok_or("No active review")?;
+    let mut guard = review_state.lock();
+    let review = guard.as_mut().ok_or("No active review")?;
     review.verify_window(window.label())?;
 
     // Get content from root_view and export with portals embedded as code blocks
@@ -302,6 +304,9 @@ pub fn save_content(
 
     // Write the file
     std::fs::write(&path, &raw_content).map_err(|e| format!("Failed to write file: {}", e))?;
+
+    // Track that we saved (for session output)
+    review.saved_to = Some(path.clone());
 
     // Extract filename for new label
     let new_label = path

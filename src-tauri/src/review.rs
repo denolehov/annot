@@ -101,6 +101,10 @@ pub struct Review {
     //--- Result delivery ---
     /// Channel to send result when review ends. `None` for CLI mode.
     result_channel: Option<Sender<FormatResult>>,
+
+    //--- Save tracking ---
+    /// Path where content was saved (if user saved during session).
+    pub saved_to: Option<PathBuf>,
 }
 
 /// Annotation target — a file that can receive annotations.
@@ -240,6 +244,7 @@ impl Review {
             selected_exit_mode_id: None,
             config,
             result_channel,
+            saved_to: None,
         }
     }
 
