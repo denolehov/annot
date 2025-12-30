@@ -20,7 +20,9 @@ use crate::SessionLock;
 use tools::{ReviewContentInput, ReviewDiffInput, ReviewFileInput, SessionImage, SessionOutput};
 
 /// Instructions for AI agents using the MCP server.
-const MCP_INSTRUCTIONS: &str = r#"Annotation tool for human-in-the-loop AI workflows. Tools: review_file (opens a file for annotation), review_content (opens ephemeral content for annotation), review_diff (opens a unified diff for annotation).
+const MCP_INSTRUCTIONS: &str = r#"Human-in-the-loop annotation for AI workflows. Pull the human into the loop to provide located, specific feedback on content.
+
+Tools open a native window where users annotate specific lines with tags and comments. Tools block until the session closes, then return structured output designed for LLM parsing.
 
 ## Portals (Code Embeds)
 
@@ -37,7 +39,20 @@ Portal syntax: `[label](path#L<start>-L<end>)` where:
 
 The original line stays visible with the portal content expanded below it. Multiple portals on one line each expand separately.
 
-Keep portals small for optimal annotation experience - prefer multiple focused portals over one sprawling embed."#;
+Keep portals small for optimal annotation experience - prefer multiple focused portals over one sprawling embed.
+
+## Highlights
+
+Use `==highlighted text==` to draw the human's attention to specific phrases. Highlights render visually distinct.
+
+## Diagrams
+
+Mermaid code blocks render as interactive diagrams:
+
+```mermaid
+graph LR
+    A[Input] --> B[Process] --> C[Output]
+```"#;
 
 /// MCP server that exposes annotation tools.
 #[derive(Clone)]
@@ -55,7 +70,7 @@ impl AnnotServer {
         }
     }
 
-    #[tool(description = "Opens a file in the annotation interface. Blocks until the window closes, then returns all annotations as structured text.")]
+    #[tool(description = "Opens a file for human review and annotation. Blocks until the window closes. The user can select line ranges to annotate, apply semantic tags (like [# SECURITY], [# TODO]), and add freeform comments. Returns line-anchored annotations with tags for systematic processing.")]
     async fn review_file(
         &self,
         params: Parameters<ReviewFileInput>,
@@ -73,7 +88,7 @@ impl AnnotServer {
         Ok(build_mcp_response(output))
     }
 
-    #[tool(description = "Opens ephemeral (agent-generated) content for annotation. Use for reviewing plans, drafts, or other generated text. Blocks until the window closes. Supports markdown with portal links to embed live code snippets.")]
+    #[tool(description = "Opens agent-generated content (plans, drafts, analysis) for human review. Blocks until the window closes. Best for content you've generated that needs human steering before proceeding. Supports portal links to embed live code (`[label](path#L1-L20)`), highlights (`==important==`), and Mermaid diagrams. Returns line-anchored annotations for iterative refinement.")]
     async fn review_content(
         &self,
         params: Parameters<ReviewContentInput>,
@@ -91,7 +106,7 @@ impl AnnotServer {
         Ok(build_mcp_response(output))
     }
 
-    #[tool(description = "Opens a unified diff in hl for annotation. Supports git-aware generation (preferred) or raw diff content. Blocks until browser closes.")]
+    #[tool(description = "Opens a diff for human review. Blocks until the window closes. Supports git_diff_args (e.g. [\"--staged\"], [\"main...HEAD\"]) or raw diff_content. Returns annotations anchored to diff lines for targeted feedback on changes.")]
     async fn review_diff(
         &self,
         params: Parameters<ReviewDiffInput>,
