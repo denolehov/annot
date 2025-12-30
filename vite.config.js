@@ -8,6 +8,7 @@ const host = process.env.TAURI_DEV_HOST;
 // Custom logger to filter out Svelte 5 @__PURE__ annotation warnings
 const logger = createLogger();
 const originalWarn = logger.warn.bind(logger);
+/** @param {string} msg @param {import('vite').LogOptions} [options] */
 logger.warn = (msg, options) => {
   // Skip @__PURE__ annotation warnings from Svelte 5 runes compilation
   // (these are harmless - Rollup just can't use the tree-shaking hint)
@@ -34,6 +35,7 @@ export default defineConfig(async () => ({
 
   build: {
     rollupOptions: {
+      // @ts-ignore - Rollup onwarn typing
       onwarn(warning, warn) {
         // Ignore @__PURE__ annotation warnings from Svelte 5 runes compilation
         // (these are harmless - Rollup just can't use the tree-shaking hint)

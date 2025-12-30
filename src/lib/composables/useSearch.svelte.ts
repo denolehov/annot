@@ -13,7 +13,7 @@ interface SearchState {
 }
 
 /**
- * Extract text content from HTML string.
+ * Extract text content from HTML.
  * This ensures we search the same text that gets rendered in the DOM.
  */
 function getRenderedText(line: Line): string {
@@ -21,7 +21,15 @@ function getRenderedText(line: Line): string {
 
   // Use a temporary element to extract text from HTML
   const div = document.createElement('div');
-  div.innerHTML = line.html;
+  if (line.html.type === 'full') {
+    div.innerHTML = line.html.value;
+  } else if (line.html.type === 'cells') {
+    div.innerHTML = line.html.value.join(' ');
+  } else {
+    // Exhaustive check: if a new LineHtml type is added, TypeScript will error here
+    const _exhaustive: never = line.html;
+    return line.content;
+  }
   return div.textContent ?? line.content;
 }
 

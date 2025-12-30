@@ -6,7 +6,7 @@ import type { Range } from '$lib/range';
 
 // Mock ResizeObserver (not available in jsdom)
 beforeAll(() => {
-  global.ResizeObserver = class ResizeObserver {
+  globalThis.ResizeObserver = class ResizeObserver {
     observe() {}
     unobserve() {}
     disconnect() {}
@@ -42,7 +42,8 @@ function createTableProps(lines: Array<{ line: Line; displayIndex: number }>) {
     onAddMouseDown: vi.fn(),
     onMouseEnter: vi.fn(),
     onMouseLeave: vi.fn(),
-    annotationSlot: () => null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    annotationSlot: (() => null) as any,
   };
 }
 
