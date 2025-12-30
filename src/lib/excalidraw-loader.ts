@@ -72,8 +72,12 @@ export async function mountExcalidraw(
   // Create root
   const root = createRoot(options.container);
 
-  // Store ref to Excalidraw API
+  // Store ref to Excalidraw API + readiness promise
   let excalidrawAPI: ExcalidrawAPI = null;
+  let resolveReady: () => void;
+  const apiReady = new Promise<void>((resolve) => {
+    resolveReady = resolve;
+  });
 
   // Create wrapper component using createElement (no JSX needed)
   const ExcalidrawWrapper = () => {
@@ -97,6 +101,8 @@ export async function mountExcalidraw(
               });
             });
           }
+          // Signal that API is ready
+          resolveReady();
         },
       }),
       // Control buttons - positioned via CSS
@@ -144,8 +150,9 @@ export async function mountExcalidraw(
     );
   };
 
-  // Render
+  // Render and wait for API to be ready
   root.render(React.createElement(ExcalidrawWrapper));
+  await apiReady;
 
   return {
     unmount: () => root.unmount(),

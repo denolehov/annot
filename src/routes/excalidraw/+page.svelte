@@ -22,6 +22,8 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let showConfirmDialog = $state(false);
+  let closeHandled = false;  // Prevent re-entry on Cmd-W
+  let unlistenClose: (() => void) | undefined;
   let initialElementCount = 0;
   let initialHash = '';
 
@@ -108,6 +110,7 @@
 
   function dismissConfirm() {
     showConfirmDialog = false;
+    closeHandled = false;  // Allow future close attempts
   }
 
   onMount(async () => {
@@ -133,10 +136,6 @@
         console.warn('Failed to parse initial elements, using empty array');
       }
 
-      // Track initial state for change detection
-      initialElementCount = parsedElements.filter((el) => !el.isDeleted).length;
-      initialHash = hashElements(parsedElements);
-
       handle = await mountExcalidraw({
         container: containerEl,
         initialElements: parsedElements,
@@ -144,6 +143,12 @@
         onSave: handleSave,
         onCancel: tryCancel,
       });
+
+      // Track initial state for change detection AFTER mounting
+      // (Excalidraw normalizes elements internally, so we must hash the mounted state)
+      const mountedElements = handle.getElements() as ExcalidrawElement[];
+      initialElementCount = mountedElements.filter((el) => !el.isDeleted).length;
+      initialHash = hashElements(mountedElements);
 
       loading = false;
 
@@ -179,6 +184,15 @@
       // Show the window
       const win = getCurrentWindow();
       await win.show();
+
+      // Intercept window close (Cmd-W) to check for unsaved changes
+      unlistenClose = await win.onCloseRequested(async (event) => {
+        if (!closeHandled) {
+          closeHandled = true;
+          event.preventDefault();
+          tryCancel();
+        }
+      });
     } catch (e) {
       error = String(e);
       loading = false;
@@ -190,6 +204,7 @@
 
   onDestroy(() => {
     handle?.unmount();
+    unlistenClose?.();
   });
 
   function handleKeyDown(e: KeyboardEvent) {
