@@ -55,7 +55,7 @@
 }
 
 .annotation-editor.sealed:hover {
-	border-color: var(--accent-primary);
+	border-color: var(--border-editor-hover);
 }
 
 .annotation-editor.sealed::after {
@@ -65,8 +65,8 @@
 }
 
 .annotation-editor.sealed:hover::after {
-	border-left-color: var(--accent-primary);
-	border-top-color: var(--accent-primary);
+	border-left-color: var(--border-editor-hover);
+	border-top-color: var(--border-editor-hover);
 }
 
 /* ===========================================
