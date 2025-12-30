@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/svelte";
+
+// Mock @excalidraw/excalidraw (roughjs doesn't work in jsdom)
+vi.mock("@excalidraw/excalidraw", () => ({
+  Excalidraw: vi.fn(() => null),
+  exportToBlob: vi.fn(),
+  serializeAsJSON: vi.fn(),
+}));
+
 import Page from "./+page.svelte";
 
 // Mock matchMedia (not available in jsdom)

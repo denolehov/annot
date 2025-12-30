@@ -962,33 +962,4 @@
       transform: translateX(-50%) translateY(-8px);
     }
   }
-
-  .mermaid-view-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin-left: 8px;
-    padding: 2px 4px;
-    background: var(--bg-window);
-    border: 1px solid var(--border-subtle);
-    border-radius: 4px;
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .mermaid-view-btn:hover {
-    background: var(--bg-panel);
-    color: var(--text-primary);
-    border-color: var(--border-strong);
-  }
-
-  .mermaid-view-btn:focus-visible {
-    outline: none;
-    border-color: var(--focus-ring);
-  }
-
-  .mermaid-view-btn svg {
-    display: block;
-  }
 </style>
