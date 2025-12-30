@@ -2,6 +2,7 @@
 // Action-only namespace — items emit theme change events
 
 import type { Namespace, Item } from '../engine/types';
+import { fuzzySearch } from '$lib/fuzzy';
 
 export const themeNamespace: Namespace = {
   id: 'theme',
@@ -38,7 +39,5 @@ export function getThemeItems(): Item[] {
 }
 
 export function filterThemeItems(query: string): Item[] {
-  if (!query) return themeItems;
-  const q = query.toLowerCase();
-  return themeItems.filter((item) => item.name.toLowerCase().includes(q));
+  return fuzzySearch(themeItems, query, [{ name: 'name', weight: 1 }]);
 }

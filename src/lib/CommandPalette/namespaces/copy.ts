@@ -2,6 +2,7 @@
 // Action-only namespace — items execute on selection, no CRUD
 
 import type { Namespace, Item } from '../engine/types';
+import { fuzzySearch } from '$lib/fuzzy';
 
 export const copyNamespace: Namespace = {
   id: 'copy',
@@ -38,7 +39,5 @@ export function getCopyItems(): Item[] {
 }
 
 export function filterCopyItems(query: string): Item[] {
-  if (!query) return copyItems;
-  const q = query.toLowerCase();
-  return copyItems.filter((item) => item.name.toLowerCase().includes(q));
+  return fuzzySearch(copyItems, query, [{ name: 'name', weight: 1 }]);
 }

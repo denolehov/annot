@@ -3,6 +3,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 import Suggestion, { type SuggestionOptions, type SuggestionProps, type SuggestionKeyDownProps } from '@tiptap/suggestion';
 import { computePosition, offset, flip, shift, arrow } from '@floating-ui/dom';
 import type { ContentNode, Tag } from './types';
+import { fuzzySearch } from './fuzzy';
 
 /**
  * Generic suggestion state for autocomplete menus.
@@ -943,9 +944,15 @@ export function createTagSuggestion(
   return {
     char: '#',
     items: ({ query }) => {
-      return tags
-        .filter((tag) => tag.name.toLowerCase().includes(query.toLowerCase()))
-        .slice(0, 5);
+      return fuzzySearch(
+        tags,
+        query,
+        [
+          { name: 'name', weight: 2 },
+          { name: 'instruction', weight: 1 },
+        ],
+        5
+      );
     },
     command: ({ editor, range, props }) => {
       editor
@@ -1094,9 +1101,10 @@ export function createSlashSuggestion(
   return {
     char: '/',
     items: ({ query }) => {
-      return commands.filter((cmd) =>
-        cmd.name.toLowerCase().includes(query.toLowerCase())
-      );
+      return fuzzySearch(commands, query, [
+        { name: 'name', weight: 2 },
+        { name: 'description', weight: 1 },
+      ]);
     },
     command: ({ editor, range, props }) => {
       props.action(editor, range);

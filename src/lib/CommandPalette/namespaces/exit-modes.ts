@@ -2,6 +2,7 @@
 // In-memory storage (no persistence yet)
 
 import type { Namespace, Item } from '../engine/types';
+import { fuzzySearch } from '$lib/fuzzy';
 
 export const exitModesNamespace: Namespace = {
   id: 'exit-modes',
@@ -37,9 +38,10 @@ export function setExitModeItems(data: Item[]): void {
 }
 
 export function filterExitModeItems(query: string): Item[] {
-  if (!query) return items;
-  const q = query.toLowerCase();
-  return items.filter((item) => item.name.toLowerCase().includes(q));
+  return fuzzySearch(items, query, [
+    { name: 'name', weight: 2 },
+    { name: 'values.instruction', weight: 1 },
+  ]);
 }
 
 export function saveExitModeItem(item: Item): void {

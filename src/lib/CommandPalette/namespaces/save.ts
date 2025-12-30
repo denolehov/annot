@@ -2,6 +2,7 @@
 // Action-only namespace — opens save modal on selection
 
 import type { Namespace, Item } from '../engine/types';
+import { fuzzySearch } from '$lib/fuzzy';
 
 export const saveNamespace: Namespace = {
   id: 'save',
@@ -26,7 +27,5 @@ export function getSaveItems(): Item[] {
 }
 
 export function filterSaveItems(query: string): Item[] {
-  if (!query) return saveItems;
-  const q = query.toLowerCase();
-  return saveItems.filter((item) => item.name.toLowerCase().includes(q));
+  return fuzzySearch(saveItems, query, [{ name: 'name', weight: 1 }]);
 }

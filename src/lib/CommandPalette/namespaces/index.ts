@@ -1,6 +1,7 @@
 // Namespace registry and QueryContext factory for CommandPalette
 
 import type { QueryContext, Namespace } from '../engine/types';
+import { fuzzySearch } from '$lib/fuzzy';
 import { tagsNamespace, getTagItems, filterTagItems } from './tags';
 import { exitModesNamespace, getExitModeItems, filterExitModeItems } from './exit-modes';
 import { copyNamespace, getCopyItems, filterCopyItems } from './copy';
@@ -15,9 +16,7 @@ export function createQueryContext(): QueryContext {
     namespaces,
 
     filterNamespaces(query: string): Namespace[] {
-      if (!query) return namespaces;
-      const q = query.toLowerCase();
-      return namespaces.filter((ns) => ns.label.toLowerCase().includes(q));
+      return fuzzySearch(namespaces, query, [{ name: 'label', weight: 1 }]);
     },
 
     getItems(namespace: Namespace) {

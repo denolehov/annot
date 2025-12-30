@@ -2,6 +2,7 @@
 // Hybrid namespace: vault CRUD + export action
 
 import type { Namespace, Item } from '../engine/types';
+import { fuzzySearch } from '$lib/fuzzy';
 
 export const obsidianNamespace: Namespace = {
   id: 'obsidian',
@@ -63,10 +64,7 @@ export function getRawVaultItems(): Item[] {
  * Filter items by query
  */
 export function filterObsidianItems(query: string): Item[] {
-  const items = getObsidianItems();
-  if (!query) return items;
-  const q = query.toLowerCase();
-  return items.filter((item) => item.name.toLowerCase().includes(q));
+  return fuzzySearch(getObsidianItems(), query, [{ name: 'name', weight: 1 }]);
 }
 
 /**
