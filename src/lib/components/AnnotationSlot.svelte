@@ -1,12 +1,5 @@
-<script lang="ts">
-  /**
-   * AnnotationSlot - Wrapper component for AnnotationEditor in embedded contexts.
-   *
-   * Handles the conditional rendering, keying, and prop threading for annotations
-   * in Portal, CodeBlock, Table, and regular line contexts.
-   */
-  import AnnotationEditor from '$lib/AnnotationEditor.svelte';
-  import { keyToRange, type Range } from '$lib/range';
+<script lang="ts" module>
+  import type { Range } from '$lib/range';
   import type { JSONContent, Tag } from '$lib/types';
 
   interface AnnotationEntry {
@@ -14,7 +7,8 @@
     sealed: boolean;
   }
 
-  interface Props {
+  /** Props for AnnotationSlot component (exported for use in other components) */
+  export interface AnnotationSlotProps {
     rangeKey: string | null;
     annotationState: {
       getByKey(key: string): AnnotationEntry | undefined;
@@ -38,6 +32,17 @@
     onImagePasteBlocked: () => void;
     getOriginalLinesForRange: (range: Range) => string;
   }
+</script>
+
+<script lang="ts">
+  /**
+   * AnnotationSlot - Wrapper component for AnnotationEditor in embedded contexts.
+   *
+   * Handles the conditional rendering, keying, and prop threading for annotations
+   * in Portal, CodeBlock, Table, and regular line contexts.
+   */
+  import AnnotationEditor from '$lib/AnnotationEditor.svelte';
+  import { keyToRange } from '$lib/range';
 
   let {
     rangeKey,
@@ -51,7 +56,7 @@
     onRequestCreateTag,
     onImagePasteBlocked,
     getOriginalLinesForRange,
-  }: Props = $props();
+  }: AnnotationSlotProps = $props();
 </script>
 
 {#if rangeKey}

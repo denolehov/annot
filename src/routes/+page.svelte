@@ -15,6 +15,7 @@
   import Portal from "$lib/components/embedded/Portal.svelte";
   import CodeBlock from "$lib/components/embedded/CodeBlock.svelte";
   import Table from "$lib/components/embedded/Table.svelte";
+  import RegularLines from "$lib/components/embedded/RegularLines.svelte";
   import { Header, StatusBar, SessionEditor } from "$lib/components";
   import { useExitModes } from "$lib/composables/useExitModes.svelte";
   import { useContentTracking } from "$lib/composables/useContentTracking.svelte";
@@ -806,63 +807,25 @@
             <span class="code"><hr class="separator" /></span>
           </div>
         {:else}
-          {#each segment.lines as { line, displayIndex }}
-            {@const sourceLineNum = getLineNumber(line)}
-            {@const diffKind = getDiffKind(line)}
-            {@const mermaidBlock = sourceLineNum !== null ? mermaid.getMermaidBlockAt(sourceLineNum) : null}
-            <div
-              class="line"
-              class:selected={isSelected(displayIndex)}
-              class:annotated={hasAnnotation(displayIndex)}
-              class:preview={isPreview(displayIndex)}
-              class:diff-added={diffKind === 'added'}
-              class:diff-deleted={diffKind === 'deleted'}
-              class:diff-context={diffKind === 'context'}
-              class:diff-header={diffKind === 'file_header' || diffKind === 'hunk_header'}
-              data-display-idx={displayIndex}
-              onmouseenter={() => interaction.handleLineEnter(displayIndex)}
-              onmouseleave={() => interaction.handleLineLeave()}
-              role="presentation"
-            >
-              <button
-                class="add-btn"
-                onpointerdown={(e) => interaction.handlePointerDown(displayIndex, e)}
-                aria-label="Add annotation"
-              >+</button>
-              <!-- svelte-ignore a11y_click_events_have_key_events -->
-              <span
-                class="gutter"
-                class:selected={isSelected(displayIndex)}
-                onpointerdown={(e) => interaction.handlePointerDown(displayIndex, e)}
-                onclick={() => interaction.handleGutterClick(displayIndex)}
-                role="button"
-                tabindex="-1"
-              >
-                {#if line.origin.type === 'diff'}
-                  <span class="diff-gutter-old">{line.origin.old_line ?? ''}</span>
-                  <span class="diff-gutter-new">{line.origin.new_line ?? ''}</span>
-                {:else if sourceLineNum !== null}
-                  {sourceLineNum}
-                {/if}
-              </span>
-              <span class="code" class:md={markdownMetadata}>{#if line.html}{@html line.html}{:else}{line.content}{/if}</span>
-              {#if mermaidBlock}
-                <button
-                  class="mermaid-view-btn"
-                  onclick={() => mermaid.openMermaidWindow(mermaidBlock)}
-                  title="View diagram"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="14" height="14">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z" />
-                  </svg>
-                </button>
-              {/if}
-            </div>
-            {@const annotationAtLine = getAnnotationAtLine(displayIndex)}
-            {@const isLastSelectedLine = displayIndex === lastSelectedLine && interaction.range && interaction.phase !== 'selecting'}
-            {@const rangeKey = annotationAtLine?.key ?? (isLastSelectedLine && interaction.range ? rangeToKey(interaction.range) : null)}
-            <AnnotationSlot {rangeKey} {...annotationSlotProps} />
-          {/each}
+          <RegularLines
+            lines={segment.lines}
+            {markdownMetadata}
+            selection={interactionSelection}
+            interactionRange={interaction.range}
+            interactionPhase={interaction.phase}
+            {lastSelectedLine}
+            {isSelected}
+            {isPreview}
+            {hasAnnotation}
+            {getAnnotationAtLine}
+            getMermaidBlockAt={mermaid.getMermaidBlockAt}
+            openMermaidWindow={mermaid.openMermaidWindow}
+            onPointerDown={interaction.handlePointerDown}
+            onGutterClick={interaction.handleGutterClick}
+            onLineEnter={interaction.handleLineEnter}
+            onLineLeave={interaction.handleLineLeave}
+            {annotationSlotProps}
+          />
         {/if}
       {/each}
       </div>
