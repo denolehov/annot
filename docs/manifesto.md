@@ -8,22 +8,26 @@
 
 AI generates content at unprecedented speed and scale. But generation without feedback is noise. The bottleneck isn't what AI can produce — it's what humans can shape, steer, and approve.
 
-Chat is too slow. Approval buttons are too coarse. The gap between "AI generates" and "human refines" is where quality dies.
+Most AI interactions force humans toward two extremes: vague steering ("make it better") or manual labor ("I'll rewrite it myself"). Chat offers influence without precision. Direct editing offers precision without leverage. The gap between these poles is where quality dies.
 
 ---
 
 ## II. The Solution
 
-annot is a **structured dialogue substrate** — a medium in which human and AI take turns adding, questioning, and refining until something crystallizes.
+annot is not a destination; it is a **membrane** — the active layer where raw AI generation passes through to become committed reality.
 
-It appears when needed. It vanishes when done. It leaves behind only the artifact that emerged from the conversation.
+Within that membrane is a **structured dialogue substrate**: a medium designed for high-bandwidth, high-fidelity communication between human and AI. The substrate is where dialogue happens. The membrane is what the dialogue accomplishes.
+
+It appears when needed. It vanishes when done. It leaves behind only the artifact that emerged from the crossing.
 
 ---
 
 ## III. Core Principles
 
 ### Ephemeral
-annot has no persistence ambitions. It is a momentary collaboration surface. Cmd-W closes it. There is no "save session." There is no "come back later." The session exists to produce an artifact, and when the artifact exists, the session has served its purpose.
+Persistence is **effect**, not state. The session must dissolve for the value to live. If the session persists, the work isn't done.
+
+annot is a catalyst — it facilitates the reaction but is not consumed by it, nor does it remain in the final product. Cmd-W closes it. There is no "save session." There is no "come back later." The session exists to produce an artifact, and when the artifact exists, the session has served its purpose.
 
 ### Bidirectional
 Either party initiates. AI can pull human in: "review this plan." Human can pull AI in: "explain this code." The roles are fluid. The "who's driving" can shift mid-session. What matters is that both parties can contribute.
@@ -32,7 +36,7 @@ Either party initiates. AI can pull human in: "review this plan." Human can pull
 This is not chat. Feedback is **anchored** — attached to specific lines, specific locations. Feedback is **tagged** — categorized with semantic markers that AI can parse. Feedback is **constrained** — shaped by exit modes and structured elements that make dialogue productive rather than meandering.
 
 ### Generative
-Humans don't just approve or reject. They add information that didn't exist. They explain *why* something is wrong. They sketch alternatives. They provide context AI couldn't infer. The human contribution is creative, not clerical.
+Humans don't just approve or reject. They add information that didn't exist. They mark up drafts with specific corrections. They sketch architecture with diagrams. They provide context AI couldn't infer. They explain *why* something is wrong. They sketch alternatives. The human contribution is creative, not clerical.
 
 ---
 
@@ -48,7 +52,7 @@ Features in annot flow in specific directions:
 
 **Human → AI**: Tools that give AI cleaner signal about human intent.
 - Tags categorize feedback semantically
-- Checkboxes confirm or reject items
+- Replace blocks show the fix, not just describe the problem
 - Exit modes declare session-level intent
 - Annotations provide located, reasoned feedback
 
@@ -62,18 +66,34 @@ Both directions serve the same goal: **high-bandwidth, high-fidelity communicati
 
 **Not a form builder.** Humans provide generative input, not checkbox surveys. If a widget doesn't add information AI couldn't derive, it doesn't belong.
 
-**Not a workspace.** There is no session state to manage, no files to organize, no project to maintain. annot is the channel; your codebase, your docs, your Slack — those are the containers. The value lands somewhere safe. annot just helps it get there.
+**Not a workspace.** There is no session state to manage, no files to organize, no project to maintain. annot is the membrane; your codebase, your documents, your team channels — those are the destinations. The value lands somewhere permanent. annot just helps it get there.
 
 **Not chat.** The spatial anchoring, the structured output, the line-level precision — these are what make annot more than conversation.
 
+**Not another tool in the stack.** annot sits *between* generation and persistence — wherever AI produces and wherever artifacts land. It is the shaping layer, not the source or destination.
+
 ---
 
-## VI. The Artifact
+## VI. The Gradient of Control
+
+Every medium of human-AI interaction offers a different trade-off between precision and effort:
+
+At one extreme: influence without precision. "Try again." "Make it better." The human gestures vaguely; the AI varies randomly. Low effort, low control.
+
+At the other extreme: precision without leverage. The human rewrites every word, codes every line. Total control, total labor.
+
+annot occupies the ground between these poles. The human provides **located, specific, reasoned feedback** — and the AI transforms that signal into systematic change. The precision of direct editing. The leverage of delegation.
+
+This is not about approving or rejecting. It is about shaping — adding the constraints, the corrections, the context that transform plausible output into correct output.
+
+---
+
+## VII. The Artifact
 
 Every annot session ends with something that didn't exist before:
 - A refined implementation plan
 - An RFC for the team to review
-- A Slack message with the right tone
+- A document with the right tone
 - A shared understanding captured in prose
 - A decision, documented with rationale
 
@@ -81,7 +101,7 @@ The session is ephemeral. The artifact persists — in your repo, your docs, you
 
 ---
 
-## VII. The Vision
+## VIII. The Vision
 
 We imagine a world where human-AI collaboration is:
 - **Precise** — feedback at the point of concern, not vague gestures
@@ -94,11 +114,11 @@ annot is not the only tool in this world. But it is the tool for **structured, l
 
 ---
 
-## VIII. Closing
+## IX. Closing
 
 The content is malleable. The container is also malleable.
 
-AI can now shape not just text, but the very structure through which humans respond. annot is where that structure meets human judgment — adaptive to the moment, shaped by context, dissolved when done.
+AI can now shape not just text, but the very structure through which humans respond. annot is the membrane where that structure meets human judgment — adaptive to the moment, shaped by context, dissolved when done.
 
 Think together. Until something crystallizes.
 
