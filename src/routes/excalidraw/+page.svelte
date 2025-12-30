@@ -61,6 +61,7 @@
       const reader = new FileReader();
       reader.onloadend = async () => {
         try {
+          unlistenClose?.();  // Remove listener before closing to prevent re-entry
           await invoke('excalidraw_save', {
             elements: JSON.stringify(elements),
             png: reader.result as string,
@@ -74,6 +75,7 @@
       console.error('Failed to export PNG:', e);
       // Save without PNG if export fails
       try {
+        unlistenClose?.();  // Remove listener before closing to prevent re-entry
         await invoke('excalidraw_save', {
           elements: JSON.stringify(elements),
           png: '',
