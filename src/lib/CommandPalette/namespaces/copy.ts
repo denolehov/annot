@@ -7,7 +7,7 @@ import { fuzzySearch } from '$lib/fuzzy';
 export const copyNamespace: Namespace = {
   id: 'copy',
   label: 'Copy',
-  icon: 'copy',
+  icon: 'copy-code',
   fields: [], // No fields — not editable
   hotkeys: [], // No hotkeys for action namespaces
 };
