@@ -259,88 +259,75 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
         }
     }
 
-    if !has_annotations {
-        // Add saved_to line before returning
-        if let Some(ref saved_path) = review.saved_to {
-            if !output.is_empty() {
-                output.push('\n');
-            }
-            output.push_str(&format!("Saved to {}\n", saved_path.display()));
-        }
-        return FormatResult {
-            text: output,
-            images,
-        };
-    }
-
-    // Build list of (display_path, annotations) for files with annotations
-    // We collect display paths (String) for output formatting
-    let files_with_annotations: Vec<(String, &_)> = if let Some(diff_files) = review.root_view.diff_files() {
-        // Diff mode: use DiffFileView for display paths, enumerate for index
-        diff_files
-            .iter()
-            .enumerate()
-            .filter_map(|(index, df)| {
-                let key = FileKey::diff_file(index);
-                review.files.get(&key).and_then(|target| {
-                    if target.annotations.is_empty() {
-                        None
-                    } else {
-                        Some((df.path.display().to_string(), target))
+    // Build annotation blocks (if any)
+    if has_annotations {
+        let files_with_annotations: Vec<(String, &_)> = if let Some(diff_files) = review.root_view.diff_files() {
+            // Diff mode: use DiffFileView for display paths, enumerate for index
+            diff_files
+                .iter()
+                .enumerate()
+                .filter_map(|(index, df)| {
+                    let key = FileKey::diff_file(index);
+                    review.files.get(&key).and_then(|target| {
+                        if target.annotations.is_empty() {
+                            None
+                        } else {
+                            Some((df.path.display().to_string(), target))
+                        }
+                    })
+                })
+                .collect()
+        } else {
+            // File mode: extract display string from FileKey
+            review
+                .files
+                .iter()
+                .filter(|(_, target)| !target.annotations.is_empty())
+                .filter_map(|(key, target)| {
+                    match key {
+                        FileKey::Path(p) => Some((p.display().to_string(), target)),
+                        FileKey::Ephemeral { label } => Some((label.clone(), target)),
+                        FileKey::DiffFile { .. } => None, // Should not happen in file mode
                     }
                 })
-            })
-            .collect()
-    } else {
-        // File mode: extract display string from FileKey
-        review
-            .files
+                .collect()
+        };
+
+        // Calculate max line number width across all annotations
+        let max_line = files_with_annotations
             .iter()
-            .filter(|(_, target)| !target.annotations.is_empty())
-            .filter_map(|(key, target)| {
-                match key {
-                    FileKey::Path(p) => Some((p.display().to_string(), target)),
-                    FileKey::Ephemeral { label } => Some((label.clone(), target)),
-                    FileKey::DiffFile { .. } => None, // Should not happen in file mode
+            .flat_map(|(_, target)| target.annotations.values())
+            .map(|a| a.end_line)
+            .max()
+            .unwrap_or(0);
+        let line_num_width = max_line.to_string().len();
+
+        let mut first_block = true;
+        for (display_path, target) in &files_with_annotations {
+            // Sort annotations within this file by start line
+            let mut sorted_annotations: Vec<&Annotation> = target.annotations.values().collect();
+            sorted_annotations.sort_by_key(|a| a.start_line);
+
+            for ann in sorted_annotations {
+                if !first_block {
+                    output.push_str("\n---\n\n");
                 }
-            })
-            .collect()
-    };
-
-    // Calculate max line number width across all annotations
-    let max_line = files_with_annotations
-        .iter()
-        .flat_map(|(_, target)| target.annotations.values())
-        .map(|a| a.end_line)
-        .max()
-        .unwrap_or(0);
-    let line_num_width = max_line.to_string().len();
-
-    let mut first_block = true;
-    for (display_path, target) in &files_with_annotations {
-        // Sort annotations within this file by start line
-        let mut sorted_annotations: Vec<&Annotation> = target.annotations.values().collect();
-        sorted_annotations.sort_by_key(|a| a.start_line);
-
-        for ann in sorted_annotations {
-            if !first_block {
-                output.push_str("\n---\n\n");
+                first_block = false;
+                format_annotation_block(
+                    &mut output,
+                    content,
+                    ann,
+                    display_path,
+                    line_num_width,
+                    &mut images,
+                    &mut figure_counter,
+                    mode,
+                );
             }
-            first_block = false;
-            format_annotation_block(
-                &mut output,
-                content,
-                ann,
-                display_path,
-                line_num_width,
-                &mut images,
-                &mut figure_counter,
-                mode,
-            );
         }
     }
 
-    // Add saved_to line at the end if content was saved
+    // Saved path (single location, always runs)
     if let Some(ref saved_path) = review.saved_to {
         if !output.is_empty() {
             output.push('\n');
