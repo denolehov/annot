@@ -46,7 +46,7 @@
         getBoundingClientRect: () => rect,
       };
 
-      const { x, y } = await computePosition(virtualEl, node, {
+      const { x, y, placement } = await computePosition(virtualEl, node, {
         placement: opts.placement ?? 'bottom-start',
         middleware: [
           offset(4),
@@ -55,10 +55,20 @@
         ],
       });
 
-      Object.assign(node.style, {
-        left: `${x}px`,
-        top: `${y}px`,
-      });
+      // When flipped above cursor, anchor from bottom so menu shrinks downward
+      if (placement.startsWith('top')) {
+        Object.assign(node.style, {
+          left: `${x}px`,
+          top: 'auto',
+          bottom: `${window.innerHeight - y - node.offsetHeight}px`,
+        });
+      } else {
+        Object.assign(node.style, {
+          left: `${x}px`,
+          top: `${y}px`,
+          bottom: 'auto',
+        });
+      }
     }
 
     // Initial position
