@@ -14,3 +14,6 @@ export { default as SunIcon } from './SunIcon.svelte';
 export { default as MoonIcon } from './MoonIcon.svelte';
 export { default as ExcalidrawIcon } from './ExcalidrawIcon.svelte';
 export { default as WarningIcon } from './WarningIcon.svelte';
+export { default as ChevronUpIcon } from './ChevronUpIcon.svelte';
+export { default as ChevronDownIcon } from './ChevronDownIcon.svelte';
+export { default as XMarkIcon } from './XMarkIcon.svelte';

@@ -25,6 +25,8 @@
   import { useSelectionBounds } from "$lib/composables/useSelectionBounds.svelte";
   import { useMermaid } from "$lib/composables/useMermaid.svelte";
   import { useLineSegments } from "$lib/composables/useLineSegments.svelte";
+  import { useSearch } from "$lib/composables/useSearch.svelte";
+  import SearchBar from "$lib/components/SearchBar.svelte";
   import type { SaveContentResponse } from "$lib/types";
   import { initTheme, setTheme, type ThemePreference } from "$lib/theme";
   import { convertMermaidToExcalidraw } from "$lib/mermaid-to-excalidraw";
@@ -200,6 +202,15 @@
 
   // Line segmentation (composable)
   const lineSegmentation = useLineSegments(() => lines);
+
+  // Search (composable)
+  function scrollToDisplayIndex(displayIndex: number) {
+    if (!contentEl) return;
+    const targetY = (displayIndex - 1) * LINE_HEIGHT;
+    const viewportCenter = viewportHeight / 2;
+    contentEl.scrollTop = Math.max(0, targetY - viewportCenter);
+  }
+  const search = useSearch(() => lines, scrollToDisplayIndex);
 
   // Session comment state (global/file-level comment)
   let sessionComment: JSONContent | undefined = $state(undefined);
@@ -564,6 +575,7 @@
       onOpenSessionEditor: openSessionEditor,
       onOpenCommandPalette: () => commandPaletteOpen = true,
       onOpenSaveModal: openSaveModal,
+      onOpenSearch: () => search.open(),
       onZoomIn: () => contentZoom = Math.min(contentZoom + 0.1, 3.0),
       onZoomOut: () => contentZoom = Math.max(contentZoom - 0.1, 0.5),
       onZoomReset: () => contentZoom = 1.0,
@@ -577,6 +589,7 @@
       isEditorActive: () => !!interaction.range || sessionEditorOpen,
       isCommandPaletteOpen: () => commandPaletteOpen,
       isSaveModalOpen: () => saveModalOpen,
+      isSearchOpen: () => search.isOpen,
       hasHoveredLine: () => interaction.hoverLine !== null,
       hasExitModes: () => exitModeState.modes.length > 0,
       isHoveredLineSelectable: () => interaction.hoverLine !== null && isLineSelectable(interaction.hoverLine),
@@ -814,6 +827,8 @@
             interactionRange={interaction.range}
             interactionPhase={interaction.phase}
             {lastSelectedLine}
+            searchMatches={search.matches}
+            currentSearchMatch={search.getCurrentMatch()}
             {isSelected}
             {isPreview}
             {hasAnnotation}
@@ -835,6 +850,8 @@
   <!-- Footer / Status Bar -->
   <StatusBar selectedMode={exitModeState.selectedMode} onCycleMode={exitModeState.cycleForward} />
 </main>
+
+<SearchBar {search} />
 
 {#if commandPaletteOpen}
   <CommandPalette

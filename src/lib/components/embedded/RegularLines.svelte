@@ -7,8 +7,10 @@
   import type { Line, MarkdownMetadata, Tag, CodeBlockInfo } from '$lib/types';
   import type { Range } from '$lib/range';
   import type { JSONContent } from '@tiptap/core';
+  import type { SearchMatch } from '$lib/composables/useSearch.svelte';
   import { rangeToKey } from '$lib/range';
   import { getLineNumber, getDiffKind } from '$lib/line-utils';
+  import { highlightMatches, clearHighlights } from '$lib/search-highlight';
   import AnnotationSlot, { type AnnotationSlotProps } from '$lib/components/AnnotationSlot.svelte';
 
   interface DisplayLine {
@@ -23,6 +25,10 @@
     interactionRange: Range | null;
     interactionPhase: string;
     lastSelectedLine: number | null;
+
+    // Search
+    searchMatches: SearchMatch[];
+    currentSearchMatch: SearchMatch | null;
 
     // Functions
     isSelected: (displayIdx: number) => boolean;
@@ -49,6 +55,8 @@
     interactionRange,
     interactionPhase,
     lastSelectedLine,
+    searchMatches,
+    currentSearchMatch,
     isSelected,
     isPreview,
     hasAnnotation,
@@ -61,6 +69,38 @@
     onLineLeave,
     annotationSlotProps,
   }: Props = $props();
+
+  // Map of display indices to code element refs for search highlighting
+  let codeRefs: Map<number, HTMLElement> = new Map();
+
+  // Svelte action to track code element refs
+  function setCodeRef(el: HTMLElement, displayIndex: number) {
+    codeRefs.set(displayIndex, el);
+    return {
+      destroy() {
+        codeRefs.delete(displayIndex);
+      },
+    };
+  }
+
+  // Apply search highlights when matches change
+  $effect(() => {
+    // Clear all previous highlights first
+    for (const el of codeRefs.values()) {
+      clearHighlights(el);
+    }
+
+    // Apply new highlights
+    for (const match of searchMatches) {
+      const el = codeRefs.get(match.displayIndex);
+      if (el) {
+        const isCurrent = currentSearchMatch?.displayIndex === match.displayIndex;
+        // Find the range index within this match that should be "current"
+        const currentRangeIndex = isCurrent ? 0 : null;
+        highlightMatches(el, match.ranges, currentRangeIndex);
+      }
+    }
+  });
 </script>
 
 {#each lines as { line, displayIndex }}
@@ -102,7 +142,11 @@
         {sourceLineNum}
       {/if}
     </span>
-    <span class="code" class:md={markdownMetadata}>{#if line.html}{@html line.html}{:else}{line.content}{/if}</span>
+    <span
+      class="code"
+      class:md={markdownMetadata}
+      use:setCodeRef={displayIndex}
+    >{#if line.html}{@html line.html}{:else}{line.content}{/if}</span>
     {#if mermaidBlock}
       <button
         class="mermaid-view-btn"

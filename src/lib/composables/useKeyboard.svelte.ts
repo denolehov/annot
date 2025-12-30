@@ -5,6 +5,7 @@ export interface KeyboardHandlers {
   onOpenSessionEditor?: () => void;
   onOpenCommandPalette?: () => void;
   onOpenSaveModal?: () => void;
+  onOpenSearch?: () => void;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onZoomReset?: () => void;
@@ -19,6 +20,8 @@ export interface KeyboardState {
   isCommandPaletteOpen: () => boolean;
   /** Whether save modal is open */
   isSaveModalOpen: () => boolean;
+  /** Whether search bar is open */
+  isSearchOpen: () => boolean;
   /** Whether a line is currently hovered */
   hasHoveredLine: () => boolean;
   /** Whether exit modes are available */
@@ -80,6 +83,13 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
     if (e.key === 's' && (e.metaKey || e.ctrlKey) && !state.isSaveModalOpen()) {
       e.preventDefault();
       handlers.onOpenSaveModal?.();
+      return;
+    }
+
+    // Cmd+F for search (blocked in editor or command palette)
+    if (e.key === 'f' && (e.metaKey || e.ctrlKey) && !state.isSearchOpen() && !state.isEditorActive() && !state.isCommandPaletteOpen()) {
+      e.preventDefault();
+      handlers.onOpenSearch?.();
       return;
     }
 
