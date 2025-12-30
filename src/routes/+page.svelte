@@ -4,7 +4,7 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
-  import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, isHorizontalRule, getFilePath, extractCodeBlockContent } from "$lib/line-utils";
+  import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, isHorizontalRule, getFilePath } from "$lib/line-utils";
   import { rangeToKey, keyToRange, isLineInRange, validateRange, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap, findExcalidrawChip } from "$lib/tiptap";
   import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
@@ -22,10 +22,11 @@
   import { useAnnotations } from "$lib/composables/useAnnotations.svelte";
   import { useKeyboard } from "$lib/composables/useKeyboard.svelte";
   import { useSelectionBounds } from "$lib/composables/useSelectionBounds.svelte";
+  import { useMermaid } from "$lib/composables/useMermaid.svelte";
   import type { SaveContentResponse } from "$lib/types";
   import { initTheme, setTheme, type ThemePreference } from "$lib/theme";
   import { convertMermaidToExcalidraw } from "$lib/mermaid-to-excalidraw";
-  import { isMermaidExcalidrawSupported, validateMermaid } from "$lib/mermaid-loader";
+  import { isMermaidExcalidrawSupported } from "$lib/mermaid-loader";
 
   let lines: Line[] = $state([]);
   let label = $state("");
@@ -276,6 +277,13 @@
   // Exit mode state (composable)
   const exitModeState = useExitModes();
 
+  // Mermaid diagram handling (composable)
+  const mermaid = useMermaid({
+    getLines: () => lines,
+    getLabel: () => label,
+    getMarkdownMetadata: () => markdownMetadata,
+  });
+
   // Session comment state (global/file-level comment)
   let sessionComment: JSONContent | undefined = $state(undefined);
   let sessionEditorOpen = $state(false);
@@ -304,37 +312,6 @@
 
   // Content zoom state
   let contentZoom = $state(1.0);
-
-  // Mermaid validation errors keyed by "startLine-endLine"
-  let mermaidErrors = $state<Map<string, string>>(new Map());
-
-  // Validate mermaid blocks when content changes
-  $effect(() => {
-    if (!markdownMetadata?.code_blocks) {
-      mermaidErrors = new Map();
-      return;
-    }
-
-    const mermaidBlocks = markdownMetadata.code_blocks.filter(b => b.language === 'mermaid');
-    if (mermaidBlocks.length === 0) {
-      mermaidErrors = new Map();
-      return;
-    }
-
-    // Validate each mermaid block
-    const newErrors = new Map<string, string>();
-    const validations = mermaidBlocks.map(async (block) => {
-      const source = getMermaidContent(block.start_line, block.end_line);
-      const error = await validateMermaid(source);
-      if (error) {
-        newErrors.set(`${block.start_line}-${block.end_line}`, error);
-      }
-    });
-
-    Promise.all(validations).then(() => {
-      mermaidErrors = newErrors;
-    });
-  });
 
   // Virtual scrolling state
   const LINE_HEIGHT = 22;
@@ -596,33 +573,7 @@
     return interaction.isLinePreview(displayIdx);
   }
 
-  // Check if a line starts a mermaid code block
-  function getMermaidBlockAt(lineNum: number) {
-    if (!markdownMetadata?.code_blocks) return null;
-    return markdownMetadata.code_blocks.find(
-      b => b.start_line === lineNum && b.language === 'mermaid'
-    ) ?? null;
-  }
-
-  // Extract mermaid content from a code block (excluding fence lines)
-  function getMermaidContent(startLine: number, endLine: number): string {
-    return extractCodeBlockContent(lines, startLine, endLine, label);
-  }
-
-  async function openMermaidWindow(block: { start_line: number; end_line: number }) {
-    const source = getMermaidContent(block.start_line, block.end_line);
-    try {
-      await invoke('open_mermaid_window', {
-        source,
-        filePath: label,
-        startLine: block.start_line,
-        endLine: block.end_line,
-      });
-    } catch (e) {
-      console.error('Failed to open mermaid window:', e);
-    }
-  }
-
+  // Open excalidraw from a mermaid code block (keeps annotation coupling here)
   async function openExcalidrawFromMermaid(
     sourceBlock: { start_line: number; end_line: number },
     annotationRange: { start: number; end: number }
@@ -640,7 +591,7 @@
     }
 
     // No existing chip - convert mermaid fresh
-    const source = getMermaidContent(sourceBlock.start_line, sourceBlock.end_line);
+    const source = mermaid.getMermaidContent(sourceBlock.start_line, sourceBlock.end_line);
     try {
       const elements = await convertMermaidToExcalidraw(source);
       await invoke('open_excalidraw_window', {
@@ -885,11 +836,10 @@
           </Portal>
         {:else if segment.type === 'codeblock'}
           {@const firstLineNum = getLineNumber(segment.lines[0]?.line)}
-          {@const mermaidBlock = firstLineNum !== null ? getMermaidBlockAt(firstLineNum) : null}
-          {@const mermaidSource = mermaidBlock ? getMermaidContent(mermaidBlock.start_line, mermaidBlock.end_line) : null}
+          {@const mermaidBlock = firstLineNum !== null ? mermaid.getMermaidBlockAt(firstLineNum) : null}
+          {@const mermaidSource = mermaidBlock ? mermaid.getMermaidContent(mermaidBlock.start_line, mermaidBlock.end_line) : null}
           {@const excalidrawSupported = mermaidSource ? isMermaidExcalidrawSupported(mermaidSource) : true}
-          {@const mermaidErrorKey = mermaidBlock ? `${mermaidBlock.start_line}-${mermaidBlock.end_line}` : null}
-          {@const mermaidError = mermaidErrorKey ? mermaidErrors.get(mermaidErrorKey) ?? null : null}
+          {@const mermaidError = mermaidBlock ? mermaid.getMermaidError(mermaidBlock.start_line, mermaidBlock.end_line) : null}
           {@const annotationRange = mermaidBlock ? {
             start: segment.lines[1]?.displayIndex ?? segment.lines[0].displayIndex,
             end: segment.lines[segment.lines.length - 2]?.displayIndex ?? segment.lines[segment.lines.length - 1].displayIndex
@@ -908,7 +858,7 @@
             onAddMouseDown={handleAddPointerDown}
             onMouseEnter={interaction.handleLineEnter}
             onMouseLeave={interaction.handleLineLeave}
-            onMermaidOpen={mermaidBlock && !mermaidError ? () => openMermaidWindow(mermaidBlock) : undefined}
+            onMermaidOpen={mermaidBlock && !mermaidError ? () => mermaid.openMermaidWindow(mermaidBlock) : undefined}
             onExcalidrawOpen={mermaidBlock ? () => openExcalidrawFromMermaid(
               mermaidBlock,  // source block for content extraction
               annotationRange!
@@ -989,7 +939,7 @@
           {#each segment.lines as { line, displayIndex }}
             {@const sourceLineNum = getLineNumber(line)}
             {@const diffKind = getDiffKind(line)}
-            {@const mermaidBlock = sourceLineNum !== null ? getMermaidBlockAt(sourceLineNum) : null}
+            {@const mermaidBlock = sourceLineNum !== null ? mermaid.getMermaidBlockAt(sourceLineNum) : null}
             <div
               class="line"
               class:selected={isSelected(displayIndex)}
@@ -1029,7 +979,7 @@
               {#if mermaidBlock}
                 <button
                   class="mermaid-view-btn"
-                  onclick={() => openMermaidWindow(mermaidBlock)}
+                  onclick={() => mermaid.openMermaidWindow(mermaidBlock)}
                   title="View diagram"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="14" height="14">
