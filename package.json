@@ -17,7 +17,8 @@
     "demo:portals": "tauri dev -- -- $PWD/test-fixtures/portals.md",
     "generate:large": "bash scripts/generate-large-md.sh",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "install:local": "ln -sf $PWD/src-tauri/target/release/bundle/macos/annot.app/Contents/MacOS/annot ~/.local/bin/annot && echo 'Installed annot to ~/.local/bin/annot'"
   },
   "license": "MIT",
   "dependencies": {
