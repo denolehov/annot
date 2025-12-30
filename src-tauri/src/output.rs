@@ -587,6 +587,9 @@ fn render_content(
                 diff.push_str("```");
                 diff
             }
+            ContentNode::Error { source, message } => {
+                format!("[ERROR:{}] {}", source, message)
+            }
         })
         .collect::<Vec<_>>()
         .join("")

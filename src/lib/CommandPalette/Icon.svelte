@@ -14,7 +14,8 @@
     ViewFinderIcon,
     SunIcon,
     MoonIcon,
-    ExcalidrawIcon
+    ExcalidrawIcon,
+    WarningIcon
   } from '$lib/icons';
 
   interface Props {
@@ -39,7 +40,8 @@
     'view-finder': ViewFinderIcon,
     sun: SunIcon,
     moon: MoonIcon,
-    excalidraw: ExcalidrawIcon
+    excalidraw: ExcalidrawIcon,
+    warning: WarningIcon
   };
 
   const IconComponent = $derived(icons[name]);

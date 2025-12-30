@@ -24,7 +24,7 @@
   import type { SaveContentResponse } from "$lib/types";
   import { initTheme, setTheme, type ThemePreference } from "$lib/theme";
   import { convertMermaidToExcalidraw } from "$lib/mermaid-to-excalidraw";
-  import { isMermaidExcalidrawSupported } from "$lib/mermaid-loader";
+  import { isMermaidExcalidrawSupported, validateMermaid } from "$lib/mermaid-loader";
 
   let lines: Line[] = $state([]);
   let label = $state("");
@@ -462,6 +462,37 @@
   // Content zoom state
   let contentZoom = $state(1.0);
 
+  // Mermaid validation errors keyed by "startLine-endLine"
+  let mermaidErrors = $state<Map<string, string>>(new Map());
+
+  // Validate mermaid blocks when content changes
+  $effect(() => {
+    if (!markdownMetadata?.code_blocks) {
+      mermaidErrors = new Map();
+      return;
+    }
+
+    const mermaidBlocks = markdownMetadata.code_blocks.filter(b => b.language === 'mermaid');
+    if (mermaidBlocks.length === 0) {
+      mermaidErrors = new Map();
+      return;
+    }
+
+    // Validate each mermaid block
+    const newErrors = new Map<string, string>();
+    const validations = mermaidBlocks.map(async (block) => {
+      const source = getMermaidContent(block.start_line, block.end_line);
+      const error = await validateMermaid(source);
+      if (error) {
+        newErrors.set(`${block.start_line}-${block.end_line}`, error);
+      }
+    });
+
+    Promise.all(validations).then(() => {
+      mermaidErrors = newErrors;
+    });
+  });
+
   // Virtual scrolling state
   const LINE_HEIGHT = 22;
   const BUFFER_LINES = 10;
@@ -633,6 +664,48 @@
 
   function handleImagePasteBlocked() {
     showToast('Image paste is only supported in MCP mode');
+  }
+
+  // Handle reporting a mermaid syntax error as an annotation
+  async function handleReportMermaidError(displayRange: Range, errorMessage: string) {
+    // Check if annotation already exists at this range
+    const rangeKey = rangeToKey(displayRange);
+    const existing = annotationState.getByKey(rangeKey);
+
+    if (existing?.content) {
+      // Check if error node already exists (TipTap uses 'errorChip' type)
+      const hasError = JSON.stringify(existing.content).includes('"type":"errorChip"');
+      if (hasError) {
+        // Highlight existing annotation
+        interaction.setSelection(displayRange);
+        showToast('Error already reported');
+        return;
+      }
+    }
+
+    // Create error content node
+    const errorNode = {
+      type: 'errorChip',
+      attrs: { source: 'mermaid', message: errorMessage }
+    };
+
+    // Create or update annotation with error node
+    const newContent: JSONContent = existing?.content ? {
+      ...existing.content,
+      content: [
+        ...(existing.content.content || []),
+        { type: 'paragraph', content: [errorNode] }
+      ]
+    } : {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [errorNode] }
+      ]
+    };
+
+    await annotationState.upsert(displayRange, newContent);
+    annotationState.seal(rangeKey);
+    showToast('Error added to feedback');
   }
 
   async function handleExitModesChange(newModes: ExitMode[]) {
@@ -972,6 +1045,12 @@
           {@const mermaidBlock = firstLineNum !== null ? getMermaidBlockAt(firstLineNum) : null}
           {@const mermaidSource = mermaidBlock ? getMermaidContent(mermaidBlock.start_line, mermaidBlock.end_line) : null}
           {@const excalidrawSupported = mermaidSource ? isMermaidExcalidrawSupported(mermaidSource) : true}
+          {@const mermaidErrorKey = mermaidBlock ? `${mermaidBlock.start_line}-${mermaidBlock.end_line}` : null}
+          {@const mermaidError = mermaidErrorKey ? mermaidErrors.get(mermaidErrorKey) ?? null : null}
+          {@const annotationRange = mermaidBlock ? {
+            start: segment.lines[1]?.displayIndex ?? segment.lines[0].displayIndex,
+            end: segment.lines[segment.lines.length - 2]?.displayIndex ?? segment.lines[segment.lines.length - 1].displayIndex
+          } : null}
           <CodeBlock
             lines={segment.lines}
             language={segment.language}
@@ -986,15 +1065,14 @@
             onAddMouseDown={handleAddPointerDown}
             onMouseEnter={interaction.handleLineEnter}
             onMouseLeave={interaction.handleLineLeave}
-            onMermaidOpen={mermaidBlock ? () => openMermaidWindow(mermaidBlock) : undefined}
+            onMermaidOpen={mermaidBlock && !mermaidError ? () => openMermaidWindow(mermaidBlock) : undefined}
             onExcalidrawOpen={mermaidBlock ? () => openExcalidrawFromMermaid(
               mermaidBlock,  // source block for content extraction
-              {  // annotation range: content lines only (exclude fences)
-                start: segment.lines[1]?.displayIndex ?? segment.lines[0].displayIndex,
-                end: segment.lines[segment.lines.length - 2]?.displayIndex ?? segment.lines[segment.lines.length - 1].displayIndex
-              }
+              annotationRange!
             ) : undefined}
             {excalidrawSupported}
+            {mermaidError}
+            onReportMermaidError={annotationRange ? (error) => handleReportMermaidError(annotationRange, error) : undefined}
           >
             {#snippet annotationSlot(displayIndex, rangeKey)}
               {#if rangeKey}

@@ -814,6 +814,131 @@ export const ReplacePreview = Node.create({
 });
 
 /**
+ * ErrorChip node - an inline, atomic node representing a system-generated error.
+ * Rendered as [⚠️ source: message] in the editor. Deletable by user.
+ */
+export const ErrorChip = Node.create({
+  name: 'errorChip',
+  group: 'inline',
+  inline: true,
+  atom: true,
+
+  addAttributes() {
+    return {
+      source: { default: '' }, // Error source (e.g., 'mermaid')
+      message: { default: '' }, // Full error message
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-error-chip]',
+        getAttrs: (dom) => {
+          const element = dom as HTMLElement;
+          return {
+            source: element.getAttribute('data-source') || '',
+            message: element.getAttribute('data-message') || '',
+          };
+        },
+      },
+    ];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    return [
+      'span',
+      mergeAttributes(HTMLAttributes, {
+        'data-error-chip': '',
+        'data-source': node.attrs.source,
+        'data-message': node.attrs.message,
+        class: 'tag-chip error-chip',
+      }),
+      `[⚠️ ${node.attrs.source} error]`,
+    ];
+  },
+
+  addNodeView() {
+    return ({ node }) => {
+      const { source, message } = node.attrs;
+
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip error-chip';
+      chip.setAttribute('data-error-chip', '');
+
+      // Truncate message for display
+      const shortMessage = message.length > 50 ? message.slice(0, 50) + '...' : message;
+      const tooltipContent = escapeHtml(message);
+
+      chip.innerHTML = `
+        <span class="tag-icon">⚠️</span>
+        <span class="tag-content">${escapeHtml(source)} syntax error</span>
+        <div class="chip-tooltip error-tooltip"><div class="chip-tooltip-content">${tooltipContent}</div><div class="chip-tooltip-arrow"></div></div>
+      `;
+
+      // Position tooltip on hover using Floating UI
+      const tooltip = chip.querySelector('.chip-tooltip') as HTMLElement;
+      const arrowEl = chip.querySelector('.chip-tooltip-arrow') as HTMLElement;
+
+      const updatePosition = async () => {
+        const { x, y, placement, middlewareData } = await computePosition(chip, tooltip, {
+          placement: 'top',
+          middleware: [
+            offset(8),
+            flip(),
+            shift({ padding: 8 }),
+            arrow({ element: arrowEl }),
+          ],
+        });
+
+        Object.assign(tooltip.style, {
+          left: `${x}px`,
+          top: `${y}px`,
+        });
+
+        // Position arrow
+        if (middlewareData.arrow) {
+          const { x: arrowX } = middlewareData.arrow;
+          const staticSide = placement.includes('top') ? 'bottom' : 'top';
+
+          Object.assign(arrowEl.style, {
+            left: arrowX != null ? `${arrowX}px` : '',
+            [staticSide]: '-4px',
+          });
+        }
+      };
+
+      chip.addEventListener('mouseenter', updatePosition);
+
+      return { dom: chip };
+    };
+  },
+
+  addKeyboardShortcuts() {
+    return {
+      Backspace: () =>
+        this.editor.commands.command(({ tr, state }) => {
+          let isChip = false;
+          const { selection } = state;
+          const { empty, anchor } = selection;
+
+          if (!empty) return false;
+
+          state.doc.nodesBetween(anchor - 1, anchor, (node, pos) => {
+            if (node.type.name === this.name) {
+              isChip = true;
+              tr.insertText('', pos, pos + node.nodeSize);
+              return false;
+            }
+          });
+
+          return isChip;
+        }),
+    };
+  },
+});
+
+/**
  * EditorShortcuts extension - handles keyboard shortcuts at the TipTap level
  * to prevent default behavior from firing first.
  */
@@ -1367,6 +1492,13 @@ export function extractContentNodes(json: JSONContent): ContentNode[] {
         original: node.attrs.original,
         replacement: node.attrs.replacement,
       });
+    } else if (node.type === 'errorChip' && node.attrs) {
+      flushText();
+      nodes.push({
+        type: 'error',
+        source: node.attrs.source,
+        message: node.attrs.message,
+      });
     } else if (node.type === 'bulletList') {
       // Push bullet list context
       listStack.push({ type: 'bullet', index: 0 });
@@ -1517,6 +1649,15 @@ export function contentNodesToTipTap(nodes: ContentNode[] | null): JSONContent |
           blockId: crypto.randomUUID(),
           original: node.original,
           replacement: node.replacement,
+        },
+      });
+    } else if (node.type === 'error') {
+      // Insert error chip inline
+      currentParagraph.push({
+        type: 'errorChip',
+        attrs: {
+          source: node.source,
+          message: node.message,
         },
       });
     }

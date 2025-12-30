@@ -13,6 +13,31 @@ export function preloadMermaid(): void {
 }
 
 /**
+ * Get the mermaid module instance, loading it if necessary.
+ */
+async function getMermaid() {
+	if (!loadPromise) {
+		loadPromise = import('mermaid');
+	}
+	return (await loadPromise).default;
+}
+
+/**
+ * Validate mermaid diagram syntax without rendering.
+ * @param source - The mermaid source code
+ * @returns Error message if invalid, null if valid
+ */
+export async function validateMermaid(source: string): Promise<string | null> {
+	try {
+		const mermaid = await getMermaid();
+		await mermaid.parse(source);
+		return null;
+	} catch (e) {
+		return e instanceof Error ? e.message : String(e);
+	}
+}
+
+/**
  * Supported mermaid diagram types for Excalidraw conversion.
  * The @excalidraw/mermaid-to-excalidraw library only supports:
  * - Flowchart (flowchart, graph)
@@ -36,10 +61,7 @@ export function isMermaidExcalidrawSupported(source: string): boolean {
 }
 
 export async function renderMermaid(source: string, theme: EffectiveTheme = 'light'): Promise<string> {
-	if (!loadPromise) {
-		loadPromise = import('mermaid');
-	}
-	const mermaid = (await loadPromise).default;
+	const mermaid = await getMermaid();
 
 	// Map our theme to mermaid's theme
 	const mermaidTheme = theme === 'dark' ? 'dark' : 'default';

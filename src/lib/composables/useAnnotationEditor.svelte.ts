@@ -12,6 +12,7 @@ import {
   ExcalidrawPlaceholder,
   ReplaceBlock,
   ReplacePreview,
+  ErrorChip,
   SlashCommands,
   createSlashSuggestion,
   EditorShortcuts,
@@ -133,6 +134,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
         ExcalidrawPlaceholder,
         ReplaceBlock,
         ReplacePreview,
+        ErrorChip,
         ImagePasteHandler.configure({
           allowsImagePaste: initialAllowsImagePaste,
           onPasteBlocked: initialOnImagePasteBlocked,

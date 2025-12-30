@@ -4,6 +4,7 @@
   import type { Range } from '$lib/range';
   import { getLineNumber, isCodeBlockFence } from '$lib/line-utils';
   import { rangeToKey, isLineInRange } from '$lib/range';
+  import { computePosition, offset, flip, shift } from '@floating-ui/dom';
   import Icon from '$lib/CommandPalette/Icon.svelte';
 
   interface Props {
@@ -24,6 +25,10 @@
     onMermaidOpen?: () => void;
     onExcalidrawOpen?: () => void;
     excalidrawSupported?: boolean;
+    /** Mermaid syntax error (null if valid or not mermaid) */
+    mermaidError?: string | null;
+    /** Callback when user wants to report mermaid error */
+    onReportMermaidError?: (error: string) => void;
 
     annotationSlot: Snippet<[displayIndex: number, rangeKey: string | null]>;
   }
@@ -45,11 +50,62 @@
     onMermaidOpen,
     onExcalidrawOpen,
     excalidrawSupported = true,
+    mermaidError = null,
+    onReportMermaidError,
     annotationSlot,
   }: Props = $props();
 
   let isMermaid = $derived(language === 'mermaid');
   let copied = $state(false);
+
+  // Mermaid error popover state
+  let errorPopoverOpen = $state(false);
+  let errorBtnEl: HTMLButtonElement | undefined = $state();
+  let errorPopoverEl: HTMLDivElement | undefined = $state();
+
+  // Position popover when it opens
+  $effect(() => {
+    if (!errorPopoverOpen || !errorBtnEl || !errorPopoverEl) return;
+
+    async function updatePosition() {
+      if (!errorBtnEl || !errorPopoverEl) return;
+      const { x, y } = await computePosition(errorBtnEl, errorPopoverEl, {
+        placement: 'bottom-start',
+        middleware: [
+          offset(4),
+          flip({ padding: 8 }),
+          shift({ padding: 8 }),
+        ],
+      });
+      Object.assign(errorPopoverEl.style, {
+        left: `${x}px`,
+        top: `${y}px`,
+      });
+    }
+
+    updatePosition();
+  });
+
+  function handleAddToFeedback() {
+    if (mermaidError && onReportMermaidError) {
+      onReportMermaidError(mermaidError);
+    }
+    errorPopoverOpen = false;
+  }
+
+  function handlePopoverKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      errorPopoverOpen = false;
+    }
+  }
+
+  function handlePopoverClickOutside(e: MouseEvent) {
+    if (!errorPopoverOpen) return;
+    const target = e.target as HTMLElement;
+    if (!target.closest('.mermaid-error-popover-container')) {
+      errorPopoverOpen = false;
+    }
+  }
 
   // Extract code content (excluding fence lines) for copying
   function getCodeContent(): string {
@@ -152,6 +208,8 @@
   }
 </script>
 
+<svelte:window onkeydown={handlePopoverKeydown} onclick={handlePopoverClickOutside} />
+
 <div class="codeblock-group">
   {#each lines as { line, displayIndex }}
     {@const sourceLineNum = getLineNumber(line)}
@@ -197,14 +255,35 @@
           <span class="codeblock-header-info">
             <span class="lang-badge">{language}</span>
             <span class="codeblock-actions">
-              {#if isMermaid && onMermaidOpen}
-                <button
-                  class="codeblock-action-btn"
-                  onclick={onMermaidOpen}
-                  title="View diagram"
-                >
-                  <Icon name="view-finder" />
-                </button>
+              {#if isMermaid}
+                {#if mermaidError}
+                  <div class="mermaid-error-popover-container">
+                    <button
+                      bind:this={errorBtnEl}
+                      class="codeblock-action-btn mermaid-error-btn"
+                      onclick={() => (errorPopoverOpen = !errorPopoverOpen)}
+                      title="Syntax error - click for details"
+                    >
+                      <Icon name="warning" />
+                    </button>
+                    {#if errorPopoverOpen}
+                      <div bind:this={errorPopoverEl} class="mermaid-error-popover">
+                        <pre class="error-text">{mermaidError}</pre>
+                        <button class="feedback-btn" onclick={handleAddToFeedback}>
+                          Add to feedback
+                        </button>
+                      </div>
+                    {/if}
+                  </div>
+                {:else if onMermaidOpen}
+                  <button
+                    class="codeblock-action-btn"
+                    onclick={onMermaidOpen}
+                    title="View diagram"
+                  >
+                    <Icon name="view-finder" />
+                  </button>
+                {/if}
               {/if}
               {#if isMermaid}
                 <button
@@ -426,5 +505,88 @@
   /* Ensure content lines have relative positioning for inline actions */
   .line.codeblock-content .code {
     position: relative;
+  }
+
+  /* Mermaid error popover styles */
+  .mermaid-error-popover-container {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .mermaid-error-btn {
+    color: var(--warning, #f97316) !important;
+  }
+
+  .mermaid-error-btn:hover {
+    color: var(--warning, #f97316) !important;
+    background: color-mix(in srgb, var(--warning, #f97316) 15%, transparent) !important;
+  }
+
+  .mermaid-error-popover {
+    position: fixed;
+    top: 0;
+    left: 0;
+    background: var(--bg-window);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 12px;
+    min-width: 280px;
+    max-width: 400px;
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.08),
+      0 1px 3px rgba(0, 0, 0, 0.06);
+    z-index: 1000;
+    animation: popover-enter 150ms ease;
+  }
+
+  @keyframes popover-enter {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .mermaid-error-popover .error-text {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--bg-panel);
+    border-radius: 4px;
+    padding: 8px;
+    margin: 0 0 8px 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 150px;
+    overflow-y: auto;
+  }
+
+  .mermaid-error-popover .feedback-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--warning, #f97316);
+    border: none;
+    border-radius: 6px;
+    color: white;
+    cursor: pointer;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 500;
+    transition: opacity 0.15s ease;
+  }
+
+  .mermaid-error-popover .feedback-btn:hover {
+    opacity: 0.9;
+  }
+
+  .mermaid-error-popover .feedback-btn:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 </style>

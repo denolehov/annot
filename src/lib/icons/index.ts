@@ -13,3 +13,4 @@ export { default as ViewFinderIcon } from './ViewFinderIcon.svelte';
 export { default as SunIcon } from './SunIcon.svelte';
 export { default as MoonIcon } from './MoonIcon.svelte';
 export { default as ExcalidrawIcon } from './ExcalidrawIcon.svelte';
+export { default as WarningIcon } from './WarningIcon.svelte';

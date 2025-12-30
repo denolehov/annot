@@ -165,6 +165,17 @@ gantt
         Maintenance   :c2, after c1, 90d
 ```
 
+## Broken Diagram (syntax error)
+
+```mermaid
+flowchart TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Do something
+    B -->|No| D[Do other thing]
+    C --> E[End
+    D --> E
+```
+
 ## ER Diagram
 
 ```mermaid

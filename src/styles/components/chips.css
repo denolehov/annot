@@ -107,6 +107,33 @@
 	opacity: 0.85;
 }
 
+/* Color variant for errors (system-generated) - orange tint */
+.error-chip {
+	background:
+		var(--chip-pattern-bg),
+		color-mix(in srgb, var(--bg-code-block) 90%, #f97316 10%);
+	background-size: var(--chip-pattern-size), auto;
+	color: var(--warning, #f97316);
+	border-color: color-mix(in srgb, var(--border-code) 70%, #f97316 30%);
+}
+
+.error-chip:hover {
+	border-color: #f97316;
+}
+
+.error-chip .tag-content {
+	color: var(--text-secondary);
+}
+
+/* Error tooltip has wider max-width for full error messages */
+.error-tooltip .chip-tooltip-content {
+	max-width: 350px;
+	font-family: var(--font-mono);
+	font-size: 10px;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
 /* Selected chip (via backspace or click) */
 .tag-chip.ProseMirror-selectednode {
 	outline: none;

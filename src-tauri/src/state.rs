@@ -126,6 +126,8 @@ pub enum ContentNode {
     Media { image: String, mime_type: String },
     Excalidraw { elements: String, image: Option<String> },
     Replace { original: String, replacement: String },
+    /// System-generated error node (e.g., Mermaid syntax error).
+    Error { source: String, message: String },
 }
 
 /// A normalized line range (start ≤ end).
