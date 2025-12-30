@@ -331,7 +331,10 @@
       </span>
     </div>
     {#if !fence}
-      {@render annotationSlot(displayIndex, rangeKey)}
+      <div class="annotation-row">
+        <span class="annotation-gutter"></span>
+        {@render annotationSlot(displayIndex, rangeKey)}
+      </div>
     {/if}
   {/each}
 </div>
@@ -590,5 +593,23 @@
   .mermaid-error-popover .feedback-btn:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
+  }
+
+  /* Annotation row - structural gutter for annotations inside code blocks */
+  .annotation-row {
+    display: flex;
+  }
+
+  .annotation-gutter {
+    width: var(--gutter-width);
+    flex-shrink: 0;
+    background: var(--bg-main);
+    border-right: 1px solid var(--border-subtle);
+  }
+
+  /* Override annotation editor margin when inside code block */
+  .annotation-row :global(.annotation-editor) {
+    flex: 1;
+    margin-left: 8px;
   }
 </style>
