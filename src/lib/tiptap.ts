@@ -545,186 +545,8 @@ export const ExcalidrawPlaceholder = Node.create({
 });
 
 /**
- * ReplaceBlock node - editable code block for proposing code replacements.
- * Inserted via /replace slash command. Transforms to ReplacePreview on seal.
- */
-export const ReplaceBlock = Node.create({
-  name: 'replaceBlock',
-  group: 'block',
-  content: 'text*',
-  code: true,
-  isolating: true,
-
-  addAttributes() {
-    return {
-      blockId: {
-        default: null,
-        parseHTML: (element) =>
-          element.getAttribute('data-block-id') || crypto.randomUUID(),
-      },
-      original: { default: '' }, // Original content captured at /replace time
-    };
-  },
-
-  parseHTML() {
-    return [
-      {
-        tag: 'div[data-replace-block]',
-        preserveWhitespace: 'full',
-        getAttrs: (dom) => {
-          const element = dom as HTMLElement;
-          return {
-            blockId: element.getAttribute('data-block-id') || crypto.randomUUID(),
-            original: element.getAttribute('data-original') || '',
-          };
-        },
-      },
-    ];
-  },
-
-  renderHTML({ node, HTMLAttributes }) {
-    return [
-      'div',
-      mergeAttributes(HTMLAttributes, {
-        'data-replace-block': '',
-        'data-block-id': node.attrs.blockId,
-        'data-original': node.attrs.original,
-        class: 'replace-block',
-      }),
-      ['pre', { class: 'replace-block-content' }, 0],
-    ];
-  },
-
-  addNodeView() {
-    return ({ node }) => {
-      const { original } = node.attrs;
-
-      const wrapper = document.createElement('div');
-      wrapper.className = 'replace-block';
-      wrapper.setAttribute('data-replace-block', '');
-
-      // Header
-      const header = document.createElement('div');
-      header.className = 'replace-block-header';
-      header.textContent = 'REPLACE';
-
-      // Original section (read-only)
-      const originalSection = document.createElement('div');
-      originalSection.className = 'replace-block-original';
-
-      const originalLabel = document.createElement('div');
-      originalLabel.className = 'replace-block-label';
-      originalLabel.textContent = 'Original:';
-
-      const originalPre = document.createElement('pre');
-      originalPre.className = 'replace-block-original-code';
-      originalPre.textContent = original || '(empty)';
-
-      originalSection.appendChild(originalLabel);
-      originalSection.appendChild(originalPre);
-
-      // Replacement section (editable)
-      const replacementSection = document.createElement('div');
-      replacementSection.className = 'replace-block-replacement';
-
-      const replacementLabel = document.createElement('div');
-      replacementLabel.className = 'replace-block-label';
-      replacementLabel.textContent = 'Replacement:';
-
-      const content = document.createElement('pre');
-      content.className = 'replace-block-content';
-
-      replacementSection.appendChild(replacementLabel);
-      replacementSection.appendChild(content);
-
-      wrapper.appendChild(header);
-      wrapper.appendChild(originalSection);
-      wrapper.appendChild(replacementSection);
-
-      return {
-        dom: wrapper,
-        contentDOM: content,
-      };
-    };
-  },
-
-  addKeyboardShortcuts() {
-    return {
-      // Exit the code block with arrow down at end
-      ArrowDown: ({ editor }) => {
-        const { state } = editor;
-        const { selection } = state;
-        const { $from, empty } = selection;
-
-        if (!empty) return false;
-
-        const node = $from.node();
-        if (node.type.name !== this.name) return false;
-
-        // Check if cursor is at the end of the block
-        const isAtEnd = $from.parentOffset === node.content.size;
-        if (!isAtEnd) return false;
-
-        // Move cursor after this block
-        const pos = $from.after();
-        editor.commands.setTextSelection(pos);
-        return true;
-      },
-      // Exit the code block with arrow up at start
-      ArrowUp: ({ editor }) => {
-        const { state } = editor;
-        const { selection } = state;
-        const { $from, empty } = selection;
-
-        if (!empty) return false;
-
-        const node = $from.node();
-        if (node.type.name !== this.name) return false;
-
-        // Check if cursor is at the start of the block
-        const isAtStart = $from.parentOffset === 0;
-        if (!isAtStart) return false;
-
-        // Move cursor before this block
-        const pos = $from.before();
-        editor.commands.setTextSelection(pos);
-        return true;
-      },
-      // Tab to exit after block
-      Tab: ({ editor }) => {
-        const { state } = editor;
-        const { selection } = state;
-        const { $from } = selection;
-
-        const node = $from.node();
-        if (node.type.name !== this.name) return false;
-
-        // Move cursor after this block
-        const pos = $from.after();
-        editor.commands.setTextSelection(pos);
-        return true;
-      },
-      // Shift+Tab to exit before block
-      'Shift-Tab': ({ editor }) => {
-        const { state } = editor;
-        const { selection } = state;
-        const { $from } = selection;
-
-        const node = $from.node();
-        if (node.type.name !== this.name) return false;
-
-        // Move cursor before this block
-        const pos = $from.before();
-        editor.commands.setTextSelection(pos);
-        return true;
-      },
-    };
-  },
-});
-
-/**
- * ReplacePreview node - sealed atomic node showing a diff preview.
- * Created from ReplaceBlock on annotation seal. Click to unseal.
+ * ReplacePreview node - sealed atomic node showing an inline diff preview.
+ * Created when ```replace fence is sealed. Click to unseal (converts back to fence text).
  */
 export const ReplacePreview = Node.create({
   name: 'replacePreview',
@@ -777,36 +599,30 @@ export const ReplacePreview = Node.create({
       wrapper.className = 'replace-preview';
       wrapper.setAttribute('data-replace-preview', '');
 
-      const header = document.createElement('div');
-      header.className = 'replace-preview-header';
-      header.textContent = 'REPLACE';
+      // Show header only if this is the first node (no content above)
+      const pos = typeof getPos === 'function' ? getPos() : null;
+      const isFirst = pos === 0;
 
-      const diffContainer = document.createElement('pre');
-      diffContainer.className = 'replace-preview-diff';
+      let diffHtml = isFirst ? '<div class="replace-preview-header">Replace</div>' : '';
 
       // Generate diff display using LCS algorithm
       const originalLines = original.split('\n');
       const replacementLines = replacement.split('\n');
       const diff = computeDiff(originalLines, replacementLines);
 
-      let diffHtml = '';
       for (const { type, line } of diff) {
-        if (type === 'equal') {
-          diffHtml += `<div class="diff-line diff-context">  ${escapeHtml(line)}</div>`;
-        } else if (type === 'delete') {
-          diffHtml += `<div class="diff-line diff-removed">- ${escapeHtml(line)}</div>`;
-        } else {
-          diffHtml += `<div class="diff-line diff-added">+ ${escapeHtml(line)}</div>`;
-        }
+        const gutterChar = type === 'delete' ? '-' : type === 'insert' ? '+' : ' ';
+        const lineClass = type === 'delete' ? 'removed' : type === 'insert' ? 'added' : 'context';
+        diffHtml += `<div class="replace-preview-line ${lineClass}">`;
+        diffHtml += `<span class="replace-preview-gutter">${gutterChar}</span>`;
+        diffHtml += `<span class="replace-preview-content">${escapeHtml(line)}</span>`;
+        diffHtml += `</div>`;
       }
-      diffContainer.innerHTML = diffHtml;
-
-      wrapper.appendChild(header);
-      wrapper.appendChild(diffContainer);
+      wrapper.innerHTML = diffHtml;
 
       // No click handler here - clicks bubble up to the sealed editor container,
       // which calls onUnseal(). The unseal effect in useAnnotationEditor transforms
-      // all ReplacePreview nodes to ReplaceBlock and focuses the editor.
+      // all ReplacePreview nodes back to fence text and focuses the editor.
 
       return { dom: wrapper };
     };
@@ -1187,13 +1003,19 @@ export function createSlashSuggestion(
       icon: '✏️',
       action: (editor, range) => {
         // Check if there's already a replace block (limit to one per annotation)
+        // Either a sealed replacePreview node or an isolated fence in editing
         let hasReplaceBlock = false;
         editor.state.doc.descendants((node) => {
-          if (node.type.name === 'replaceBlock' || node.type.name === 'replacePreview') {
+          if (node.type.name === 'replacePreview') {
             hasReplaceBlock = true;
             return false;
           }
         });
+        // Check for existing isolated fence using the centralized parser
+        if (!hasReplaceBlock) {
+          const json = editor.getJSON();
+          hasReplaceBlock = parseFenceFromJson(json) !== null;
+        }
         if (hasReplaceBlock) {
           editor.chain().focus().deleteRange(range).run();
           return;
@@ -1205,19 +1027,23 @@ export function createSlashSuggestion(
           return;
         }
 
-        // Insert ReplaceBlock node with original stored in attrs
+        // Insert fence as separate paragraphs for clean isolation
+        // This ensures the fence can be transformed without data loss
+        const originalLines = original.split('\n');
+        const contentNodes: JSONContent[] = [
+          { type: 'paragraph', content: [{ type: 'text', text: '```replace' }] },
+          ...originalLines.map((line) => ({
+            type: 'paragraph',
+            content: line ? [{ type: 'text', text: line }] : undefined,
+          })),
+          { type: 'paragraph', content: [{ type: 'text', text: '```' }] },
+        ];
+
         editor
           .chain()
           .focus()
           .deleteRange(range)
-          .insertContent({
-            type: 'replaceBlock',
-            attrs: {
-              blockId: crypto.randomUUID(),
-              original: original,
-            },
-            content: [{ type: 'text', text: original }],
-          })
+          .insertContent(contentNodes)
           .run();
       },
     },
@@ -1672,4 +1498,164 @@ export function contentNodesToTipTap(nodes: ContentNode[] | null): JSONContent |
     type: 'doc',
     content: paragraphs,
   };
+}
+
+/**
+ * Result of parsing a replace fence from TipTap JSON.
+ */
+export interface ParsedFence {
+  /** The replacement text content inside the fence */
+  replacement: string;
+  /** Start index (inclusive) in doc.content of the fence */
+  startIndex: number;
+  /** End index (exclusive) in doc.content of the fence */
+  endIndex: number;
+}
+
+/**
+ * Parse an isolated replace fence from TipTap JSON content.
+ * Returns null if no valid isolated fence is found.
+ *
+ * A valid fence must be isolated - the opening ```replace and closing ```
+ * must each be the sole content of their paragraphs. Content paragraphs
+ * between the markers are collected as replacement text.
+ *
+ * @param json - The TipTap document JSON
+ * @returns ParsedFence if a valid isolated fence is found, null otherwise
+ */
+export function parseFenceFromJson(json: JSONContent): ParsedFence | null {
+  if (!json.content) return null;
+
+  // Helper to get the text content of a paragraph (if it's simple text only)
+  const getParagraphText = (node: JSONContent): string | null => {
+    if (node.type !== 'paragraph') return null;
+    if (!node.content) return '';
+
+    // Check for simple text-only content (no inline nodes like tagChip)
+    const texts: string[] = [];
+    for (const child of node.content) {
+      if (child.type === 'text' && child.text) {
+        texts.push(child.text);
+      } else if (child.type === 'hardBreak') {
+        texts.push('\n');
+      } else {
+        // Non-text content (tagChip, etc) - not isolated
+        return null;
+      }
+    }
+    return texts.join('');
+  };
+
+  // Find opening ```replace marker
+  let startIndex = -1;
+  for (let i = 0; i < json.content.length; i++) {
+    const text = getParagraphText(json.content[i]);
+    if (text === '```replace') {
+      startIndex = i;
+      break;
+    }
+  }
+
+  if (startIndex === -1) return null;
+
+  // Find closing ``` marker
+  let endIndex = -1;
+  const contentLines: string[] = [];
+
+  for (let i = startIndex + 1; i < json.content.length; i++) {
+    const text = getParagraphText(json.content[i]);
+    if (text === null) {
+      // Non-text content in the fence body - invalid
+      return null;
+    }
+    if (text === '```') {
+      endIndex = i + 1; // exclusive
+      break;
+    }
+    contentLines.push(text);
+  }
+
+  if (endIndex === -1) return null;
+
+  return {
+    replacement: contentLines.join('\n'),
+    startIndex,
+    endIndex,
+  };
+}
+
+/**
+ * Transform TipTap JSON content: replace ```replace fence text with ReplacePreview node.
+ * Only transforms isolated fences (where opening/closing markers are sole content of their paragraphs).
+ *
+ * @param json - The TipTap document JSON
+ * @param original - The original content (from annotation context)
+ * @param replacement - The replacement content (from parseFenceFromJson)
+ * @returns Transformed JSON with ReplacePreview node instead of fence text
+ */
+export function transformReplaceFenceToPreview(
+  json: JSONContent,
+  original: string,
+  replacement: string
+): JSONContent {
+  if (!json.content) return json;
+
+  // Use the centralized parser to find an isolated fence
+  const parsed = parseFenceFromJson(json);
+  if (!parsed) {
+    // No valid isolated fence found, return unchanged
+    return json;
+  }
+
+  // Build new content: before fence + replacePreview + after fence
+  const newContent: JSONContent[] = [
+    // Content before the fence
+    ...json.content.slice(0, parsed.startIndex),
+    // The ReplacePreview node
+    {
+      type: 'replacePreview',
+      attrs: {
+        blockId: crypto.randomUUID(),
+        original,
+        replacement,
+      },
+    },
+    // Content after the fence
+    ...json.content.slice(parsed.endIndex),
+  ];
+
+  return { ...json, content: newContent };
+}
+
+/**
+ * Transform TipTap JSON content: replace ReplacePreview node with fence text.
+ * Used when unsealing to return to editable plain text.
+ * Outputs isolated paragraphs matching the insertion format.
+ *
+ * @param json - The TipTap document JSON containing ReplacePreview node(s)
+ * @returns Transformed JSON with fence text instead of ReplacePreview
+ */
+export function transformReplacePreviewToFence(json: JSONContent): JSONContent {
+  if (!json.content) return json;
+
+  const newContent: JSONContent[] = [];
+
+  for (const node of json.content) {
+    if (node.type === 'replacePreview' && node.attrs) {
+      const replacement = (node.attrs.replacement as string) || '';
+      // Convert to isolated paragraphs matching the insertion format
+      newContent.push({ type: 'paragraph', content: [{ type: 'text', text: '```replace' }] });
+      for (const line of replacement.split('\n')) {
+        newContent.push({
+          type: 'paragraph',
+          content: line ? [{ type: 'text', text: line }] : undefined,
+        });
+      }
+      newContent.push({ type: 'paragraph', content: [{ type: 'text', text: '```' }] });
+    } else {
+      newContent.push(node);
+    }
+  }
+
+  return { ...json, content: newContent };
 }

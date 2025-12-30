@@ -185,6 +185,11 @@
 	--danger: var(--light-red-500);
 	--danger-hover: var(--light-red-700);
 
+	/* Diff colors (for /replace) */
+	--diff-remove-bg: rgba(220, 38, 38, 0.18);
+	--diff-add-bg: rgba(22, 163, 74, 0.18);
+	--diff-gutter: var(--text-muted);
+
 	/* Focus */
 	--focus-ring: var(--border-active);
 	--focus-glow: rgba(113, 113, 122, 0.15);
@@ -348,6 +353,11 @@
 	--error-text: var(--dark-red-400);
 	--danger: var(--dark-red-400);
 	--danger-hover: #fca5a5; /* red-300 */
+
+	/* --- DIFF COLORS --- */
+	--diff-remove-bg: rgba(239, 68, 68, 0.22);
+	--diff-add-bg: rgba(34, 197, 94, 0.22);
+	--diff-gutter: var(--text-muted);
 
 	/* --- ACCENTS --- */
 	--accent: var(--dark-amber-400);

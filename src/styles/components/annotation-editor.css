@@ -4,6 +4,7 @@
 
 /* Popover container matching hl-editor appearance */
 .annotation-editor {
+	--annotation-padding-x: 14px;
 	display: block;
 	position: relative;
 	background: var(--bg-portal);
@@ -15,7 +16,7 @@
 	z-index: 2;
 	max-width: 600px;
 	margin: 8px 8px 8px 60px;
-	padding: 10px 14px;
+	padding: 10px var(--annotation-padding-x);
 	min-height: 44px;
 	font-family: var(--font-ui);
 }
@@ -67,6 +68,17 @@
 .annotation-editor.sealed:hover::after {
 	border-left-color: var(--border-editor-hover);
 	border-top-color: var(--border-editor-hover);
+}
+
+/* Compact sealed state when content is ONLY a replace block */
+.annotation-editor.sealed.replace-only {
+	padding-top: 0;
+	padding-bottom: 0;
+}
+
+/* Hide ProseMirror trailing break in sealed state - no cursor needed */
+.annotation-editor.sealed .ProseMirror-trailingBreak {
+	display: none;
 }
 
 /* ===========================================

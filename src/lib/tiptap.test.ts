@@ -1,7 +1,53 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { trimContent, isContentEmpty, EditorShortcuts, extractContentNodes } from './tiptap';
+import {
+  trimContent,
+  isContentEmpty,
+  EditorShortcuts,
+  extractContentNodes,
+  parseFenceFromJson,
+  transformReplaceFenceToPreview,
+  transformReplacePreviewToFence,
+  ReplacePreview,
+} from './tiptap';
 import { Editor, type JSONContent } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+
+// ============================================================================
+// Test Helpers - Factory functions for TipTap JSON nodes
+// ============================================================================
+
+/** Create a text node, optionally with marks */
+const text = (t: string, marks?: Array<{ type: string; attrs?: Record<string, unknown> }>): JSONContent =>
+  marks ? { type: 'text', text: t, marks } : { type: 'text', text: t };
+
+/** Create a paragraph node with inline content */
+const p = (...content: (string | JSONContent)[]): JSONContent => ({
+  type: 'paragraph',
+  content: content.length > 0
+    ? content.map((c) => (typeof c === 'string' ? text(c) : c))
+    : undefined,
+});
+
+/** Create a document node with block content */
+const doc = (...content: JSONContent[]): JSONContent => ({
+  type: 'doc',
+  content,
+});
+
+/** Create a tagChip node */
+const tagChip = (id: string, name: string, instruction: string): JSONContent => ({
+  type: 'tagChip',
+  attrs: { id, name, instruction },
+});
+
+/** Create a replacePreview node */
+const replacePreview = (original: string, replacement: string, blockId?: string): JSONContent => ({
+  type: 'replacePreview',
+  attrs: { blockId: blockId ?? 'test-id', original, replacement },
+});
+
+/** Create a hardBreak node */
+const hardBreak = (): JSONContent => ({ type: 'hardBreak' });
 
 describe('trimContent', () => {
   it('removes trailing empty paragraphs', () => {
@@ -465,4 +511,610 @@ describe('extractContentNodes', () => {
     expect(nodes[0]).toEqual({ type: 'text', text: 'Line one\nLine two' });
   });
 
+});
+
+describe('parseFenceFromJson', () => {
+  it('parses a simple isolated fence', () => {
+    const input = doc(
+      p('```replace'),
+      p('const x = 2;'),
+      p('```')
+    );
+
+    const result = parseFenceFromJson(input);
+
+    expect(result).toEqual({
+      replacement: 'const x = 2;',
+      startIndex: 0,
+      endIndex: 3,
+    });
+  });
+
+  it('parses fence with content before', () => {
+    const input = doc(
+      p('Some text'),
+      p('```replace'),
+      p('code'),
+      p('```')
+    );
+
+    const result = parseFenceFromJson(input);
+
+    expect(result).toEqual({
+      replacement: 'code',
+      startIndex: 1,
+      endIndex: 4,
+    });
+  });
+
+  it('returns null for non-isolated fence (mixed content in opening marker)', () => {
+    const input = doc(p('prefix ```replace'), p('code'), p('```'));
+
+    const result = parseFenceFromJson(input);
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null when opening marker is not alone', () => {
+    const input = doc(
+      p(tagChip('1', 'FIX', 'Fix'), '```replace'),
+      p('code'),
+      p('```')
+    );
+
+    const result = parseFenceFromJson(input);
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null when no fence present', () => {
+    const input = doc(p('Just some text'));
+
+    const result = parseFenceFromJson(input);
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null when closing fence is missing', () => {
+    const input = doc(
+      p('```replace'),
+      p('code'),
+      p('more code')
+    );
+
+    const result = parseFenceFromJson(input);
+
+    expect(result).toBeNull();
+  });
+
+  it('handles multiline content', () => {
+    const input = doc(
+      p('```replace'),
+      p('line 1'),
+      p('line 2'),
+      p('line 3'),
+      p('```')
+    );
+
+    const result = parseFenceFromJson(input);
+
+    expect(result).toEqual({
+      replacement: 'line 1\nline 2\nline 3',
+      startIndex: 0,
+      endIndex: 5,
+    });
+  });
+
+  it('handles empty lines in content', () => {
+    const input = doc(
+      p('```replace'),
+      p('line 1'),
+      p(), // empty paragraph
+      p('line 2'),
+      p('```')
+    );
+
+    const result = parseFenceFromJson(input);
+
+    expect(result).toEqual({
+      replacement: 'line 1\n\nline 2',
+      startIndex: 0,
+      endIndex: 5,
+    });
+  });
+});
+
+describe('transformReplaceFenceToPreview', () => {
+  // Note: The new implementation requires ISOLATED fences:
+  // - Opening ```replace must be alone in its paragraph
+  // - Content lines are separate paragraphs
+  // - Closing ``` must be alone in its paragraph
+
+  it('transforms an isolated fence to ReplacePreview node', () => {
+    // New format: each line is a separate paragraph
+    const input = doc(
+      p('```replace'),
+      p('const x = 2;'),
+      p('```')
+    );
+
+    const result = transformReplaceFenceToPreview(input, 'const x = 1;', 'const x = 2;');
+
+    expect(result).toMatchObject({
+      content: [
+        {
+          type: 'replacePreview',
+          attrs: {
+            original: 'const x = 1;',
+            replacement: 'const x = 2;',
+          },
+        },
+      ],
+    });
+    // blockId should be generated
+    expect(result.content?.[0]?.attrs?.blockId).toBeDefined();
+  });
+
+  it('preserves text before the fence', () => {
+    const input = doc(
+      p('Here is my fix:'),
+      p('```replace'),
+      p('const x = 2;'),
+      p('```')
+    );
+
+    const result = transformReplaceFenceToPreview(input, 'const x = 1;', 'const x = 2;');
+
+    expect(result).toMatchObject({
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Here is my fix:' }] },
+        { type: 'replacePreview' },
+      ],
+    });
+  });
+
+  it('handles multiline replacement content', () => {
+    const original = 'function foo() {\n  return 1;\n}';
+    const replacement = 'function foo() {\n  return 2;\n}';
+    // Multi-line content = multiple paragraphs
+    const input = doc(
+      p('```replace'),
+      p('function foo() {'),
+      p('  return 2;'),
+      p('}'),
+      p('```')
+    );
+
+    const result = transformReplaceFenceToPreview(input, original, replacement);
+
+    expect(result).toMatchObject({
+      content: [
+        {
+          type: 'replacePreview',
+          attrs: { original, replacement },
+        },
+      ],
+    });
+  });
+
+  it('only transforms the first valid fence', () => {
+    const input = doc(
+      p('```replace'),
+      p('first'),
+      p('```'),
+      p('```replace'),
+      p('second'),
+      p('```')
+    );
+
+    const result = transformReplaceFenceToPreview(input, 'original', 'first');
+
+    expect(result).toMatchObject({
+      content: [
+        { type: 'replacePreview' },
+        { type: 'paragraph', content: [{ type: 'text', text: '```replace' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'second' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: '```' }] },
+      ],
+    });
+  });
+
+  it('returns unchanged JSON when no fence is present', () => {
+    const input = doc(p('Just some regular text'));
+
+    const result = transformReplaceFenceToPreview(input, 'original', 'replacement');
+
+    expect(result).toMatchObject({
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Just some regular text' }] },
+      ],
+    });
+  });
+
+  it('handles empty document', () => {
+    const input: JSONContent = { type: 'doc' };
+
+    const result = transformReplaceFenceToPreview(input, 'orig', 'repl');
+
+    expect(result).toEqual({ type: 'doc' });
+  });
+
+  it('ignores non-isolated fence (mixed content in same paragraph)', () => {
+    // Fence markers mixed with other content should NOT transform
+    const input = doc(
+      p(tagChip('1', 'FIX', 'Fix this'), ' some text'),
+      p('```replace'),
+      p('fixed'),
+      p('```')
+    );
+
+    const result = transformReplaceFenceToPreview(input, 'broken', 'fixed');
+
+    // The fence should still transform because the markers are isolated
+    expect(result.content?.some((n) => n.type === 'replacePreview')).toBe(true);
+    // And the tagChip paragraph is preserved
+    expect(result.content?.[0]?.type).toBe('paragraph');
+  });
+
+  it('ignores fence if opening marker has other content', () => {
+    // Opening marker with extra text - should NOT transform
+    const input = doc(p('prefix ```replace'), p('code'), p('```'));
+
+    const result = transformReplaceFenceToPreview(input, 'orig', 'code');
+
+    // Should return unchanged
+    expect(result).toEqual(input);
+  });
+
+  it('handles multi-paragraph fence (each line is a separate paragraph)', () => {
+    // When user types in TipTap with Enter, each line becomes a separate paragraph
+    const input = doc(
+      p('```replace'),
+      p('const x = 2;'),
+      p('```')
+    );
+
+    const result = transformReplaceFenceToPreview(input, 'const x = 1;', 'const x = 2;');
+
+    expect(result).toMatchObject({
+      content: [
+        {
+          type: 'replacePreview',
+          attrs: { original: 'const x = 1;', replacement: 'const x = 2;' },
+        },
+      ],
+    });
+  });
+
+  it('handles multi-paragraph fence with content before and after', () => {
+    const input = doc(
+      p('Here is a fix:'),
+      p('```replace'),
+      p('new code'),
+      p('```'),
+      p('Please review.')
+    );
+
+    const result = transformReplaceFenceToPreview(input, 'old code', 'new code');
+
+    expect(result).toMatchObject({
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Here is a fix:' }] },
+        { type: 'replacePreview' },
+        { type: 'paragraph', content: [{ type: 'text', text: 'Please review.' }] },
+      ],
+    });
+  });
+
+  it('handles multi-line replacement in multi-paragraph fence', () => {
+    // The replacement value is passed in, not extracted from paragraphs
+    const input = doc(
+      p('```replace'),
+      p('line 1'),
+      p('line 2'),
+      p('line 3'),
+      p('```')
+    );
+
+    const result = transformReplaceFenceToPreview(input, 'original', 'line 1\nline 2\nline 3');
+
+    expect(result).toMatchObject({
+      content: [
+        {
+          type: 'replacePreview',
+          attrs: { replacement: 'line 1\nline 2\nline 3' },
+        },
+      ],
+    });
+  });
+
+  // Edge cases
+
+  it('handles fence marker with trailing space', () => {
+    // User might accidentally type "```replace " with trailing space
+    const input = doc(p('```replace \ncode\n```'));
+
+    const result = transformReplaceFenceToPreview(input, 'orig', 'code');
+
+    // Current implementation requires exact match, so this should NOT transform
+    // This documents current behavior - adjust if we want to be more lenient
+    expect(result).toMatchObject({
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: '```replace \ncode\n```' }] },
+      ],
+    });
+  });
+
+  it('leaves document unchanged when closing fence is missing', () => {
+    const input = doc(
+      p('```replace'),
+      p('code without closing fence'),
+      p('more text')
+    );
+
+    const result = transformReplaceFenceToPreview(input, 'orig', 'code');
+
+    // Without closing fence, document should remain unchanged
+    expect(result).toMatchObject({
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: '```replace' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'code without closing fence' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'more text' }] },
+      ],
+    });
+  });
+
+  it('handles empty paragraphs between fence lines', () => {
+    const input = doc(
+      p('```replace'),
+      p('line 1'),
+      p(), // empty paragraph
+      p('line 2'),
+      p('```')
+    );
+
+    const result = transformReplaceFenceToPreview(input, 'orig', 'line 1\n\nline 2');
+
+    expect(result).toMatchObject({
+      content: [
+        {
+          type: 'replacePreview',
+          attrs: { replacement: 'line 1\n\nline 2' },
+        },
+      ],
+    });
+  });
+
+  it('handles fence content with special characters', () => {
+    const replacement = 'const regex = /```/g;';
+    // Note: Content containing ``` must be carefully crafted
+    // The closing ``` must be alone in its paragraph
+    const input = doc(
+      p('```replace'),
+      p(replacement),
+      p('```')
+    );
+
+    const result = transformReplaceFenceToPreview(input, 'orig', replacement);
+
+    expect(result).toMatchObject({
+      content: [
+        {
+          type: 'replacePreview',
+          attrs: { replacement },
+        },
+      ],
+    });
+  });
+
+  it('does not leave trailing empty paragraph after sealed node', () => {
+    const input = doc(
+      p('```replace'),
+      p('content'),
+      p('```')
+    );
+
+    const result = transformReplaceFenceToPreview(input, 'orig', 'content');
+
+    // Should only have the replacePreview, no trailing empty paragraph
+    expect(result.content).toHaveLength(1);
+    expect(result.content?.[0].type).toBe('replacePreview');
+  });
+});
+
+describe('trimContent with replacePreview', () => {
+  it('removes trailing empty paragraph after replacePreview node', () => {
+    // ProseMirror often adds a trailing paragraph for cursor positioning
+    // trimContent should remove it
+    const input = doc(
+      replacePreview('orig', 'repl'),
+      p() // empty trailing paragraph
+    );
+
+    const result = trimContent(input);
+
+    expect(result.content).toHaveLength(1);
+    expect(result.content?.[0].type).toBe('replacePreview');
+  });
+});
+
+describe('transformReplacePreviewToFence', () => {
+  // Note: Now outputs isolated paragraphs (one per line) to match insertion format
+
+  it('transforms ReplacePreview node back to isolated paragraphs', () => {
+    const input = doc(replacePreview('const x = 1;', 'const x = 2;'));
+
+    const result = transformReplacePreviewToFence(input);
+
+    expect(result).toMatchObject({
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: '```replace' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'const x = 2;' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: '```' }] },
+      ],
+    });
+  });
+
+  it('preserves multiline replacement as separate paragraphs', () => {
+    const replacement = 'function foo() {\n  return 2;\n}';
+    const input = doc(replacePreview('original code', replacement));
+
+    const result = transformReplacePreviewToFence(input);
+
+    expect(result).toMatchObject({
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: '```replace' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'function foo() {' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: '  return 2;' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: '}' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: '```' }] },
+      ],
+    });
+  });
+
+  it('preserves other nodes around ReplacePreview', () => {
+    const input = doc(
+      p('Before'),
+      replacePreview('orig', 'repl'),
+      p('After')
+    );
+
+    const result = transformReplacePreviewToFence(input);
+
+    expect(result).toMatchObject({
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Before' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: '```replace' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'repl' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: '```' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'After' }] },
+      ],
+    });
+  });
+
+  it('handles empty replacement', () => {
+    const input = doc(replacePreview('something', ''));
+
+    const result = transformReplacePreviewToFence(input);
+
+    expect(result).toMatchObject({
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: '```replace' }] },
+        { type: 'paragraph' }, // empty paragraph for empty line
+        { type: 'paragraph', content: [{ type: 'text', text: '```' }] },
+      ],
+    });
+  });
+
+  it('handles missing attrs gracefully', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [{ type: 'replacePreview' }], // Missing attrs
+    };
+
+    const result = transformReplacePreviewToFence(input);
+
+    // Should preserve the node as-is since no attrs
+    expect(result).toMatchObject({
+      content: [{ type: 'replacePreview' }],
+    });
+  });
+
+  it('handles empty document', () => {
+    const input: JSONContent = { type: 'doc' };
+
+    const result = transformReplacePreviewToFence(input);
+
+    expect(result).toEqual({ type: 'doc' });
+  });
+
+  it('is inverse of transformReplaceFenceToPreview (round-trip)', () => {
+    const original = 'const x = 1;';
+    const replacement = 'const x = 2;';
+    // Use isolated paragraph format for input
+    const fenceDoc = doc(
+      p('```replace'),
+      p(replacement),
+      p('```')
+    );
+
+    // Fence -> Preview
+    const previewDoc = transformReplaceFenceToPreview(fenceDoc, original, replacement);
+    expect(previewDoc).toMatchObject({
+      content: [{ type: 'replacePreview' }],
+    });
+
+    // Preview -> Fence (outputs isolated paragraphs)
+    const backToFence = transformReplacePreviewToFence(previewDoc);
+    expect(backToFence).toMatchObject({
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: '```replace' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: replacement }] },
+        { type: 'paragraph', content: [{ type: 'text', text: '```' }] },
+      ],
+    });
+  });
+});
+
+describe('ReplacePreview position verification', () => {
+  let editor: Editor;
+  let container: HTMLDivElement;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+  });
+
+  afterEach(() => {
+    editor?.destroy();
+    container?.remove();
+  });
+
+  it('first block child in document has position 0', () => {
+    // Verify that ProseMirror position 0 corresponds to the first block child
+    editor = new Editor({
+      element: container,
+      extensions: [StarterKit, ReplacePreview],
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'replacePreview',
+            attrs: { blockId: 'test', original: 'old', replacement: 'new' },
+          },
+        ],
+      },
+    });
+
+    // In ProseMirror, the first block child starts at position 0
+    const firstNode = editor.state.doc.nodeAt(0);
+    expect(firstNode?.type.name).toBe('replacePreview');
+  });
+
+  it('second block child has position > 0', () => {
+    editor = new Editor({
+      element: container,
+      extensions: [StarterKit, ReplacePreview],
+      content: {
+        type: 'doc',
+        content: [
+          { type: 'paragraph', content: [{ type: 'text', text: 'hello' }] },
+          {
+            type: 'replacePreview',
+            attrs: { blockId: 'test', original: 'old', replacement: 'new' },
+          },
+        ],
+      },
+    });
+
+    // First node at position 0 should be paragraph
+    const firstNode = editor.state.doc.nodeAt(0);
+    expect(firstNode?.type.name).toBe('paragraph');
+
+    // ReplacePreview should be at position > 0 (after paragraph)
+    // Paragraph with "hello" = 1 (p open) + 5 (text) + 1 (p close) = 7
+    // So replacePreview should be at position 7
+    const secondNode = editor.state.doc.nodeAt(7);
+    expect(secondNode?.type.name).toBe('replacePreview');
+  });
 });

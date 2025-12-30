@@ -10,13 +10,15 @@ import {
   ImagePasteHandler,
   ExcalidrawChip,
   ExcalidrawPlaceholder,
-  ReplaceBlock,
   ReplacePreview,
   ErrorChip,
   SlashCommands,
   createSlashSuggestion,
   EditorShortcuts,
   createSuggestionRender,
+  parseFenceFromJson,
+  transformReplaceFenceToPreview,
+  transformReplacePreviewToFence,
   type SlashCommand,
   type SuggestionState,
 } from '../tiptap';
@@ -52,6 +54,7 @@ function createInitialSuggestionState<T>(): SuggestionState<T> {
     clientRect: null,
   };
 }
+
 
 /**
  * Composable for managing TipTap editor lifecycle, extensions, and suggestion state.
@@ -132,7 +135,6 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
         MediaChip,
         ExcalidrawChip,
         ExcalidrawPlaceholder,
-        ReplaceBlock,
         ReplacePreview,
         ErrorChip,
         ImagePasteHandler.configure({
@@ -183,61 +185,41 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
       onBlur: ({ editor: blurEditor }) => {
         // Don't dismiss while Excalidraw modal is open or suggestion menus are active
         if (!getSealed() && !tagSuggestion.active && !excalidrawModalOpen) {
-          // Find ReplaceBlock nodes and validate/transform them
-          const replaceBlocks: Array<{ pos: number; node: import('@tiptap/pm/model').Node }> = [];
-          blurEditor.state.doc.descendants((node, pos) => {
-            if (node.type.name === 'replaceBlock') {
-              replaceBlocks.push({ pos, node });
-            }
-          });
+          const editorDom = blurEditor.view.dom as HTMLElement;
+          const json = blurEditor.getJSON();
 
-          // Validate each replace block
-          for (const { node } of replaceBlocks) {
-            const original = node.attrs.original || '';
-            const replacement = node.textContent || '';
+          // Use centralized parser to find isolated fence
+          const parsed = parseFenceFromJson(json);
 
-            if (original === replacement) {
-              // Validation error - content unchanged
-              const editorDom = blurEditor.view.dom as HTMLElement;
+          if (parsed) {
+            const original = options.getOriginalLines?.() ?? '';
+
+            // Validate: replacement must differ from original
+            if (parsed.replacement === original) {
               editorDom.classList.add('has-replace-error', 'shake');
               setTimeout(() => editorDom.classList.remove('shake'), 400);
               blurEditor.commands.focus();
               return;
             }
+
+            // Clear any previous error state
+            editorDom.classList.remove('has-replace-error');
+
+            // Transform the fence text to ReplacePreview node
+            const transformedJson = transformReplaceFenceToPreview(json, original, parsed.replacement);
+            const trimmed = trimContent(transformedJson);
+            blurEditor.commands.setContent(trimmed);
+            getOnUpdate()(isContentEmpty(trimmed) ? null : trimmed);
+            getOnDismiss()();
+          } else {
+            // No valid isolated fence found, clear error state
+            editorDom.classList.remove('has-replace-error');
+
+            const trimmed = trimContent(json);
+            blurEditor.commands.setContent(trimmed);
+            getOnUpdate()(isContentEmpty(trimmed) ? null : trimmed);
+            getOnDismiss()();
           }
-
-          // Clear any previous error state
-          const editorDom = blurEditor.view.dom as HTMLElement;
-          editorDom.classList.remove('has-replace-error');
-
-          // Transform ReplaceBlock nodes to ReplacePreview nodes for sealed display
-          if (replaceBlocks.length > 0 && blurEditor.schema.nodes.replacePreview) {
-            const tr = blurEditor.state.tr;
-            let offset = 0;
-
-            for (const { pos, node } of replaceBlocks) {
-              const original = node.attrs.original || '';
-              const replacement = node.textContent || '';
-              const preview = blurEditor.schema.nodes.replacePreview.create({
-                blockId: node.attrs.blockId || crypto.randomUUID(),
-                original,
-                replacement,
-              });
-
-              const mappedPos = pos + offset;
-              tr.replaceWith(mappedPos, mappedPos + node.nodeSize, preview);
-              offset += preview.nodeSize - node.nodeSize;
-            }
-
-            if (tr.docChanged) {
-              blurEditor.view.dispatch(tr);
-            }
-          }
-
-          const trimmed = trimContent(blurEditor.getJSON());
-          blurEditor.commands.setContent(trimmed);
-          getOnUpdate()(isContentEmpty(trimmed) ? null : trimmed);
-          getOnDismiss()();
         }
       },
     });
@@ -255,31 +237,12 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
       if (editor) {
         editor.setEditable(!isSealed);
         if (!isSealed) {
-          // When unsealing, transform ReplacePreviews back to ReplaceBlock for editing
-          if (editor.state && editor.schema && editor.schema.nodes.replaceBlock) {
-            const doc = editor.state.doc;
-            const tr = editor.state.tr;
-            let offset = 0;
+          // When unsealing, transform ReplacePreviews back to fence text for editing
+          const json = editor.getJSON();
+          const transformedJson = transformReplacePreviewToFence(json);
+          editor.commands.setContent(transformedJson);
 
-            doc.descendants((node, pos) => {
-              if (node.type.name !== 'replacePreview') return;
-
-              const { blockId, original, replacement } = node.attrs;
-              const replaceBlock = editor!.schema.nodes.replaceBlock.create(
-                { blockId, original },
-                replacement ? editor!.schema.text(replacement) : null
-              );
-
-              const mappedPos = pos + offset;
-              tr.replaceWith(mappedPos, mappedPos + node.nodeSize, replaceBlock);
-              offset += replaceBlock.nodeSize - node.nodeSize;
-            });
-
-            if (tr.docChanged) {
-              editor.view.dispatch(tr);
-            }
-          }
-
+          // Focus at end after content is set
           editor.commands.focus('end', { scrollIntoView: false });
         }
       }

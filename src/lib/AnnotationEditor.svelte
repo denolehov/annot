@@ -114,6 +114,11 @@
   let container: HTMLDivElement | undefined = $state();
   let element: HTMLDivElement | undefined = $state();
 
+  // Detect if content is ONLY a replace block (for compact styling)
+  const isReplaceOnly = $derived(
+    content?.content?.length === 1 && content?.content?.[0]?.type === 'replacePreview'
+  );
+
   // Use the annotation editor composable for TipTap lifecycle
   const ann = useAnnotationEditor({
     element: () => element,
@@ -420,8 +425,28 @@
   });
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-<div bind:this={container} class="annotation-editor" class:sealed onclick={() => sealed && onUnseal?.()}>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  bind:this={container}
+  class="annotation-editor"
+  class:sealed
+  class:replace-only={isReplaceOnly}
+  role={sealed ? "button" : undefined}
+  tabindex={sealed ? 0 : undefined}
+  onmousedown={(e) => {
+    if (sealed) {
+      e.preventDefault();
+      e.stopPropagation();
+      onUnseal?.();
+    }
+  }}
+  onkeydown={(e) => {
+    if (sealed && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      onUnseal?.();
+    }
+  }}
+>
   <div bind:this={element} class="editor-content"></div>
   {#if !sealed}
     <div class="toolbar">

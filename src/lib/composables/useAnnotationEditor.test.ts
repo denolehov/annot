@@ -48,7 +48,6 @@ vi.mock('../tiptap', () => ({
   MediaChip: {},
   ExcalidrawChip: {},
   ExcalidrawPlaceholder: {},
-  ReplaceBlock: {},
   ReplacePreview: {},
   ErrorChip: {},
   ImagePasteHandler: { configure: vi.fn(() => ({})) },
@@ -61,6 +60,8 @@ vi.mock('../tiptap', () => ({
     onKeyDown: vi.fn(),
     onExit: vi.fn(),
   })),
+  transformReplaceFenceToPreview: vi.fn((json) => json),
+  transformReplacePreviewToFence: vi.fn((json) => json),
 }));
 
 import { useAnnotationEditor } from './useAnnotationEditor.svelte';
