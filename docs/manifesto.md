@@ -18,6 +18,8 @@ annot is not a destination; it is a **membrane** — the active layer where raw 
 
 Within that membrane is a **structured dialogue substrate**: a medium designed for high-bandwidth, high-fidelity communication between human and AI. The substrate is where dialogue happens. The membrane is what the dialogue accomplishes.
 
+annot follows the UNIX philosophy: do one thing well. It is the shaping layer — designed to compose with whatever produces content and whatever consumes artifacts.
+
 It appears when needed. It vanishes when done. It leaves behind only the artifact that emerged from the crossing.
 
 ---
@@ -29,6 +31,8 @@ Persistence is **effect**, not state. The session must dissolve for the value to
 
 annot is a catalyst — it facilitates the reaction but is not consumed by it, nor does it remain in the final product. Cmd-W closes it. There is no "save session." There is no "come back later." The session exists to produce an artifact, and when the artifact exists, the session has served its purpose.
 
+Ephemerality is permission.
+
 ### Bidirectional
 Either party initiates. AI can pull human in: "review this plan." Human can pull AI in: "explain this code." The roles are fluid. The "who's driving" can shift mid-session. What matters is that both parties can contribute.
 
@@ -37,6 +41,9 @@ This is not chat. Feedback is **anchored** — attached to specific lines, speci
 
 ### Generative
 Humans don't just approve or reject. They add information that didn't exist. They mark up drafts with specific corrections. They sketch architecture with diagrams. They provide context AI couldn't infer. They explain *why* something is wrong. They sketch alternatives. The human contribution is creative, not clerical.
+
+### Shaping
+annot is where artifacts take form, not where they land. The session refines — a question gets clearer, a plan gets sharper, a rough draft becomes ready. But the conclusion happens elsewhere: in your commit, your PR, your team discussion. annot shapes what gets concluded.
 
 ---
 
@@ -72,6 +79,8 @@ Both directions serve the same goal: **high-bandwidth, high-fidelity communicati
 
 **Not another tool in the stack.** annot sits *between* generation and persistence — wherever AI produces and wherever artifacts land. It is the shaping layer, not the source or destination.
 
+**Not a decision point.** Decisions happen elsewhere — in commits, in team discussions, in production. annot shapes the understanding that decisions require, but doesn't make them.
+
 ---
 
 ## VI. The Gradient of Control
@@ -90,12 +99,15 @@ This is not about approving or rejecting. It is about shaping — adding the con
 
 ## VII. The Artifact
 
+The artifact may be concrete or epistemic. A refined plan, a clarified question, a problem finally well-posed — all are valid outcomes. All justify the session.
+
 Every annot session ends with something that didn't exist before:
 - A refined implementation plan
 - An RFC for the team to review
 - A document with the right tone
 - A shared understanding captured in prose
 - A decision, documented with rationale
+- A question, finally understood well enough to answer
 
 The session is ephemeral. The artifact persists — in your repo, your docs, your team's memory.
 
