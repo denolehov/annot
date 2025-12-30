@@ -18,16 +18,16 @@ export interface DisplayLine {
 export type LineSegment =
   | { type: 'regular'; lines: DisplayLine[] }
   | { type: 'portal'; lines: DisplayLine[] }
-  | { type: 'codeblock'; lines: DisplayLine[]; language: string | null }
+  | { type: 'codeblock'; lines: DisplayLine[]; language: string | null; color: string | null }
   | { type: 'table'; lines: DisplayLine[] }
   | { type: 'separator'; lines: DisplayLine[] };
 
-/** Get the language from a code block start line */
-function getCodeBlockLanguage(line: Line): string | null {
+/** Get the language and color from a code block start line */
+function getCodeBlockInfo(line: Line): { language: string | null; color: string | null } {
   if (line.semantics.type === 'markdown' && line.semantics.kind === 'code_block_start') {
-    return line.semantics.language;
+    return { language: line.semantics.language, color: line.semantics.color };
   }
-  return null;
+  return { language: null, color: null };
 }
 
 export function useLineSegments(getLines: () => Line[]) {
@@ -70,8 +70,8 @@ export function useLineSegments(getLines: () => Line[]) {
         } else {
           // Start new code block segment
           if (currentSegment) result.push(currentSegment);
-          const language = getCodeBlockLanguage(line);
-          currentSegment = { type: 'codeblock', lines: [{ line, displayIndex }], language };
+          const { language, color } = getCodeBlockInfo(line);
+          currentSegment = { type: 'codeblock', lines: [{ line, displayIndex }], language, color };
         }
       } else if (isTable) {
         // Table row line

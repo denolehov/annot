@@ -18,7 +18,7 @@ export type LineSemantics =
 /** Markdown structural semantics. */
 export type MarkdownSemantics =
   | { kind: 'header'; level: number }
-  | { kind: 'code_block_start'; language: string | null }
+  | { kind: 'code_block_start'; language: string | null; color: string | null }
   | { kind: 'code_block_content' }
   | { kind: 'code_block_end' }
   | { kind: 'table_row' }

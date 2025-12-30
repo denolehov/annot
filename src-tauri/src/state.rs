@@ -636,6 +636,10 @@ impl ContentModel {
                     let semantics = LineSemantics::Markdown(if info.is_start {
                         MarkdownSemantics::CodeBlockStart {
                             language: info.language.clone(),
+                            color: info
+                                .language
+                                .as_ref()
+                                .and_then(|l| crate::lang::language_color(l).map(String::from)),
                         }
                     } else if info.is_end {
                         MarkdownSemantics::CodeBlockEnd

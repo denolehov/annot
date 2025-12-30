@@ -10,6 +10,7 @@
   interface Props {
     lines: Array<{ line: Line; displayIndex: number }>;
     language: string | null;
+    color: string | null;
     selection: Range | null;
     isDragging: boolean;
     hoveredDisplayIdx: number | null;
@@ -36,6 +37,7 @@
   let {
     lines,
     language,
+    color,
     selection,
     isDragging,
     hoveredDisplayIdx,
@@ -253,7 +255,7 @@
       <span class="code" class:md={markdownMetadata}>
         {#if startFence && language}
           <span class="codeblock-header-info">
-            <span class="lang-badge">{language}</span>
+            <span class="lang-badge" style:--lang-color={color}>{language}</span>
             <span class="codeblock-actions">
               {#if isMermaid}
                 {#if mermaidError}
@@ -442,7 +444,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--accent);
+    background: var(--lang-color, var(--accent));
   }
 
   .codeblock-actions {

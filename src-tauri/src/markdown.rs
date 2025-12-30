@@ -83,7 +83,10 @@ pub struct PortalInfo {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum MarkdownSemantics {
     Header { level: u8 },
-    CodeBlockStart { language: Option<String> },
+    CodeBlockStart {
+        language: Option<String>,
+        color: Option<String>,
+    },
     CodeBlockContent,
     CodeBlockEnd,
     TableRow,

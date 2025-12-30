@@ -38,6 +38,13 @@ pub fn fence_language_to_extension(lang: &str) -> String {
     lower
 }
 
+/// Get the color for a language from GitHub's linguist dataset.
+///
+/// Returns the hex color string (e.g., "#dea584" for Rust).
+pub fn language_color(lang: &str) -> Option<&'static str> {
+    languages::from_name(lang).and_then(|l| l.color)
+}
+
 /// Convert language name to fence-appropriate lowercase form.
 fn language_name_to_fence(name: &str) -> &'static str {
     match name {
@@ -141,5 +148,29 @@ mod tests {
     fn fence_to_extension_case_insensitive() {
         assert_eq!(fence_language_to_extension("RUST"), "rs");
         assert_eq!(fence_language_to_extension("Python"), "py");
+    }
+
+    #[test]
+    fn language_color_common_languages() {
+        // Rust has a distinct orange-ish color
+        assert_eq!(language_color("rust"), Some("#dea584"));
+        // Python has a blue color
+        assert_eq!(language_color("python"), Some("#3572A5"));
+        // Go has a cyan color
+        assert_eq!(language_color("go"), Some("#00ADD8"));
+        // JavaScript has a yellow color
+        assert_eq!(language_color("javascript"), Some("#f1e05a"));
+    }
+
+    #[test]
+    fn language_color_case_insensitive() {
+        assert_eq!(language_color("Rust"), Some("#dea584"));
+        assert_eq!(language_color("PYTHON"), Some("#3572A5"));
+    }
+
+    #[test]
+    fn language_color_unknown_returns_none() {
+        assert_eq!(language_color("xyz123"), None);
+        assert_eq!(language_color(""), None);
     }
 }

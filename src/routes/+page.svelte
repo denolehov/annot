@@ -771,6 +771,7 @@
           <CodeBlock
             lines={segment.lines}
             language={segment.language}
+            color={segment.color}
             selection={interactionSelection}
             isDragging={interactionIsDragging}
             hoveredDisplayIdx={interactionHoveredIdx}
