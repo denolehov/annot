@@ -3,6 +3,7 @@
   import type { JSONContent } from '@tiptap/core';
   import { invoke } from '@tauri-apps/api/core';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+  import { computePosition, offset, flip, shift, type Placement } from '@floating-ui/dom';
   import { useAnnotationEditor } from './composables';
   import { trimContent, isContentEmpty } from './tiptap';
   import type { Tag } from './types';
@@ -28,6 +29,57 @@
     return {
       destroy() {
         node.remove();
+      },
+    };
+  }
+
+  // Floating UI action: positions element relative to a virtual reference (cursor rect)
+  function floating(node: HTMLElement, opts: { getRect: () => DOMRect | null; placement?: Placement }) {
+    let cleanup: (() => void) | null = null;
+
+    async function update() {
+      const rect = opts.getRect();
+      if (!rect) return;
+
+      // Create virtual element for Floating UI
+      const virtualEl = {
+        getBoundingClientRect: () => rect,
+      };
+
+      const { x, y } = await computePosition(virtualEl, node, {
+        placement: opts.placement ?? 'bottom-start',
+        middleware: [
+          offset(4),
+          flip({ padding: 8 }),
+          shift({ padding: 8 }),
+        ],
+      });
+
+      Object.assign(node.style, {
+        left: `${x}px`,
+        top: `${y}px`,
+      });
+    }
+
+    // Initial position
+    update();
+
+    // Reposition on scroll
+    const handleScroll = () => {
+      requestAnimationFrame(update);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true, capture: true });
+    cleanup = () => {
+      window.removeEventListener('scroll', handleScroll, { capture: true });
+    };
+
+    return {
+      update(newOpts: { getRect: () => DOMRect | null; placement?: Placement }) {
+        opts = newOpts;
+        update();
+      },
+      destroy() {
+        cleanup?.();
       },
     };
   }
@@ -80,34 +132,12 @@
   let selectionPopoverEl: HTMLDivElement | undefined = $state();
   let selectionDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Force position recalculation on scroll
-  let positionTick = $state(0);
   let suggestionsEl: HTMLDivElement | undefined = $state();
   let slashSuggestionsEl: HTMLDivElement | undefined = $state();
 
   // Sync Excalidraw window state with composable (prevents blur dismiss)
   $effect(() => {
     ann.setExcalidrawModalOpen(excalidrawWindowOpen);
-  });
-
-  // Scroll listener for popup repositioning
-  $effect(() => {
-    if (!ann.tagSuggestion.active && !ann.slashSuggestion.active) return;
-
-    let rafId: number | null = null;
-    const handleScroll = () => {
-      if (rafId) return;
-      rafId = requestAnimationFrame(() => {
-        rafId = null;
-        positionTick++;
-      });
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true, capture: true });
-    return () => {
-      window.removeEventListener('scroll', handleScroll, { capture: true });
-      if (rafId) cancelAnimationFrame(rafId);
-    };
   });
 
   // Scroll selected tag suggestion into view on keyboard navigation
@@ -129,34 +159,6 @@
       selected?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
   });
-
-  // Calculate optimal popup position (above or below cursor)
-  function getSuggestionPosition(_tick: number, clientRect: (() => DOMRect | null) | null, menuEl?: HTMLDivElement): { left: number; top: number } {
-    const rect = clientRect?.();
-    if (!rect) return { left: 0, top: 0 };
-
-    const menuHeight = menuEl?.offsetHeight ?? 60;
-    const padding = 8;
-    const gap = 4;
-
-    const spaceBelow = window.innerHeight - rect.bottom - padding;
-    const spaceAbove = rect.top - padding;
-
-    let top: number;
-    if (spaceBelow >= menuHeight) {
-      top = rect.bottom + gap;
-    } else if (spaceAbove >= menuHeight) {
-      top = rect.top - menuHeight - gap;
-    } else {
-      top = spaceAbove > spaceBelow
-        ? rect.top - menuHeight - gap
-        : rect.bottom + gap;
-    }
-
-    if (top < padding) top = padding;
-
-    return { left: rect.left, top };
-  }
 
   // Helper to find a TipTap node by attribute value
   function findNodeByAttr(attrName: string, attrValue: string): { pos: number; node: import('@tiptap/pm/model').Node } | null {
@@ -421,15 +423,13 @@
   {/if}
 </div>
 
-<!-- Portal tag suggestions to body so they're not clipped by scroll containers -->
+<!-- Portal tag suggestions to body, positioned with Floating UI -->
 {#if ann.tagSuggestion.active && ann.tagSuggestion.items.length > 0}
-  {@const pos = getSuggestionPosition(positionTick, ann.tagSuggestion.clientRect, suggestionsEl)}
   <div
     bind:this={suggestionsEl}
     use:portal
+    use:floating={{ getRect: () => ann.tagSuggestion.clientRect?.() ?? null }}
     class="tag-suggestions"
-    style:left="{pos.left}px"
-    style:top="{pos.top}px"
   >
     {#each ann.tagSuggestion.items as tag, i}
       <button
@@ -448,15 +448,13 @@
   </div>
 {/if}
 
-<!-- Portal slash command suggestions to body -->
+<!-- Portal slash command suggestions to body, positioned with Floating UI -->
 {#if ann.slashSuggestion.active && ann.slashSuggestion.items.length > 0}
-  {@const pos = getSuggestionPosition(positionTick, ann.slashSuggestion.clientRect, slashSuggestionsEl)}
   <div
     bind:this={slashSuggestionsEl}
     use:portal
+    use:floating={{ getRect: () => ann.slashSuggestion.clientRect?.() ?? null }}
     class="slash-suggestions"
-    style:left="{pos.left}px"
-    style:top="{pos.top}px"
   >
     {#each ann.slashSuggestion.items as cmd, i}
       <button
@@ -478,15 +476,13 @@
   </div>
 {/if}
 
-<!-- Selection popover for "Create Tag from Selection" -->
+<!-- Selection popover for "Create Tag from Selection", positioned with Floating UI -->
 {#if selectionPopover && onRequestCreateTag}
-  {@const pos = getSuggestionPosition(positionTick, () => selectionPopover?.rect ?? null, selectionPopoverEl)}
   <div
     bind:this={selectionPopoverEl}
     use:portal
+    use:floating={{ getRect: () => selectionPopover?.rect ?? null }}
     class="selection-popover"
-    style:left="{pos.left}px"
-    style:top="{pos.top}px"
   >
     <button
       type="button"

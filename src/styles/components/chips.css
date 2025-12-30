@@ -131,37 +131,39 @@
 
 /* ===========================================
    CHIP TOOLTIP (hover to reveal instruction)
+   Positioned by Floating UI
    =========================================== */
 .tag-chip .chip-tooltip {
-	position: absolute;
-	bottom: 100%;
-	left: 50%;
-	transform: translateX(-50%);
-	margin-bottom: 4px;
-	background: var(--text-primary);
-	border-radius: 4px;
-	padding: 4px 8px;
-	font-size: 11px;
-	color: white;
-	max-width: 300px;
-	word-wrap: break-word;
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: max-content;
+	max-width: 450px;
 	opacity: 0;
 	visibility: hidden;
 	transition: opacity 0.1s ease, visibility 0.1s ease;
 	z-index: 9999;
 	pointer-events: none;
-	white-space: nowrap;
 }
 
-.tag-chip .chip-tooltip::after {
-	content: "";
+.tag-chip .chip-tooltip-content {
+	background: var(--tooltip-bg);
+	border-radius: 4px;
+	padding: 6px 10px;
+	font-size: 11px;
+	line-height: 1.4;
+	color: var(--tooltip-text);
+	word-wrap: break-word;
+	white-space: normal;
+	box-shadow: var(--shadow-md);
+}
+
+.tag-chip .chip-tooltip-arrow {
 	position: absolute;
-	top: 100%;
-	left: 50%;
-	transform: translateX(-50%);
-	border: 4px solid transparent;
-	border-top-color: var(--text-primary);
+	width: 8px;
+	height: 8px;
+	background: var(--tooltip-bg);
+	transform: rotate(45deg);
 }
 
 .tag-chip:hover .chip-tooltip,

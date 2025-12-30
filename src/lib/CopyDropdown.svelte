@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
+	import { computePosition, offset, flip, shift } from '@floating-ui/dom';
 	import Icon from '$lib/CommandPalette/Icon.svelte';
 
 	interface Props {
@@ -9,6 +10,31 @@
 	let { showToast }: Props = $props();
 
 	let open = $state(false);
+	let buttonEl: HTMLButtonElement | undefined = $state();
+	let menuEl: HTMLDivElement | undefined = $state();
+
+	// Position menu when it opens
+	$effect(() => {
+		if (!open || !buttonEl || !menuEl) return;
+
+		async function updatePosition() {
+			if (!buttonEl || !menuEl) return;
+			const { x, y } = await computePosition(buttonEl, menuEl, {
+				placement: 'bottom-end',
+				middleware: [
+					offset(4),
+					flip({ padding: 8 }),
+					shift({ padding: 8 }),
+				],
+			});
+			Object.assign(menuEl.style, {
+				left: `${x}px`,
+				top: `${y}px`,
+			});
+		}
+
+		updatePosition();
+	});
 
 	async function copyToClipboard(mode: 'content' | 'annotations' | 'all') {
 		const labels = {
@@ -44,6 +70,7 @@
 
 <div class="copy-dropdown">
 	<button
+		bind:this={buttonEl}
 		class="copy-btn"
 		onclick={() => (open = !open)}
 		aria-haspopup="true"
@@ -53,7 +80,7 @@
 		<Icon name="copy-code" />
 	</button>
 	{#if open}
-		<div class="copy-menu">
+		<div bind:this={menuEl} class="copy-menu">
 			<button class="copy-menu-item" onclick={() => copyToClipboard('content')}>Content</button>
 			<button class="copy-menu-item" onclick={() => copyToClipboard('annotations')}
 				>Annotations</button
@@ -98,9 +125,9 @@
 	}
 
 	.copy-menu {
-		position: absolute;
-		top: calc(100% + 4px);
-		right: 0;
+		position: fixed;
+		top: 0;
+		left: 0;
 		background: var(--bg-window);
 		border: 1px solid var(--border-subtle);
 		border-radius: 8px;

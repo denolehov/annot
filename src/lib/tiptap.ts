@@ -1,6 +1,7 @@
 import { Node, Extension, mergeAttributes, type JSONContent } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import Suggestion, { type SuggestionOptions, type SuggestionProps, type SuggestionKeyDownProps } from '@tiptap/suggestion';
+import { computePosition, offset, flip, shift, arrow } from '@floating-ui/dom';
 import type { ContentNode, Tag } from './types';
 
 /**
@@ -205,16 +206,43 @@ export const TagChip = Node.create({
       chip.innerHTML = `
         <span class="tag-icon">#</span>
         <span class="tag-content">${escapeHtml(name)}</span>
-        ${tooltipContent ? `<div class="chip-tooltip">${tooltipContent}</div>` : ''}
+        ${tooltipContent ? `<div class="chip-tooltip"><div class="chip-tooltip-content">${tooltipContent}</div><div class="chip-tooltip-arrow"></div></div>` : ''}
       `;
 
-      // Position tooltip on hover (for position: fixed)
+      // Position tooltip on hover using Floating UI
       if (tooltipContent) {
-        chip.addEventListener('mouseenter', () => {
-          const rect = chip.getBoundingClientRect();
-          chip.style.setProperty('--tooltip-x', `${rect.left + rect.width / 2}px`);
-          chip.style.setProperty('--tooltip-y', `${rect.top}px`);
-        });
+        const tooltip = chip.querySelector('.chip-tooltip') as HTMLElement;
+        const arrowEl = chip.querySelector('.chip-tooltip-arrow') as HTMLElement;
+
+        const updatePosition = async () => {
+          const { x, y, placement, middlewareData } = await computePosition(chip, tooltip, {
+            placement: 'top',
+            middleware: [
+              offset(8),
+              flip(),
+              shift({ padding: 8 }),
+              arrow({ element: arrowEl }),
+            ],
+          });
+
+          Object.assign(tooltip.style, {
+            left: `${x}px`,
+            top: `${y}px`,
+          });
+
+          // Position arrow
+          if (middlewareData.arrow) {
+            const { x: arrowX } = middlewareData.arrow;
+            const staticSide = placement.includes('top') ? 'bottom' : 'top';
+
+            Object.assign(arrowEl.style, {
+              left: arrowX != null ? `${arrowX}px` : '',
+              [staticSide]: '-4px',
+            });
+          }
+        };
+
+        chip.addEventListener('mouseenter', updatePosition);
       }
 
       return { dom: chip };

@@ -11,6 +11,9 @@ dependencies:
   '@excalidraw/mermaid-to-excalidraw':
     specifier: ^2.0.0
     version: 2.0.0
+  '@floating-ui/dom':
+    specifier: ^1.7.4
+    version: 1.7.4
   '@fontsource/inter':
     specifier: ^5.2.8
     version: 5.2.8

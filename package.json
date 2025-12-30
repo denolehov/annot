@@ -23,6 +23,7 @@
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.0",
     "@excalidraw/mermaid-to-excalidraw": "^2.0.0",
+    "@floating-ui/dom": "^1.7.4",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@tauri-apps/api": "^2",
