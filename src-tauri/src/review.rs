@@ -254,14 +254,33 @@ impl Review {
     ) -> (View, HashMap<FileKey, AnnotationTarget>, WindowView) {
         let key = content.file_key();
 
+        // Extract file extension for language metadata
+        let extension = content
+            .source
+            .path_hint()
+            .and_then(|p| std::path::Path::new(p).extension())
+            .and_then(|ext| ext.to_str())
+            .map(|s| s.to_string());
+
+        let mut target = AnnotationTarget::new();
+        target.metadata.language = extension;
+
         let mut files = HashMap::new();
-        files.insert(key.clone(), AnnotationTarget::new());
+        files.insert(key.clone(), target);
 
         // Register portal source files as annotation targets
         for portal in &content.portals {
             let portal_key = FileKey::path(portal.source_path.clone());
             if !files.contains_key(&portal_key) {
-                files.insert(portal_key, AnnotationTarget::new());
+                // Extract extension from portal source path
+                let portal_ext = portal
+                    .source_path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|s| s.to_string());
+                let mut portal_target = AnnotationTarget::new();
+                portal_target.metadata.language = portal_ext;
+                files.insert(portal_key, portal_target);
             }
         }
 

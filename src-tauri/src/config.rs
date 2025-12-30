@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use fs4::fs_std::FileExt;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::state::{ExitMode, Tag};
+use crate::state::{ExitMode, Tag, TagUsageStats};
 
 /// Current config version. Bump when making breaking changes.
 pub const CONFIG_VERSION: u32 = 1;
@@ -199,6 +199,63 @@ pub fn load_exit_modes() -> Vec<ExitMode> {
 /// Saves exit modes to ~/.config/annot/exit-modes.json with locking and merge.
 pub fn save_exit_modes(modes: &[ExitMode], deleted_ids: &HashSet<String>) -> io::Result<()> {
     save_merged("exit-modes.json", modes, deleted_ids)
+}
+
+/// Loads tag usage stats from ~/.config/annot/tag-usage.json. Returns default if file doesn't exist.
+pub fn load_tag_usage() -> TagUsageStats {
+    let Some(dir) = config_dir() else {
+        return TagUsageStats::default();
+    };
+
+    let path = dir.join("tag-usage.json");
+    match fs::read_to_string(&path) {
+        Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+        Err(_) => TagUsageStats::default(),
+    }
+}
+
+/// Saves tag usage stats to ~/.config/annot/tag-usage.json with locking and atomic write.
+pub fn save_tag_usage(stats: &TagUsageStats) -> io::Result<()> {
+    let dir = ensure_config_dir()?;
+    let data_path = dir.join("tag-usage.json");
+    let lock_path = dir.join("tag-usage.json.lock");
+
+    // Create lock file and acquire exclusive lock
+    let lock_file = File::create(&lock_path)?;
+    lock_file.lock_exclusive()?;
+
+    // Read current disk state and merge (additive)
+    let disk_stats: TagUsageStats = if data_path.exists() {
+        let content = fs::read_to_string(&data_path)?;
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        TagUsageStats::default()
+    };
+
+    // Merge: add memory counts to disk counts
+    let mut merged = disk_stats;
+    for (tag_id, mem_usage) in &stats.tags {
+        let entry = merged
+            .tags
+            .entry(tag_id.clone())
+            .or_insert_with(|| crate::state::TagUsage::default());
+        entry.count += mem_usage.count;
+        // Take the more recent last_used
+        if mem_usage.last_used > entry.last_used {
+            entry.last_used = mem_usage.last_used;
+        }
+        // Merge by_language counts
+        for (lang, count) in &mem_usage.by_language {
+            *entry.by_language.entry(lang.clone()).or_insert(0) += count;
+        }
+    }
+
+    let content = serde_json::to_string_pretty(&merged)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    atomic_write(&data_path, &content)?;
+
+    FileExt::unlock(&lock_file)?;
+    Ok(())
 }
 
 /// Loads config from ~/.config/annot/config.json. Returns default if file doesn't exist.

@@ -6,9 +6,10 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 use crate::config::{self, Config, Theme};
+use crate::lang::extension_to_fence_language;
 use crate::output::{export_content, format_output, OutputMode};
 use crate::review::ActiveReview;
-use crate::state::{ContentNode, ContentResponse, ExitMode, Tag};
+use crate::state::{ContentNode, ContentResponse, ExitMode, Tag, TagUsageStats};
 use crate::ShouldExit;
 
 #[derive(Deserialize)]
@@ -79,6 +80,9 @@ pub fn finish_review(
     let mut guard = review_state.lock();
     let mut review = guard.take().ok_or("No active review")?;
 
+    // Collect tag usage stats from all annotations
+    collect_tag_usage(&mut review);
+
     let is_mcp = review.is_mcp();
     let result = format_output(
         &review,
@@ -111,6 +115,48 @@ pub fn finish_review(
     }
 
     Ok(())
+}
+
+/// Collect tag usage from all annotations and save to disk.
+fn collect_tag_usage(review: &mut crate::review::Review) {
+    let mut session_stats = TagUsageStats::default();
+
+    // Walk all annotation targets
+    for (_file_key, target) in &review.files {
+        // Get language for this file from metadata
+        let language = target
+            .metadata
+            .language
+            .as_ref()
+            .map(|ext| extension_to_fence_language(ext))
+            .filter(|s| !s.is_empty());
+
+        // Walk all annotations
+        for annotation in target.annotations.values() {
+            // Extract tag IDs from content nodes
+            for node in &annotation.content {
+                if let ContentNode::Tag { id, .. } = node {
+                    session_stats.increment(id, language);
+                }
+            }
+        }
+    }
+
+    // Also check session comment for tags (no language context)
+    if let Some(ref comment) = review.session_comment {
+        for node in comment {
+            if let ContentNode::Tag { id, .. } = node {
+                session_stats.increment(id, None);
+            }
+        }
+    }
+
+    // Only save if we have stats to record
+    if !session_stats.tags.is_empty() {
+        // Update config and save
+        *review.config.usage_stats_mut() = session_stats;
+        review.config.save_usage_stats();
+    }
 }
 
 #[tauri::command]

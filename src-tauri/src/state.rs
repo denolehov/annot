@@ -1,8 +1,61 @@
 use std::collections::{HashMap, HashSet};
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::config;
+
+/// Type alias for tag IDs (12-character alphanumeric strings).
+pub type TagId = String;
+
+// ════════════════════════════════════════════════════════════════════════════
+// TAG USAGE STATS — tracks tag usage for smart suggestions
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Aggregate tag usage statistics.
+/// Persisted to `~/.config/annot/tag-usage.json`.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct TagUsageStats {
+    /// Usage stats per tag, keyed by tag ID.
+    pub tags: HashMap<TagId, TagUsage>,
+}
+
+/// Usage statistics for a single tag.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TagUsage {
+    /// Total number of times this tag was used.
+    pub count: u32,
+    /// When this tag was last used.
+    pub last_used: DateTime<Utc>,
+    /// Usage count per language (fence name, e.g., "rust", "go").
+    pub by_language: HashMap<String, u32>,
+}
+
+impl Default for TagUsage {
+    fn default() -> Self {
+        Self {
+            count: 0,
+            last_used: Utc::now(),
+            by_language: HashMap::new(),
+        }
+    }
+}
+
+impl TagUsageStats {
+    /// Increment usage for a tag, optionally with a language.
+    pub fn increment(&mut self, tag_id: &str, language: Option<&str>) {
+        let usage = self
+            .tags
+            .entry(tag_id.to_string())
+            .or_insert_with(TagUsage::default);
+        usage.count += 1;
+        usage.last_used = Utc::now();
+        if let Some(lang) = language {
+            *usage.by_language.entry(lang.to_string()).or_insert(0) += 1;
+        }
+    }
+}
+
 use crate::diff::{self, DiffMetadata};
 use crate::error::AnnotError;
 use crate::highlight::Highlighter;
@@ -280,6 +333,8 @@ pub struct UserConfig {
     exit_modes: Vec<ExitMode>,
     deleted_tags: HashSet<String>,
     deleted_exit_modes: HashSet<String>,
+    /// Tag usage statistics (global + per-language).
+    usage_stats: TagUsageStats,
 }
 
 impl UserConfig {
@@ -290,6 +345,7 @@ impl UserConfig {
             exit_modes: config::load_exit_modes(),
             deleted_tags: HashSet::new(),
             deleted_exit_modes: HashSet::new(),
+            usage_stats: config::load_tag_usage(),
         }
     }
 
@@ -300,6 +356,7 @@ impl UserConfig {
             exit_modes: Vec::new(),
             deleted_tags: HashSet::new(),
             deleted_exit_modes: HashSet::new(),
+            usage_stats: TagUsageStats::default(),
         }
     }
 
@@ -400,7 +457,18 @@ impl UserConfig {
             exit_modes,
             deleted_tags: HashSet::new(),
             deleted_exit_modes: HashSet::new(),
+            usage_stats: TagUsageStats::default(),
         }
+    }
+
+    /// Get mutable reference to usage stats (for incrementing).
+    pub fn usage_stats_mut(&mut self) -> &mut TagUsageStats {
+        &mut self.usage_stats
+    }
+
+    /// Save tag usage stats to disk.
+    pub fn save_usage_stats(&self) {
+        let _ = config::save_tag_usage(&self.usage_stats);
     }
 }
 
