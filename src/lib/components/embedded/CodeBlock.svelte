@@ -310,8 +310,8 @@
         {:else if startFence || endFence}
           <span class="codeblock-footer-info"></span>
         {:else}
-          {#if line.html}
-            {@html wrapPipes(line.html)}
+          {#if line.html?.type === 'full'}
+            {@html wrapPipes(line.html.value)}
           {:else}
             {@html wrapPipes(escapeHtml(line.content))}
           {/if}

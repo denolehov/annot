@@ -90,6 +90,28 @@ stateDiagram-v2
 | POST     | `/auth/refresh`  | Refresh JWT token  |
 | DELETE   | `/auth/logout`   | Invalidate session |
 
+## Table Inline Formatting
+
+Tables now support inline formatting inside cells:
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| ==Highlights== | ✅ Supported | Use `==text==` syntax |
+| **Bold text** | ✅ Supported | Use `**text**` syntax |
+| *Italic text* | ✅ Supported | Use `*text*` syntax |
+| `inline code` | ✅ Supported | Use backticks |
+| [Links](https://example.com) | ✅ Supported | Standard link syntax |
+| ~~Strikethrough~~ | ✅ Supported | Use `~~text~~` syntax |
+
+### Combined Formatting in Cells
+
+| Component | Description | Priority |
+|-----------|-------------|----------|
+| `AuthService` | ==Critical== - handles **all** authentication | 🔴 High |
+| `UserStore` | Manages *user sessions* with `Redis` backend | 🟡 Medium |
+| `RateLimiter` | Prevents **brute force** via ==sliding window== | 🔴 High |
+| ~~DeprecatedAuth~~ | Legacy system - **do not use** | 🟢 Low |
+
 ## Error Codes
 
 | Code | Name            | Description                                            | Retry? |

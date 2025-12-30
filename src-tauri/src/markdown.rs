@@ -56,6 +56,9 @@ pub struct TableInfo {
     pub end_line: u32,
     /// Reformatted lines with aligned columns.
     pub formatted_lines: Vec<String>,
+    /// Per-row, per-cell HTML (rendered via `render_inline`).
+    /// Each inner Vec corresponds to one row, containing HTML for each cell.
+    pub row_html_cells: Vec<Vec<String>>,
 }
 
 /// A portal link detected in markdown.
@@ -113,6 +116,10 @@ enum ParseContext {
     Heading { line: u32, level: u8, text: String },
     CodeBlock { line: u32, lang: Option<String> },
     Table { start_line: u32 },
+    /// Accumulates cells for a table row.
+    TableRow { cells: Vec<String> },
+    /// Accumulates text for a single table cell.
+    TableCell { text: String },
     PortalLink { line: u32, url: String, text: String },
 }
 
@@ -210,6 +217,53 @@ impl ParseState {
             }
         })
     }
+
+    /// Get mutable reference to current table cell's text accumulator.
+    fn current_cell_text(&mut self) -> Option<&mut String> {
+        self.stack.iter_mut().rev().find_map(|ctx| {
+            if let ParseContext::TableCell { text, .. } = ctx {
+                Some(text)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Pop table cell context and return its accumulated text.
+    fn pop_table_cell(&mut self) -> Option<String> {
+        match self.stack.last() {
+            Some(ParseContext::TableCell { .. }) => {
+                if let Some(ParseContext::TableCell { text }) = self.stack.pop() {
+                    return Some(text);
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
+    /// Pop table row context and return its accumulated cells.
+    fn pop_table_row(&mut self) -> Option<Vec<String>> {
+        match self.stack.last() {
+            Some(ParseContext::TableRow { .. }) => {
+                if let Some(ParseContext::TableRow { cells }) = self.stack.pop() {
+                    return Some(cells);
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
+    /// Add a cell to the current table row.
+    fn add_cell_to_row(&mut self, cell_text: String) {
+        for ctx in self.stack.iter_mut().rev() {
+            if let ParseContext::TableRow { cells } = ctx {
+                cells.push(cell_text);
+                return;
+            }
+        }
+    }
 }
 
 /// Check if a file is markdown based on extension.
@@ -232,6 +286,8 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
     let mut code_blocks = Vec::new();
     let mut tables = Vec::new();
     let mut portals = Vec::new();
+    // Accumulates HTML cells for each row in the current table
+    let mut current_table_rows: Vec<Vec<String>> = Vec::new();
 
     let mut state = ParseState::default();
 
@@ -289,11 +345,39 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
                     let end_line = mapper.byte_to_line(range.end.saturating_sub(1));
                     let table_content = extract_table_lines(content, start_line, end_line);
                     let formatted = format_table(&table_content);
+                    // row_html_cells accumulated via TableRow/TableCell events
+                    let row_html_cells = std::mem::take(&mut current_table_rows);
                     tables.push(TableInfo {
                         start_line,
                         end_line,
                         formatted_lines: formatted,
+                        row_html_cells,
                     });
+                }
+            }
+
+            // Table row tracking
+            Event::Start(Tag::TableHead) | Event::Start(Tag::TableRow) => {
+                state.push(ParseContext::TableRow { cells: Vec::new() });
+            }
+            Event::End(TagEnd::TableHead) | Event::End(TagEnd::TableRow) => {
+                if let Some(cells) = state.pop_table_row() {
+                    // Render each cell's content via render_inline
+                    let html_cells: Vec<String> = cells
+                        .iter()
+                        .map(|c| render_inline(c))
+                        .collect();
+                    current_table_rows.push(html_cells);
+                }
+            }
+
+            // Table cell tracking
+            Event::Start(Tag::TableCell) => {
+                state.push(ParseContext::TableCell { text: String::new() });
+            }
+            Event::End(TagEnd::TableCell) => {
+                if let Some(cell_text) = state.pop_table_cell() {
+                    state.add_cell_to_row(cell_text);
                 }
             }
 
@@ -327,13 +411,16 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
                 }
             }
 
-            // Text accumulation for headings and portal links
+            // Text accumulation for headings, portal links, and table cells
             Event::Text(text) | Event::Code(text) => {
                 if let Some(heading_text) = state.current_heading_text() {
                     heading_text.push_str(&text);
                 }
                 if let Some(portal_text) = state.current_portal_text() {
                     portal_text.push_str(&text);
+                }
+                if let Some(cell_text) = state.current_cell_text() {
+                    cell_text.push_str(&text);
                 }
             }
 

@@ -196,10 +196,15 @@
               </span>
             </td>
             {#each cells as cell, colIndex}
+              {@const cellHtml = line.html?.type === 'cells' ? line.html.value[colIndex] : null}
               {#if isHeader}
-                <th class="table-cell" style:text-align={getAlignStyle(colIndex)}>{cell}</th>
+                <th class="table-cell" style:text-align={getAlignStyle(colIndex)}>
+                  {#if cellHtml}{@html cellHtml}{:else}{cell}{/if}
+                </th>
               {:else}
-                <td class="table-cell" style:text-align={getAlignStyle(colIndex)}>{cell}</td>
+                <td class="table-cell" style:text-align={getAlignStyle(colIndex)}>
+                  {#if cellHtml}{@html cellHtml}{:else}{cell}{/if}
+                </td>
               {/if}
             {/each}
           </tr>

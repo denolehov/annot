@@ -141,8 +141,8 @@
             <span class="portal-label">{portalSemantics.label}</span>
             <span class="portal-path">{portalSemantics.path}#{portalSemantics.range}</span>
           </span>
-        {:else if line.html}
-          {@html line.html}
+        {:else if line.html?.type === 'full'}
+          {@html line.html.value}
         {:else}
           {line.content}
         {/if}

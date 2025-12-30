@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use crate::highlight::Highlighter;
 use crate::markdown::PortalInfo;
-use crate::state::{Line, LineOrigin, LineSemantics, PortalSemantics};
+use crate::state::{Line, LineHtml, LineOrigin, LineSemantics, PortalSemantics};
 
 // =============================================================================
 // Constants
@@ -242,7 +242,7 @@ pub fn load_portal(info: &PortalInfo, base_dir: &Path) -> Result<LoadedPortal, P
 
         lines.push(Line {
             content: raw_content,
-            html: Some(html),
+            html: Some(LineHtml::Full(html)),
             origin: LineOrigin::Source {
                 path: source_path.to_string_lossy().to_string(),
                 line: source_line,

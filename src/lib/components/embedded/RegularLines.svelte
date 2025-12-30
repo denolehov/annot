@@ -146,7 +146,7 @@
       class="code"
       class:md={markdownMetadata}
       use:setCodeRef={displayIndex}
-    >{#if line.html}{@html line.html}{:else}{line.content}{/if}</span>
+    >{#if line.html?.type === 'full'}{@html line.html.value}{:else}{line.content}{/if}</span>
     {#if mermaidBlock}
       <button
         class="mermaid-view-btn"

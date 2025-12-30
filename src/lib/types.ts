@@ -40,10 +40,19 @@ export type PortalSemantics =
   | { kind: 'content' }
   | { kind: 'footer' };
 
+/** HTML rendering for a line - either full-line or per-cell (for tables). */
+export type LineHtml =
+  | { type: 'full'; value: string }
+  | { type: 'cells'; value: string[] };
+
 export interface Line {
   content: string;
-  /** Syntax-highlighted HTML with CSS classes, or null if unavailable */
-  html: string | null;
+  /** Rendered HTML for display:
+   * - Full: for code blocks (syntax-highlighted) and markdown (inline formatting)
+   * - Cells: for table rows (per-cell inline formatting)
+   * - null if no rendering needed
+   */
+  html: LineHtml | null;
   /** Where this line originates from. */
   origin: LineOrigin;
   /** Content classification. */

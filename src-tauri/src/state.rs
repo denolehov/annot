@@ -76,16 +76,26 @@ pub enum PortalSemantics {
     Footer,
 }
 
+/// HTML rendering for a line - either full-line or per-cell (for tables).
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "type", content = "value", rename_all = "lowercase")]
+pub enum LineHtml {
+    /// Full-line HTML (code blocks, regular markdown, etc.)
+    Full(String),
+    /// Per-cell HTML for table rows
+    Cells(Vec<String>),
+}
+
 /// A single line of content.
 #[derive(Clone, Debug, Serialize)]
 pub struct Line {
     /// Raw text content of the line.
     pub content: String,
     /// Rendered HTML for display:
-    /// - For code blocks: syntect-highlighted spans
-    /// - For markdown: inline formatting (bold, italic, etc.)
+    /// - Full: for code blocks (syntect-highlighted) and markdown (inline formatting)
+    /// - Cells: for table rows (per-cell inline formatting)
     /// - None if no rendering needed
-    pub html: Option<String>,
+    pub html: Option<LineHtml>,
     /// Where this line originates from.
     pub origin: LineOrigin,
     /// Content classification.
@@ -438,7 +448,7 @@ impl ContentModel {
             .enumerate()
             .map(|(i, line)| {
                 let line_num = (i + 1) as u32;
-                let html = html_lines.get(i).cloned();
+                let html = html_lines.get(i).cloned().map(LineHtml::Full);
                 Line {
                     content: line.to_string(),
                     html,
@@ -555,7 +565,7 @@ impl ContentModel {
 
                 Line {
                     content: line_content.to_string(),
-                    html,
+                    html: html.map(LineHtml::Full),
                     origin,
                     semantics,
                 }
@@ -602,14 +612,31 @@ impl ContentModel {
             }
         }
 
-        // Build set of table lines
+        // Build set of table lines and map line numbers to their HTML cells
         let mut table_lines: HashSet<u32> = HashSet::new();
         let mut table_replacements: HashMap<u32, String> = HashMap::new();
+        let mut table_html_cells: HashMap<u32, Vec<String>> = HashMap::new();
         for table in &md_metadata.tables {
+            // row_html_cells only contains actual data rows (header + body),
+            // not the separator row. We need to map them correctly.
+            let mut html_row_idx = 0;
             for (i, formatted) in table.formatted_lines.iter().enumerate() {
                 let line_num = table.start_line + i as u32;
                 table_lines.insert(line_num);
                 table_replacements.insert(line_num, formatted.clone());
+
+                // Check if this is a separator row (contains only |, -, :, and whitespace)
+                let is_separator = formatted
+                    .chars()
+                    .all(|c| c == '|' || c == '-' || c == ':' || c.is_whitespace());
+
+                if !is_separator {
+                    // Map line number to pre-rendered HTML cells for this row
+                    if let Some(html_cells) = table.row_html_cells.get(html_row_idx) {
+                        table_html_cells.insert(line_num, html_cells.clone());
+                    }
+                    html_row_idx += 1;
+                }
             }
         }
 
@@ -663,15 +690,19 @@ impl ContentModel {
 
                     Line {
                         content: display_content,
-                        html,
+                        html: html.map(LineHtml::Full),
                         origin,
                         semantics,
                     }
                 } else if table_lines.contains(&line_num) {
-                    // Table row: render inline formatting (highlights, bold, etc.)
+                    // Table row: use per-cell HTML if available
+                    let html = table_html_cells
+                        .get(&line_num)
+                        .cloned()
+                        .map(LineHtml::Cells);
                     Line {
                         content: display_content.clone(),
-                        html: Some(markdown::render_inline(&display_content)),
+                        html,
                         origin,
                         semantics: LineSemantics::Markdown(MarkdownSemantics::TableRow),
                     }
@@ -684,7 +715,7 @@ impl ContentModel {
                     };
                     Line {
                         content: display_content,
-                        html: Some(rendered.html),
+                        html: Some(LineHtml::Full(rendered.html)),
                         origin,
                         semantics,
                     }
@@ -892,7 +923,10 @@ mod tests {
 
         // Should have HTML highlighting for Rust
         assert!(response.lines[0].html.is_some());
-        let html = response.lines[0].html.as_ref().unwrap();
+        let html = match response.lines[0].html.as_ref().unwrap() {
+            LineHtml::Full(s) => s.as_str(),
+            LineHtml::Cells(_) => panic!("Expected Full HTML for source file"),
+        };
         assert!(html.contains("class="), "Expected HTML with CSS classes");
     }
 
@@ -1052,9 +1086,16 @@ mod tests {
         for (i, line) in state.content.lines.iter().enumerate() {
             println!("Line {}: content={:?}", i + 1, line.content);
             if let Some(ref html) = line.html {
-                println!("        html={:?}", html);
+                let html_str = match html {
+                    LineHtml::Full(s) => s.as_str(),
+                    LineHtml::Cells(cells) => {
+                        println!("        cells={:?}", cells);
+                        continue;
+                    }
+                };
+                println!("        html={:?}", html_str);
                 // Check for newlines
-                if html.contains('\n') {
+                if html_str.contains('\n') {
                     println!("        WARNING: HTML contains newline!");
                 }
             }
@@ -1064,7 +1105,10 @@ mod tests {
         // Find the deleted doc comment line
         let deleted_line = state.content.lines.iter().find(|l| l.content.starts_with("-///")).unwrap();
         assert!(deleted_line.html.is_some(), "Deleted doc comment should have HTML");
-        let html = deleted_line.html.as_ref().unwrap();
+        let html = match deleted_line.html.as_ref().unwrap() {
+            LineHtml::Full(s) => s.as_str(),
+            LineHtml::Cells(_) => panic!("Expected Full HTML, got Cells"),
+        };
 
         // HTML should not contain newlines
         assert!(!html.contains('\n'), "HTML should not contain newline. Got: {:?}", html);
@@ -1092,10 +1136,20 @@ mod tests {
 
         let html = data_row.html.as_ref().expect("Table row should have HTML");
 
-        assert!(
-            html.contains(r#"<mark class="hl">"#),
-            "Table cells should render ==highlights== as <mark> tags. Got: {:?}",
-            html
-        );
+        // Now HTML is LineHtml::Cells for table rows
+        match html {
+            LineHtml::Cells(cells) => {
+                // Find the cell that contains the highlight
+                let has_highlight = cells.iter().any(|c| c.contains(r#"<mark class="hl">"#));
+                assert!(
+                    has_highlight,
+                    "Table cells should render ==highlights== as <mark> tags. Got cells: {:?}",
+                    cells
+                );
+            }
+            LineHtml::Full(s) => {
+                panic!("Expected Cells HTML for table row, got Full: {:?}", s);
+            }
+        }
     }
 }
