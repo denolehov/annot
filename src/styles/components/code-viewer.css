@@ -543,7 +543,6 @@ div.line.separator-line:hover {
 .separator {
 	border: none;
 	height: 1px;
-	background: var(--border-subtle);
 	margin: 0;
 }
 

@@ -75,8 +75,6 @@
 }
 
 .separator {
-	color: var(--text-muted);
-	margin: 0 6px;
 	font-size: 12px;
 	flex-shrink: 0;
 }
