@@ -44,6 +44,7 @@ parking_lot = "0.12"
 uuid = { version = "1", features = ["v4"] }
 regex = "1.12.2"
 languages = "0.0.2"
+htmlescape = "0.3.1"
 
 [dev-dependencies]
 tempfile = "3.23.0"

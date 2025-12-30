@@ -51,6 +51,7 @@ dependencies = [
  "dirs 5.0.1",
  "fs4",
  "hex",
+ "htmlescape",
  "languages",
  "parking_lot",
  "pulldown-cmark",
@@ -1725,6 +1726,12 @@ dependencies = [
  "markup5ever",
  "match_token",
 ]
+
+[[package]]
+name = "htmlescape"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9025058dae765dee5070ec375f591e2ba14638c63feff74f13805a72e523163"
 
 [[package]]
 name = "http"

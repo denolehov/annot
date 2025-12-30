@@ -598,11 +598,7 @@ fn build_section_hierarchy(sections: &mut [SectionInfo]) {
 
 /// HTML-escape a string for safe display.
 pub fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#x27;")
+    htmlescape::encode_minimal(s)
 }
 
 /// Render a markdown line with structural markers preserved.
@@ -1210,6 +1206,13 @@ mod tests {
     #[test]
     fn html_escape_special_chars() {
         assert_eq!(html_escape("<>&\"'"), "&lt;&gt;&amp;&quot;&#x27;");
+    }
+
+    #[test]
+    fn html_escape_ampersands() {
+        // Plain ampersands get escaped
+        assert_eq!(html_escape("&&"), "&amp;&amp;");
+        assert_eq!(html_escape("foo & bar"), "foo &amp; bar");
     }
 
     // =========================================================================
