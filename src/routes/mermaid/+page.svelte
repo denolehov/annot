@@ -217,7 +217,16 @@
 		// Center = smart fit (scales to fit window + centers)
 		smartFit();
 	}
+
+	function handleKeyDown(e: KeyboardEvent) {
+		if (e.key === 'f') {
+			e.preventDefault();
+			smartFit();
+		}
+	}
 </script>
+
+<svelte:window onkeydown={handleKeyDown} />
 
 <div class="mermaid-window">
 	<header class="window-header" data-tauri-drag-region>
