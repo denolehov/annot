@@ -22,6 +22,7 @@
     onSetExitMode: (modeId: string) => void;
     onTagsChange?: (tags: Tag[]) => void;
     onExitModesChange?: (modes: ExitMode[]) => void;
+    onBookmarkDeleted?: (id: string) => void;
     showToast?: (message: string) => void;
     onOpenSaveModal?: () => void;
     initialState?: InitialState;
@@ -166,6 +167,7 @@
           }));
         } else if (cmd.namespace === 'bookmarks') {
           deleteBookmarkItem(cmd.itemId);
+          onBookmarkDeleted?.(cmd.itemId);
           // Force state update to trigger itemListData recompute
           machineState = { ...machineState };
         }

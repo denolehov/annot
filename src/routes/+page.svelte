@@ -364,6 +364,13 @@
     pendingTagCreation = null;
   }
 
+  function handleBookmarkDeleted(id: string) {
+    if (currentBookmarkId === id) {
+      isBookmarked = false;
+      currentBookmarkId = null;
+    }
+  }
+
   // Handle events from CommandPalette (e.g., theme change)
   function handleCommandPaletteEvent(event: string, payload: unknown) {
     if (event === 'SET_THEME') {
@@ -880,6 +887,7 @@
     onSetExitMode={handleSetExitModeFromPalette}
     onTagsChange={handleTagsChange}
     onExitModesChange={handleExitModesChange}
+    onBookmarkDeleted={handleBookmarkDeleted}
     {showToast}
     onOpenSaveModal={openSaveModal}
     initialState={pendingTagCreation ? { namespace: 'tags', mode: 'create', prefill: { instruction: pendingTagCreation.text } } : undefined}
