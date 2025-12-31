@@ -164,20 +164,14 @@ pub struct Tag {
 }
 
 impl Tag {
-    /// Creates a new tag with a generated 12-character alphanumeric ID.
+    /// Creates a new tag with a generated 12-character ID (jj-style alphabet).
     pub fn new(name: String, instruction: String) -> Self {
         Self {
-            id: generate_id(),
+            id: crate::id::generate(),
             name,
             instruction,
         }
     }
-}
-
-/// Generates a 12-character alphanumeric ID.
-fn generate_id() -> String {
-    use rand::distributions::{Alphanumeric, DistString};
-    Alphanumeric.sample_string(&mut rand::thread_rng(), 12)
 }
 
 /// Content node for structured annotation content.
@@ -257,10 +251,10 @@ pub struct ExitMode {
 }
 
 impl ExitMode {
-    /// Creates a new exit mode with a generated 12-character alphanumeric ID.
+    /// Creates a new exit mode with a generated 12-character ID (jj-style alphabet).
     pub fn new(name: String, color: String, instruction: String, order: u32) -> Self {
         Self {
-            id: generate_id(),
+            id: crate::id::generate(),
             name,
             color,
             instruction,

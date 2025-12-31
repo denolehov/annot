@@ -2,26 +2,26 @@
 
 use rand::Rng;
 
-/// Alphabet for base32 IDs (jj-style: no vowels, lowercase only).
-/// This avoids accidental words and is case-insensitive friendly.
-const BASE32_ALPHABET: &[u8] = b"0123456789kpqrstvwxyz";
+/// Alphabet for IDs (jj-style: no vowels, no numbers).
+/// This avoids accidental words.
+const ALPHABET: &[u8] = b"kpqrstvwxyzKPQRSTVWXYZ";
 
-/// Generates a 12-character base32 ID.
+/// Generates a 12-character ID.
 ///
-/// IDs are prefix-matchable (e.g., `k3u` can resolve to `k3u3daxdd2wp`).
+/// IDs are prefix-matchable (e.g., `kXp` can resolve to `kXpQrStVwXyZ`).
 ///
 /// # Example
 /// ```
 /// let id = annot_lib::id::generate();
 /// assert_eq!(id.len(), 12);
-/// assert!(id.chars().all(|c| "0123456789kpqrstvwxyz".contains(c)));
+/// assert!(id.chars().all(|c| "kpqrstvwxyzKPQRSTVWXYZ".contains(c)));
 /// ```
 pub fn generate() -> String {
     let mut rng = rand::thread_rng();
     (0..12)
         .map(|_| {
-            let idx = rng.gen_range(0..BASE32_ALPHABET.len());
-            BASE32_ALPHABET[idx] as char
+            let idx = rng.gen_range(0..ALPHABET.len());
+            ALPHABET[idx] as char
         })
         .collect()
 }
@@ -41,7 +41,7 @@ mod tests {
         let id = generate();
         for c in id.chars() {
             assert!(
-                "0123456789kpqrstvwxyz".contains(c),
+                "kpqrstvwxyzKPQRSTVWXYZ".contains(c),
                 "Invalid character in ID: {}",
                 c
             );
