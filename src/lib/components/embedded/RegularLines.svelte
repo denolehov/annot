@@ -4,13 +4,15 @@
    *
    * Handles regular markdown lines, diff lines, and their annotations.
    */
-  import type { Line, MarkdownMetadata, Tag, CodeBlockInfo } from '$lib/types';
+  import type { Line, MarkdownMetadata, Tag, CodeBlockInfo, SectionInfo } from '$lib/types';
   import type { Range } from '$lib/range';
   import type { JSONContent } from '@tiptap/core';
   import type { SearchMatch } from '$lib/composables/useSearch.svelte';
   import { rangeToKey } from '$lib/range';
   import { getLineNumber, getDiffKind } from '$lib/line-utils';
   import { highlightMatches, clearHighlights } from '$lib/search-highlight';
+  import { invoke } from '@tauri-apps/api/core';
+  import Icon from '$lib/CommandPalette/Icon.svelte';
   import AnnotationSlot, { type AnnotationSlotProps } from '$lib/components/AnnotationSlot.svelte';
 
   interface DisplayLine {
@@ -83,6 +85,24 @@
     };
   }
 
+  /**
+   * Get section info for a line if it's a markdown heading.
+   */
+  function getSectionAt(lineNum: number): SectionInfo | null {
+    if (!markdownMetadata?.sections) return null;
+    return markdownMetadata.sections.find(s => s.source_line === lineNum) ?? null;
+  }
+
+  /**
+   * Copy a section to clipboard.
+   */
+  async function copySection(section: SectionInfo) {
+    await invoke('copy_section', {
+      startLine: section.source_line,
+      endLine: section.end_line,
+    });
+  }
+
   // Apply search highlights when matches change
   $effect(() => {
     // Clear all previous highlights first
@@ -107,6 +127,7 @@
   {@const sourceLineNum = getLineNumber(line)}
   {@const diffKind = getDiffKind(line)}
   {@const mermaidBlock = sourceLineNum !== null ? getMermaidBlockAt(sourceLineNum) : null}
+  {@const sectionInfo = sourceLineNum !== null ? getSectionAt(sourceLineNum) : null}
   <div
     class="line"
     class:selected={isSelected(displayIndex)}
@@ -158,6 +179,15 @@
         </svg>
       </button>
     {/if}
+    {#if sectionInfo}
+      <button
+        class="copy-section-btn"
+        onclick={() => copySection(sectionInfo)}
+        title="Copy section"
+      >
+        <Icon name="copy-code" />
+      </button>
+    {/if}
   </div>
   {@const annotationAtLine = getAnnotationAtLine(displayIndex)}
   {@const isLastSelectedLine = displayIndex === lastSelectedLine && interactionRange && interactionPhase !== 'selecting'}
@@ -193,5 +223,36 @@
 
   .mermaid-view-btn svg {
     display: block;
+  }
+
+  .copy-section-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 8px;
+    padding: 2px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 16px;
+    opacity: 0;
+    transition: color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+  }
+
+  .line:hover .copy-section-btn {
+    opacity: 1;
+  }
+
+  .copy-section-btn:hover {
+    color: var(--text-secondary);
+    background: var(--bg-hover);
+  }
+
+  .copy-section-btn:focus-visible {
+    outline: 1px solid var(--focus-ring);
+    outline-offset: 2px;
+    opacity: 1;
   }
 </style>

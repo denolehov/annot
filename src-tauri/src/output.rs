@@ -144,6 +144,101 @@ fn format_portal_code_block(portal: &LoadedPortal) -> String {
     block
 }
 
+/// Export a section (line range) from markdown content.
+///
+/// Like `export_content`, but only includes lines in [start_line, end_line].
+/// Portal content is included if the portal link appears within the range.
+pub fn export_section(content: &ContentModel, start_line: u32, end_line: u32) -> String {
+    // Filter lines by source line number (excluding portal-interleaved lines)
+    // Then handle portals whose source link is in range
+
+    // Build a map of portal insert positions within our range
+    let mut portal_inserts: HashMap<u32, Vec<&LoadedPortal>> = HashMap::new();
+    for portal in &content.portals {
+        if portal.insert_at >= start_line && portal.insert_at <= end_line {
+            portal_inserts
+                .entry(portal.insert_at)
+                .or_default()
+                .push(portal);
+        }
+    }
+
+    let mut result = String::new();
+    let mut current_line: u32 = 0;
+
+    for line in &content.lines {
+        // Skip portal-interleaved lines (we'll re-emit them as code blocks)
+        if matches!(line.semantics, LineSemantics::Portal(_)) {
+            continue;
+        }
+
+        // Track original line number
+        current_line += 1;
+
+        // Skip lines outside our range
+        if current_line < start_line || current_line > end_line {
+            // But still need to emit portals if any were at this line
+            // (shouldn't happen since portal.insert_at is within range check above)
+            continue;
+        }
+
+        // Emit the line
+        result.push_str(&line.content);
+        result.push('\n');
+
+        // If there are portals to insert after this line, emit them as code blocks
+        if let Some(portals) = portal_inserts.get(&current_line) {
+            for portal in portals {
+                let code_block = format_portal_code_block(portal);
+                if !code_block.is_empty() {
+                    result.push_str(&code_block);
+                }
+            }
+        }
+    }
+
+    // Trim trailing whitespace, blank lines, and separators (---, ___, ***)
+    let result = result.trim_end();
+    let result = trim_trailing_separators(result);
+
+    result.to_string()
+}
+
+/// Trim trailing horizontal rule separators (---, ___, ***) and blank lines.
+fn trim_trailing_separators(s: &str) -> &str {
+    let mut result = s;
+    loop {
+        let trimmed = result.trim_end();
+        // Check for horizontal rules: 3+ of same char (-, _, *)
+        let is_separator = trimmed
+            .rsplit('\n')
+            .next()
+            .map(|last_line| {
+                let line = last_line.trim();
+                if line.len() < 3 {
+                    return false;
+                }
+                let chars: Vec<char> = line.chars().collect();
+                let first = chars[0];
+                (first == '-' || first == '_' || first == '*')
+                    && chars.iter().all(|&c| c == first || c.is_whitespace())
+            })
+            .unwrap_or(false);
+
+        if is_separator {
+            // Remove the separator line
+            if let Some(newline_pos) = trimmed.rfind('\n') {
+                result = &trimmed[..newline_pos];
+            } else {
+                // Entire string is just a separator
+                return "";
+            }
+        } else {
+            return trimmed;
+        }
+    }
+}
+
 /// Collect unique tags from all content nodes (session comment + annotations).
 /// Returns a BTreeMap for alphabetical ordering by tag name.
 fn collect_unique_tags(review: &Review) -> BTreeMap<String, String> {
@@ -1684,5 +1779,47 @@ mod tests {
         let output = format_output(&review, OutputMode::Cli).text;
 
         assert!(!output.contains("Saved to"), "Should not have saved_to line");
+    }
+
+    #[test]
+    fn trim_trailing_separators_removes_dashes() {
+        let input = "# Heading\n\nContent\n\n---";
+        let result = super::trim_trailing_separators(input);
+        assert_eq!(result, "# Heading\n\nContent");
+    }
+
+    #[test]
+    fn trim_trailing_separators_removes_underscores() {
+        let input = "# Heading\n\n___";
+        let result = super::trim_trailing_separators(input);
+        assert_eq!(result, "# Heading");
+    }
+
+    #[test]
+    fn trim_trailing_separators_removes_asterisks() {
+        let input = "Content\n***";
+        let result = super::trim_trailing_separators(input);
+        assert_eq!(result, "Content");
+    }
+
+    #[test]
+    fn trim_trailing_separators_removes_multiple() {
+        let input = "Content\n\n---\n\n***";
+        let result = super::trim_trailing_separators(input);
+        assert_eq!(result, "Content");
+    }
+
+    #[test]
+    fn trim_trailing_separators_preserves_content() {
+        let input = "# Heading\n\nSome content here";
+        let result = super::trim_trailing_separators(input);
+        assert_eq!(result, "# Heading\n\nSome content here");
+    }
+
+    #[test]
+    fn trim_trailing_separators_handles_spaced_separator() {
+        let input = "Content\n- - -";
+        let result = super::trim_trailing_separators(input);
+        assert_eq!(result, "Content");
     }
 }

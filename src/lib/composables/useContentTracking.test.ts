@@ -89,9 +89,9 @@ describe('useContentTracking', () => {
     const tracking = useContentTracking();
     const meta: MarkdownMetadata = {
       sections: [
-        { title: 'Intro', level: 1, source_line: 1, parent_index: null },
-        { title: 'Details', level: 2, source_line: 10, parent_index: 0 },
-        { title: 'More', level: 2, source_line: 25, parent_index: 0 },
+        { title: 'Intro', level: 1, source_line: 1, parent_index: null, end_line: 9 },
+        { title: 'Details', level: 2, source_line: 10, parent_index: 0, end_line: 24 },
+        { title: 'More', level: 2, source_line: 25, parent_index: 0, end_line: 50 },
       ],
       code_blocks: [],
       tables: [],
@@ -112,9 +112,9 @@ describe('useContentTracking', () => {
     const tracking = useContentTracking();
     const meta: MarkdownMetadata = {
       sections: [
-        { title: 'A', level: 1, source_line: 1, parent_index: null },
-        { title: 'B', level: 1, source_line: 20, parent_index: null },
-        { title: 'C', level: 1, source_line: 40, parent_index: null },
+        { title: 'A', level: 1, source_line: 1, parent_index: null, end_line: 19 },
+        { title: 'B', level: 1, source_line: 20, parent_index: null, end_line: 39 },
+        { title: 'C', level: 1, source_line: 40, parent_index: null, end_line: 100 },
       ],
       code_blocks: [],
       tables: [],

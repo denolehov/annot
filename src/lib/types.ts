@@ -128,6 +128,8 @@ export interface SectionInfo {
   level: number;
   title: string;
   parent_index: number | null;
+  /** Last line of section content (inclusive). */
+  end_line: number;
 }
 
 export interface CodeBlockInfo {

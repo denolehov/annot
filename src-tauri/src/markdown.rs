@@ -34,6 +34,9 @@ pub struct SectionInfo {
     pub title: String,
     /// Index of parent section (for breadcrumb), None if top-level.
     pub parent_index: Option<usize>,
+    /// 1-indexed last line of section content (inclusive).
+    /// Computed as the line before the next heading at same or higher level, or EOF.
+    pub end_line: u32,
 }
 
 /// A fenced code block.
@@ -309,6 +312,7 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
                         level,
                         title: text.trim().to_string(),
                         parent_index: None,
+                        end_line: 0, // Computed later by compute_section_boundaries
                     });
                 }
             }
@@ -428,8 +432,14 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
         }
     }
 
+    // Compute total line count for section boundary calculation
+    let total_lines = content.lines().count() as u32;
+
     // Build parent chain for sections
     build_section_hierarchy(&mut sections);
+
+    // Compute section end lines
+    compute_section_boundaries(&mut sections, total_lines);
 
     MarkdownMetadata {
         sections,
@@ -679,6 +689,24 @@ fn build_section_hierarchy(sections: &mut [SectionInfo]) {
 
         // Push current section
         stack.push((i, level));
+    }
+}
+
+/// Compute end_line for each section.
+///
+/// A section ends at the line before the next heading at the same or higher level,
+/// or at EOF if there is no such heading.
+fn compute_section_boundaries(sections: &mut [SectionInfo], total_lines: u32) {
+    for i in 0..sections.len() {
+        let current_level = sections[i].level;
+
+        // Find the next heading at same or higher level (smaller or equal level number)
+        let next_boundary = sections[i + 1..]
+            .iter()
+            .find(|s| s.level <= current_level)
+            .map(|s| s.source_line.saturating_sub(1));
+
+        sections[i].end_line = next_boundary.unwrap_or(total_lines);
     }
 }
 

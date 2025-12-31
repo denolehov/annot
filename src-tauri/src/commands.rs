@@ -7,7 +7,7 @@ use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 use crate::config::{self, Config, Theme};
 use crate::lang::extension_to_fence_language;
-use crate::output::{export_content, format_output, OutputMode};
+use crate::output::{export_content, export_section, format_output, OutputMode};
 use crate::review::ActiveReview;
 use crate::state::{ContentNode, ContentResponse, ExitMode, Tag, TagUsageStats};
 use crate::ShouldExit;
@@ -306,6 +306,29 @@ pub fn copy_to_clipboard(
 
     arboard::Clipboard::new()
         .and_then(|mut cb| cb.set_text(text))
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn copy_section(
+    window: WebviewWindow,
+    review_state: State<ActiveReview>,
+    start_line: u32,
+    end_line: u32,
+) -> Result<(), String> {
+    let guard = review_state.lock();
+    let review = guard.as_ref().ok_or("No active review")?;
+    review.verify_window(window.label())?;
+
+    let content = review.root_view.content();
+    let section_text = export_section(content, start_line, end_line);
+
+    if section_text.is_empty() {
+        return Err("Section is empty".to_string());
+    }
+
+    arboard::Clipboard::new()
+        .and_then(|mut cb| cb.set_text(section_text))
         .map_err(|e| e.to_string())
 }
 

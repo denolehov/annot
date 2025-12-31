@@ -23,10 +23,10 @@ pub mod state;
 pub mod window_state;
 
 use commands::{
-    copy_to_clipboard, cycle_exit_mode, delete_annotation, delete_exit_mode, delete_tag,
-    export_to_obsidian, finish_review, get_config, get_content, get_exit_modes, get_tags,
-    get_theme, reorder_exit_modes, save_config, save_content, set_exit_mode, set_session_comment,
-    set_theme, upsert_annotation, upsert_exit_mode, upsert_tag,
+    copy_section, copy_to_clipboard, cycle_exit_mode, delete_annotation, delete_exit_mode,
+    delete_tag, export_to_obsidian, finish_review, get_config, get_content, get_exit_modes,
+    get_tags, get_theme, reorder_exit_modes, save_config, save_content, set_exit_mode,
+    set_session_comment, set_theme, upsert_annotation, upsert_exit_mode, upsert_tag,
 };
 use excalidraw_window::{
     excalidraw_cancel, excalidraw_save, get_excalidraw_context, open_excalidraw_window,
@@ -53,6 +53,7 @@ macro_rules! all_commands {
             delete_exit_mode,
             reorder_exit_modes,
             copy_to_clipboard,
+            copy_section,
             save_content,
             open_mermaid_window,
             get_mermaid_source,
