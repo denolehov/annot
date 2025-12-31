@@ -999,7 +999,7 @@ export function createSlashSuggestion(
     {
       id: 'replace',
       name: 'replace',
-      description: 'Propose code replacement',
+      description: 'Propose a replacement',
       icon: '✏️',
       action: (editor, range) => {
         // Check if there's already a replace block (limit to one per annotation)
