@@ -109,11 +109,8 @@
     return breadcrumb;
   });
 
-  // Depth-based header display: H1 always, H2 only at depth 2, else ellipsis + current
-  let headerRootSection = $derived(sectionBreadcrumb.find(s => s.level === 1) ?? null);
-  let headerH2Section = $derived(sectionBreadcrumb.find(s => s.level === 2) ?? null);
+  // Header display: show only the current (deepest) section
   let headerCurrentSection = $derived(sectionBreadcrumb.at(-1) ?? null);
-  let headerCurrentDepth = $derived(headerCurrentSection?.level ?? 0);
 
   function updateCurrentPosition() {
     if (!contentEl) return;
@@ -688,10 +685,7 @@
       currentFileIndex={contentTracking.currentFileIndex}
       {currentHunk}
       {sectionBreadcrumb}
-      {headerRootSection}
-      {headerH2Section}
       {headerCurrentSection}
-      {headerCurrentDepth}
       hasSessionComment={sessionComment !== undefined}
       onOpenSessionEditor={openSessionEditor}
       onOpenSaveModal={openSaveModal}

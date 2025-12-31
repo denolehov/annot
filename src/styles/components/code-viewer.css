@@ -490,9 +490,19 @@ div.line.diff-context.annotated {
 	min-width: 0;
 }
 
-.md-header-ellipsis {
+.md-header-sub-sep {
 	color: var(--text-muted);
+	margin: 0 0.25rem;
 	flex-shrink: 0;
+}
+
+.md-header-sub {
+	color: var(--text-primary);
+	font-weight: 500;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	min-width: 0;
 }
 
 /* ===========================================

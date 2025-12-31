@@ -10,10 +10,7 @@
     currentFileIndex: number;
     currentHunk: HunkInfo | null;
     sectionBreadcrumb: SectionInfo[];
-    headerRootSection: SectionInfo | null;
-    headerH2Section: SectionInfo | null;
     headerCurrentSection: SectionInfo | null;
-    headerCurrentDepth: number;
     hasSessionComment: boolean;
     onOpenSessionEditor: () => void;
     onOpenSaveModal: () => void;
@@ -27,10 +24,7 @@
     currentFileIndex,
     currentHunk,
     sectionBreadcrumb,
-    headerRootSection,
-    headerH2Section,
     headerCurrentSection,
-    headerCurrentDepth,
     hasSessionComment,
     onOpenSessionEditor,
     onOpenSaveModal,
@@ -91,30 +85,10 @@
           title={label}
         ><span class="md-header-title">{displayLabel}</span></span>
 
-        <!-- H1 (root) - always shown -->
-        {#if headerRootSection}
+        <!-- Show only the current section (deepest in breadcrumb) -->
+        {#if headerCurrentSection}
           <span class="md-header-sep" data-tauri-drag-region>·</span>
-          <span class="md-header-section md-header-root" data-tauri-drag-region>
-            <span class="md-header-level" data-tauri-drag-region>#</span>
-            <span class="md-header-title" data-tauri-drag-region>{headerRootSection.title}</span>
-          </span>
-        {/if}
-
-        <!-- H2 shown only when current depth is exactly 2 -->
-        {#if headerCurrentDepth === 2 && headerH2Section}
-          <span class="md-header-sep" data-tauri-drag-region>·</span>
-          <span class="md-header-section md-header-current" data-tauri-drag-region>
-            <span class="md-header-level" data-tauri-drag-region>##</span>
-            <span class="md-header-title" data-tauri-drag-region>{headerH2Section.title}</span>
-          </span>
-        {/if}
-
-        <!-- Ellipsis + current section when depth >= 3 -->
-        {#if headerCurrentDepth >= 3 && headerCurrentSection}
-          <span class="md-header-sep" data-tauri-drag-region>·</span>
-          <span class="md-header-ellipsis" data-tauri-drag-region>…</span>
-          <span class="md-header-sep" data-tauri-drag-region>·</span>
-          <span class="md-header-section md-header-current" data-tauri-drag-region>
+          <span class="md-header-section" data-tauri-drag-region>
             <span class="md-header-level" data-tauri-drag-region>{'#'.repeat(headerCurrentSection.level)}</span>
             <span class="md-header-title" data-tauri-drag-region>{headerCurrentSection.title}</span>
           </span>
