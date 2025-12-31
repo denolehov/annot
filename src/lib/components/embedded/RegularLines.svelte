@@ -12,7 +12,7 @@
   import { getLineNumber, getDiffKind } from '$lib/line-utils';
   import { highlightMatches, clearHighlights } from '$lib/search-highlight';
   import { invoke } from '@tauri-apps/api/core';
-  import Icon from '$lib/CommandPalette/Icon.svelte';
+  import CopyButton from '$lib/components/CopyButton.svelte';
   import AnnotationSlot, { type AnnotationSlotProps } from '$lib/components/AnnotationSlot.svelte';
 
   interface DisplayLine {
@@ -180,13 +180,12 @@
       </button>
     {/if}
     {#if sectionInfo}
-      <button
-        class="copy-section-btn"
-        onclick={() => copySection(sectionInfo)}
+      <CopyButton
+        onCopy={() => copySection(sectionInfo)}
         title="Copy section"
-      >
-        <Icon name="copy-code" />
-      </button>
+        hoverOnly
+        class="copy-section-btn"
+      />
     {/if}
   </div>
   {@const annotationAtLine = getAnnotationAtLine(displayIndex)}
@@ -225,34 +224,11 @@
     display: block;
   }
 
-  .copy-section-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+  :global(.copy-section-btn) {
     margin-left: 8px;
-    padding: 2px;
-    background: transparent;
-    border: none;
-    border-radius: 4px;
-    color: var(--text-muted);
-    cursor: pointer;
-    font-size: 16px;
-    opacity: 0;
-    transition: color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
   }
 
-  .line:hover .copy-section-btn {
-    opacity: 1;
-  }
-
-  .copy-section-btn:hover {
-    color: var(--text-secondary);
-    background: var(--bg-hover);
-  }
-
-  .copy-section-btn:focus-visible {
-    outline: 1px solid var(--focus-ring);
-    outline-offset: 2px;
+  .line:hover :global(.copy-section-btn) {
     opacity: 1;
   }
 </style>
