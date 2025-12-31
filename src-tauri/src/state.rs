@@ -191,6 +191,8 @@ pub enum ContentNode {
     Replace { original: String, replacement: String },
     /// System-generated error node (e.g., Mermaid syntax error).
     Error { source: String, message: String },
+    /// Pasted text content collapsed into a chip (large paste).
+    Paste { content: String },
 }
 
 /// A normalized line range (start ≤ end).

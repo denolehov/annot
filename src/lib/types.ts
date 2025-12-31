@@ -152,7 +152,7 @@ export interface Tag {
 }
 
 // Content node types for structured annotation content (output format)
-export type ContentNode = TextNode | TagNode | MediaNode | ExcalidrawNode | ReplaceNode | ErrorNode;
+export type ContentNode = TextNode | TagNode | MediaNode | ExcalidrawNode | ReplaceNode | ErrorNode | PasteNode;
 
 export interface TextNode {
   type: 'text';
@@ -188,6 +188,11 @@ export interface ErrorNode {
   type: 'error';
   source: string; // Error source (e.g., 'mermaid')
   message: string; // Full error message
+}
+
+export interface PasteNode {
+  type: 'paste';
+  content: string; // Full pasted text
 }
 
 // TipTap JSON content type for internal storage

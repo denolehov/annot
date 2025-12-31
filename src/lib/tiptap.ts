@@ -289,6 +289,161 @@ export type TagChipOptions = {
 };
 
 /**
+ * Determine if pasted text should be collapsed into a chip.
+ * Focus on screen real estate - chip when content would visually dominate.
+ */
+export function shouldChip(text: string): boolean {
+  if (!text) return false;
+
+  const lines = text.split('\n');
+  const lineCount = lines.length;
+  const charCount = text.length;
+
+  // Vertical sprawl: takes up too much height
+  if (lineCount >= 20) return true;
+
+  // Horizontal sprawl: massive single/double line (minified, tokens, URLs)
+  if (lineCount <= 2 && charCount >= 600) return true;
+
+  return false;
+}
+
+/**
+ * PasteChip node - an inline, atomic node representing pasted text content.
+ * Rendered as [📋 Pasted (N lines)] in the editor with hover preview.
+ */
+export const PasteChip = Node.create({
+  name: 'pasteChip',
+  group: 'inline',
+  inline: true,
+  atom: true, // Non-editable, treated as single unit
+
+  addAttributes() {
+    return {
+      content: { default: '' }, // Full pasted text
+      lineCount: { default: 1 }, // For display label
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-paste-chip]',
+        getAttrs: (dom) => {
+          const element = dom as HTMLElement;
+          return {
+            content: element.getAttribute('data-content') || '',
+            lineCount: parseInt(element.getAttribute('data-line-count') || '1', 10),
+          };
+        },
+      },
+    ];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    const label = node.attrs.lineCount > 1 ? `Pasted (${node.attrs.lineCount} lines)` : 'Pasted text';
+    return [
+      'span',
+      mergeAttributes(HTMLAttributes, {
+        'data-paste-chip': '',
+        'data-content': node.attrs.content,
+        'data-line-count': node.attrs.lineCount,
+        class: 'tag-chip paste-chip',
+      }),
+      `[📋 ${label}]`,
+    ];
+  },
+
+  addNodeView() {
+    return ({ node }) => {
+      const { content, lineCount } = node.attrs;
+
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip paste-chip';
+      chip.setAttribute('data-paste-chip', '');
+
+      const label = lineCount > 1 ? `Pasted (${lineCount} lines)` : 'Pasted text';
+
+      // Build preview content (max 10 lines, then truncate)
+      const lines = (content as string).split('\n');
+      const maxPreviewLines = 10;
+      const previewLines = lines.slice(0, maxPreviewLines);
+      const hasMore = lines.length > maxPreviewLines;
+
+      let previewHtml = `<pre class="paste-preview-content">${escapeHtml(previewLines.join('\n'))}</pre>`;
+      if (hasMore) {
+        previewHtml += `<div class="paste-preview-more">+${lines.length - maxPreviewLines} more lines</div>`;
+      }
+
+      chip.innerHTML = `
+        <span class="tag-icon">📋</span>
+        <span class="tag-content">${escapeHtml(label)}</span>
+        <div class="chip-tooltip paste-tooltip"><div class="chip-tooltip-content">${previewHtml}</div><div class="chip-tooltip-arrow"></div></div>
+      `;
+
+      // Position tooltip on hover using Floating UI
+      const tooltip = chip.querySelector('.chip-tooltip') as HTMLElement;
+      const arrowEl = chip.querySelector('.chip-tooltip-arrow') as HTMLElement;
+
+      const updatePosition = async () => {
+        const { x, y, placement, middlewareData } = await computePosition(chip, tooltip, {
+          placement: 'top',
+          middleware: [
+            offset(8),
+            flip(),
+            shift({ padding: 8 }),
+            arrow({ element: arrowEl }),
+          ],
+        });
+
+        Object.assign(tooltip.style, {
+          left: `${x}px`,
+          top: `${y}px`,
+        });
+
+        // Position arrow
+        if (middlewareData.arrow) {
+          const { x: arrowX } = middlewareData.arrow;
+          const staticSide = placement.includes('top') ? 'bottom' : 'top';
+
+          Object.assign(arrowEl.style, {
+            left: arrowX != null ? `${arrowX}px` : '',
+            [staticSide]: '-4px',
+          });
+        }
+      };
+
+      chip.addEventListener('mouseenter', updatePosition);
+
+      return { dom: chip };
+    };
+  },
+
+  addKeyboardShortcuts() {
+    return {
+      Backspace: () =>
+        this.editor.commands.command(({ tr, state }) => {
+          let isPasteChip = false;
+          const { selection } = state;
+          const { empty, anchor } = selection;
+
+          if (!empty) return false;
+
+          state.doc.nodesBetween(anchor - 1, anchor, (node, pos) => {
+            if (node.type.name === this.name) {
+              isPasteChip = true;
+              tr.insertText('', pos, pos + node.nodeSize);
+              return false;
+            }
+          });
+
+          return isPasteChip;
+        }),
+    };
+  },
+});
+
+/**
  * MediaChip node - an inline, atomic node representing a pasted image.
  * Rendered as [🖼️ Image] in the editor.
  */
@@ -875,6 +1030,62 @@ export const ImagePasteHandler = Extension.create<ImagePasteHandlerOptions>({
 });
 
 /**
+ * TextPasteHandler extension - intercepts text paste events and inserts PasteChip nodes
+ * for large text content that would visually dominate the editor.
+ */
+export const TextPasteHandler = Extension.create({
+  name: 'textPasteHandler',
+
+  addProseMirrorPlugins() {
+    const editor = this.editor;
+
+    return [
+      new Plugin({
+        key: new PluginKey('textPasteHandler'),
+        props: {
+          handlePaste(view, event) {
+            const clipboardData = event.clipboardData;
+            if (!clipboardData) return false;
+
+            // Only handle if there's no image (let ImagePasteHandler handle those)
+            const hasImage = Array.from(clipboardData.items).some((item) =>
+              item.type.startsWith('image/')
+            );
+            if (hasImage) return false;
+
+            // Get plain text from clipboard
+            const text = clipboardData.getData('text/plain');
+            if (!text) return false;
+
+            // Check if this text should be chipped
+            if (!shouldChip(text)) return false;
+
+            // Insert PasteChip instead of raw text
+            const lineCount = text.split('\n').length;
+            editor
+              .chain()
+              .focus()
+              .insertContent([
+                {
+                  type: 'pasteChip',
+                  attrs: {
+                    content: text,
+                    lineCount,
+                  },
+                },
+                { type: 'text', text: ' ' },
+              ])
+              .run();
+
+            return true; // Consume the event
+          },
+        },
+      }),
+    ];
+  },
+});
+
+/**
  * Create the suggestion configuration for tag autocomplete.
  * Call this with your tags array and callbacks.
  */
@@ -1325,6 +1536,12 @@ export function extractContentNodes(json: JSONContent): ContentNode[] {
         source: node.attrs.source,
         message: node.attrs.message,
       });
+    } else if (node.type === 'pasteChip' && node.attrs) {
+      flushText();
+      nodes.push({
+        type: 'paste',
+        content: node.attrs.content,
+      });
     } else if (node.type === 'bulletList') {
       // Push bullet list context
       listStack.push({ type: 'bullet', index: 0 });
@@ -1484,6 +1701,16 @@ export function contentNodesToTipTap(nodes: ContentNode[] | null): JSONContent |
         attrs: {
           source: node.source,
           message: node.message,
+        },
+      });
+    } else if (node.type === 'paste') {
+      // Insert paste chip inline
+      const lineCount = node.content.split('\n').length;
+      currentParagraph.push({
+        type: 'pasteChip',
+        attrs: {
+          content: node.content,
+          lineCount,
         },
       });
     }

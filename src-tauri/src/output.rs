@@ -688,6 +688,10 @@ fn render_content(
             ContentNode::Error { source, message } => {
                 format!("[ERROR:{}] {}", source, message)
             }
+            ContentNode::Paste { content } => {
+                // Output pasted content as plain text
+                content.clone()
+            }
         })
         .collect::<Vec<_>>()
         .join("")

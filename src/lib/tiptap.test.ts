@@ -8,6 +8,7 @@ import {
   transformReplaceFenceToPreview,
   transformReplacePreviewToFence,
   ReplacePreview,
+  shouldChip,
 } from './tiptap';
 import { Editor, type JSONContent } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -1116,5 +1117,106 @@ describe('ReplacePreview position verification', () => {
     // So replacePreview should be at position 7
     const secondNode = editor.state.doc.nodeAt(7);
     expect(secondNode?.type.name).toBe('replacePreview');
+  });
+});
+
+describe('shouldChip', () => {
+  it('returns false for empty text', () => {
+    expect(shouldChip('')).toBe(false);
+  });
+
+  it('returns false for short single line', () => {
+    expect(shouldChip('Hello world')).toBe(false);
+  });
+
+  it('returns false for short multi-line text (under 6 lines)', () => {
+    const text = 'Line 1\nLine 2\nLine 3\nLine 4\nLine 5';
+    expect(shouldChip(text)).toBe(false);
+  });
+
+  it('returns true for tall content (6+ lines)', () => {
+    const text = 'Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6';
+    expect(shouldChip(text)).toBe(true);
+  });
+
+  it('returns true for code block (10 lines)', () => {
+    const code = Array(10).fill('const x = 1;').join('\n');
+    expect(shouldChip(code)).toBe(true);
+  });
+
+  it('returns false for normal paragraph (3 lines, under 400 chars)', () => {
+    const text = 'This is the first sentence of my paragraph.\nThis is the second line.\nAnd this is the third.';
+    expect(shouldChip(text)).toBe(false);
+  });
+
+  it('returns true for horizontal sprawl (single line, 400+ chars)', () => {
+    const longLine = 'x'.repeat(400);
+    expect(shouldChip(longLine)).toBe(true);
+  });
+
+  it('returns true for horizontal sprawl (2 lines, 400+ chars)', () => {
+    const text = 'x'.repeat(200) + '\n' + 'y'.repeat(201);
+    expect(shouldChip(text)).toBe(true);
+  });
+
+  it('returns false for 3 lines with 400+ chars (not horizontal sprawl)', () => {
+    // 3 lines means it's not a "massive single/double line" case
+    const text = 'x'.repeat(150) + '\n' + 'y'.repeat(150) + '\n' + 'z'.repeat(150);
+    expect(shouldChip(text)).toBe(false);
+  });
+
+  it('returns true for minified JSON (single long line)', () => {
+    const json = '{"key":"value","nested":{"a":1,"b":2},"array":[1,2,3,4,5]}'.repeat(10);
+    expect(json.length).toBeGreaterThan(400);
+    expect(shouldChip(json)).toBe(true);
+  });
+
+  it('returns true for stack trace (20 lines)', () => {
+    const stackTrace = Array(20).fill('at SomeClass.method (file.ts:123:45)').join('\n');
+    expect(shouldChip(stackTrace)).toBe(true);
+  });
+
+  it('returns false for short URL', () => {
+    expect(shouldChip('https://example.com/page')).toBe(false);
+  });
+
+  it('returns true for very long URL', () => {
+    const longUrl = 'https://example.com/' + 'a'.repeat(400);
+    expect(shouldChip(longUrl)).toBe(true);
+  });
+});
+
+/** Create a pasteChip node */
+const pasteChip = (content: string, lineCount: number): JSONContent => ({
+  type: 'pasteChip',
+  attrs: { content, lineCount },
+});
+
+describe('extractContentNodes with pasteChip', () => {
+  it('extracts pasteChip as PasteNode', () => {
+    const input = doc(p(pasteChip('Hello\nWorld', 2)));
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({ type: 'paste', content: 'Hello\nWorld' });
+  });
+
+  it('extracts pasteChip mixed with text', () => {
+    const input = doc(p('See this: ', pasteChip('code here', 1), ' for details'));
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(3);
+    expect(nodes[0]).toEqual({ type: 'text', text: 'See this: ' });
+    expect(nodes[1]).toEqual({ type: 'paste', content: 'code here' });
+    expect(nodes[2]).toEqual({ type: 'text', text: ' for details' });
+  });
+
+  it('extracts multiple pasteChips', () => {
+    const input = doc(
+      p(pasteChip('first paste', 1)),
+      p(pasteChip('second paste', 2))
+    );
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(2);
+    expect(nodes[0]).toEqual({ type: 'paste', content: 'first paste' });
+    expect(nodes[1]).toEqual({ type: 'paste', content: 'second paste' });
   });
 });

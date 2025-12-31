@@ -7,7 +7,9 @@ import {
   isContentEmpty,
   TagChip,
   MediaChip,
+  PasteChip,
   ImagePasteHandler,
+  TextPasteHandler,
   ExcalidrawChip,
   ExcalidrawPlaceholder,
   ReplacePreview,
@@ -133,6 +135,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
           },
         }),
         MediaChip,
+        PasteChip,
         ExcalidrawChip,
         ExcalidrawPlaceholder,
         ReplacePreview,
@@ -141,6 +144,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
           allowsImagePaste: initialAllowsImagePaste,
           onPasteBlocked: initialOnImagePasteBlocked,
         }),
+        TextPasteHandler,
         SlashCommands.configure({
           suggestion: {
             ...createSlashSuggestion({

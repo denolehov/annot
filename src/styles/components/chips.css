@@ -81,6 +81,46 @@
 	border-color: #3b82f6;
 }
 
+/* Color variant for pasted text content - subtle cyan tint */
+.paste-chip {
+	background:
+		var(--chip-pattern-bg),
+		color-mix(in srgb, var(--bg-code-block) 95%, #06b6d4 5%);
+	background-size: var(--chip-pattern-size), auto;
+	color: var(--text-secondary);
+	cursor: default;
+}
+
+.paste-chip:hover {
+	border-color: #06b6d4;
+}
+
+/* Paste tooltip has wider max-width for code preview */
+.paste-tooltip .chip-tooltip-content {
+	max-width: 500px;
+	padding: 0;
+	overflow: hidden;
+}
+
+.paste-tooltip .paste-preview-content {
+	margin: 0;
+	padding: 8px 12px;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	line-height: 1.5;
+	white-space: pre;
+	overflow: hidden;
+	max-height: 300px;
+}
+
+.paste-tooltip .paste-preview-more {
+	padding: 4px 12px;
+	font-size: 10px;
+	color: var(--text-muted);
+	background: color-mix(in srgb, var(--tooltip-bg) 90%, #000 10%);
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 /* Color variant for Excalidraw diagrams - subtle green tint */
 .excalidraw-chip {
 	background:
