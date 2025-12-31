@@ -291,8 +291,12 @@
                 <button
                   class="codeblock-action-btn"
                   onclick={onExcalidrawOpen}
-                  disabled={!excalidrawSupported}
-                  title={excalidrawSupported ? "Edit in Excalidraw" : "Only flowchart, sequence, and class diagrams can be edited in Excalidraw"}
+                  disabled={!excalidrawSupported || !!mermaidError}
+                  title={mermaidError
+                    ? "Fix syntax error before editing in Excalidraw"
+                    : excalidrawSupported
+                      ? "Edit in Excalidraw"
+                      : "Only flowchart, sequence, and class diagrams can be edited in Excalidraw"}
                 >
                   <Icon name="excalidraw" />
                 </button>
