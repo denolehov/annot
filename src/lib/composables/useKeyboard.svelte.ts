@@ -7,6 +7,7 @@ export interface KeyboardHandlers {
   onOpenSaveModal?: () => void;
   onOpenSearch?: () => void;
   onCreateBookmark?: () => void;
+  onEditLastBookmark?: () => void;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onZoomReset?: () => void;
@@ -29,6 +30,8 @@ export interface KeyboardState {
   hasExitModes: () => boolean;
   /** Whether the hovered line is selectable */
   isHoveredLineSelectable: () => boolean;
+  /** Whether there's a last created bookmark that can be edited */
+  hasLastCreatedBookmark: () => boolean;
 }
 
 export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
@@ -92,6 +95,14 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
       if (isInEditorOrInput()) return;
       e.preventDefault();
       handlers.onCreateBookmark?.();
+      return;
+    }
+
+    // 'e' to edit last created bookmark
+    if (e.key === 'e' && !e.metaKey && !e.ctrlKey && state.hasLastCreatedBookmark() && !state.isEditorActive() && !state.isCommandPaletteOpen()) {
+      if (isInEditorOrInput()) return;
+      e.preventDefault();
+      handlers.onEditLastBookmark?.();
       return;
     }
 

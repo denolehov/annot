@@ -120,8 +120,9 @@ export type State =
 // === Actions ===
 
 export interface InitialState {
-  namespace: 'tags' | 'exit-modes';
-  mode: 'create';
+  namespace: 'tags' | 'exit-modes' | 'bookmarks';
+  mode: 'create' | 'edit';
+  itemId?: string; // For edit mode - which item to edit
   prefill?: Record<string, string>;
 }
 

@@ -58,6 +58,11 @@
   let toastExiting = $state(false);
   let toastTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  // Last created bookmark for [e] edit flow
+  let lastCreatedBookmarkId = $state<string | null>(null);
+  // Bookmark ID to edit when opening command palette (set by e key, cleared after use)
+  let editBookmarkId = $state<string | null>(null);
+
   function showToast(message: string, duration = 3000) {
     if (toastTimeout) clearTimeout(toastTimeout);
     toastMessage = message;
@@ -347,27 +352,41 @@
       await deleteBookmarkItem(currentBookmarkId);
       isBookmarked = false;
       currentBookmarkId = null;
+      lastCreatedBookmarkId = null;
       showToast('Bookmark removed');
     } else {
       const bookmark = await createBookmark();
       const shortId = bookmark.id.slice(0, 3);
       isBookmarked = true;
       currentBookmarkId = bookmark.id;
-      showToast(`Bookmarked as ${shortId}`);
+      lastCreatedBookmarkId = bookmark.id;
+      showToast(`Bookmarked as ${shortId} · [e] edit`);
+    }
+  }
+
+  // Edit last created bookmark handler
+  function handleEditLastBookmark() {
+    if (lastCreatedBookmarkId) {
+      editBookmarkId = lastCreatedBookmarkId;
+      commandPaletteOpen = true;
     }
   }
 
   // CommandPalette handlers
   function handleCommandPaletteClose() {
     commandPaletteOpen = false;
-    // Clear pending tag creation if cancelled
+    // Clear pending states
     pendingTagCreation = null;
+    editBookmarkId = null;
   }
 
   function handleBookmarkDeleted(id: string) {
     if (currentBookmarkId === id) {
       isBookmarked = false;
       currentBookmarkId = null;
+    }
+    if (lastCreatedBookmarkId === id) {
+      lastCreatedBookmarkId = null;
     }
   }
 
@@ -601,6 +620,7 @@
       onOpenSaveModal: openSaveModal,
       onOpenSearch: () => search.open(),
       onCreateBookmark: handleToggleBookmark,
+      onEditLastBookmark: handleEditLastBookmark,
       onZoomIn: () => contentZoom = Math.min(contentZoom + 0.1, 3.0),
       onZoomOut: () => contentZoom = Math.max(contentZoom - 0.1, 0.5),
       onZoomReset: () => contentZoom = 1.0,
@@ -618,6 +638,7 @@
       hasHoveredLine: () => interaction.hoverLine !== null,
       hasExitModes: () => exitModeState.modes.length > 0,
       isHoveredLineSelectable: () => interaction.hoverLine !== null && isLineSelectable(interaction.hoverLine),
+      hasLastCreatedBookmark: () => !!lastCreatedBookmarkId,
     }
   );
 
@@ -890,7 +911,11 @@
     onBookmarkDeleted={handleBookmarkDeleted}
     {showToast}
     onOpenSaveModal={openSaveModal}
-    initialState={pendingTagCreation ? { namespace: 'tags', mode: 'create', prefill: { instruction: pendingTagCreation.text } } : undefined}
+    initialState={pendingTagCreation
+      ? { namespace: 'tags', mode: 'create', prefill: { instruction: pendingTagCreation.text } }
+      : editBookmarkId
+        ? { namespace: 'bookmarks', mode: 'edit', itemId: editBookmarkId }
+        : undefined}
     onItemCreated={handleItemCreated}
     onEvent={handleCommandPaletteEvent}
   />

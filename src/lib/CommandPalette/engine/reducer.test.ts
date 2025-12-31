@@ -648,3 +648,65 @@ describe('reducer: single-action namespace auto-execute', () => {
     });
   });
 });
+
+describe('reducer: initial state', () => {
+  const ctx = createMockContext(
+    [tagsNamespace, copyNamespace],
+    { tags: regularItems, copy: actionItems }
+  );
+
+  describe('OPEN with edit initialState', () => {
+    it('opens directly in EDIT_FORM for valid item', () => {
+      const state: State = { type: 'IDLE' };
+      const result = reduce(
+        state,
+        { type: 'OPEN', initialState: { namespace: 'tags', mode: 'edit', itemId: 'tag-1' } },
+        ctx
+      );
+
+      expect(result.state.type).toBe('EDIT_FORM');
+      if (result.state.type === 'EDIT_FORM') {
+        expect(result.state.item.id).toBe('tag-1');
+        expect(result.state.namespace.id).toBe('tags');
+        expect(result.state.focusedField).toBe(0);
+      }
+    });
+
+    it('falls back to NAMESPACE_FILTER if item not found', () => {
+      const state: State = { type: 'IDLE' };
+      const result = reduce(
+        state,
+        { type: 'OPEN', initialState: { namespace: 'tags', mode: 'edit', itemId: 'nonexistent' } },
+        ctx
+      );
+
+      expect(result.state.type).toBe('NAMESPACE_FILTER');
+    });
+
+    it('falls back to NAMESPACE_FILTER if namespace not found', () => {
+      const state: State = { type: 'IDLE' };
+      const result = reduce(
+        state,
+        { type: 'OPEN', initialState: { namespace: 'bookmarks', mode: 'edit', itemId: 'tag-1' } },
+        ctx
+      );
+
+      expect(result.state.type).toBe('NAMESPACE_FILTER');
+    });
+
+    it('falls back to NAMESPACE_FILTER if item is not editable', () => {
+      const ctxWithReadonly = createMockContext(
+        [tagsNamespace],
+        { tags: [{ id: 'tag-1', name: 'TODO', values: { name: 'TODO' }, readonly: true }] }
+      );
+      const state: State = { type: 'IDLE' };
+      const result = reduce(
+        state,
+        { type: 'OPEN', initialState: { namespace: 'tags', mode: 'edit', itemId: 'tag-1' } },
+        ctxWithReadonly
+      );
+
+      expect(result.state.type).toBe('NAMESPACE_FILTER');
+    });
+  });
+});

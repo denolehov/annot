@@ -36,7 +36,7 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
       if (action.type === 'OPEN') {
         commands.push({ type: 'EMIT_EVENT', event: 'commandpalette:open', payload: undefined });
 
-        // If initialState provided, jump directly to CREATE_FORM
+        // If initialState provided, jump directly to appropriate form
         if (action.initialState?.mode === 'create') {
           const namespace = ctx.namespaces.find((ns) => ns.id === action.initialState!.namespace);
           if (namespace) {
@@ -50,6 +50,27 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
               },
               commands,
             };
+          }
+        }
+
+        // If initialState is edit mode, jump directly to EDIT_FORM
+        if (action.initialState?.mode === 'edit' && action.initialState.itemId) {
+          const namespace = ctx.namespaces.find((ns) => ns.id === action.initialState!.namespace);
+          if (namespace) {
+            const items = ctx.getItems(namespace);
+            const item = items.find((i) => i.id === action.initialState!.itemId);
+            if (item && isItemEditable(item)) {
+              return {
+                state: {
+                  type: 'EDIT_FORM',
+                  namespace,
+                  item,
+                  values: { ...item.values },
+                  focusedField: 0,
+                },
+                commands,
+              };
+            }
           }
         }
 

@@ -15,6 +15,7 @@ describe('useKeyboard', () => {
     hasHoveredLine: () => false,
     hasExitModes: () => true,
     isHoveredLineSelectable: () => true,
+    hasLastCreatedBookmark: () => false,
   };
 
   function createKeyboardEvent(key: string, options: Partial<KeyboardEvent> = {}): KeyboardEvent {
@@ -214,5 +215,55 @@ describe('useKeyboard', () => {
     keyboard.handleKeyDown(createKeyboardEvent('c', { metaKey: true }));
 
     expect(onCommentHoveredLine).not.toHaveBeenCalled();
+  });
+
+  it('calls onEditLastBookmark when "e" is pressed and hasLastCreatedBookmark', () => {
+    const onEditLastBookmark = vi.fn();
+    const keyboard = useKeyboard({ onEditLastBookmark }, {
+      ...defaultState,
+      hasLastCreatedBookmark: () => true,
+    });
+
+    keyboard.handleKeyDown(createKeyboardEvent('e'));
+
+    expect(onEditLastBookmark).toHaveBeenCalled();
+  });
+
+  it('does not edit bookmark when hasLastCreatedBookmark is false', () => {
+    const onEditLastBookmark = vi.fn();
+    const keyboard = useKeyboard({ onEditLastBookmark }, {
+      ...defaultState,
+      hasLastCreatedBookmark: () => false,
+    });
+
+    keyboard.handleKeyDown(createKeyboardEvent('e'));
+
+    expect(onEditLastBookmark).not.toHaveBeenCalled();
+  });
+
+  it('does not edit bookmark when command palette is open', () => {
+    const onEditLastBookmark = vi.fn();
+    const keyboard = useKeyboard({ onEditLastBookmark }, {
+      ...defaultState,
+      hasLastCreatedBookmark: () => true,
+      isCommandPaletteOpen: () => true,
+    });
+
+    keyboard.handleKeyDown(createKeyboardEvent('e'));
+
+    expect(onEditLastBookmark).not.toHaveBeenCalled();
+  });
+
+  it('does not edit bookmark when editor is active', () => {
+    const onEditLastBookmark = vi.fn();
+    const keyboard = useKeyboard({ onEditLastBookmark }, {
+      ...defaultState,
+      hasLastCreatedBookmark: () => true,
+      isEditorActive: () => true,
+    });
+
+    keyboard.handleKeyDown(createKeyboardEvent('e'));
+
+    expect(onEditLastBookmark).not.toHaveBeenCalled();
   });
 });
