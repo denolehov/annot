@@ -299,11 +299,11 @@ export function shouldChip(text: string): boolean {
   const lineCount = lines.length;
   const charCount = text.length;
 
-  // Vertical sprawl: takes up too much height
-  if (lineCount >= 20) return true;
+  // Vertical sprawl: takes up too much height (6+ lines)
+  if (lineCount >= 6) return true;
 
   // Horizontal sprawl: massive single/double line (minified, tokens, URLs)
-  if (lineCount <= 2 && charCount >= 600) return true;
+  if (lineCount <= 2 && charCount >= 400) return true;
 
   return false;
 }
