@@ -230,6 +230,9 @@
 	--font-mono: "JetBrains Mono", monospace;
 	--font-ui: "Inter", sans-serif;
 
+	/* Editor Typography */
+	--editor-line-height: 22px;
+
 	/* Chip/Tag Sizing */
 	--chip-height: 20px;
 	--chip-radius: 4px;

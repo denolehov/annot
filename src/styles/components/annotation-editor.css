@@ -76,8 +76,8 @@
 	padding-bottom: 0;
 }
 
-/* Hide ProseMirror trailing break in sealed state - no cursor needed */
-.annotation-editor.sealed .ProseMirror-trailingBreak {
+/* Hide trailing empty paragraph in sealed state - no cursor/extra space needed */
+.annotation-editor.sealed p:has(.ProseMirror-trailingBreak) {
 	display: none;
 }
 
@@ -88,12 +88,13 @@
 	outline: none;
 	font-family: var(--font-ui);
 	font-size: 14px;
-	line-height: 22px;
+	line-height: var(--editor-line-height);
 	color: var(--text-primary);
 }
 
 .editor-content .tiptap p {
 	margin: 0;
+	min-height: var(--editor-line-height); /* Preserve empty paragraphs (deliberate blank lines) */
 }
 
 .editor-content .tiptap p.is-editor-empty:first-child::before {
