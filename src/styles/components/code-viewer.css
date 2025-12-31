@@ -50,6 +50,13 @@ header.header {
 	-webkit-app-region: no-drag;
 }
 
+.zoom-indicator {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	color: var(--fg-muted);
+	padding: 0 4px;
+}
+
 /* Sticky header container */
 .sticky-header {
 	position: sticky;

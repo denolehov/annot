@@ -690,6 +690,7 @@
       onOpenSessionEditor={openSessionEditor}
       onOpenSaveModal={openSaveModal}
       {showToast}
+      zoomLevel={contentZoom}
     />
     <SessionEditor
       content={sessionComment}

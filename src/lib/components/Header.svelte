@@ -15,6 +15,7 @@
     onOpenSessionEditor: () => void;
     onOpenSaveModal: () => void;
     showToast: (message: string) => void;
+    zoomLevel: number;
   }
 
   let {
@@ -28,7 +29,8 @@
     hasSessionComment,
     onOpenSessionEditor,
     onOpenSaveModal,
-    showToast
+    showToast,
+    zoomLevel
   }: Props = $props();
 
   const diffMetadata = $derived(metadata.type === 'diff' ? metadata : null);
@@ -106,6 +108,9 @@
     {/if}
   </div>
   <div class="header-right">
+    {#if zoomLevel !== 1.0}
+      <span class="zoom-indicator">{Math.round(zoomLevel * 100)}%</span>
+    {/if}
     <CopyDropdown {showToast} />
     <button class="header-btn" onclick={onOpenSaveModal} title="Save to file (Cmd+S)">
       <Icon name="save" />
