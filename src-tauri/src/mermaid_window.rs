@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager, State, WebviewWindow, WebviewWindowBuilder};
 
+use crate::window_state::{self, WindowType};
+
 /// Context for a mermaid diagram window.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct MermaidContext {
@@ -99,9 +101,20 @@ pub fn open_mermaid_window(
         builder = builder.traffic_light_position(tauri::LogicalPosition::new(12.0, 22.0));
     }
 
-    let _new_window = builder
+    let new_window = builder
         .build()
         .map_err(|e| format!("Failed to create mermaid window: {}", e))?;
+
+    // Restore saved position/size (or keep defaults)
+    window_state::restore_window_state(&new_window, WindowType::Mermaid);
+
+    // Save window state on close
+    let window_for_save = new_window.clone();
+    new_window.on_window_event(move |event| {
+        if let tauri::WindowEvent::CloseRequested { .. } = event {
+            let _ = window_state::save_window_state(&window_for_save, WindowType::Mermaid);
+        }
+    });
 
     Ok(label)
 }

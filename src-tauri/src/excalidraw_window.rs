@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow, WebviewWindowBuilder};
 use uuid::Uuid;
 
+use crate::window_state::{self, WindowType};
+
 /// Reference to a TipTap node being edited.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", content = "id")]
@@ -159,35 +161,46 @@ pub fn open_excalidraw_window(
         .build()
         .map_err(|e| format!("Failed to create excalidraw window: {}", e))?;
 
-    // Center window on screen
-    let _ = new_window.center();
+    // Restore saved position/size, or center if no saved state
+    if !window_state::restore_window_state(&new_window, WindowType::Excalidraw) {
+        let _ = new_window.center();
+    }
 
-    // Register cleanup on window close
+    // Register window event handlers
     let label_for_cleanup = label.clone();
     let app_for_cleanup = app.clone();
+    let window_for_save = new_window.clone();
 
     new_window.on_window_event(move |event| {
-        if let tauri::WindowEvent::Destroyed = event {
-            // Get state from app handle
-            let state: tauri::State<Mutex<ExcalidrawWindowState>> = app_for_cleanup.state();
-            let mut state = state.lock();
-            // If context still exists, user closed without save/cancel - treat as cancel
-            if let Some(ctx) = state.contexts.remove(&label_for_cleanup) {
-                // Only emit cancel for Annotation origin (TipTap needs to clean up placeholder)
-                // CodeBlock origin doesn't need cancel notification - nothing to clean up
-                if matches!(ctx.origin, ExcalidrawOrigin::Annotation) {
-                    if let Some(parent) = app_for_cleanup.get_webview_window(&ctx.parent_label) {
-                        let _ = parent.emit(
-                            "excalidraw-result",
-                            ExcalidrawResult {
-                                range_key: ctx.range_key,
-                                node_ref: ctx.node_ref,
-                                outcome: ExcalidrawOutcome::Cancelled,
-                            },
-                        );
+        match event {
+            tauri::WindowEvent::CloseRequested { .. } => {
+                // Save window state before close
+                let _ = window_state::save_window_state(&window_for_save, WindowType::Excalidraw);
+            }
+            tauri::WindowEvent::Destroyed => {
+                // Get state from app handle
+                let state: tauri::State<Mutex<ExcalidrawWindowState>> = app_for_cleanup.state();
+                let mut state = state.lock();
+                // If context still exists, user closed without save/cancel - treat as cancel
+                if let Some(ctx) = state.contexts.remove(&label_for_cleanup) {
+                    // Only emit cancel for Annotation origin (TipTap needs to clean up placeholder)
+                    // CodeBlock origin doesn't need cancel notification - nothing to clean up
+                    if matches!(ctx.origin, ExcalidrawOrigin::Annotation) {
+                        if let Some(parent) = app_for_cleanup.get_webview_window(&ctx.parent_label)
+                        {
+                            let _ = parent.emit(
+                                "excalidraw-result",
+                                ExcalidrawResult {
+                                    range_key: ctx.range_key,
+                                    node_ref: ctx.node_ref,
+                                    outcome: ExcalidrawOutcome::Cancelled,
+                                },
+                            );
+                        }
                     }
                 }
             }
+            _ => {}
         }
     });
 

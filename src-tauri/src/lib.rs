@@ -20,6 +20,7 @@ pub mod output;
 pub mod portal;
 pub mod review;
 pub mod state;
+pub mod window_state;
 
 use commands::{
     copy_to_clipboard, cycle_exit_mode, delete_annotation, delete_exit_mode, delete_tag,
@@ -108,10 +109,22 @@ pub fn run(state: AppState, context: tauri::Context) {
                 builder = builder.traffic_light_position(tauri::LogicalPosition::new(12.0, 22.0));
             }
 
-            let _window = builder.build()?;
+            let window = builder.build()?;
+
+            // Restore saved window position/size (or keep defaults)
+            window_state::restore_window_state(&window, window_state::WindowType::Main);
+
+            // Save window state on close
+            let window_for_save = window.clone();
+            window.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { .. } = event {
+                    let _ =
+                        window_state::save_window_state(&window_for_save, window_state::WindowType::Main);
+                }
+            });
 
             #[cfg(debug_assertions)]
-            _window.open_devtools();
+            window.open_devtools();
 
             Ok(())
         })
