@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use fs4::fs_std::FileExt;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::state::{ExitMode, Tag, TagUsageStats};
+use crate::state::{Bookmark, ExitMode, Tag, TagUsageStats};
 
 /// Current config version. Bump when making breaking changes.
 pub const CONFIG_VERSION: u32 = 1;
@@ -77,6 +77,13 @@ impl Mergeable for Tag {
 }
 
 impl Mergeable for ExitMode {
+    type Id = String;
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+}
+
+impl Mergeable for Bookmark {
     type Id = String;
     fn id(&self) -> String {
         self.id.clone()
@@ -199,6 +206,24 @@ pub fn load_exit_modes() -> Vec<ExitMode> {
 /// Saves exit modes to ~/.config/annot/exit-modes.json with locking and merge.
 pub fn save_exit_modes(modes: &[ExitMode], deleted_ids: &HashSet<String>) -> io::Result<()> {
     save_merged("exit-modes.json", modes, deleted_ids)
+}
+
+/// Loads bookmarks from ~/.config/annot/bookmarks.json. Returns empty vec if file doesn't exist.
+pub fn load_bookmarks() -> Vec<Bookmark> {
+    let Some(dir) = config_dir() else {
+        return vec![];
+    };
+
+    let path = dir.join("bookmarks.json");
+    match fs::read_to_string(&path) {
+        Ok(content) => serde_json::from_str(&content).unwrap_or_else(|_| vec![]),
+        Err(_) => vec![],
+    }
+}
+
+/// Saves bookmarks to ~/.config/annot/bookmarks.json with locking and merge.
+pub fn save_bookmarks(bookmarks: &[Bookmark], deleted_ids: &HashSet<String>) -> io::Result<()> {
+    save_merged("bookmarks.json", bookmarks, deleted_ids)
 }
 
 /// Loads tag usage stats from ~/.config/annot/tag-usage.json. Returns default if file doesn't exist.

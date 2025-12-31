@@ -6,6 +6,7 @@ export interface KeyboardHandlers {
   onOpenCommandPalette?: () => void;
   onOpenSaveModal?: () => void;
   onOpenSearch?: () => void;
+  onCreateBookmark?: () => void;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onZoomReset?: () => void;
@@ -83,6 +84,14 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
     if (e.key === 's' && (e.metaKey || e.ctrlKey) && !state.isSaveModalOpen()) {
       e.preventDefault();
       handlers.onOpenSaveModal?.();
+      return;
+    }
+
+    // 'b' for bookmark
+    if (e.key === 'b' && !e.metaKey && !e.ctrlKey && !state.isEditorActive()) {
+      if (isInEditorOrInput()) return;
+      e.preventDefault();
+      handlers.onCreateBookmark?.();
       return;
     }
 

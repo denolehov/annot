@@ -2,6 +2,7 @@
   import {
     SearchIcon,
     HashtagIcon,
+    BookmarkIcon,
     ExitIcon,
     CopyIcon,
     SaveIcon,
@@ -28,6 +29,7 @@
   const icons: Record<string, typeof SearchIcon> = {
     search: SearchIcon,
     hashtag: HashtagIcon,
+    bookmark: BookmarkIcon,
     exit: ExitIcon,
     copy: CopyIcon,
     save: SaveIcon,

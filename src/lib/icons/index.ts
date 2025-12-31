@@ -1,5 +1,6 @@
 export { default as SearchIcon } from './SearchIcon.svelte';
 export { default as HashtagIcon } from './HashtagIcon.svelte';
+export { default as BookmarkIcon } from './BookmarkIcon.svelte';
 export { default as ExitIcon } from './ExitIcon.svelte';
 export { default as CopyIcon } from './CopyIcon.svelte';
 export { default as SaveIcon } from './SaveIcon.svelte';

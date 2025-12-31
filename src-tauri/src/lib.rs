@@ -11,6 +11,7 @@ pub mod diff;
 pub mod error;
 pub mod excalidraw_window;
 pub mod highlight;
+pub mod id;
 pub mod input;
 pub mod lang;
 pub mod markdown;
@@ -23,10 +24,11 @@ pub mod state;
 pub mod window_state;
 
 use commands::{
-    copy_section, copy_to_clipboard, cycle_exit_mode, delete_annotation, delete_exit_mode,
-    delete_tag, export_to_obsidian, finish_review, get_config, get_content, get_exit_modes,
-    get_tags, get_theme, reorder_exit_modes, save_config, save_content, set_exit_mode,
-    set_session_comment, set_theme, upsert_annotation, upsert_exit_mode, upsert_tag,
+    copy_section, copy_to_clipboard, create_bookmark, cycle_exit_mode, delete_annotation,
+    delete_bookmark, delete_exit_mode, delete_tag, export_to_obsidian, finish_review, get_bookmarks,
+    get_config, get_content, get_exit_modes, get_tags, get_theme, reorder_exit_modes, save_config,
+    save_content, set_exit_mode, set_session_comment, set_theme, update_bookmark, upsert_annotation,
+    upsert_exit_mode, upsert_tag,
 };
 use excalidraw_window::{
     excalidraw_cancel, excalidraw_save, get_excalidraw_context, open_excalidraw_window,
@@ -52,6 +54,10 @@ macro_rules! all_commands {
             upsert_exit_mode,
             delete_exit_mode,
             reorder_exit_modes,
+            get_bookmarks,
+            create_bookmark,
+            update_bookmark,
+            delete_bookmark,
             copy_to_clipboard,
             copy_section,
             save_content,

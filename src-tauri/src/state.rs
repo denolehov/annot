@@ -276,6 +276,104 @@ impl ExitMode {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// BOOKMARKS — capture moments of attention for later reference
+// ════════════════════════════════════════════════════════════════════════════
+
+/// A bookmark capturing a moment of attention during an annot session.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Bookmark {
+    /// Unique 12-character base32 ID (prefix-matchable).
+    pub id: String,
+    /// User-provided or auto-derived label.
+    pub label: Option<String>,
+    /// When this bookmark was created.
+    pub created_at: DateTime<Utc>,
+    /// Project context (cwd at creation time).
+    pub project_path: Option<std::path::PathBuf>,
+    /// The captured content snapshot.
+    pub snapshot: BookmarkSnapshot,
+}
+
+/// The content snapshot captured by a bookmark.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum BookmarkSnapshot {
+    /// Entire session content.
+    Session {
+        source_type: SessionType,
+        source_title: String,
+        /// Full document snapshot.
+        context: String,
+    },
+    // Phase 4: Selection variant will be added here
+}
+
+/// Type of session where the bookmark was created.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionType {
+    File,
+    Diff,
+    Content,
+}
+
+impl Bookmark {
+    /// Creates a new bookmark with auto-derived label if not provided.
+    pub fn new(
+        label: Option<String>,
+        project_path: Option<std::path::PathBuf>,
+        snapshot: BookmarkSnapshot,
+    ) -> Self {
+        let derived_label = label.or_else(|| Some(Self::derive_label(&snapshot)));
+        Self {
+            id: crate::id::generate(),
+            label: derived_label,
+            created_at: Utc::now(),
+            project_path,
+            snapshot,
+        }
+    }
+
+    /// Derive a label from the snapshot content.
+    fn derive_label(snapshot: &BookmarkSnapshot) -> String {
+        match snapshot {
+            BookmarkSnapshot::Session {
+                source_title,
+                context,
+                ..
+            } => {
+                // For markdown: extract first # heading
+                if source_title.ends_with(".md") {
+                    if let Some(heading) = Self::extract_first_heading(context) {
+                        return Self::truncate(&heading, 50);
+                    }
+                }
+                // Fallback: use filename
+                source_title.clone()
+            }
+        }
+    }
+
+    /// Extract the first markdown heading from content.
+    fn extract_first_heading(content: &str) -> Option<String> {
+        content
+            .lines()
+            .find(|line| line.starts_with('#'))
+            .map(|line| line.trim_start_matches('#').trim().to_string())
+    }
+
+    /// Truncate a string to max_len, adding ellipsis if needed.
+    fn truncate(s: &str, max_len: usize) -> String {
+        if s.len() <= max_len {
+            s.to_string()
+        } else {
+            let truncated: String = s.chars().take(max_len - 1).collect();
+            format!("{}…", truncated)
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // CONTENT MODEL — immutable after construction
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -328,13 +426,15 @@ pub struct SessionState {
 // USER CONFIG — encapsulates deletion tracking
 // ════════════════════════════════════════════════════════════════════════════
 
-/// User configuration for tags and exit modes.
+/// User configuration for tags, exit modes, and bookmarks.
 /// Encapsulates deletion tracking for safe concurrent writes.
 pub struct UserConfig {
     tags: Vec<Tag>,
     exit_modes: Vec<ExitMode>,
+    bookmarks: Vec<Bookmark>,
     deleted_tags: HashSet<String>,
     deleted_exit_modes: HashSet<String>,
+    deleted_bookmarks: HashSet<String>,
     /// Tag usage statistics (global + per-language).
     usage_stats: TagUsageStats,
 }
@@ -345,8 +445,10 @@ impl UserConfig {
         Self {
             tags: config::load_tags(),
             exit_modes: config::load_exit_modes(),
+            bookmarks: config::load_bookmarks(),
             deleted_tags: HashSet::new(),
             deleted_exit_modes: HashSet::new(),
+            deleted_bookmarks: HashSet::new(),
             usage_stats: config::load_tag_usage(),
         }
     }
@@ -356,8 +458,10 @@ impl UserConfig {
         Self {
             tags: Vec::new(),
             exit_modes: Vec::new(),
+            bookmarks: Vec::new(),
             deleted_tags: HashSet::new(),
             deleted_exit_modes: HashSet::new(),
+            deleted_bookmarks: HashSet::new(),
             usage_stats: TagUsageStats::default(),
         }
     }
@@ -451,14 +555,61 @@ impl UserConfig {
         self.exit_modes.splice(0..0, modes);
     }
 
+    /// Get all bookmarks.
+    pub fn bookmarks(&self) -> &[Bookmark] {
+        &self.bookmarks
+    }
+
+    /// Get a bookmark by ID or prefix.
+    ///
+    /// Returns `Some(bookmark)` if exactly one bookmark matches the prefix,
+    /// `None` if no match or ambiguous (multiple matches).
+    pub fn get_bookmark(&self, id_prefix: &str) -> Option<&Bookmark> {
+        let matches: Vec<_> = self
+            .bookmarks
+            .iter()
+            .filter(|b| b.id.starts_with(id_prefix))
+            .collect();
+
+        match matches.len() {
+            1 => Some(matches[0]),
+            _ => None, // Ambiguous or not found
+        }
+    }
+
+    /// Insert or update a bookmark, then save to disk.
+    pub fn upsert_bookmark(&mut self, bookmark: Bookmark) {
+        if let Some(existing) = self.bookmarks.iter_mut().find(|b| b.id == bookmark.id) {
+            *existing = bookmark;
+        } else {
+            self.bookmarks.push(bookmark);
+        }
+        let _ = config::save_bookmarks(&self.bookmarks, &self.deleted_bookmarks);
+    }
+
+    /// Delete a bookmark by ID, then save to disk.
+    pub fn delete_bookmark(&mut self, id: &str) -> bool {
+        let len_before = self.bookmarks.len();
+        self.bookmarks.retain(|b| b.id != id);
+        if self.bookmarks.len() < len_before {
+            self.deleted_bookmarks.insert(id.to_string());
+            let _ = config::save_bookmarks(&self.bookmarks, &self.deleted_bookmarks);
+            true
+        } else {
+            false
+        }
+    }
+
     /// Create config with specific tags and exit modes (for testing).
     #[cfg(test)]
     pub fn with_data(tags: Vec<Tag>, exit_modes: Vec<ExitMode>) -> Self {
         Self {
             tags,
             exit_modes,
+            bookmarks: Vec::new(),
             deleted_tags: HashSet::new(),
             deleted_exit_modes: HashSet::new(),
+            deleted_bookmarks: HashSet::new(),
             usage_stats: TagUsageStats::default(),
         }
     }

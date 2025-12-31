@@ -1,6 +1,7 @@
 <script lang="ts">
   import CopyDropdown from '$lib/CopyDropdown.svelte';
   import Icon from '$lib/CommandPalette/Icon.svelte';
+  import { BookmarkIcon } from '$lib/icons';
   import type { DiffMetadata, MarkdownMetadata, DiffFileInfo, HunkInfo, SectionInfo, JSONContent } from '$lib/types';
 
   interface Props {
@@ -14,6 +15,8 @@
     hasSessionComment: boolean;
     onOpenSessionEditor: () => void;
     onOpenSaveModal: () => void;
+    onCreateBookmark: () => void;
+    isBookmarked: boolean;
     showToast: (message: string) => void;
     zoomLevel: number;
   }
@@ -29,6 +32,8 @@
     hasSessionComment,
     onOpenSessionEditor,
     onOpenSaveModal,
+    onCreateBookmark,
+    isBookmarked,
     showToast,
     zoomLevel
   }: Props = $props();
@@ -111,9 +116,18 @@
     {#if zoomLevel !== 1.0}
       <span class="zoom-indicator">{Math.round(zoomLevel * 100)}%</span>
     {/if}
+    <button class="header-btn bookmark-btn" class:bookmarked={isBookmarked} onclick={onCreateBookmark} title="Bookmark session (b)">
+      <BookmarkIcon filled={isBookmarked} />
+    </button>
     <CopyDropdown {showToast} />
     <button class="header-btn" onclick={onOpenSaveModal} title="Save to file (Cmd+S)">
       <Icon name="save" />
     </button>
   </div>
 </header>
+
+<style>
+  .bookmark-btn.bookmarked {
+    color: #ef4444;
+  }
+</style>

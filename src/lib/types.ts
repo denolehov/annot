@@ -203,3 +203,34 @@ export interface SaveContentResponse {
   saved_path: string;
   new_label: string;
 }
+
+// =============================================================================
+// Bookmarks — capture moments of attention for later reference
+// =============================================================================
+
+/** Type of session where the bookmark was created. */
+export type SessionType = 'file' | 'diff' | 'content';
+
+/** The content snapshot captured by a bookmark. */
+export type BookmarkSnapshot =
+  | {
+      type: 'session';
+      source_type: SessionType;
+      source_title: string;
+      context: string;
+    };
+// Phase 4: Selection variant will be added here
+
+/** A bookmark capturing a moment of attention during an annot session. */
+export interface Bookmark {
+  /** Unique 12-character base32 ID (prefix-matchable). */
+  id: string;
+  /** User-provided or auto-derived label. */
+  label: string | null;
+  /** When this bookmark was created (ISO 8601). */
+  created_at: string;
+  /** Project context (cwd at creation time). */
+  project_path: string | null;
+  /** The captured content snapshot. */
+  snapshot: BookmarkSnapshot;
+}

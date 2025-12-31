@@ -10,7 +10,7 @@
   import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
   import AnnotationSlot from "$lib/components/AnnotationSlot.svelte";
   import CopyDropdown from "$lib/CopyDropdown.svelte";
-  import { CommandPalette } from "$lib/CommandPalette";
+  import { CommandPalette, createBookmark, deleteBookmarkItem } from "$lib/CommandPalette";
   import SaveModal from "$lib/SaveModal.svelte";
   import Portal from "$lib/components/embedded/Portal.svelte";
   import CodeBlock from "$lib/components/embedded/CodeBlock.svelte";
@@ -235,6 +235,10 @@
   // Save modal state
   let saveModalOpen = $state(false);
 
+  // Bookmark state (tracks if current session has been bookmarked)
+  let isBookmarked = $state(false);
+  let currentBookmarkId = $state<string | null>(null);
+
   // Content zoom state
   let contentZoom = $state(1.0);
 
@@ -335,6 +339,22 @@
     label = response.new_label;
     closeSaveModal();
     showToast(`Saved to ${response.saved_path}`);
+  }
+
+  // Bookmark toggle handler
+  async function handleToggleBookmark() {
+    if (isBookmarked && currentBookmarkId) {
+      await deleteBookmarkItem(currentBookmarkId);
+      isBookmarked = false;
+      currentBookmarkId = null;
+      showToast('Bookmark removed');
+    } else {
+      const bookmark = await createBookmark();
+      const shortId = bookmark.id.slice(0, 3);
+      isBookmarked = true;
+      currentBookmarkId = bookmark.id;
+      showToast(`Bookmarked as ${shortId}`);
+    }
   }
 
   // CommandPalette handlers
@@ -573,6 +593,7 @@
       onOpenCommandPalette: () => commandPaletteOpen = true,
       onOpenSaveModal: openSaveModal,
       onOpenSearch: () => search.open(),
+      onCreateBookmark: handleToggleBookmark,
       onZoomIn: () => contentZoom = Math.min(contentZoom + 0.1, 3.0),
       onZoomOut: () => contentZoom = Math.max(contentZoom - 0.1, 0.5),
       onZoomReset: () => contentZoom = 1.0,
@@ -689,6 +710,8 @@
       hasSessionComment={sessionComment !== undefined}
       onOpenSessionEditor={openSessionEditor}
       onOpenSaveModal={openSaveModal}
+      onCreateBookmark={handleToggleBookmark}
+      {isBookmarked}
       {showToast}
       zoomLevel={contentZoom}
     />

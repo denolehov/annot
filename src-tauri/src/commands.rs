@@ -9,7 +9,11 @@ use crate::config::{self, Config, Theme};
 use crate::lang::extension_to_fence_language;
 use crate::output::{export_content, export_section, format_output, OutputMode};
 use crate::review::ActiveReview;
-use crate::state::{ContentNode, ContentResponse, ExitMode, Tag, TagUsageStats};
+use crate::input::{ContentSource, McpSource};
+use crate::state::{
+    Bookmark, BookmarkSnapshot, ContentNode, ContentResponse, ExitMode, SessionType, Tag,
+    TagUsageStats,
+};
 use crate::ShouldExit;
 
 #[derive(Deserialize)]
@@ -270,6 +274,92 @@ pub fn reorder_exit_modes(
     with_review!(review_state, |review| {
         review.config.reorder_exit_modes(ids);
         Ok(review.config.exit_modes().to_vec())
+    })
+}
+
+// --- Bookmark commands ---
+
+#[tauri::command]
+pub fn get_bookmarks(review_state: State<ActiveReview>) -> Result<Vec<Bookmark>, String> {
+    let guard = review_state.lock();
+    let review = guard.as_ref().ok_or("No active review")?;
+    Ok(review.config.bookmarks().to_vec())
+}
+
+#[tauri::command]
+pub fn create_bookmark(
+    review_state: State<ActiveReview>,
+    label: Option<String>,
+) -> Result<Bookmark, String> {
+    with_review!(review_state, |review| {
+        // Determine session type from the content source
+        let source = &review.root_view.content().source;
+        let source_type = match source {
+            ContentSource::Mcp(McpSource::Diff { .. }) => SessionType::Diff,
+            ContentSource::Mcp(McpSource::Content { .. }) => SessionType::Content,
+            _ => SessionType::File,
+        };
+
+        // Get source title (label) and full content
+        let source_title = review.root_view.content().label.clone();
+        let context = review
+            .root_view
+            .content()
+            .lines
+            .iter()
+            .map(|l| l.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let snapshot = BookmarkSnapshot::Session {
+            source_type,
+            source_title,
+            context,
+        };
+
+        // Get current working directory as project path
+        let project_path = std::env::current_dir().ok();
+
+        let bookmark = Bookmark::new(label, project_path, snapshot);
+        review.config.upsert_bookmark(bookmark.clone());
+
+        Ok(bookmark)
+    })
+}
+
+#[tauri::command]
+pub fn update_bookmark(
+    review_state: State<ActiveReview>,
+    id: String,
+    label: String,
+) -> Result<Bookmark, String> {
+    with_review!(review_state, |review| {
+        let bookmark = review
+            .config
+            .get_bookmark(&id)
+            .ok_or_else(|| format!("Bookmark not found: {}", id))?
+            .clone();
+
+        let updated = Bookmark {
+            label: Some(label),
+            ..bookmark
+        };
+        review.config.upsert_bookmark(updated.clone());
+
+        Ok(updated)
+    })
+}
+
+#[tauri::command]
+pub fn delete_bookmark(
+    review_state: State<ActiveReview>,
+    id: String,
+) -> Result<Vec<Bookmark>, String> {
+    with_review!(review_state, |review| {
+        if !review.config.delete_bookmark(&id) {
+            return Err(format!("Bookmark not found: {}", id));
+        }
+        Ok(review.config.bookmarks().to_vec())
     })
 }
 

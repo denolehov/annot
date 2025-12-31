@@ -3,7 +3,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { reduce, computeItemList } from './engine/reducer';
-  import { createQueryContext, setTagItems, setExitModeItems, saveTagItem, deleteTagItem, saveExitModeItem, deleteExitModeItem, reorderExitModeItems, generateTagId, generateExitModeId, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId } from './namespaces';
+  import { createQueryContext, setTagItems, setExitModeItems, saveTagItem, deleteTagItem, saveExitModeItem, deleteExitModeItem, deleteBookmarkItem, reorderExitModeItems, generateTagId, generateExitModeId, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId } from './namespaces';
   import type { State, Action, Command, Item, Namespace, InitialState } from './engine/types';
   import type { Tag, ExitMode } from '$lib/types';
   import Icon from './Icon.svelte';
@@ -164,6 +164,10 @@
             const orig = exitModes.find((m) => m.id === i.id);
             return itemToExitMode(i, orig);
           }));
+        } else if (cmd.namespace === 'bookmarks') {
+          deleteBookmarkItem(cmd.itemId);
+          // Force state update to trigger itemListData recompute
+          machineState = { ...machineState };
         }
         break;
       }
