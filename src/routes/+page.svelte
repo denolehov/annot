@@ -3,7 +3,7 @@
   import { listen, emit } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
-  import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
+  import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, Bookmark, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
   import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, isHorizontalRule, getFilePath } from "$lib/line-utils";
   import { rangeToKey, keyToRange, isLineInRange, validateRange, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap, findExcalidrawChip } from "$lib/tiptap";
@@ -221,6 +221,7 @@
   // CommandPalette state
   let commandPaletteOpen = $state(false);
   let tags: Tag[] = $state([]);
+  let bookmarks: Bookmark[] = $state([]);
 
   // Tag creation from selection state
   let pendingTagCreation = $state<{
@@ -600,6 +601,7 @@
     annotationState,
     interaction,
     tags,
+    bookmarks,
     allowsImagePaste,
     pendingTagInsertion,
     onUpdate: updateAnnotation,
@@ -653,6 +655,7 @@
       label = res.label;
       lines = res.lines;
       tags = res.tags;
+      bookmarks = res.bookmarks;
       exitModeState.initialize(res.exit_modes, res.selected_exit_mode_id);
       metadata = res.metadata;
       allowsImagePaste = res.allows_image_paste;
@@ -747,6 +750,7 @@
       content={sessionComment}
       isOpen={sessionEditorOpen}
       {tags}
+      {bookmarks}
       {allowsImagePaste}
       pendingTagInsertion={pendingTagInsertion?.editorKey === 'session' ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
       onUpdate={updateSessionComment}

@@ -187,6 +187,8 @@ pub enum ContentNode {
     Error { source: String, message: String },
     /// Pasted text content collapsed into a chip (large paste).
     Paste { content: String },
+    /// Reference to a bookmark (captured moment of attention).
+    BookmarkRef { id: String, label: String },
 }
 
 /// A normalized line range (start ≤ end).
@@ -309,6 +311,27 @@ pub enum SessionType {
     File,
     Diff,
     Content,
+}
+
+impl BookmarkSnapshot {
+    /// Get the source title for this snapshot.
+    pub fn source_title(&self) -> &str {
+        match self {
+            BookmarkSnapshot::Session { source_title, .. } => source_title,
+        }
+    }
+
+    /// Get a preview of the content (first N lines).
+    pub fn preview(&self, max_lines: usize) -> String {
+        let context = match self {
+            BookmarkSnapshot::Session { context, .. } => context,
+        };
+        context
+            .lines()
+            .take(max_lines)
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 }
 
 impl Bookmark {
@@ -643,6 +666,8 @@ pub struct ContentResponse {
     pub metadata: ContentMetadata,
     /// Whether image paste is allowed (MCP mode only).
     pub allows_image_paste: bool,
+    /// All bookmarks for @ autocomplete.
+    pub bookmarks: Vec<Bookmark>,
 }
 
 // Render functions moved to crate::markdown (render_line, render_inline)
@@ -1048,6 +1073,7 @@ impl AppState {
             session_comment: self.session.comment.clone(),
             metadata: self.content.metadata.clone(),
             allows_image_paste: self.content.source.allows_image_paste(),
+            bookmarks: self.config.bookmarks().to_vec(),
         }
     }
 

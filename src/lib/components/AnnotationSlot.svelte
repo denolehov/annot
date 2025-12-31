@@ -1,6 +1,6 @@
 <script lang="ts" module>
   import type { Range } from '$lib/range';
-  import type { JSONContent, Tag } from '$lib/types';
+  import type { JSONContent, Tag, Bookmark } from '$lib/types';
 
   interface AnnotationEntry {
     content: JSONContent;
@@ -19,6 +19,7 @@
       setSelection(range: Range): void;
     };
     tags: Tag[];
+    bookmarks: Bookmark[];
     allowsImagePaste: boolean;
     pendingTagInsertion: {
       editorKey: string;
@@ -49,6 +50,7 @@
     annotationState,
     interaction,
     tags,
+    bookmarks,
     allowsImagePaste,
     pendingTagInsertion,
     onUpdate,
@@ -72,6 +74,7 @@
       }}
       {onDismiss}
       {tags}
+      {bookmarks}
       {allowsImagePaste}
       {onImagePasteBlocked}
       onRequestCreateTag={(text, from, to) => onRequestCreateTag(rangeKey, text, from, to)}

@@ -273,6 +273,35 @@ fn collect_unique_tags(review: &Review) -> BTreeMap<String, String> {
     tags
 }
 
+/// Collect unique bookmarks referenced from all content nodes (session comment + annotations).
+/// Returns a vector of (id, label) pairs in order of first occurrence.
+fn collect_unique_bookmarks(review: &Review) -> Vec<(String, String)> {
+    use indexmap::IndexMap;
+    let mut bookmarks: IndexMap<String, String> = IndexMap::new();
+
+    let mut process_nodes = |nodes: &[ContentNode]| {
+        for node in nodes {
+            if let ContentNode::BookmarkRef { id, label } = node {
+                bookmarks.entry(id.clone()).or_insert_with(|| label.clone());
+            }
+        }
+    };
+
+    // Collect from session comment
+    if let Some(ref comment) = review.session_comment {
+        process_nodes(comment);
+    }
+
+    // Collect from all file annotations
+    for file in review.files.values() {
+        for annotation in file.annotations.values() {
+            process_nodes(&annotation.content);
+        }
+    }
+
+    bookmarks.into_iter().collect()
+}
+
 /// Format all annotations as structured output for LLM consumption.
 pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
     // Get content from root_view
@@ -311,6 +340,38 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
             output.push_str(&format!("  [# {}] {}\n", name, instruction));
         }
         output.push('\n');
+    }
+
+    // BOOKMARKS REFERENCED block (if any bookmarks are referenced)
+    let unique_bookmarks = collect_unique_bookmarks(review);
+    if !unique_bookmarks.is_empty() {
+        output.push_str("BOOKMARKS REFERENCED:\n");
+        for (id, label) in &unique_bookmarks {
+            // Look up full bookmark from config for additional context
+            if let Some(bookmark) = review.config.get_bookmark(id) {
+                let short_id = &id[..id.len().min(3)];
+                output.push_str(&format!("  [@ {}] {}\n", short_id, label));
+                output.push_str(&format!("    Source: {}\n", bookmark.snapshot.source_title()));
+                if let Some(ref project) = bookmark.project_path {
+                    output.push_str(&format!("    Project: {}\n", project.display()));
+                }
+                output.push_str(&format!(
+                    "    Created: {}\n",
+                    bookmark.created_at.format("%Y-%m-%d")
+                ));
+                output.push_str("    ────────────────────────────────────\n");
+                // Show preview (first 10 lines)
+                let preview = bookmark.snapshot.preview(10);
+                for line in preview.lines() {
+                    output.push_str(&format!("    {}\n", line));
+                }
+                output.push_str("    ────────────────────────────────────\n\n");
+            } else {
+                // Bookmark was deleted but still referenced
+                let short_id = &id[..id.len().min(3)];
+                output.push_str(&format!("  [@ {}] {} (deleted)\n", short_id, label));
+            }
+        }
     }
 
     // SESSION block (if exit mode selected or session comment exists)
@@ -691,6 +752,11 @@ fn render_content(
             ContentNode::Paste { content } => {
                 // Output pasted content as plain text
                 content.clone()
+            }
+            ContentNode::BookmarkRef { id, .. } => {
+                // Output bookmark reference with short ID (first 3-4 chars)
+                let short_id = &id[..id.len().min(3)];
+                format!("[@{}]", short_id)
             }
         })
         .collect::<Vec<_>>()

@@ -2,7 +2,7 @@ import { Node, Extension, mergeAttributes, type JSONContent } from '@tiptap/core
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import Suggestion, { type SuggestionOptions, type SuggestionProps, type SuggestionKeyDownProps } from '@tiptap/suggestion';
 import { computePosition, offset, flip, shift, arrow } from '@floating-ui/dom';
-import type { ContentNode, Tag } from './types';
+import type { ContentNode, Tag, Bookmark } from './types';
 import { fuzzySearch } from './fuzzy';
 
 /**
@@ -84,6 +84,7 @@ export function createSuggestionRender<T>(
 // Unique plugin keys for each suggestion type
 const TagSuggestionPluginKey = new PluginKey('tagSuggestion');
 const SlashSuggestionPluginKey = new PluginKey('slashSuggestion');
+const BookmarkSuggestionPluginKey = new PluginKey('bookmarkSuggestion');
 
 /**
  * Escape HTML special characters in a string.
@@ -286,6 +287,149 @@ export const TagChip = Node.create({
 
 export type TagChipOptions = {
   suggestion: Omit<SuggestionOptions<Tag>, 'editor' | 'pluginKey'>;
+};
+
+/**
+ * BookmarkChip node - an inline, atomic node representing a bookmark reference.
+ * Rendered as [@ k3u · Label...] in the editor.
+ */
+export const BookmarkChip = Node.create<BookmarkChipOptions>({
+  name: 'bookmarkChip',
+  group: 'inline',
+  inline: true,
+  atom: true, // Non-editable, treated as single unit
+
+  addAttributes() {
+    return {
+      id: { default: null },
+      label: { default: null },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-bookmark-chip]',
+        getAttrs: (dom) => {
+          const element = dom as HTMLElement;
+          return {
+            id: element.getAttribute('data-id') || null,
+            label: element.getAttribute('data-label') || '',
+          };
+        },
+      },
+    ];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    const shortId = node.attrs.id?.slice(0, 3) || '';
+    const label = node.attrs.label || '';
+    const displayLabel = label.length > 30 ? label.slice(0, 30) + '...' : label;
+    return [
+      'span',
+      mergeAttributes(HTMLAttributes, {
+        'data-bookmark-chip': '',
+        'data-id': node.attrs.id || '',
+        'data-label': node.attrs.label || '',
+        class: 'tag-chip bookmark-chip',
+      }),
+      `[@ ${shortId} · ${displayLabel}]`,
+    ];
+  },
+
+  addNodeView() {
+    return ({ node }) => {
+      const { id, label } = node.attrs;
+      const shortId = id?.slice(0, 3) || '';
+      const displayLabel = label
+        ? label.length > 25
+          ? label.slice(0, 25) + '...'
+          : label
+        : '';
+
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip bookmark-chip';
+      chip.setAttribute('data-bookmark-chip', '');
+
+      // Build tooltip content with bookmark details
+      const tooltipContent = `<strong>${escapeHtml(id || '')}</strong><br>${escapeHtml(label || '')}`;
+
+      chip.innerHTML = `
+        <span class="bookmark-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><path fill-rule="evenodd" d="M6.32 2.577a49.255 49.255 0 0 1 11.36 0c1.497.174 2.57 1.46 2.57 2.93V21a.75.75 0 0 1-1.085.67L12 18.089l-7.165 3.583A.75.75 0 0 1 3.75 21V5.507c0-1.47 1.073-2.756 2.57-2.93Z" clip-rule="evenodd" /></svg></span>
+        <span class="bookmark-id">${escapeHtml(shortId)}</span>
+        ${displayLabel ? `<span class="bookmark-divider">·</span><span class="bookmark-label">${escapeHtml(displayLabel)}</span>` : ''}
+        <div class="chip-tooltip"><div class="chip-tooltip-content">${tooltipContent}</div><div class="chip-tooltip-arrow"></div></div>
+      `;
+
+      // Position tooltip on hover using Floating UI
+      const tooltip = chip.querySelector('.chip-tooltip') as HTMLElement;
+      const arrowEl = chip.querySelector('.chip-tooltip-arrow') as HTMLElement;
+
+      const updatePosition = async () => {
+        const { x, y, placement, middlewareData } = await computePosition(chip, tooltip, {
+          placement: 'top',
+          middleware: [offset(8), flip(), shift({ padding: 8 }), arrow({ element: arrowEl })],
+        });
+
+        Object.assign(tooltip.style, {
+          left: `${x}px`,
+          top: `${y}px`,
+        });
+
+        // Position arrow
+        if (middlewareData.arrow) {
+          const { x: arrowX } = middlewareData.arrow;
+          const staticSide = placement.includes('top') ? 'bottom' : 'top';
+
+          Object.assign(arrowEl.style, {
+            left: arrowX != null ? `${arrowX}px` : '',
+            [staticSide]: '-4px',
+          });
+        }
+      };
+
+      chip.addEventListener('mouseenter', updatePosition);
+
+      return { dom: chip };
+    };
+  },
+
+  addKeyboardShortcuts() {
+    return {
+      Backspace: () =>
+        this.editor.commands.command(({ tr, state }) => {
+          let isBookmarkChip = false;
+          const { selection } = state;
+          const { empty, anchor } = selection;
+
+          if (!empty) return false;
+
+          state.doc.nodesBetween(anchor - 1, anchor, (node, pos) => {
+            if (node.type.name === this.name) {
+              isBookmarkChip = true;
+              tr.insertText('', pos, pos + node.nodeSize);
+              return false;
+            }
+          });
+
+          return isBookmarkChip;
+        }),
+    };
+  },
+
+  addProseMirrorPlugins() {
+    return [
+      Suggestion({
+        editor: this.editor,
+        pluginKey: BookmarkSuggestionPluginKey,
+        ...this.options.suggestion,
+      }),
+    ];
+  },
+});
+
+export type BookmarkChipOptions = {
+  suggestion: Omit<SuggestionOptions<Bookmark>, 'editor' | 'pluginKey'>;
 };
 
 /**
@@ -1472,6 +1616,11 @@ const CHIP_EXTRACTORS: Record<string, ChipExtractor> = {
     type: 'paste',
     content: attrs.content as string,
   }),
+  bookmarkChip: (attrs) => ({
+    type: 'bookmarkref',
+    id: attrs.id as string,
+    label: attrs.label as string,
+  }),
 };
 
 /**
@@ -1756,6 +1905,15 @@ export function contentNodesToTipTap(nodes: ContentNode[] | null): JSONContent |
         attrs: {
           content: node.content,
           lineCount,
+        },
+      });
+    } else if (node.type === 'bookmarkref') {
+      // Insert bookmark chip inline
+      currentParagraph.push({
+        type: 'bookmarkChip',
+        attrs: {
+          id: node.id,
+          label: node.label,
         },
       });
     }

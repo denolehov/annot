@@ -75,6 +75,7 @@ describe('useAnnotationEditor', () => {
     getContent: () => undefined,
     getSealed: () => false,
     getTags: () => [],
+    getBookmarks: () => [],
     getAllowsImagePaste: () => true,
     getOnUpdate: () => vi.fn(),
     getOnDismiss: () => vi.fn(),

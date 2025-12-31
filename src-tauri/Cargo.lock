@@ -53,6 +53,7 @@ dependencies = [
  "fs4",
  "hex",
  "htmlescape",
+ "indexmap 2.12.1",
  "languages",
  "parking_lot",
  "pulldown-cmark",

@@ -269,6 +269,76 @@
 }
 
 /* ===========================================
+   BOOKMARK AUTOCOMPLETE POPUP (@)
+   =========================================== */
+.bookmark-suggestions {
+	position: fixed;
+	background: var(--bg-window);
+	border: 1px solid var(--border-strong);
+	border-radius: 6px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+	z-index: 100;
+	min-width: 280px;
+	max-width: 400px;
+	max-height: 280px;
+	overflow-y: auto;
+	scroll-padding-block: 40px;
+	padding: 4px;
+	font-family: var(--font-ui);
+}
+
+.bookmark-suggestion {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	width: 100%;
+	padding: 8px 10px;
+	border: none;
+	border-radius: 4px;
+	background: none;
+	cursor: pointer;
+	text-align: left;
+}
+
+.bookmark-suggestion:hover,
+.bookmark-suggestion.selected {
+	background: var(--bg-panel);
+}
+
+.bookmark-suggestion .bookmark-id {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	font-weight: 600;
+	color: #8b5cf6;
+	flex-shrink: 0;
+	padding-top: 1px;
+}
+
+.bookmark-suggestion .bookmark-info {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.bookmark-suggestion .bookmark-label {
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--text-primary);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.bookmark-suggestion .bookmark-meta {
+	font-size: 11px;
+	color: var(--text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* ===========================================
    SELECTION POPOVER (Create Tag from Selection)
    =========================================== */
 .selection-popover {

@@ -1,11 +1,12 @@
 <script lang="ts">
-  import type { JSONContent, Tag } from '$lib/types';
+  import type { JSONContent, Tag, Bookmark } from '$lib/types';
   import AnnotationEditor from '$lib/AnnotationEditor.svelte';
 
   interface Props {
     content: JSONContent | undefined;
     isOpen: boolean;
     tags: Tag[];
+    bookmarks: Bookmark[];
     allowsImagePaste: boolean;
     pendingTagInsertion: { from: number; to: number; tag: Tag } | null;
     onUpdate: (content: JSONContent | null) => void;
@@ -19,6 +20,7 @@
     content,
     isOpen,
     tags,
+    bookmarks,
     allowsImagePaste,
     pendingTagInsertion,
     onUpdate,
@@ -38,6 +40,7 @@
       onUnseal={onOpen}
       onDismiss={onClose}
       {tags}
+      {bookmarks}
       {allowsImagePaste}
       {onImagePasteBlocked}
       {onRequestCreateTag}

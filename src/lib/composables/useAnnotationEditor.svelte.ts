@@ -6,6 +6,7 @@ import {
   trimContent,
   isContentEmpty,
   TagChip,
+  BookmarkChip,
   MediaChip,
   PasteChip,
   ImagePasteHandler,
@@ -24,7 +25,7 @@ import {
   type SlashCommand,
   type SuggestionState,
 } from '../tiptap';
-import type { Tag } from '../types';
+import type { Tag, Bookmark } from '../types';
 import { fuzzySearch } from '../fuzzy';
 
 export interface AnnotationEditorOptions {
@@ -36,6 +37,8 @@ export interface AnnotationEditorOptions {
   getSealed: () => boolean;
   /** Returns available tags for autocomplete (reactive) */
   getTags: () => Tag[];
+  /** Returns available bookmarks for @ autocomplete (reactive) */
+  getBookmarks: () => Bookmark[];
   /** Returns whether image paste is allowed */
   getAllowsImagePaste: () => boolean;
   /** Returns the onUpdate callback (reactive) */
@@ -66,8 +69,10 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
   let editor: Editor | null = $state(null);
   let tagSuggestion = $state<SuggestionState<Tag>>(createInitialSuggestionState());
   let slashSuggestion = $state<SuggestionState<SlashCommand>>(createInitialSuggestionState());
+  let bookmarkSuggestion = $state<SuggestionState<Bookmark>>(createInitialSuggestionState());
   let tagCommand: ((item: Tag) => void) | null = null;
   let slashCommandFn: ((item: SlashCommand) => void) | null = null;
+  let bookmarkCommand: ((item: Bookmark) => void) | null = null;
 
   // Track if Excalidraw modal is open (prevents blur dismiss)
   let excalidrawModalOpen = false;
@@ -86,7 +91,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
     const el = options.element();
     if (!el) return;
 
-    const { getSealed, getTags, getOnUpdate, getOnDismiss } = options;
+    const { getSealed, getTags, getBookmarks, getOnUpdate, getOnDismiss } = options;
 
     editor = new Editor({
       element: el,
@@ -134,6 +139,43 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
             },
           },
         }),
+        BookmarkChip.configure({
+          suggestion: {
+            char: '@',
+            items: ({ query }: { query: string }) => {
+              const bookmarks = getBookmarks();
+              // Fuzzy search with priority: ID prefix > label > source_title
+              return fuzzySearch(bookmarks, query, [
+                { name: 'id', weight: 3 },
+                { name: 'label', weight: 2 },
+                { name: 'snapshot.source_title', weight: 1 },
+              ]);
+            },
+            render: createSuggestionRender<Bookmark>(
+              () => bookmarkSuggestion,
+              (state) => { bookmarkSuggestion = state; },
+              () => bookmarkCommand,
+              (cmd) => { bookmarkCommand = cmd; }
+            ),
+            command: ({ editor, range, props }: { editor: Editor; range: Range; props: Bookmark }) => {
+              const label = props.label ?? props.snapshot.source_title;
+              editor
+                .chain()
+                .focus()
+                .insertContentAt(range, [
+                  {
+                    type: 'bookmarkChip',
+                    attrs: {
+                      id: props.id,
+                      label,
+                    },
+                  },
+                  { type: 'text', text: ' ' },
+                ])
+                .run();
+            },
+          },
+        }),
         MediaChip,
         PasteChip,
         ExcalidrawChip,
@@ -172,6 +214,10 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
               slashSuggestion = { ...slashSuggestion, active: false };
               return;
             }
+            if (bookmarkSuggestion.active) {
+              bookmarkSuggestion = { ...bookmarkSuggestion, active: false };
+              return;
+            }
             editor?.commands.blur();
           },
         }),
@@ -188,7 +234,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
       },
       onBlur: ({ editor: blurEditor }) => {
         // Don't dismiss while Excalidraw modal is open or suggestion menus are active
-        if (!getSealed() && !tagSuggestion.active && !excalidrawModalOpen) {
+        if (!getSealed() && !tagSuggestion.active && !bookmarkSuggestion.active && !excalidrawModalOpen) {
           const editorDom = blurEditor.view.dom as HTMLElement;
           const json = blurEditor.getJSON();
 
@@ -257,6 +303,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
     get editor() { return editor; },
     get tagSuggestion() { return tagSuggestion; },
     get slashSuggestion() { return slashSuggestion; },
+    get bookmarkSuggestion() { return bookmarkSuggestion; },
 
     /** Execute selected tag item */
     selectTagItem(item: Tag) {
@@ -266,6 +313,11 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
     /** Execute selected slash command item */
     selectSlashItem(item: SlashCommand) {
       slashCommandFn?.(item);
+    },
+
+    /** Execute selected bookmark item */
+    selectBookmarkItem(item: Bookmark) {
+      bookmarkCommand?.(item);
     },
 
     /** Insert a tag chip at the specified position (for pending tag insertion) */

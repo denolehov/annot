@@ -480,6 +480,7 @@ impl Review {
                     session_comment: self.session_comment.clone(),
                     metadata: content.metadata.clone(),
                     allows_image_paste: content.source.allows_image_paste(),
+                    bookmarks: self.config.bookmarks().to_vec(),
                 })
             }
             WindowView::Mermaid { .. } => None, // Mermaid windows don't use ContentResponse

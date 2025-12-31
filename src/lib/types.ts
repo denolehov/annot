@@ -84,6 +84,8 @@ export interface ContentResponse {
   metadata: ContentMetadata;
   /** Whether image paste is allowed (MCP content mode). */
   allows_image_paste: boolean;
+  /** All bookmarks for @ autocomplete. */
+  bookmarks: Bookmark[];
 }
 
 // Diff types
@@ -152,7 +154,7 @@ export interface Tag {
 }
 
 // Content node types for structured annotation content (output format)
-export type ContentNode = TextNode | TagNode | MediaNode | ExcalidrawNode | ReplaceNode | ErrorNode | PasteNode;
+export type ContentNode = TextNode | TagNode | MediaNode | ExcalidrawNode | ReplaceNode | ErrorNode | PasteNode | BookmarkRefNode;
 
 export interface TextNode {
   type: 'text';
@@ -193,6 +195,12 @@ export interface ErrorNode {
 export interface PasteNode {
   type: 'paste';
   content: string; // Full pasted text
+}
+
+export interface BookmarkRefNode {
+  type: 'bookmarkref';
+  id: string; // Full resolved bookmark ID
+  label: string; // Cached label for display
 }
 
 // TipTap JSON content type for internal storage
