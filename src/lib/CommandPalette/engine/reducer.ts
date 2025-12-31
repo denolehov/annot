@@ -16,9 +16,10 @@ export function computeItemList(
   const hasExactMatch = matches.some(
     (m) => m.name.toLowerCase() === queryTrimmed.toLowerCase()
   );
-  // Show Create only if: namespace has fields, query is non-empty, and no exact match
+  // Show Create only if: namespace allows it, has fields, query is non-empty, and no exact match
   const hasFields = state.namespace.fields.length > 0;
-  const showCreate = hasFields && queryTrimmed !== '' && !hasExactMatch;
+  const allowCreate = state.namespace.allowCreate !== false;
+  const showCreate = allowCreate && hasFields && queryTrimmed !== '' && !hasExactMatch;
   const createIndex = showCreate ? matches.length : -1;
 
   return { matches, showCreate, createIndex };

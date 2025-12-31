@@ -16,6 +16,7 @@ export const bookmarksNamespace: Namespace = {
     { key: 'e', label: 'edit', action: 'EDIT' },
   ],
   examples: [],
+  allowCreate: false,
 };
 
 // In-memory storage

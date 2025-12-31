@@ -169,6 +169,7 @@
           // Force state update to trigger itemListData recompute
           machineState = { ...machineState };
         }
+        inputEl?.focus();
         break;
       }
 
@@ -579,7 +580,7 @@
           type="text"
           class="inline-input"
           class:navigating={isNavigating}
-          placeholder={machineState.namespace.fields.length === 0 ? 'Filter...' : (itemListData.totalItems === 0 ? 'Type to create...' : 'Filter or create...')}
+          placeholder={machineState.namespace.fields.length === 0 || machineState.namespace.allowCreate === false ? 'Filter...' : (itemListData.totalItems === 0 ? 'Type to create...' : 'Filter or create...')}
           value={currentQuery}
           oninput={handleInput}
         />

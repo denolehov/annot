@@ -21,6 +21,8 @@ export interface Namespace {
   hotkeys?: Hotkey[];
   /** Example values shown as placeholders in CREATE_FORM (random one picked per form open) */
   examples?: Array<Record<string, string>>;
+  /** Whether to show the "Create new" option. Defaults to true if fields are present. */
+  allowCreate?: boolean;
 }
 
 export type Field =
