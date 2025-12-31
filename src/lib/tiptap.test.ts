@@ -41,6 +41,24 @@ const tagChip = (id: string, name: string, instruction: string): JSONContent => 
   attrs: { id, name, instruction },
 });
 
+/** Create a mediaChip node */
+const mediaChip = (image: string, mimeType: string): JSONContent => ({
+  type: 'mediaChip',
+  attrs: { image, mimeType },
+});
+
+/** Create an excalidrawChip node */
+const excalidrawChip = (elements: string, image?: string): JSONContent => ({
+  type: 'excalidrawChip',
+  attrs: { elements, image },
+});
+
+/** Create an errorChip node */
+const errorChip = (source: string, message: string): JSONContent => ({
+  type: 'errorChip',
+  attrs: { source, message },
+});
+
 /** Create a replacePreview node */
 const replacePreview = (original: string, replacement: string, blockId?: string): JSONContent => ({
   type: 'replacePreview',
@@ -510,6 +528,137 @@ describe('extractContentNodes', () => {
     const nodes = extractContentNodes(input);
     expect(nodes).toHaveLength(1);
     expect(nodes[0]).toEqual({ type: 'text', text: 'Line one\nLine two' });
+  });
+
+  it('preserves multiple paragraphs as newlines', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'First line' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'Second line' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'Third line' }] },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({ type: 'text', text: 'First line\nSecond line\nThird line' });
+  });
+
+  it('preserves empty paragraphs as blank lines', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Before' }] },
+        { type: 'paragraph' }, // empty paragraph = blank line
+        { type: 'paragraph', content: [{ type: 'text', text: 'After' }] },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({ type: 'text', text: 'Before\n\nAfter' });
+  });
+
+  it('preserves multiple consecutive empty paragraphs', () => {
+    const input: JSONContent = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Start' }] },
+        { type: 'paragraph' }, // blank line 1
+        { type: 'paragraph' }, // blank line 2
+        { type: 'paragraph', content: [{ type: 'text', text: 'End' }] },
+      ],
+    };
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({ type: 'text', text: 'Start\n\n\nEnd' });
+  });
+
+  it('extracts tagChip as TagNode', () => {
+    const input = doc(p(tagChip('tag-1', 'SECURITY', 'Review for security issues')));
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({
+      type: 'tag',
+      id: 'tag-1',
+      name: 'SECURITY',
+      instruction: 'Review for security issues',
+    });
+  });
+
+  it('extracts tagChip mixed with text', () => {
+    const input = doc(p('Check this ', tagChip('t1', 'TODO', 'Fix later'), ' please'));
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(3);
+    expect(nodes[0]).toEqual({ type: 'text', text: 'Check this ' });
+    expect(nodes[1]).toEqual({ type: 'tag', id: 't1', name: 'TODO', instruction: 'Fix later' });
+    expect(nodes[2]).toEqual({ type: 'text', text: ' please' });
+  });
+
+  it('extracts mediaChip as MediaNode', () => {
+    const input = doc(p(mediaChip('data:image/png;base64,abc123', 'image/png')));
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({
+      type: 'media',
+      image: 'data:image/png;base64,abc123',
+      mime_type: 'image/png',
+    });
+  });
+
+  it('extracts excalidrawChip as ExcalidrawNode', () => {
+    const input = doc(p(excalidrawChip('[{"type":"rectangle"}]', 'data:image/png;base64,xyz')));
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({
+      type: 'excalidraw',
+      elements: '[{"type":"rectangle"}]',
+      image: 'data:image/png;base64,xyz',
+    });
+  });
+
+  it('extracts excalidrawChip without image', () => {
+    const input = doc(p(excalidrawChip('[{"type":"ellipse"}]')));
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({
+      type: 'excalidraw',
+      elements: '[{"type":"ellipse"}]',
+      image: undefined,
+    });
+  });
+
+  it('extracts errorChip as ErrorNode', () => {
+    const input = doc(p(errorChip('```replace block', 'Invalid syntax')));
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({
+      type: 'error',
+      source: '```replace block',
+      message: 'Invalid syntax',
+    });
+  });
+
+  it('extracts replacePreview as ReplaceNode', () => {
+    const input = doc(replacePreview('const x = 1;', 'const x = 2;'));
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toEqual({
+      type: 'replace',
+      original: 'const x = 1;',
+      replacement: 'const x = 2;',
+    });
+  });
+
+  it('extracts multiple chip types in same paragraph', () => {
+    const input = doc(
+      p('Check ', tagChip('t1', 'CRITICAL', 'This is critical'), ' and see ', mediaChip('data:image/png;base64,img', 'image/png'))
+    );
+    const nodes = extractContentNodes(input);
+    expect(nodes).toHaveLength(4);
+    expect(nodes[0]).toEqual({ type: 'text', text: 'Check ' });
+    expect(nodes[1]).toEqual({ type: 'tag', id: 't1', name: 'CRITICAL', instruction: 'This is critical' });
+    expect(nodes[2]).toEqual({ type: 'text', text: ' and see ' });
+    expect(nodes[3]).toEqual({ type: 'media', image: 'data:image/png;base64,img', mime_type: 'image/png' });
   });
 
 });

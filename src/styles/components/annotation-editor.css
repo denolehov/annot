@@ -76,8 +76,18 @@
 	padding-bottom: 0;
 }
 
-/* Hide trailing empty paragraph in sealed state - no cursor/extra space needed */
-.annotation-editor.sealed p:has(.ProseMirror-trailingBreak) {
+/* Hide trailing break and separator elements in sealed state (no cursor needed) */
+.annotation-editor.sealed .ProseMirror-trailingBreak,
+.annotation-editor.sealed .ProseMirror-separator {
+	display: none;
+}
+
+/*
+ * Hide paragraphs that contain ONLY trailing break stuff (no real content).
+ * This handles the "fat footer" case where a trailing paragraph shows as 22px.
+ * Selector logic: has trailing break AND has no elements other than break/separator.
+ */
+.annotation-editor.sealed p:has(.ProseMirror-trailingBreak):not(:has(:not(.ProseMirror-separator):not(.ProseMirror-trailingBreak))) {
 	display: none;
 }
 

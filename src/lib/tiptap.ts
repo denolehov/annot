@@ -1397,220 +1397,265 @@ export function replaceExcalidrawChip(
   return walk(json);
 }
 
+// ============================================================================
+// extractContentNodes: Transform TipTap JSON to ContentNode[]
+// ============================================================================
+
 /**
- * Extract ContentNode array from TipTap JSON.
- * Handles text, tagChip, and mediaChip nodes.
+ * Mark-to-Markdown wrappers.
+ * Maps TipTap mark types to their markdown formatting functions.
  */
-export function extractContentNodes(json: JSONContent): ContentNode[] {
-  if (!json.content || json.content.length === 0) {
-    return [];
+const MARK_WRAPPERS: Record<string, (text: string) => string> = {
+  bold: (t) => `**${t}**`,
+  italic: (t) => `*${t}*`,
+  strike: (t) => `~~${t}~~`,
+  code: (t) => `\`${t}\``,
+  underline: (t) => `<u>${t}</u>`, // No standard markdown, use HTML
+};
+
+/**
+ * Apply TipTap marks to text, converting to markdown format.
+ * Links are applied last to wrap the formatted text.
+ */
+function applyMarks(text: string, marks?: JSONContent['marks']): string {
+  if (!marks) return text;
+
+  let result = text;
+  let linkHref: string | null = null;
+
+  for (const mark of marks) {
+    if (mark.type === 'link') {
+      linkHref = mark.attrs?.href ?? null;
+    } else if (MARK_WRAPPERS[mark.type]) {
+      result = MARK_WRAPPERS[mark.type](result);
+    }
   }
 
-  const nodes: ContentNode[] = [];
-  let pendingText = '';
+  return linkHref ? `[${result}](${linkHref})` : result;
+}
 
-  // Track list context for proper markdown formatting
-  type ListContext = { type: 'bullet' | 'ordered'; index: number };
-  const listStack: ListContext[] = [];
+/**
+ * Chip extractors registry.
+ * Maps TipTap chip node types to ContentNode factory functions.
+ * Adding a new chip type = add one entry here.
+ */
+type ChipExtractor = (attrs: Record<string, unknown>) => ContentNode;
 
-  function flushText() {
-    if (!pendingText) return;
+const CHIP_EXTRACTORS: Record<string, ChipExtractor> = {
+  tagChip: (attrs) => ({
+    type: 'tag',
+    id: attrs.id as string,
+    name: attrs.name as string,
+    instruction: attrs.instruction as string,
+  }),
+  mediaChip: (attrs) => ({
+    type: 'media',
+    image: attrs.image as string,
+    mime_type: attrs.mimeType as string,
+  }),
+  excalidrawChip: (attrs) => ({
+    type: 'excalidraw',
+    elements: attrs.elements as string,
+    image: attrs.image as string | undefined,
+  }),
+  replacePreview: (attrs) => ({
+    type: 'replace',
+    original: attrs.original as string,
+    replacement: attrs.replacement as string,
+  }),
+  errorChip: (attrs) => ({
+    type: 'error',
+    source: attrs.source as string,
+    message: attrs.message as string,
+  }),
+  pasteChip: (attrs) => ({
+    type: 'paste',
+    content: attrs.content as string,
+  }),
+};
 
-    // Parse for ```replace blocks
-    // Format: ```replace\n{original}\n---\n{replacement}\n```
-    const replacePattern = /```replace\n([\s\S]*?)\n---\n([\s\S]*?)\n```/g;
+/**
+ * Text accumulator with embedded replace block parsing.
+ * Encapsulates pending text buffer and parsed ContentNode output.
+ */
+class TextAccumulator {
+  private pending = '';
+  private nodes: ContentNode[] = [];
+
+  append(text: string): void {
+    this.pending += text;
+  }
+
+  pushNode(node: ContentNode): void {
+    this.flush();
+    this.nodes.push(node);
+  }
+
+  flush(): void {
+    if (!this.pending) return;
+    this.parseAndPushText(this.pending);
+    this.pending = '';
+  }
+
+  /**
+   * Parse text for embedded ```replace blocks and push as nodes.
+   * Format: ```replace\n{original}\n---\n{replacement}\n```
+   */
+  private parseAndPushText(text: string): void {
+    const REPLACE_PATTERN = /```replace\n([\s\S]*?)\n---\n([\s\S]*?)\n```/g;
     let lastIndex = 0;
-    let match;
+    let match: RegExpExecArray | null;
 
-    while ((match = replacePattern.exec(pendingText)) !== null) {
+    while ((match = REPLACE_PATTERN.exec(text)) !== null) {
       // Add text before the match
       if (match.index > lastIndex) {
-        const beforeText = pendingText.slice(lastIndex, match.index);
+        const beforeText = text.slice(lastIndex, match.index);
         if (beforeText.trim()) {
-          nodes.push({ type: 'text', text: beforeText });
+          this.nodes.push({ type: 'text', text: beforeText });
         }
       }
 
       // Add the replace node
-      const original = match[1];
-      const replacement = match[2];
-      nodes.push({ type: 'replace', original, replacement });
+      this.nodes.push({
+        type: 'replace',
+        original: match[1],
+        replacement: match[2],
+      });
 
       lastIndex = match.index + match[0].length;
     }
 
     // Add remaining text after last match
-    if (lastIndex < pendingText.length) {
-      const afterText = pendingText.slice(lastIndex);
+    if (lastIndex < text.length) {
+      const afterText = text.slice(lastIndex);
       if (afterText.trim()) {
-        nodes.push({ type: 'text', text: afterText });
+        this.nodes.push({ type: 'text', text: afterText });
       }
     } else if (lastIndex === 0) {
       // No matches found, add as plain text
-      nodes.push({ type: 'text', text: pendingText });
-    }
-
-    pendingText = '';
-  }
-
-  function getListPrefix(): string {
-    if (listStack.length === 0) return '';
-    const indent = '  '.repeat(listStack.length - 1);
-    const ctx = listStack[listStack.length - 1];
-    if (ctx.type === 'bullet') {
-      return `${indent}- `;
-    } else {
-      return `${indent}${ctx.index}. `;
+      this.nodes.push({ type: 'text', text });
     }
   }
 
-  function walkNode(node: JSONContent) {
-    if (node.type === 'text' && node.text) {
-      // Apply marks as markdown (StarterKit v3 includes: bold, italic, strike, code, underline, link)
-      let text = node.text;
-      let linkHref: string | null = null;
-      if (node.marks) {
-        for (const mark of node.marks) {
-          switch (mark.type) {
-            case 'bold':
-              text = `**${text}**`;
-              break;
-            case 'italic':
-              text = `*${text}*`;
-              break;
-            case 'strike':
-              text = `~~${text}~~`;
-              break;
-            case 'code':
-              text = `\`${text}\``;
-              break;
-            case 'underline':
-              // No standard markdown for underline, use HTML
-              text = `<u>${text}</u>`;
-              break;
-            case 'link':
-              // Capture href, apply after other marks
-              linkHref = mark.attrs?.href ?? null;
-              break;
-          }
-        }
-        // Apply link last so it wraps the formatted text
-        if (linkHref) {
-          text = `[${text}](${linkHref})`;
-        }
-      }
-      pendingText += text;
-    } else if (node.type === 'tagChip' && node.attrs) {
-      flushText();
-      nodes.push({
-        type: 'tag',
-        id: node.attrs.id,
-        name: node.attrs.name,
-        instruction: node.attrs.instruction,
-      });
-    } else if (node.type === 'mediaChip' && node.attrs) {
-      flushText();
-      nodes.push({
-        type: 'media',
-        image: node.attrs.image,
-        mime_type: node.attrs.mimeType,
-      });
-    } else if (node.type === 'excalidrawChip' && node.attrs) {
-      flushText();
-      nodes.push({
-        type: 'excalidraw',
-        elements: node.attrs.elements,
-        image: node.attrs.image,
-      });
-    } else if (node.type === 'replacePreview' && node.attrs) {
-      flushText();
-      nodes.push({
-        type: 'replace',
-        original: node.attrs.original,
-        replacement: node.attrs.replacement,
-      });
-    } else if (node.type === 'errorChip' && node.attrs) {
-      flushText();
-      nodes.push({
-        type: 'error',
-        source: node.attrs.source,
-        message: node.attrs.message,
-      });
-    } else if (node.type === 'pasteChip' && node.attrs) {
-      flushText();
-      nodes.push({
-        type: 'paste',
-        content: node.attrs.content,
-      });
-    } else if (node.type === 'bulletList') {
-      // Push bullet list context
-      listStack.push({ type: 'bullet', index: 0 });
-      if (node.content) {
-        node.content.forEach(walkNode);
-      }
-      listStack.pop();
-    } else if (node.type === 'orderedList') {
-      // Push ordered list context (start from attrs or default to 1)
-      const start = node.attrs?.start ?? 1;
-      listStack.push({ type: 'ordered', index: start - 1 });
-      if (node.content) {
-        node.content.forEach(walkNode);
-      }
-      listStack.pop();
-    } else if (node.type === 'listItem') {
-      // Increment index for ordered lists
-      if (listStack.length > 0) {
-        listStack[listStack.length - 1].index++;
-      }
-      // Add newline before list item (except first item at top level)
-      if (pendingText || nodes.length > 0) {
-        pendingText += '\n';
-      }
-      // Add list marker
-      pendingText += getListPrefix();
-      // Walk children but handle nested lists specially
-      if (node.content) {
-        for (const child of node.content) {
+  getNodes(): ContentNode[] {
+    return this.nodes;
+  }
+
+  get hasContent(): boolean {
+    return this.pending.length > 0 || this.nodes.length > 0;
+  }
+}
+
+/**
+ * List context manager for markdown list formatting.
+ * Tracks nested list state (bullet vs ordered, current index).
+ */
+type ListType = 'bullet' | 'ordered';
+
+class ListContext {
+  private stack: Array<{ type: ListType; index: number }> = [];
+
+  enter(type: ListType, start = 1): void {
+    this.stack.push({ type, index: type === 'ordered' ? start - 1 : 0 });
+  }
+
+  exit(): void {
+    this.stack.pop();
+  }
+
+  incrementIndex(): void {
+    if (this.stack.length > 0) {
+      this.stack[this.stack.length - 1].index++;
+    }
+  }
+
+  getPrefix(): string {
+    if (this.stack.length === 0) return '';
+    const indent = '  '.repeat(this.stack.length - 1);
+    const ctx = this.stack[this.stack.length - 1];
+    return ctx.type === 'bullet' ? `${indent}- ` : `${indent}${ctx.index}. `;
+  }
+}
+
+/**
+ * Extract ContentNode array from TipTap JSONContent.
+ * Transforms the rich text tree into a flat array suitable for backend storage and LLM consumption.
+ */
+export function extractContentNodes(json: JSONContent): ContentNode[] {
+  if (!json.content?.length) return [];
+
+  const accumulator = new TextAccumulator();
+  const listCtx = new ListContext();
+
+  function walk(node: JSONContent): void {
+    const { type, attrs, content, text, marks } = node;
+
+    // Text node with optional marks
+    if (type === 'text' && text) {
+      accumulator.append(applyMarks(text, marks));
+      return;
+    }
+
+    // Chip node — check extractors registry
+    if (type && attrs && CHIP_EXTRACTORS[type]) {
+      accumulator.pushNode(CHIP_EXTRACTORS[type](attrs));
+      return;
+    }
+
+    // Structural nodes
+    switch (type) {
+      case 'bulletList':
+        listCtx.enter('bullet');
+        content?.forEach(walk);
+        listCtx.exit();
+        break;
+
+      case 'orderedList':
+        listCtx.enter('ordered', (attrs?.start as number) ?? 1);
+        content?.forEach(walk);
+        listCtx.exit();
+        break;
+
+      case 'listItem':
+        listCtx.incrementIndex();
+        if (accumulator.hasContent) accumulator.append('\n');
+        accumulator.append(listCtx.getPrefix());
+        // Walk children, handling paragraph wrapper specially
+        for (const child of content ?? []) {
           if (child.type === 'paragraph') {
             // Don't add newline for first paragraph in list item
-            if (child.content) {
-              child.content.forEach(walkNode);
-            }
-          } else if (child.type === 'bulletList' || child.type === 'orderedList') {
-            // Nested list - walk it
-            walkNode(child);
+            child.content?.forEach(walk);
           } else {
-            walkNode(child);
+            walk(child);
           }
         }
-      }
-    } else if (node.type === 'hardBreak') {
-      // Hard break within a paragraph - preserve as newline
-      pendingText += '\n';
-    } else if (node.type === 'paragraph') {
-      // Add newline between paragraphs (except first)
-      if (pendingText || nodes.length > 0) {
-        pendingText += '\n';
-      }
-      if (node.content) {
-        node.content.forEach(walkNode);
-      }
-    } else if (node.content) {
-      node.content.forEach(walkNode);
+        break;
+
+      case 'hardBreak':
+        accumulator.append('\n');
+        break;
+
+      case 'paragraph':
+        if (accumulator.hasContent) accumulator.append('\n');
+        content?.forEach(walk);
+        break;
+
+      default:
+        // Generic container — recurse into children
+        content?.forEach(walk);
     }
   }
 
-  json.content.forEach(walkNode);
-  flushText();
+  json.content.forEach(walk);
+  accumulator.flush();
 
   // Trim trailing whitespace from last text node
+  const nodes = accumulator.getNodes();
   if (nodes.length > 0) {
     const last = nodes[nodes.length - 1];
     if (last.type === 'text') {
       last.text = last.text.trimEnd();
-      if (!last.text) {
-        nodes.pop();
-      }
+      if (!last.text) nodes.pop();
     }
   }
 
