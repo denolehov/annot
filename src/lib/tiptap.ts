@@ -981,7 +981,7 @@ export function createSlashSuggestion(
       id: 'excalidraw',
       name: 'excalidraw',
       description: 'Draw a diagram',
-      icon: '📐',
+      icon: 'excalidraw',
       action: (editor, range) => {
         editor
           .chain()
@@ -1000,7 +1000,7 @@ export function createSlashSuggestion(
       id: 'replace',
       name: 'replace',
       description: 'Propose a replacement',
-      icon: '✏️',
+      icon: 'edit',
       action: (editor, range) => {
         // Check if there's already a replace block (limit to one per annotation)
         // Either a sealed replacePreview node or an isolated fence in editing

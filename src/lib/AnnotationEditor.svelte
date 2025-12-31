@@ -7,6 +7,7 @@
   import { useAnnotationEditor } from './composables';
   import { trimContent, isContentEmpty } from './tiptap';
   import type { Tag } from './types';
+  import Icon from './CommandPalette/Icon.svelte';
 
   interface NodeRef {
     type: 'Chip' | 'Placeholder';
@@ -501,7 +502,7 @@
           ann.selectSlashItem(cmd);
         }}
       >
-        <span class="slash-icon">{cmd.icon}</span>
+        <span class="slash-icon"><Icon name={cmd.icon} /></span>
         <div class="slash-info">
           <span class="slash-name">{cmd.name}</span>
           <span class="slash-description">{cmd.description}</span>
