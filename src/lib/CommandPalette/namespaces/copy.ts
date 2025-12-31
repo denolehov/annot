@@ -8,8 +8,9 @@ export const copyNamespace: Namespace = {
   id: 'copy',
   label: 'Copy',
   icon: 'copy-code',
-  fields: [], // No fields — not editable
-  hotkeys: [], // No hotkeys for action namespaces
+  fields: [],
+  hotkeys: [],
+  capabilities: { delete: false },
 };
 
 // Static items — execute copy_to_clipboard on selection

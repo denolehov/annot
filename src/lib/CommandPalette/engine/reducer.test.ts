@@ -14,13 +14,14 @@ const tagsNamespace: Namespace = {
   ],
 };
 
-// Test namespace with action items (no fields = action-only)
+// Test namespace with action items (no fields = action-only, no CRUD)
 const copyNamespace: Namespace = {
   id: 'copy',
   label: 'Copy',
   icon: 'copy',
   fields: [],
   hotkeys: [],
+  capabilities: { delete: false },
 };
 
 // Test namespace with single action item (should auto-execute)

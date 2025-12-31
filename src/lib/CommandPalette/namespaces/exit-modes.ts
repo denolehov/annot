@@ -24,6 +24,7 @@ export const exitModesNamespace: Namespace = {
     { name: 'Reject', instruction: 'Reject and start over with a different approach' },
     { name: 'Discuss', instruction: 'Need to discuss before proceeding' },
   ],
+  capabilities: { reorder: true },
 };
 
 // In-memory storage

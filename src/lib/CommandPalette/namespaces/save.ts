@@ -8,8 +8,9 @@ export const saveNamespace: Namespace = {
   id: 'save',
   label: 'Save',
   icon: 'save',
-  fields: [], // No fields — not editable
-  hotkeys: [], // No hotkeys for action namespaces
+  fields: [],
+  hotkeys: [],
+  capabilities: { delete: false },
 };
 
 // Single item — opens save modal

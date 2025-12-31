@@ -2,6 +2,7 @@
 // No side effects, no DOM dependencies
 
 import type { State, Action, Command, QueryContext, ReduceResult, Namespace, Item, PendingItem } from './types';
+import { canCreate, canUpdate, canDelete, canReorder, isItemEditable } from './types';
 
 /**
  * Compute the item list for ITEM_FILTER state
@@ -16,10 +17,8 @@ export function computeItemList(
   const hasExactMatch = matches.some(
     (m) => m.name.toLowerCase() === queryTrimmed.toLowerCase()
   );
-  // Show Create only if: namespace allows it, has fields, query is non-empty, and no exact match
-  const hasFields = state.namespace.fields.length > 0;
-  const allowCreate = state.namespace.allowCreate !== false;
-  const showCreate = allowCreate && hasFields && queryTrimmed !== '' && !hasExactMatch;
+  // Show Create only if: namespace allows it, query is non-empty, and no exact match
+  const showCreate = canCreate(state.namespace) && queryTrimmed !== '' && !hasExactMatch;
   const createIndex = showCreate ? matches.length : -1;
 
   return { matches, showCreate, createIndex };
@@ -280,6 +279,11 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
 
       // DELETE only works in navigating mode
       if (action.type === 'DELETE' && state.inputMode === 'navigating') {
+        // Check namespace capability
+        if (!canDelete(state.namespace)) {
+          return { state, commands };
+        }
+
         const { matches, showCreate, createIndex } = computeItemList(state, ctx);
 
         // Don't delete if on Create option
@@ -287,13 +291,9 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
           return { state, commands };
         }
 
-        // Don't delete ephemeral items (but allow obsidian items with actions)
+        // Check if item can be deleted
         const selectedItem = matches[state.selectedIndex];
-        if (selectedItem?.isEphemeral) {
-          return { state, commands };
-        }
-        // For non-obsidian namespaces, also block items with actions
-        if (selectedItem?.action && state.namespace.id !== 'obsidian') {
+        if (!selectedItem || !isItemEditable(selectedItem)) {
           return { state, commands };
         }
 
@@ -304,24 +304,26 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
         }
 
         // Second d - actually delete
-        const item = matches[state.selectedIndex];
-        if (item) {
-          commands.push({
-            type: 'DELETE_ITEM',
-            namespace: state.namespace.id,
-            itemId: item.id,
-          });
-          commands.push({
-            type: 'EMIT_EVENT',
-            event: 'commandpalette:item-deleted',
-            payload: { namespace: state.namespace.id, itemId: item.id },
-          });
-        }
+        commands.push({
+          type: 'DELETE_ITEM',
+          namespace: state.namespace.id,
+          itemId: selectedItem.id,
+        });
+        commands.push({
+          type: 'EMIT_EVENT',
+          event: 'commandpalette:item-deleted',
+          payload: { namespace: state.namespace.id, itemId: selectedItem.id },
+        });
         return { state: clearPending(state), commands };
       }
 
       // EDIT only works in navigating mode - opens edit form for selected item
       if (action.type === 'EDIT' && state.inputMode === 'navigating') {
+        // Check namespace capability
+        if (!canUpdate(state.namespace)) {
+          return { state, commands };
+        }
+
         const { matches, showCreate, createIndex } = computeItemList(state, ctx);
 
         // Don't edit if on Create option
@@ -329,31 +331,22 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
           return { state, commands };
         }
 
+        // Check if item can be edited
         const item = matches[state.selectedIndex];
-
-        // Don't edit ephemeral items (but allow obsidian items with actions)
-        if (item?.isEphemeral) {
-          return { state, commands };
-        }
-        // For non-obsidian namespaces, also block items with actions
-        if (item?.action && state.namespace.id !== 'obsidian') {
+        if (!item || !isItemEditable(item)) {
           return { state, commands };
         }
 
-        if (item) {
-          return {
-            state: {
-              type: 'EDIT_FORM',
-              namespace: state.namespace,
-              item,
-              values: { ...item.values },
-              focusedField: 0,
-            },
-            commands,
-          };
-        }
-
-        return { state, commands };
+        return {
+          state: {
+            type: 'EDIT_FORM',
+            namespace: state.namespace,
+            item,
+            values: { ...item.values },
+            focusedField: 0,
+          },
+          commands,
+        };
       }
 
       // SET only works in navigating mode - sets the selected item as active and closes
@@ -379,10 +372,10 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
         return { state, commands };
       }
 
-      // REORDER enters reorder mode (only in navigating mode with items, not for tags)
+      // REORDER enters reorder mode (only in navigating mode with items)
       if (action.type === 'REORDER' && state.inputMode === 'navigating') {
-        if (state.namespace.id === 'tags') {
-          return { state, commands }; // Tags cannot be reordered
+        if (!canReorder(state.namespace)) {
+          return { state, commands };
         }
         const items = ctx.getItems(state.namespace);
         if (items.length < 2) {

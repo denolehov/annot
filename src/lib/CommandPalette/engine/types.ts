@@ -13,6 +13,18 @@ export interface Hotkey {
   action: Action['type'];   // action to dispatch (e.g., 'DELETE')
 }
 
+/** CRUD capabilities for a namespace. Unset values use sensible defaults. */
+export interface Capabilities {
+  /** Show "Create X" option. Default: fields.length > 0 */
+  create?: boolean;
+  /** Allow editing items via form. Default: fields.length > 0 */
+  update?: boolean;
+  /** Allow deleting items. Default: true */
+  delete?: boolean;
+  /** Allow reordering items. Default: false */
+  reorder?: boolean;
+}
+
 export interface Namespace {
   id: string;
   label: string;
@@ -21,8 +33,39 @@ export interface Namespace {
   hotkeys?: Hotkey[];
   /** Example values shown as placeholders in CREATE_FORM (random one picked per form open) */
   examples?: Array<Record<string, string>>;
-  /** Whether to show the "Create new" option. Defaults to true if fields are present. */
-  allowCreate?: boolean;
+  /** Explicit CRUD capabilities. Unset values derived from fields presence. */
+  capabilities?: Capabilities;
+}
+
+// === Capability Resolvers ===
+
+export function canCreate(ns: Namespace): boolean {
+  return ns.capabilities?.create ?? ns.fields.length > 0;
+}
+
+export function canUpdate(ns: Namespace): boolean {
+  return ns.capabilities?.update ?? ns.fields.length > 0;
+}
+
+export function canDelete(ns: Namespace): boolean {
+  return ns.capabilities?.delete ?? true;
+}
+
+export function canReorder(ns: Namespace): boolean {
+  return ns.capabilities?.reorder ?? false;
+}
+
+/** Check if a specific item can be modified (edited/deleted) */
+export function isItemEditable(item: Item): boolean {
+  return !item.readonly && !item.isEphemeral;
+}
+
+/** Get placeholder text for item filter input */
+export function getFilterPlaceholder(ns: Namespace, totalItems: number): string {
+  if (!canCreate(ns)) {
+    return 'Filter...';
+  }
+  return totalItems === 0 ? 'Type to create...' : 'Filter or create...';
 }
 
 export type Field =
@@ -36,6 +79,7 @@ export interface Item {
   values: Record<string, string>;
   isEphemeral?: boolean; // True if injected by agent (session-scoped, not editable)
   action?: Command; // If present: execute on ENTER instead of edit form
+  readonly?: boolean; // Blocks CRUD operations (delete, edit) for this specific item
 }
 
 // Pending item — being created, no ID yet

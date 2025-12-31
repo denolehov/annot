@@ -8,8 +8,9 @@ export const themeNamespace: Namespace = {
   id: 'theme',
   label: 'Theme',
   icon: 'sun',
-  fields: [], // No fields — not editable
-  hotkeys: [], // No hotkeys for action namespaces
+  fields: [],
+  hotkeys: [],
+  capabilities: { delete: false },
 };
 
 // Static items — emit SET_THEME event on selection

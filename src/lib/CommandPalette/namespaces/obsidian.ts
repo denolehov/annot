@@ -31,12 +31,12 @@ export function getObsidianItems(): Item[] {
     action: { type: 'EXPORT_TO_OBSIDIAN' as const, vault: vault.name },
   }));
 
-  // Add "Add Vault" item at the end
+  // Add "Add Vault" item at the end (readonly: cannot be deleted/edited)
   const addVaultItem: Item = {
     id: '__add_vault__',
     name: '+ Add Vault',
     values: {},
-    // No action — selecting this triggers CREATE_FORM via reducer
+    readonly: true,
   };
 
   return [...exportItems, addVaultItem];

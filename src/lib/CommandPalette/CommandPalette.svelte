@@ -5,6 +5,7 @@
   import { reduce, computeItemList } from './engine/reducer';
   import { createQueryContext, setTagItems, setExitModeItems, saveTagItem, deleteTagItem, saveExitModeItem, deleteExitModeItem, deleteBookmarkItem, reorderExitModeItems, generateTagId, generateExitModeId, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId } from './namespaces';
   import type { State, Action, Command, Item, Namespace, InitialState } from './engine/types';
+  import { getFilterPlaceholder } from './engine/types';
   import type { Tag, ExitMode } from '$lib/types';
   import Icon from './Icon.svelte';
 
@@ -30,7 +31,7 @@
     onEvent?: (event: string, payload: unknown) => void;
   }
 
-  let { tags, exitModes, onClose, onSetExitMode, onTagsChange, onExitModesChange, showToast, onOpenSaveModal, initialState, onItemCreated, onEvent }: Props = $props();
+  let { tags, exitModes, onClose, onSetExitMode, onTagsChange, onExitModesChange, onBookmarkDeleted, showToast, onOpenSaveModal, initialState, onItemCreated, onEvent }: Props = $props();
 
   // Convert domain types to Item format
   function tagToItem(tag: Tag): Item {
@@ -582,7 +583,7 @@
           type="text"
           class="inline-input"
           class:navigating={isNavigating}
-          placeholder={machineState.namespace.fields.length === 0 || machineState.namespace.allowCreate === false ? 'Filter...' : (itemListData.totalItems === 0 ? 'Type to create...' : 'Filter or create...')}
+          placeholder={getFilterPlaceholder(machineState.namespace, itemListData.totalItems)}
           value={currentQuery}
           oninput={handleInput}
         />
