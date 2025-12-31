@@ -187,12 +187,12 @@
       const win = getCurrentWindow();
       await win.show();
 
-      // Intercept window close (Cmd-W) to check for unsaved changes
+      // Intercept window close (Cmd-W, traffic light) to auto-save
       unlistenClose = await win.onCloseRequested(async (event) => {
         if (!closeHandled) {
           closeHandled = true;
           event.preventDefault();
-          tryCancel();
+          handleSave();
         }
       });
     } catch (e) {
