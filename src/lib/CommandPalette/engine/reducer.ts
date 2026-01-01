@@ -67,6 +67,7 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
                   item,
                   values: { ...item.values },
                   focusedField: 0,
+                  closeOnSave: true, // Close CP after save when opened from editor
                 },
                 commands,
               };
@@ -591,6 +592,13 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
           namespace: state.namespace.id,
           item: updatedItem,
         });
+
+        // If opened from editor (closeOnSave), close CP; otherwise return to ITEM_FILTER
+        if (state.closeOnSave) {
+          commands.push({ type: 'EMIT_EVENT', event: 'commandpalette:close', payload: undefined });
+          return { state: { type: 'IDLE' }, commands };
+        }
+
         return {
           state: {
             type: 'ITEM_FILTER',

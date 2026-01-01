@@ -122,6 +122,7 @@ export type State =
       item: Item;
       values: Record<string, string>;
       focusedField: number;
+      closeOnSave?: boolean; // If true, close CP after save instead of returning to ITEM_FILTER
     }
   | {
       type: 'CREATE_FORM';
