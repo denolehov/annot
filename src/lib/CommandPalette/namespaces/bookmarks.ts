@@ -11,7 +11,7 @@ export const bookmarksNamespace: Namespace = {
   label: 'Bookmarks',
   icon: 'bookmark',
   ItemComponent: BookmarkItem,
-  fields: [{ key: 'label', label: 'Label', type: 'text', required: true }],
+  fields: [{ key: 'label', label: 'Label', type: 'text', required: true, placeholder: 'Enter a label...' }],
   hotkeys: [
     { key: 'd', display: 'dd', label: 'delete', action: 'DELETE' },
     { key: 'e', label: 'edit', action: 'EDIT' },
