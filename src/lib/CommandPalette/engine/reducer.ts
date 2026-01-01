@@ -433,6 +433,16 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
         // Selected an existing item
         const item = matches[action.index];
         if (item) {
+          // Executable item — run action, close palette
+          if (item.action) {
+            commands.push(item.action);
+            return {
+              state: { type: 'IDLE' },
+              commands,
+            };
+          }
+
+          // Regular item — open edit form
           return {
             state: {
               type: 'EDIT_FORM',
