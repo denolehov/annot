@@ -3,11 +3,13 @@
 
 import type { Namespace, Item } from '../engine/types';
 import { fuzzySearch } from '$lib/fuzzy';
+import { SimpleItem } from '../items';
 
 export const exitModesNamespace: Namespace = {
   id: 'exit-modes',
   label: 'Exit Modes',
   icon: 'exit',
+  ItemComponent: SimpleItem,
   fields: [
     { key: 'name', label: 'Name', type: 'text', required: true },
     { key: 'instruction', label: 'Instruction', type: 'textarea', required: true },

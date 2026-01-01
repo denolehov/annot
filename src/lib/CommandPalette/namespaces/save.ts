@@ -3,11 +3,13 @@
 
 import type { Namespace, Item } from '../engine/types';
 import { fuzzySearch } from '$lib/fuzzy';
+import { SimpleItem } from '../items';
 
 export const saveNamespace: Namespace = {
   id: 'save',
   label: 'Save',
   icon: 'save',
+  ItemComponent: SimpleItem,
   fields: [],
   hotkeys: [],
   capabilities: { delete: false },

@@ -602,22 +602,26 @@
       {#if itemListData.matches.length > 0 || itemListData.showCreate}
         <ul class="item-list" class:filtering={!isNavigating} role="listbox" bind:this={listEl}>
           {#each itemListData.matches as item, i}
+            {@const ItemComponent = machineState.namespace.ItemComponent}
+            {@const isSelected = machineState.selectedIndex === i}
+            {@const itemState = !isSelected
+              ? 'idle'
+              : machineState.pendingDelete
+                ? 'pending-delete'
+                : machineState.inputMode === 'filtering'
+                  ? 'preselected'
+                  : 'selected'}
             <li
-              class="item"
-              class:selected={machineState.selectedIndex === i}
-              class:pending-delete={machineState.pendingDelete && machineState.selectedIndex === i}
-              class:ephemeral={item.isEphemeral}
               role="option"
-              aria-selected={machineState.selectedIndex === i}
+              aria-selected={isSelected}
               onclick={() => dispatch({ type: 'SELECT', index: i })}
               onkeydown={() => {}}
             >
-              <span class="name">{item.name}</span>
-              {#if item.isEphemeral}
-                <span class="ephemeral-badge">session</span>
-              {:else if machineState.namespace.id === 'theme' && item.id === `theme-${currentThemePreference}`}
-                <span class="current-indicator"><Icon name="check" /></span>
-              {/if}
+              <ItemComponent
+                {item}
+                selectionState={itemState}
+                isCurrentTheme={machineState.namespace.id === 'theme' && item.id === `theme-${currentThemePreference}`}
+              />
             </li>
           {/each}
           {#if itemListData.showCreate}

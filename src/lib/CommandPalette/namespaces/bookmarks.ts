@@ -5,11 +5,13 @@ import type { Namespace, Item } from '../engine/types';
 import type { Bookmark } from '$lib/types';
 import { fuzzySearch } from '$lib/fuzzy';
 import { invoke } from '@tauri-apps/api/core';
+import { BookmarkItem } from '../items';
 
 export const bookmarksNamespace: Namespace = {
   id: 'bookmarks',
   label: 'Bookmarks',
   icon: 'bookmark',
+  ItemComponent: BookmarkItem,
   fields: [{ key: 'label', label: 'Label', type: 'text', required: true }],
   hotkeys: [
     { key: 'd', display: 'dd', label: 'delete', action: 'DELETE' },
@@ -40,15 +42,12 @@ export function filterBookmarkItems(query: string): Item[] {
 
 /** Convert a Bookmark from the backend to a command palette Item. */
 export function bookmarkToItem(bookmark: Bookmark): Item {
+  // Label derivation: user-set label, or source title as fallback
   const displayLabel = bookmark.label ?? bookmark.snapshot.source_title;
-
-  // Format the date for display
-  const date = new Date(bookmark.created_at);
-  const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   return {
     id: bookmark.id,
-    name: `${displayLabel} • ${bookmark.snapshot.source_title} • ${dateStr}`,
+    name: displayLabel, // Just the label for display and search
     values: {
       label: bookmark.label ?? '',
       source_title: bookmark.snapshot.source_title,

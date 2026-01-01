@@ -1,6 +1,25 @@
 // CommandPalette engine types
 // Pure domain types with no DOM dependencies
 
+import type { Component } from 'svelte';
+
+// === Item Component Props ===
+
+/**
+ * Visual state for an item in the command palette.
+ * - idle: Not selected
+ * - preselected: Selected while filtering (user typing, outline style)
+ * - selected: Selected while navigating (arrow keys, solid style)
+ * - pending-delete: Awaiting delete confirmation (dd)
+ */
+export type ItemSelectionState = 'idle' | 'preselected' | 'selected' | 'pending-delete';
+
+export interface ItemComponentProps {
+  item: Item;
+  selectionState: ItemSelectionState;
+  isCurrentTheme?: boolean; // Badge indicator for theme namespace
+}
+
 // === Domain ===
 
 /**
@@ -29,6 +48,8 @@ export interface Namespace {
   id: string;
   label: string;
   icon: string;
+  /** Component used to render items in this namespace */
+  ItemComponent: Component<ItemComponentProps>;
   fields: Field[];
   hotkeys?: Hotkey[];
   /** Example values shown as placeholders in CREATE_FORM (random one picked per form open) */

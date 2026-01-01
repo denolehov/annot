@@ -3,11 +3,13 @@
 
 import type { Namespace, Item } from '../engine/types';
 import { fuzzySearch } from '$lib/fuzzy';
+import { SimpleItem } from '../items';
 
 export const obsidianNamespace: Namespace = {
   id: 'obsidian',
   label: 'Obsidian',
   icon: 'obsidian',
+  ItemComponent: SimpleItem,
   fields: [{ key: 'name', label: 'Vault Name', type: 'text', required: true }],
   hotkeys: [
     { key: 'd', display: 'dd', label: 'delete', action: 'DELETE' },

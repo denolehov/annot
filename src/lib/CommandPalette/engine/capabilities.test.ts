@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import type { Component } from 'svelte';
 import {
   canCreate,
   canUpdate,
@@ -8,7 +9,11 @@ import {
   getFilterPlaceholder,
   type Namespace,
   type Item,
+  type ItemComponentProps,
 } from './types';
+
+// Mock component for tests (not rendered, just needed for type satisfaction)
+const MockItemComponent = null as unknown as Component<ItemComponentProps>;
 
 // === Test Namespaces ===
 
@@ -16,6 +21,7 @@ const crudNamespace: Namespace = {
   id: 'tags',
   label: 'Tags',
   icon: 'hashtag',
+  ItemComponent: MockItemComponent,
   fields: [{ key: 'name', label: 'Name', type: 'text' }],
 };
 
@@ -23,6 +29,7 @@ const actionOnlyNamespace: Namespace = {
   id: 'theme',
   label: 'Theme',
   icon: 'sun',
+  ItemComponent: MockItemComponent,
   fields: [],
 };
 
@@ -30,6 +37,7 @@ const noCreateNamespace: Namespace = {
   id: 'bookmarks',
   label: 'Bookmarks',
   icon: 'bookmark',
+  ItemComponent: MockItemComponent,
   fields: [{ key: 'label', label: 'Label', type: 'text' }],
   capabilities: { create: false },
 };
@@ -38,6 +46,7 @@ const reorderableNamespace: Namespace = {
   id: 'exit-modes',
   label: 'Exit Modes',
   icon: 'exit',
+  ItemComponent: MockItemComponent,
   fields: [{ key: 'name', label: 'Name', type: 'text' }],
   capabilities: { reorder: true },
 };
@@ -46,6 +55,7 @@ const fullCapabilitiesNamespace: Namespace = {
   id: 'custom',
   label: 'Custom',
   icon: 'star',
+  ItemComponent: MockItemComponent,
   fields: [],
   capabilities: { create: true, update: true, delete: false, reorder: true },
 };

@@ -1,12 +1,17 @@
 import { describe, it, expect } from 'vitest';
+import type { Component } from 'svelte';
 import { reduce, computeItemList } from './reducer';
-import type { State, Action, QueryContext, Namespace, Item, Command } from './types';
+import type { State, Action, QueryContext, Namespace, Item, Command, ItemComponentProps } from './types';
+
+// Mock component for tests (not rendered, just needed for type satisfaction)
+const MockItemComponent = null as unknown as Component<ItemComponentProps>;
 
 // Test namespace with regular items
 const tagsNamespace: Namespace = {
   id: 'tags',
   label: 'Tags',
   icon: 'hashtag',
+  ItemComponent: MockItemComponent,
   fields: [{ key: 'name', label: 'Name', type: 'text', required: true }],
   hotkeys: [
     { key: 'd', display: 'dd', label: 'delete', action: 'DELETE' },
@@ -19,6 +24,7 @@ const copyNamespace: Namespace = {
   id: 'copy',
   label: 'Copy',
   icon: 'copy',
+  ItemComponent: MockItemComponent,
   fields: [],
   hotkeys: [],
   capabilities: { delete: false },
@@ -29,6 +35,7 @@ const saveNamespace: Namespace = {
   id: 'save',
   label: 'Save',
   icon: 'save',
+  ItemComponent: MockItemComponent,
   fields: [],
   hotkeys: [],
 };
@@ -234,6 +241,7 @@ describe('reducer: obsidian namespace special handling', () => {
     id: 'obsidian',
     label: 'Obsidian',
     icon: 'obsidian',
+    ItemComponent: MockItemComponent,
     fields: [{ key: 'name', label: 'Vault Name', type: 'text', required: true }],
     hotkeys: [
       { key: 'd', display: 'dd', label: 'delete', action: 'DELETE' },
