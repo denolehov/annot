@@ -12,7 +12,7 @@
 //! - A window is a viewport that can display content
 //! - Two windows showing the same file share annotations
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
@@ -97,6 +97,8 @@ pub struct Review {
     pub selected_exit_mode_id: Option<String>,
     /// User configuration (tags, exit modes).
     pub config: UserConfig,
+    /// Bookmark IDs created during this session (context omitted in output).
+    pub session_created_bookmarks: HashSet<String>,
 
     //--- Result delivery ---
     /// Channel to send result when review ends. `None` for CLI mode.
@@ -243,6 +245,7 @@ impl Review {
             session_comment: None,
             selected_exit_mode_id: None,
             config,
+            session_created_bookmarks: HashSet::new(),
             result_channel,
             saved_to: None,
         }

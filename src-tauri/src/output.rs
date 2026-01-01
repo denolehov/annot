@@ -352,24 +352,34 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
         for bookmark in &unique_bookmarks {
             let short_id = &bookmark.id[..bookmark.id.len().min(3)];
             let display_label = bookmark.display_label();
-            output.push_str(&format!("  [@ {}] {}\n", short_id, display_label));
-            output.push_str(&format!(
-                "    Source: {}\n",
-                bookmark.snapshot.source_title()
-            ));
-            if let Some(ref project) = bookmark.project_path {
-                output.push_str(&format!("    Project: {}\n", project.display()));
+
+            if review.session_created_bookmarks.contains(&bookmark.id) {
+                // Condensed: created this session, agent already has context
+                output.push_str(&format!(
+                    "  [@ {}] {} (this session)\n",
+                    short_id, display_label
+                ));
+            } else {
+                // Full: pre-existing bookmark, emit full context
+                output.push_str(&format!("  [@ {}] {}\n", short_id, display_label));
+                output.push_str(&format!(
+                    "    Source: {}\n",
+                    bookmark.snapshot.source_title()
+                ));
+                if let Some(ref project) = bookmark.project_path {
+                    output.push_str(&format!("    Project: {}\n", project.display()));
+                }
+                output.push_str(&format!(
+                    "    Created: {}\n",
+                    bookmark.created_at.format("%Y-%m-%d")
+                ));
+                output.push_str("    ────────────────────────────────────\n");
+                // Show full bookmark content
+                for line in bookmark.snapshot.content().lines() {
+                    output.push_str(&format!("    {}\n", line));
+                }
+                output.push_str("    ────────────────────────────────────\n\n");
             }
-            output.push_str(&format!(
-                "    Created: {}\n",
-                bookmark.created_at.format("%Y-%m-%d")
-            ));
-            output.push_str("    ────────────────────────────────────\n");
-            // Show full bookmark content
-            for line in bookmark.snapshot.content().lines() {
-                output.push_str(&format!("    {}\n", line));
-            }
-            output.push_str("    ────────────────────────────────────\n\n");
         }
     }
 

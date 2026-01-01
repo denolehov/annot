@@ -322,6 +322,7 @@ pub fn create_bookmark(
 
         let bookmark = Bookmark::new(label, project_path, snapshot);
         review.config.upsert_bookmark(bookmark.clone());
+        review.session_created_bookmarks.insert(bookmark.id.clone());
 
         Ok(bookmark)
     })
@@ -372,6 +373,7 @@ pub fn create_selection_bookmark(
         let project_path = std::env::current_dir().ok();
         let bookmark = Bookmark::new(label, project_path, snapshot);
         review.config.upsert_bookmark(bookmark.clone());
+        review.session_created_bookmarks.insert(bookmark.id.clone());
 
         Ok(bookmark)
     })
