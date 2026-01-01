@@ -818,9 +818,6 @@
     <SessionEditor
       content={sessionComment}
       isOpen={sessionEditorOpen}
-      {tags}
-      {bookmarks}
-      {allowsImagePaste}
       pendingTagInsertion={pendingTagInsertion?.editorKey === 'session' ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
       onUpdate={updateSessionComment}
       onOpen={openSessionEditor}

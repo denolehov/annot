@@ -1,13 +1,15 @@
 <script lang="ts">
-  import type { JSONContent, Tag, Bookmark } from '$lib/types';
+  /**
+   * SessionEditor - File-level/global comment editor.
+   * Uses context for: tags, bookmarks, allowsImagePaste
+   */
+  import type { JSONContent, Tag } from '$lib/types';
   import AnnotationEditor from '$lib/AnnotationEditor.svelte';
+  import { getAnnotContext } from '$lib/context';
 
   interface Props {
     content: JSONContent | undefined;
     isOpen: boolean;
-    tags: Tag[];
-    bookmarks: Bookmark[];
-    allowsImagePaste: boolean;
     pendingTagInsertion: { from: number; to: number; tag: Tag } | null;
     onUpdate: (content: JSONContent | null) => void;
     onOpen: () => void;
@@ -19,9 +21,6 @@
   let {
     content,
     isOpen,
-    tags,
-    bookmarks,
-    allowsImagePaste,
     pendingTagInsertion,
     onUpdate,
     onOpen,
@@ -29,6 +28,8 @@
     onRequestCreateTag,
     onImagePasteBlocked
   }: Props = $props();
+
+  const ctx = getAnnotContext();
 </script>
 
 {#if isOpen || content}
@@ -39,9 +40,9 @@
       onUpdate={onUpdate}
       onUnseal={onOpen}
       onDismiss={onClose}
-      {tags}
-      {bookmarks}
-      {allowsImagePaste}
+      tags={ctx.tags}
+      bookmarks={ctx.bookmarks}
+      allowsImagePaste={ctx.allowsImagePaste}
       {onImagePasteBlocked}
       {onRequestCreateTag}
       {pendingTagInsertion}
