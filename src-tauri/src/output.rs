@@ -360,9 +360,8 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
                     bookmark.created_at.format("%Y-%m-%d")
                 ));
                 output.push_str("    ────────────────────────────────────\n");
-                // Show preview (first 10 lines)
-                let preview = bookmark.snapshot.preview(10);
-                for line in preview.lines() {
+                // Show full bookmark content
+                for line in bookmark.snapshot.content().lines() {
                     output.push_str(&format!("    {}\n", line));
                 }
                 output.push_str("    ────────────────────────────────────\n\n");

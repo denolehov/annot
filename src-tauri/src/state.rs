@@ -323,14 +323,18 @@ impl BookmarkSnapshot {
 
     /// Get a preview of the content (first N lines).
     pub fn preview(&self, max_lines: usize) -> String {
-        let context = match self {
-            BookmarkSnapshot::Session { context, .. } => context,
-        };
-        context
+        self.content()
             .lines()
             .take(max_lines)
             .collect::<Vec<_>>()
             .join("\n")
+    }
+
+    /// Get the full content of this snapshot.
+    pub fn content(&self) -> &str {
+        match self {
+            BookmarkSnapshot::Session { context, .. } => context,
+        }
     }
 }
 
