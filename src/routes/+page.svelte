@@ -350,10 +350,13 @@
   // Bookmark toggle handler
   async function handleToggleBookmark() {
     if (isBookmarked && currentBookmarkId) {
-      await deleteBookmarkItem(currentBookmarkId);
+      const idToDelete = currentBookmarkId;
+      await deleteBookmarkItem(idToDelete);
       isBookmarked = false;
       currentBookmarkId = null;
       lastCreatedBookmarkId = null;
+      // Sync bookmarks state so TipTap @ suggestions stay fresh
+      bookmarks = bookmarks.filter((b) => b.id !== idToDelete);
       showToast('Bookmark removed');
     } else {
       const bookmark = await createBookmark();
@@ -361,6 +364,8 @@
       isBookmarked = true;
       currentBookmarkId = bookmark.id;
       lastCreatedBookmarkId = bookmark.id;
+      // Sync bookmarks state so TipTap @ suggestions see the new bookmark
+      bookmarks = [...bookmarks, bookmark];
       showToast(`Bookmarked as ${shortId} · [e] edit`);
     }
   }
@@ -389,6 +394,13 @@
     if (lastCreatedBookmarkId === id) {
       lastCreatedBookmarkId = null;
     }
+    // Sync bookmarks state so TipTap @ suggestions stay fresh
+    bookmarks = bookmarks.filter((b) => b.id !== id);
+  }
+
+  function handleBookmarkUpdated(id: string, label: string) {
+    // Sync bookmarks state so TipTap @ suggestions stay fresh
+    bookmarks = bookmarks.map((b) => (b.id === id ? { ...b, label } : b));
   }
 
   // Handle events from CommandPalette (e.g., theme change)
@@ -907,12 +919,14 @@
 {#if commandPaletteOpen}
   <CommandPalette
     {tags}
+    {bookmarks}
     exitModes={exitModeState.modes}
     onClose={handleCommandPaletteClose}
     onSetExitMode={handleSetExitModeFromPalette}
     onTagsChange={handleTagsChange}
     onExitModesChange={handleExitModesChange}
     onBookmarkDeleted={handleBookmarkDeleted}
+    onBookmarkUpdated={handleBookmarkUpdated}
     {showToast}
     onOpenSaveModal={openSaveModal}
     initialState={pendingTagCreation

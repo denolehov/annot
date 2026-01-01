@@ -3,10 +3,10 @@
   import { invoke } from '@tauri-apps/api/core';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { reduce, computeItemList } from './engine/reducer';
-  import { createQueryContext, setTagItems, setExitModeItems, saveTagItem, deleteTagItem, saveExitModeItem, deleteExitModeItem, deleteBookmarkItem, reorderExitModeItems, generateTagId, generateExitModeId, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId } from './namespaces';
+  import { createQueryContext, setTagItems, setExitModeItems, setBookmarkItems, bookmarkToItem, saveTagItem, deleteTagItem, saveExitModeItem, deleteExitModeItem, saveBookmarkItem, deleteBookmarkItem, reorderExitModeItems, generateTagId, generateExitModeId, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId } from './namespaces';
   import type { State, Action, Command, Item, Namespace, InitialState } from './engine/types';
   import { getFilterPlaceholder } from './engine/types';
-  import type { Tag, ExitMode } from '$lib/types';
+  import type { Tag, ExitMode, Bookmark } from '$lib/types';
   import Icon from './Icon.svelte';
 
   // Config type matching Rust
@@ -19,11 +19,13 @@
   interface Props {
     tags: Tag[];
     exitModes: ExitMode[];
+    bookmarks: Bookmark[];
     onClose: () => void;
     onSetExitMode: (modeId: string) => void;
     onTagsChange?: (tags: Tag[]) => void;
     onExitModesChange?: (modes: ExitMode[]) => void;
     onBookmarkDeleted?: (id: string) => void;
+    onBookmarkUpdated?: (id: string, label: string) => void;
     showToast?: (message: string) => void;
     onOpenSaveModal?: () => void;
     initialState?: InitialState;
@@ -31,7 +33,7 @@
     onEvent?: (event: string, payload: unknown) => void;
   }
 
-  let { tags, exitModes, onClose, onSetExitMode, onTagsChange, onExitModesChange, onBookmarkDeleted, showToast, onOpenSaveModal, initialState, onItemCreated, onEvent }: Props = $props();
+  let { tags, exitModes, bookmarks, onClose, onSetExitMode, onTagsChange, onExitModesChange, onBookmarkDeleted, onBookmarkUpdated, showToast, onOpenSaveModal, initialState, onItemCreated, onEvent }: Props = $props();
 
   // Convert domain types to Item format
   function tagToItem(tag: Tag): Item {
@@ -64,6 +66,10 @@
 
   $effect(() => {
     setExitModeItems(exitModes.map(exitModeToItem));
+  });
+
+  $effect(() => {
+    setBookmarkItems(bookmarks.map(bookmarkToItem));
   });
 
   // State machine
@@ -152,6 +158,11 @@
             const orig = exitModes.find((m) => m.id === i.id);
             return itemToExitMode(i, orig);
           }));
+        } else if (cmd.namespace === 'bookmarks') {
+          saveBookmarkItem(cmd.item);
+          onBookmarkUpdated?.(cmd.item.id, cmd.item.values.label || cmd.item.name);
+          // Force state update to trigger itemListData recompute
+          machineState = { ...machineState };
         }
         break;
       }
