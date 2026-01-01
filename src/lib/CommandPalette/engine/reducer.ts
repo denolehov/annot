@@ -53,6 +53,24 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
           }
         }
 
+        // If initialState is filter mode, jump directly to ITEM_FILTER
+        if (action.initialState?.mode === 'filter') {
+          const namespace = ctx.namespaces.find((ns) => ns.id === action.initialState!.namespace);
+          if (namespace) {
+            return {
+              state: {
+                type: 'ITEM_FILTER',
+                namespace,
+                query: '',
+                selectedIndex: 0,
+                pendingDelete: false,
+                inputMode: 'filtering',
+              },
+              commands,
+            };
+          }
+        }
+
         // If initialState is edit mode, jump directly to EDIT_FORM
         if (action.initialState?.mode === 'edit' && action.initialState.itemId) {
           const namespace = ctx.namespaces.find((ns) => ns.id === action.initialState!.namespace);
@@ -383,8 +401,8 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
         };
       }
 
-      // SET only works in navigating mode - sets the selected item as active and closes
-      if (action.type === 'SET' && state.inputMode === 'navigating') {
+      // SET sets the selected item as active and closes (works in both filtering and navigating modes)
+      if (action.type === 'SET') {
         const { matches, showCreate, createIndex } = computeItemList(state, ctx);
 
         // Don't set if on Create option

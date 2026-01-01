@@ -322,6 +322,12 @@
     if (e.key === 'Escape') {
       e.preventDefault();
       dispatch({ type: 'ESCAPE' });
+    } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      // Cmd+Enter: Set selected item as active in ITEM_FILTER
+      if (machineState.type === 'ITEM_FILTER') {
+        e.preventDefault();
+        dispatch({ type: 'SET' });
+      }
     } else if (e.key === 'Enter') {
       e.preventDefault();
       dispatch({ type: 'ENTER' });

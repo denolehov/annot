@@ -142,7 +142,7 @@ export type State =
 
 export interface InitialState {
   namespace: 'tags' | 'exit-modes' | 'bookmarks';
-  mode: 'create' | 'edit';
+  mode: 'create' | 'edit' | 'filter';
   itemId?: string; // For edit mode - which item to edit
   prefill?: Record<string, string>;
 }

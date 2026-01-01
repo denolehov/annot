@@ -7,6 +7,7 @@ export interface KeyboardHandlers {
   onTabCycle?: (direction: 'forward' | 'backward') => void;
   onOpenSessionEditor?: () => void;
   onOpenCommandPalette?: () => void;
+  onOpenCommandPaletteWithNamespace?: (namespace: 'exit-modes') => void;
   onOpenSaveModal?: () => void;
   onOpenSearch?: () => void;
   onCreateSessionBookmark?: () => void;
@@ -57,7 +58,11 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
 
     if (e.key === 'Tab') {
       e.preventDefault();
-      if (state.hasExitModes() && !state.isEditorActive() && !state.isCommandPaletteOpen()) {
+      if (state.isEditorActive() || state.isCommandPaletteOpen()) return;
+
+      if (e.altKey) {
+        handlers.onOpenCommandPaletteWithNamespace?.('exit-modes');
+      } else if (state.hasExitModes()) {
         handlers.onTabCycle?.(e.shiftKey ? 'backward' : 'forward');
       }
       return;

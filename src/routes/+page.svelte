@@ -200,6 +200,7 @@
 
   // CommandPalette state
   let commandPaletteOpen = $state(false);
+  let commandPaletteInitialState = $state<{ namespace: 'exit-modes'; mode: 'filter' } | undefined>(undefined);
   let tags: Tag[] = $state([]);
 
   // Tag creation from selection state
@@ -360,6 +361,7 @@
     // Clear pending states
     pendingTagCreation = null;
     editBookmarkId = null;
+    commandPaletteInitialState = undefined;
   }
 
   async function handleBookmarkDeleted(id: string) {
@@ -576,6 +578,10 @@
       onTabCycle: (dir) => dir === 'forward' ? exitModeState.cycleForward() : exitModeState.cycleBackward(),
       onOpenSessionEditor: openSessionEditor,
       onOpenCommandPalette: () => commandPaletteOpen = true,
+      onOpenCommandPaletteWithNamespace: (namespace) => {
+        commandPaletteInitialState = { namespace, mode: 'filter' };
+        commandPaletteOpen = true;
+      },
       onOpenSaveModal: openSaveModal,
       onOpenSearch: () => search.open(),
       onCreateSessionBookmark: handleToggleBookmark,
@@ -837,7 +843,7 @@
       ? { namespace: 'tags', mode: 'create', prefill: { instruction: pendingTagCreation.text } }
       : editBookmarkId
         ? { namespace: 'bookmarks', mode: 'edit', itemId: editBookmarkId }
-        : undefined}
+        : commandPaletteInitialState}
     onItemCreated={handleItemCreated}
     onEvent={handleCommandPaletteEvent}
   />
