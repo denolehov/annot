@@ -370,11 +370,14 @@
   }
 
   async function handleBookmarkUpdated(id: string, label: string) {
+    // Capture before await (onClose may clear editBookmarkId while we await)
+    const wasEditTriggered = editBookmarkId === id;
+
     // Composable handles state update
     await bookmarkState?.update(id, label);
 
     // Show toast if edit was triggered via 'e' key
-    if (editBookmarkId === id) {
+    if (wasEditTriggered) {
       const shortId = id.slice(0, 3);
       const displayLabel = label ? `"${label}"` : '(no label)';
       showToast(`${shortId} → ${displayLabel}`);
