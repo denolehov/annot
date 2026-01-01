@@ -101,3 +101,27 @@ impl ExitModeInput {
         }
     }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// BOOKMARK TOOLS
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Input for the get_bookmark tool.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct GetBookmarkInput {
+    #[schemars(description = "Full or prefix ID")]
+    pub id: String,
+}
+
+/// Input for the list_bookmarks tool.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ListBookmarksInput {
+    #[schemars(description = "Maximum number of bookmarks to return")]
+    pub limit: Option<usize>,
+
+    #[schemars(description = "Search query to filter by label, selected text, or context")]
+    pub search: Option<String>,
+
+    #[schemars(description = "Filter by project path")]
+    pub project: Option<String>,
+}

@@ -39,10 +39,47 @@ struct Cli {
 enum Command {
     /// Run as MCP server (Model Context Protocol)
     Mcp,
+    /// Manage bookmarks
+    #[command(subcommand)]
+    Bookmarks(BookmarksCommand),
+}
+
+#[derive(clap::Subcommand)]
+enum BookmarksCommand {
+    /// List all bookmarks
+    List {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show a bookmark's full snapshot
+    Show {
+        /// Bookmark ID or prefix
+        id: String,
+    },
+    /// Delete a bookmark
+    Delete {
+        /// Bookmark ID or prefix
+        id: String,
+    },
+    /// Export bookmark as markdown
+    Export {
+        /// Bookmark ID or prefix
+        id: String,
+    },
 }
 
 fn main() {
     let cli = Cli::parse();
+
+    // Handle subcommands that don't need Tauri
+    match &cli.command {
+        Some(Command::Bookmarks(cmd)) => {
+            handle_bookmarks_command(cmd);
+            return;
+        }
+        _ => {}
+    }
 
     // Generate context once (avoids duplicate symbol errors)
     let context = tauri::generate_context!();
@@ -101,4 +138,214 @@ fn main() {
     let state = AppState::new(content, config);
 
     annot_lib::run(state, context);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// BOOKMARK CLI HANDLERS
+// ════════════════════════════════════════════════════════════════════════════
+
+fn handle_bookmarks_command(cmd: &BookmarksCommand) {
+    use annot_lib::state::UserConfig;
+
+    let mut config = UserConfig::load();
+
+    match cmd {
+        BookmarksCommand::List { json } => {
+            let bookmarks = config.bookmarks();
+
+            if bookmarks.is_empty() {
+                if *json {
+                    println!("[]");
+                } else {
+                    println!("No bookmarks.");
+                }
+                return;
+            }
+
+            if *json {
+                println!("{}", serde_json::to_string_pretty(bookmarks).unwrap());
+            } else {
+                // Table format
+                println!(
+                    "{:<12} {:<40} {:<20} {}",
+                    "ID", "LABEL", "SOURCE", "PROJECT"
+                );
+                println!("{}", "─".repeat(90));
+
+                for bookmark in bookmarks {
+                    let label = bookmark.display_label();
+                    let label_display = if label.len() > 38 {
+                        format!("{}…", &label[..37])
+                    } else {
+                        label
+                    };
+
+                    let source = bookmark.snapshot.source_title();
+                    let source_display = if source.len() > 18 {
+                        format!("{}…", &source[..17])
+                    } else {
+                        source.to_string()
+                    };
+
+                    let project = bookmark
+                        .project_path
+                        .as_ref()
+                        .and_then(|p| p.file_name())
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "—".to_string());
+
+                    println!(
+                        "{:<12} {:<40} {:<20} {}",
+                        &bookmark.id[..12.min(bookmark.id.len())],
+                        label_display,
+                        source_display,
+                        project
+                    );
+                }
+            }
+        }
+
+        BookmarksCommand::Show { id } => {
+            match find_bookmark(&config, id) {
+                Ok(bookmark) => print_bookmark_full(bookmark),
+                Err(e) => {
+                    eprintln!("{}", e);
+                    process::exit(1);
+                }
+            }
+        }
+
+        BookmarksCommand::Delete { id } => {
+            // First resolve the full ID
+            let full_id = match find_bookmark(&config, id) {
+                Ok(bookmark) => bookmark.id.clone(),
+                Err(e) => {
+                    eprintln!("{}", e);
+                    process::exit(1);
+                }
+            };
+
+            if config.delete_bookmark(&full_id) {
+                println!("Deleted bookmark {}", full_id);
+            } else {
+                eprintln!("Failed to delete bookmark {}", full_id);
+                process::exit(1);
+            }
+        }
+
+        BookmarksCommand::Export { id } => {
+            match find_bookmark(&config, id) {
+                Ok(bookmark) => print_bookmark_markdown(bookmark),
+                Err(e) => {
+                    eprintln!("{}", e);
+                    process::exit(1);
+                }
+            }
+        }
+    }
+}
+
+fn find_bookmark<'a>(
+    config: &'a annot_lib::state::UserConfig,
+    id_prefix: &str,
+) -> Result<&'a annot_lib::state::Bookmark, String> {
+    let bookmarks = config.bookmarks();
+    let matches: Vec<_> = bookmarks
+        .iter()
+        .filter(|b| b.id.starts_with(id_prefix))
+        .collect();
+
+    match matches.len() {
+        0 => Err(format!("No bookmark found with ID prefix '{}'", id_prefix)),
+        1 => Ok(matches[0]),
+        _ => {
+            let candidates: Vec<String> = matches
+                .iter()
+                .map(|b| format!("  {} — {}", &b.id[..6], b.display_label()))
+                .collect();
+            Err(format!(
+                "Ambiguous ID prefix '{}'. Candidates:\n{}",
+                id_prefix,
+                candidates.join("\n")
+            ))
+        }
+    }
+}
+
+fn print_bookmark_full(bookmark: &annot_lib::state::Bookmark) {
+    use annot_lib::state::BookmarkSnapshot;
+
+    let source_type = match &bookmark.snapshot {
+        BookmarkSnapshot::Session { source_type, .. }
+        | BookmarkSnapshot::Selection { source_type, .. } => match source_type {
+            annot_lib::state::SessionType::File => "file",
+            annot_lib::state::SessionType::Diff => "diff",
+            annot_lib::state::SessionType::Content => "content",
+        },
+    };
+
+    let project = bookmark
+        .project_path
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| "(none)".to_string());
+
+    println!("Bookmark: {}", bookmark.id);
+    println!("Label: {}", bookmark.display_label());
+    println!(
+        "Source: {} ({})",
+        bookmark.snapshot.source_title(),
+        source_type
+    );
+    println!("Project: {}", project);
+    println!(
+        "Created: {}",
+        bookmark.created_at.format("%Y-%m-%d %H:%M:%S UTC")
+    );
+    println!();
+
+    // Add selected text for selection bookmarks
+    if let BookmarkSnapshot::Selection { selected_text, .. } = &bookmark.snapshot {
+        println!("─── Selected Text ──────────────────────────────────────");
+        println!("{}", selected_text);
+        println!("─────────────────────────────────────────────────────────");
+        println!();
+    }
+
+    println!("─── Snapshot ───────────────────────────────────────────");
+    println!("{}", bookmark.snapshot.content());
+    println!("─────────────────────────────────────────────────────────");
+}
+
+fn print_bookmark_markdown(bookmark: &annot_lib::state::Bookmark) {
+    use annot_lib::state::BookmarkSnapshot;
+
+    let project = bookmark
+        .project_path
+        .as_ref()
+        .and_then(|p| p.file_name())
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "(none)".to_string());
+
+    println!("# {}", bookmark.display_label());
+    println!();
+    println!("**Source**: {}", bookmark.snapshot.source_title());
+    println!("**Project**: {}", project);
+    println!(
+        "**Created**: {}",
+        bookmark.created_at.format("%B %d, %Y")
+    );
+    println!();
+    println!("---");
+    println!();
+
+    // For selection bookmarks, show selected text
+    if let BookmarkSnapshot::Selection { selected_text, .. } = &bookmark.snapshot {
+        println!("```");
+        println!("{}", selected_text);
+        println!("```");
+    } else {
+        // For session bookmarks, show context
+        println!("{}", bookmark.snapshot.content());
+    }
 }
