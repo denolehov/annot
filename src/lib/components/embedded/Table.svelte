@@ -16,7 +16,6 @@
     splitTableRow,
   } from '$lib/utils/tableParser';
   import { getAnnotContext } from '$lib/context';
-  import { BookmarkIcon } from '$lib/icons';
 
   interface Props {
     lines: Array<{ line: Line; displayIndex: number }>;
@@ -148,9 +147,6 @@
                   {sourceLineNum}
                 {/if}
               </span>
-              {#if bookmarked}
-                <span class="bookmark-indicator"><BookmarkIcon filled /></span>
-              {/if}
             </td>
             {#each cells as cell, colIndex}
               {@const cellHtml = line.html?.type === 'cells' ? line.html.value[colIndex] : null}
@@ -375,12 +371,8 @@
     display: flex;
   }
 
-  /* Bookmarked rows - left border indicator */
-  .content-row.bookmarked {
-    position: relative;
-  }
-
-  .content-row.bookmarked::before {
+  /* Bookmarked rows - border + background tint (no icon, tables are dense enough) */
+  .content-row.bookmarked .gutter-cell::before {
     content: "";
     position: absolute;
     left: 0;
@@ -391,16 +383,8 @@
     z-index: 5;
   }
 
-  /* Bookmark indicator icon */
-  .bookmark-indicator {
-    display: inline-flex;
-    align-items: center;
-    margin-left: 4px;
-    color: var(--bookmark-color, #ef4444);
-  }
-
-  .bookmark-indicator :global(.cp-icon) {
-    width: 14px;
-    height: 14px;
+  .content-row.bookmarked .gutter-cell,
+  .content-row.bookmarked .table-cell {
+    background-color: color-mix(in srgb, var(--bookmark-color, #ef4444) 8%, transparent);
   }
 </style>
