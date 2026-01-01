@@ -72,8 +72,8 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
       return;
     }
 
-    // 'g' for global/session comment
-    if (e.key === 'g' && !state.isEditorActive()) {
+    // Shift+C for global/session comment
+    if (e.key === 'C' && !e.metaKey && !e.ctrlKey && !state.isEditorActive()) {
       if (isInEditorOrInput()) return;
       e.preventDefault();
       handlers.onOpenSessionEditor?.();
@@ -96,24 +96,21 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
       return;
     }
 
-    // Cmd+b for session bookmark (full document)
-    if (e.key === 'b' && (e.metaKey || e.ctrlKey) && !state.isEditorActive()) {
+    // Shift+B for session bookmark (full document)
+    if (e.key === 'B' && !e.metaKey && !e.ctrlKey && !state.isEditorActive()) {
       if (isInEditorOrInput()) return;
       e.preventDefault();
       handlers.onCreateSessionBookmark?.();
       return;
     }
 
-    // 'b' for context-aware bookmark (hover/selection → selection bookmark, else session)
+    // 'b' for selection bookmark (hover/selection context only)
     if (e.key === 'b' && !e.metaKey && !e.ctrlKey && !state.isEditorActive()) {
       if (isInEditorOrInput()) return;
-      e.preventDefault();
       const context = state.getBookmarkContext();
-      if (context) {
-        handlers.onCreateSelectionBookmark?.(context);
-      } else {
-        handlers.onCreateSessionBookmark?.();
-      }
+      if (!context) return;
+      e.preventDefault();
+      handlers.onCreateSelectionBookmark?.(context);
       return;
     }
 
