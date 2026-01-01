@@ -84,11 +84,11 @@
 
   // Set context with getters for reactive updates
   setAnnotContext({
-    interaction,
-    annotations,
-    exitModes,
-    search,
-    mermaid,
+    get interaction() { return interaction; },
+    get annotations() { return annotations; },
+    get exitModes() { return exitModes; },
+    get search() { return search; },
+    get mermaid() { return mermaid; },
 
     get selection() { return selection; },
     get isDragging() { return isDragging; },
@@ -103,9 +103,9 @@
     get allowsImagePaste() { return allowsImagePaste; },
     get markdownMetadata() { return markdownMetadata; },
 
-    showToast,
-    isLineSelectable,
-    getOriginalLinesForRange,
+    get showToast() { return showToast; },
+    get isLineSelectable() { return isLineSelectable; },
+    get getOriginalLinesForRange() { return getOriginalLinesForRange; },
   });
 </script>
 
