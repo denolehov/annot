@@ -186,8 +186,11 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
     case 'ITEM_FILTER': {
       // Helper to clear pendingDelete when returning to this state
       const clearPending = (s: typeof state) => ({ ...s, pendingDelete: false });
-      // ESCAPE goes back one level to NAMESPACE_FILTER
+      // ESCAPE: if pendingDelete is armed, just disarm it; otherwise go back to NAMESPACE_FILTER
       if (action.type === 'ESCAPE') {
+        if (state.pendingDelete) {
+          return { state: clearPending(state), commands };
+        }
         return {
           state: { type: 'NAMESPACE_FILTER', query: '', selectedIndex: 0, inputMode: 'filtering' },
           commands,

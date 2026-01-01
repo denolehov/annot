@@ -195,6 +195,25 @@ describe('reducer: action items', () => {
         expect(result.state.pendingDelete).toBe(true);
       }
     });
+
+    it('ESCAPE disarms pendingDelete instead of going back', () => {
+      const state: State = {
+        type: 'ITEM_FILTER',
+        namespace: tagsNamespace,
+        query: '',
+        selectedIndex: 0,
+        pendingDelete: true,
+        inputMode: 'navigating',
+      };
+
+      const result = reduce(state, { type: 'ESCAPE' }, ctx);
+
+      // Should stay in ITEM_FILTER with pendingDelete cleared
+      expect(result.state.type).toBe('ITEM_FILTER');
+      if (result.state.type === 'ITEM_FILTER') {
+        expect(result.state.pendingDelete).toBe(false);
+      }
+    });
   });
 });
 
