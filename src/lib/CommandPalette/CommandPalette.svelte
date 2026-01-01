@@ -183,8 +183,6 @@
         } else if (cmd.namespace === 'bookmarks') {
           deleteBookmarkItem(cmd.itemId);
           onBookmarkDeleted?.(cmd.itemId);
-          // Force state update to trigger itemListData recompute
-          machineState = { ...machineState };
         }
         inputEl?.focus();
         break;

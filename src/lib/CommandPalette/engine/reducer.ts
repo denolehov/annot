@@ -339,6 +339,15 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
           event: 'commandpalette:item-deleted',
           payload: { namespace: state.namespace.id, itemId: selectedItem.id },
         });
+
+        // If this was the last item and namespace can't create, go back to NAMESPACE_FILTER
+        if (matches.length === 1 && !canCreate(state.namespace)) {
+          return {
+            state: { type: 'NAMESPACE_FILTER', query: '', selectedIndex: 0, inputMode: 'filtering' },
+            commands,
+          };
+        }
+
         return { state: clearPending(state), commands };
       }
 

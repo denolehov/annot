@@ -737,3 +737,96 @@ describe('reducer: initial state', () => {
     });
   });
 });
+
+// Regression test: deleting last item in no-create namespace should go back to NAMESPACE_FILTER
+describe('reducer: delete last item in no-create namespace', () => {
+  // Namespace that can delete but not create (like bookmarks)
+  const bookmarksNamespace: Namespace = {
+    id: 'bookmarks',
+    label: 'Bookmarks',
+    icon: 'bookmark',
+    ItemComponent: MockItemComponent,
+    fields: [{ key: 'label', label: 'Label', type: 'text' }],
+    hotkeys: [
+      { key: 'd', display: 'dd', label: 'delete', action: 'DELETE' },
+      { key: 'e', label: 'edit', action: 'EDIT' },
+    ],
+    capabilities: { create: false },
+  };
+
+  it('should transition to NAMESPACE_FILTER after deleting last item when namespace cannot create', () => {
+    // Context with only one bookmark item (the last one)
+    const ctx: QueryContext = {
+      namespaces: [bookmarksNamespace],
+      filterNamespaces(query: string): Namespace[] {
+        return [bookmarksNamespace];
+      },
+      getItems(namespace: Namespace): Item[] {
+        return [{ id: 'bookmark-1', name: 'My Bookmark', values: { label: 'My Bookmark' } }];
+      },
+      filterItems(namespace: Namespace, query: string): Item[] {
+        return [{ id: 'bookmark-1', name: 'My Bookmark', values: { label: 'My Bookmark' } }];
+      },
+    };
+
+    // Start in ITEM_FILTER with pendingDelete armed (user pressed 'd' once)
+    const state: State = {
+      type: 'ITEM_FILTER',
+      namespace: bookmarksNamespace,
+      query: '',
+      selectedIndex: 0,
+      pendingDelete: true,
+      inputMode: 'navigating',
+    };
+
+    // Press 'd' again to confirm delete - this is the LAST item
+    const result = reduce(state, { type: 'DELETE' }, ctx);
+
+    // Should emit DELETE_ITEM command
+    expect(result.commands).toContainEqual({
+      type: 'DELETE_ITEM',
+      namespace: 'bookmarks',
+      itemId: 'bookmark-1',
+    });
+
+    // BUG: After deleting the last item in a namespace that cannot create,
+    // we should go back to NAMESPACE_FILTER (not stay in empty ITEM_FILTER)
+    expect(result.state.type).toBe('NAMESPACE_FILTER');
+  });
+
+  it('should stay in ITEM_FILTER after deleting when more items remain', () => {
+    // Context with two bookmark items
+    const ctx: QueryContext = {
+      namespaces: [bookmarksNamespace],
+      filterNamespaces(query: string): Namespace[] {
+        return [bookmarksNamespace];
+      },
+      getItems(namespace: Namespace): Item[] {
+        return [
+          { id: 'bookmark-1', name: 'Bookmark 1', values: { label: 'Bookmark 1' } },
+          { id: 'bookmark-2', name: 'Bookmark 2', values: { label: 'Bookmark 2' } },
+        ];
+      },
+      filterItems(namespace: Namespace, query: string): Item[] {
+        return [
+          { id: 'bookmark-1', name: 'Bookmark 1', values: { label: 'Bookmark 1' } },
+          { id: 'bookmark-2', name: 'Bookmark 2', values: { label: 'Bookmark 2' } },
+        ];
+      },
+    };
+
+    const state: State = {
+      type: 'ITEM_FILTER',
+      namespace: bookmarksNamespace,
+      query: '',
+      selectedIndex: 0,
+      pendingDelete: true,
+      inputMode: 'navigating',
+    };
+
+    const result = reduce(state, { type: 'DELETE' }, ctx);
+
+    // Should stay in ITEM_FILTER since there's still one item left
+    expect(result.state.type).toBe('ITEM_FILTER');
+  });
+});
