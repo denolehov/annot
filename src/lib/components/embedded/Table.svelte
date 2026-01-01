@@ -1,47 +1,26 @@
 <script lang="ts">
+  /**
+   * Table - Renders markdown tables with proper styling.
+   * Uses context for: interaction, annotations
+   */
   import type { Snippet } from 'svelte';
-  import type { Line, MarkdownMetadata, JSONContent } from '$lib/types';
-  import type { Range } from '$lib/range';
+  import type { Line } from '$lib/types';
   import { getLineNumber } from '$lib/line-utils';
-  import { rangeToKey, isLineInRange } from '$lib/range';
+  import { rangeToKey } from '$lib/range';
   import {
     analyzeTable,
     splitTableRow,
   } from '$lib/utils/tableParser';
+  import { getAnnotContext } from '$lib/context';
 
   interface Props {
     lines: Array<{ line: Line; displayIndex: number }>;
-    selection: Range | null;
-    isDragging: boolean;
-    hoveredDisplayIdx: number | null;
-    markdownMetadata: MarkdownMetadata | null;
-    annotations: Map<string, JSONContent>;
-    lastSelectedLine: number | null;
-
-    onGutterMouseDown: (displayIdx: number, event: MouseEvent) => void;
-    onGutterClick: (displayIdx: number) => void;
-    onAddMouseDown: (displayIdx: number, event: MouseEvent) => void;
-    onMouseEnter: (displayIdx: number) => void;
-    onMouseLeave: () => void;
-
     annotationSlot: Snippet<[displayIndex: number, rangeKey: string | null]>;
   }
 
-  let {
-    lines,
-    selection,
-    isDragging,
-    hoveredDisplayIdx,
-    markdownMetadata,
-    annotations,
-    lastSelectedLine,
-    onGutterMouseDown,
-    onGutterClick,
-    onAddMouseDown,
-    onMouseEnter,
-    onMouseLeave,
-    annotationSlot,
-  }: Props = $props();
+  let { lines, annotationSlot }: Props = $props();
+
+  const ctx = getAnnotContext();
 
   // Scroll state for edge shadows
   let canScrollLeft = $state(false);
@@ -97,42 +76,24 @@
 
   // Check if a display index is selected
   function isSelected(displayIdx: number): boolean {
-    if (!selection) return false;
-    return isLineInRange(displayIdx, selection);
+    return ctx.interaction.isLineHighlighted(displayIdx);
   }
 
   // Check if a display index has an annotation
   function hasAnnotation(displayIdx: number): boolean {
-    for (const key of annotations.keys()) {
-      const [start, end] = key.split('-').map(Number);
-      if (displayIdx >= start && displayIdx <= end) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Get annotation info for a specific display index
-  function getAnnotationAtLine(displayIdx: number): { key: string; content: JSONContent } | null {
-    for (const [key, content] of annotations) {
-      const [, end] = key.split('-').map(Number);
-      if (end === displayIdx) {
-        return { key, content };
-      }
-    }
-    return null;
+    return ctx.annotations.hasAnnotation(displayIdx);
   }
 
   // Compute the range key for annotation rendering at this line
   function computeRangeKey(displayIndex: number): string | null {
-    const annotationAtLine = getAnnotationAtLine(displayIndex);
+    const annotationAtLine = ctx.annotations.getAtLine(displayIndex);
     if (annotationAtLine) {
       return annotationAtLine.key;
     }
 
-    const isLastSelectedLine = displayIndex === lastSelectedLine && selection && !isDragging;
-    if (isLastSelectedLine && selection) {
-      return rangeToKey(selection);
+    const isLastSelectedLine = displayIndex === ctx.lastSelectedLine && ctx.selection && !ctx.isDragging;
+    if (isLastSelectedLine && ctx.selection) {
+      return rangeToKey(ctx.selection);
     }
 
     return null;
@@ -150,7 +111,7 @@
   let lastDisplayIndex = $derived(visibleLines[visibleLines.length - 1]?.displayIndex ?? -1);
 </script>
 
-<div class="table-wrapper" class:can-scroll-left={canScrollLeft} class:can-scroll-right={canScrollRight} class:is-dragging={isDragging}>
+<div class="table-wrapper" class:can-scroll-left={canScrollLeft} class:can-scroll-right={canScrollRight} class:is-dragging={ctx.isDragging}>
   <div class="table-scroller" use:setupScrollIndicators>
     <table class="content-table">
       <tbody>
@@ -162,7 +123,7 @@
           {@const isFirst = displayIndex === firstDisplayIndex}
           {@const isLast = displayIndex === lastDisplayIndex}
 
-          {@const isPreview = hoveredDisplayIdx === displayIndex && !isDragging}
+          {@const isPreview = ctx.interaction.isLinePreview(displayIndex)}
           <tr
             class="content-row"
             class:selected={isSelected(displayIndex)}
@@ -172,21 +133,21 @@
             class:table-first-row={isFirst}
             class:table-last-row={isLast}
             data-display-idx={displayIndex}
-            onmouseenter={() => onMouseEnter(displayIndex)}
-            onmouseleave={onMouseLeave}
+            onmouseenter={() => ctx.interaction.handleLineEnter(displayIndex)}
+            onmouseleave={() => ctx.interaction.handleLineLeave()}
           >
             <td class="gutter-cell">
               <button
                 class="add-btn"
-                onmousedown={(e) => onAddMouseDown(displayIndex, e)}
+                onpointerdown={(e) => ctx.interaction.handlePointerDown(displayIndex, e)}
                 aria-label="Add annotation"
               >+</button>
               <!-- svelte-ignore a11y_click_events_have_key_events -->
               <span
                 class="gutter"
                 class:selected={isSelected(displayIndex)}
-                onmousedown={(e) => onGutterMouseDown(displayIndex, e)}
-                onclick={() => onGutterClick(displayIndex)}
+                onpointerdown={(e) => ctx.interaction.handlePointerDown(displayIndex, e)}
+                onclick={() => ctx.interaction.handleGutterClick(displayIndex)}
                 role="button"
                 tabindex="-1"
               >
