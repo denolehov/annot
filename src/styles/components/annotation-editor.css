@@ -83,11 +83,12 @@
 }
 
 /*
- * Hide paragraphs that contain ONLY trailing break stuff (no real content).
- * This handles the "fat footer" case where a trailing paragraph shows as 22px.
- * Selector logic: has trailing break AND has no elements other than break/separator.
+ * Hide the LAST paragraph if it contains ONLY trailing break stuff (no real content).
+ * This handles the "fat footer" case where TipTap's structural trailing paragraph shows as 22px.
+ * Only target :last-child to preserve intentional blank lines (user pressed Enter twice).
+ * Selector logic: last child + has trailing break + has no elements other than break/separator.
  */
-.annotation-editor.sealed p:has(.ProseMirror-trailingBreak):not(:has(:not(.ProseMirror-separator):not(.ProseMirror-trailingBreak))) {
+.annotation-editor.sealed p:last-child:has(.ProseMirror-trailingBreak):not(:has(:not(.ProseMirror-separator):not(.ProseMirror-trailingBreak))) {
 	display: none;
 }
 
