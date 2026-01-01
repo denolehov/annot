@@ -9,6 +9,7 @@
   let { item, selectionState }: Props = $props();
 
   const shortId = $derived(item.id.slice(0, 3));
+  const isEmpty = $derived(!item.name || item.name.trim() === '');
   const dateStr = $derived(
     new Date(item.values.created_at).toLocaleDateString('en-US', {
       month: 'short',
@@ -20,7 +21,11 @@
 <div class="bookmark-item" data-state={selectionState}>
   <div class="primary">
     <span class="id">{shortId}</span>
-    <span class="label">{item.name}</span>
+    {#if isEmpty}
+      <span class="label placeholder">&lt;empty&gt;</span>
+    {:else}
+      <span class="label">{item.name}</span>
+    {/if}
   </div>
   <div class="secondary">
     {item.values.source_title} &bull; {dateStr}
@@ -80,6 +85,12 @@
     font-size: 13px;
     font-weight: 500;
     color: var(--text-primary);
+  }
+
+  .label.placeholder {
+    color: var(--text-muted);
+    font-style: italic;
+    font-weight: 400;
   }
 
   .secondary {
