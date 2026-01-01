@@ -1,12 +1,10 @@
 <script lang="ts">
-  import type { ExitMode } from '$lib/types';
+  import { getAnnotContext } from '$lib/context';
 
-  interface Props {
-    selectedMode: ExitMode | null;
-    onCycleMode: () => void;
-  }
+  const ctx = getAnnotContext();
 
-  let { selectedMode, onCycleMode }: Props = $props();
+  // Derived for template convenience
+  const selectedMode = $derived(ctx.exitModes.selectedMode);
 </script>
 
 <footer class="status-bar" style:--mode-color={selectedMode?.color ?? 'transparent'}>
@@ -14,7 +12,7 @@
     <button
       class="exit-mode-btn"
       class:neutral={!selectedMode}
-      onclick={onCycleMode}
+      onclick={ctx.exitModes.cycleForward}
       title={selectedMode ? `${selectedMode.name}: ${selectedMode.instruction}` : undefined}
     >
       <kbd>Tab</kbd>

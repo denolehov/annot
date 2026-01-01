@@ -2,32 +2,42 @@
   /**
    * AnnotProvider - Context provider for annot components.
    *
-   * Instantiates composables and exposes them via Svelte context,
+   * Accepts composables from the page and exposes them via Svelte context,
    * eliminating prop drilling across Portal, CodeBlock, RegularLines, etc.
+   *
+   * The page creates composables (for keyboard/modal coordination access),
+   * then passes them here to be set as context for child components.
    */
   import type { Snippet } from 'svelte';
-  import type { Line, ContentMetadata, Tag, Bookmark, JSONContent, MarkdownMetadata, DiffMetadata } from '$lib/types';
+  import type { Line, ContentMetadata, Tag, Bookmark, JSONContent, MarkdownMetadata } from '$lib/types';
   import type { Range } from '$lib/range';
-  import { ContentTracker, type HunkPayload } from '$lib/content-tracker';
   import { setAnnotContext, type AnnotContext } from './annot-context.svelte';
-  import { useInteraction } from '$lib/composables/useInteraction.svelte';
-  import { useAnnotations } from '$lib/composables/useAnnotations.svelte';
-  import { useExitModes } from '$lib/composables/useExitModes.svelte';
-  import { useSearch } from '$lib/composables/useSearch.svelte';
-  import { useMermaid } from '$lib/composables/useMermaid.svelte';
-  import { useSelectionBounds } from '$lib/composables/useSelectionBounds.svelte';
-  import { isSelectable } from '$lib/line-utils';
+  import type { useInteraction } from '$lib/composables/useInteraction.svelte';
+  import type { useAnnotations } from '$lib/composables/useAnnotations.svelte';
+  import type { useExitModes } from '$lib/composables/useExitModes.svelte';
+  import type { useSearch } from '$lib/composables/useSearch.svelte';
+  import type { useMermaid } from '$lib/composables/useMermaid.svelte';
 
   interface Props {
+    // Reactive data
     lines: Line[];
     metadata: ContentMetadata;
     tags: Tag[];
     bookmarks: Bookmark[];
     allowsImagePaste: boolean;
-    label: string;
+
+    // Composables (created by page)
+    interaction: ReturnType<typeof useInteraction>;
+    annotations: ReturnType<typeof useAnnotations>;
+    exitModes: ReturnType<typeof useExitModes>;
+    search: ReturnType<typeof useSearch>;
+    mermaid: ReturnType<typeof useMermaid>;
+
+    // Utilities
     showToast: (message: string, duration?: number) => void;
-    scrollToDisplayIndex: (displayIndex: number) => void;
-    hunkTracker: ContentTracker<HunkPayload> | null;
+    isLineSelectable: (displayIdx: number) => boolean;
+    getOriginalLinesForRange: (range: Range) => string;
+
     children: Snippet;
   }
 
@@ -37,49 +47,21 @@
     tags,
     bookmarks,
     allowsImagePaste,
-    label,
+    interaction,
+    annotations,
+    exitModes,
+    search,
+    mermaid,
     showToast,
-    scrollToDisplayIndex,
-    hunkTracker,
+    isLineSelectable,
+    getOriginalLinesForRange,
     children,
   }: Props = $props();
 
-  // Derived metadata helpers
-  const diffMetadata = $derived(metadata.type === 'diff' ? metadata as DiffMetadata & { type: 'diff' } : null);
-  const markdownMetadata = $derived(metadata.type === 'markdown' ? metadata as MarkdownMetadata & { type: 'markdown' } : null);
-
-  // Selection bounds (for constraining selections to hunks/portals)
-  const selectionBounds = useSelectionBounds({
-    getLines: () => lines,
-    getDiffMetadata: () => diffMetadata,
-    getHunkTracker: () => hunkTracker,
-  });
-
-  // Check if a line is selectable
-  function isLineSelectable(displayIdx: number): boolean {
-    const line = lines[displayIdx - 1];
-    return line ? isSelectable(line) : false;
-  }
-
-  // Composables
-  const interaction = useInteraction({
-    isLineSelectable,
-    constrainToBounds: selectionBounds.constrainToSelectionBounds,
-  });
-
-  const annotations = useAnnotations({
-    getLines: () => lines,
-  });
-
-  const exitModes = useExitModes();
-
-  const search = useSearch(() => lines, scrollToDisplayIndex);
-
-  const mermaid = useMermaid({
-    getLines: () => lines,
-    getLabel: () => label,
-    getMarkdownMetadata: () => markdownMetadata,
-  });
+  // Derived metadata helper
+  const markdownMetadata = $derived(
+    metadata.type === 'markdown' ? metadata as MarkdownMetadata & { type: 'markdown' } : null
+  );
 
   // Derived values for consumers
   const selection = $derived(interaction.range);
@@ -99,18 +81,6 @@
     if (!sel) return null;
     return Math.max(sel.start, sel.end);
   });
-
-  // Get original lines content for a range
-  function getOriginalLinesForRange(range: Range): string {
-    const start = Math.min(range.start, range.end);
-    const end = Math.max(range.start, range.end);
-    const rangeLines: string[] = [];
-    for (let i = start; i <= end; i++) {
-      const line = lines[i - 1];
-      if (line) rangeLines.push(line.content);
-    }
-    return rangeLines.join('\n');
-  }
 
   // Set context with getters for reactive updates
   setAnnotContext({

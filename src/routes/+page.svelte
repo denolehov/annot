@@ -27,6 +27,7 @@
   import { useLineSegments } from "$lib/composables/useLineSegments.svelte";
   import { useSearch } from "$lib/composables/useSearch.svelte";
   import SearchBar from "$lib/components/SearchBar.svelte";
+  import { AnnotProvider } from "$lib/context";
   import type { SaveContentResponse } from "$lib/types";
   import { initTheme, setTheme, type ThemePreference } from "$lib/theme";
   import { convertMermaidToExcalidraw } from "$lib/mermaid-to-excalidraw";
@@ -790,6 +791,21 @@
 <svelte:window onkeydown={keyboard.handleKeyDown} onkeyup={keyboard.handleKeyUp} />
 
 <main class="viewer" style:--mode-color={exitModeState.selectedMode?.color ?? 'transparent'}>
+  <AnnotProvider
+    {lines}
+    {metadata}
+    {tags}
+    {bookmarks}
+    {allowsImagePaste}
+    interaction={interaction}
+    annotations={annotationState}
+    exitModes={exitModeState}
+    {search}
+    {mermaid}
+    {showToast}
+    {isLineSelectable}
+    {getOriginalLinesForRange}
+  >
   <div class="sticky-header">
     <Header
       {label}
@@ -961,7 +977,8 @@
   {/if}
 
   <!-- Footer / Status Bar -->
-  <StatusBar selectedMode={exitModeState.selectedMode} onCycleMode={exitModeState.cycleForward} />
+  <StatusBar />
+  </AnnotProvider>
 </main>
 
 <SearchBar {search} />
