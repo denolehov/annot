@@ -1,25 +1,23 @@
 <script lang="ts">
   /**
    * Portal - Renders embedded file snippets (portals).
-   * Uses context for: interaction, annotations, markdownMetadata
+   * Uses LineRow for shared line-rendering logic and adds portal-specific styling.
    */
   import type { Snippet } from 'svelte';
   import type { Line, PortalSemantics } from '$lib/types';
   import { getLineNumber } from '$lib/line-utils';
-  import { rangeToKey, isLineInRange } from '$lib/range';
   import { getAnnotContext } from '$lib/context';
+  import LineRow from './LineRow.svelte';
 
   interface Props {
     lines: Array<{ line: Line; displayIndex: number }>;
+    isLineBookmarked?: (displayIdx: number) => boolean;
     annotationSlot: Snippet<[displayIndex: number, rangeKey: string | null]>;
   }
 
-  let { lines, annotationSlot }: Props = $props();
+  let { lines, isLineBookmarked, annotationSlot }: Props = $props();
 
   const ctx = getAnnotContext();
-
-  // Convenience derived values
-  const markdownMetadata = $derived(ctx.markdownMetadata);
 
   // Get portal semantics from a line
   function getPortalSemantics(line: Line): PortalSemantics | null {
@@ -28,66 +26,25 @@
     }
     return null;
   }
-
-  // Check if a display index is selected
-  function isSelected(displayIdx: number): boolean {
-    return ctx.interaction.isLineHighlighted(displayIdx);
-  }
-
-  // Check if a display index has an annotation
-  function hasAnnotation(displayIdx: number): boolean {
-    return ctx.annotations.hasAnnotation(displayIdx);
-  }
-
-  // Compute the range key for annotation rendering at this line
-  function computeRangeKey(displayIndex: number): string | null {
-    const annotationAtLine = ctx.annotations.getAtLine(displayIndex);
-    if (annotationAtLine) {
-      return annotationAtLine.key;
-    }
-
-    const isLastSelectedLine = displayIndex === ctx.lastSelectedLine && ctx.selection && !ctx.isDragging;
-    if (isLastSelectedLine && ctx.selection) {
-      return rangeToKey(ctx.selection);
-    }
-
-    return null;
-  }
 </script>
 
 <div class="portal-group">
   {#each lines as { line, displayIndex }}
     {@const sourceLineNum = getLineNumber(line)}
     {@const portalSemantics = getPortalSemantics(line)}
-    {@const rangeKey = computeRangeKey(displayIndex)}
-    {@const isPreview = ctx.interaction.isLinePreview(displayIndex)}
-    <div
-      class="line"
-      class:portal-header={portalSemantics?.kind === 'header'}
-      class:portal-content={portalSemantics?.kind === 'content'}
-      class:portal-footer={portalSemantics?.kind === 'footer'}
-      class:selected={isSelected(displayIndex)}
-      class:annotated={hasAnnotation(displayIndex)}
-      class:preview={isPreview}
-      data-display-idx={displayIndex}
-      onmouseenter={() => ctx.interaction.handleLineEnter(displayIndex)}
-      onmouseleave={() => ctx.interaction.handleLineLeave()}
-      role="presentation"
+    {@const rangeKey = ctx.getRangeKeyForLine(displayIndex)}
+    <LineRow
+      {line}
+      {displayIndex}
+      isBookmarked={isLineBookmarked?.(displayIndex)}
+      additionalClasses={{
+        'portal-header': portalSemantics?.kind === 'header',
+        'portal-content': portalSemantics?.kind === 'content',
+        'portal-footer': portalSemantics?.kind === 'footer',
+      }}
+      gutterClass="portal-gutter"
     >
-      <button
-        class="add-btn"
-        onpointerdown={(e) => ctx.interaction.handlePointerDown(displayIndex, e)}
-        aria-label="Add annotation"
-      >+</button>
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <span
-        class="gutter portal-gutter"
-        class:selected={isSelected(displayIndex)}
-        onpointerdown={(e) => ctx.interaction.handlePointerDown(displayIndex, e)}
-        onclick={() => ctx.interaction.handleGutterClick(displayIndex)}
-        role="button"
-        tabindex="-1"
-      >
+      {#snippet gutter()}
         {#if portalSemantics?.kind === 'header'}
           <svg class="portal-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
@@ -98,8 +55,9 @@
         {:else if sourceLineNum !== null}
           {sourceLineNum}
         {/if}
-      </span>
-      <span class="code" class:md={markdownMetadata}>
+      {/snippet}
+
+      {#snippet code()}
         {#if portalSemantics?.kind === 'header'}
           <span class="portal-header-info">
             <span class="portal-label">{portalSemantics.label}</span>
@@ -110,8 +68,8 @@
         {:else}
           {line.content}
         {/if}
-      </span>
-    </div>
+      {/snippet}
+    </LineRow>
     {@render annotationSlot(displayIndex, rangeKey)}
   {/each}
 </div>
@@ -130,40 +88,41 @@
     border-bottom: 1px solid var(--border-portal);
   }
 
-  .line.portal-header {
+  /* Styles targeting LineRow-rendered elements need :global() */
+  .portal-group :global(.line.portal-header) {
     background: linear-gradient(to bottom, var(--bg-portal-glow), transparent 25%);
   }
 
-  .line.portal-footer {
+  .portal-group :global(.line.portal-footer) {
     height: 4px;
     min-height: 4px;
     background: linear-gradient(to top, var(--bg-portal-glow), transparent);
   }
 
-  .line.portal-footer .gutter {
+  .portal-group :global(.line.portal-footer .gutter) {
     visibility: hidden;
   }
 
-  .line.portal-footer .code {
+  .portal-group :global(.line.portal-footer .code) {
     display: none;
   }
 
-  .gutter.portal-gutter {
+  .portal-group :global(.gutter.portal-gutter) {
     color: var(--text-muted);
   }
 
   /* Gutter highlight for selected/preview lines */
-  .line.selected .gutter.portal-gutter {
+  .portal-group :global(.line.selected .gutter.portal-gutter) {
     background: var(--selection-bg);
     color: var(--text-secondary);
   }
 
-  .line.preview .gutter.portal-gutter {
+  .portal-group :global(.line.preview .gutter.portal-gutter) {
     background: var(--selection-bg-preview);
     color: var(--text-secondary);
   }
 
-  .line.portal-header .gutter.portal-gutter {
+  .portal-group :global(.line.portal-header .gutter.portal-gutter) {
     display: flex;
     align-items: center;
     justify-content: flex-end;

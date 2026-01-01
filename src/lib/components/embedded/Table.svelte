@@ -2,23 +2,29 @@
   /**
    * Table - Renders markdown tables with proper styling.
    * Uses context for: interaction, annotations
+   *
+   * ⚠️ SYNC WARNING: This component uses <tr>/<td> structure instead of <div>/<span>,
+   * so it cannot use LineRow.svelte. When LineRow is modified (especially for:
+   * selection state, bookmark support, event handlers, new CSS classes), check if
+   * equivalent changes are needed here.
    */
   import type { Snippet } from 'svelte';
   import type { Line } from '$lib/types';
   import { getLineNumber } from '$lib/line-utils';
-  import { rangeToKey } from '$lib/range';
   import {
     analyzeTable,
     splitTableRow,
   } from '$lib/utils/tableParser';
   import { getAnnotContext } from '$lib/context';
+  import { BookmarkIcon } from '$lib/icons';
 
   interface Props {
     lines: Array<{ line: Line; displayIndex: number }>;
+    isLineBookmarked?: (displayIdx: number) => boolean;
     annotationSlot: Snippet<[displayIndex: number, rangeKey: string | null]>;
   }
 
-  let { lines, annotationSlot }: Props = $props();
+  let { lines, isLineBookmarked, annotationSlot }: Props = $props();
 
   const ctx = getAnnotContext();
 
@@ -84,21 +90,6 @@
     return ctx.annotations.hasAnnotation(displayIdx);
   }
 
-  // Compute the range key for annotation rendering at this line
-  function computeRangeKey(displayIndex: number): string | null {
-    const annotationAtLine = ctx.annotations.getAtLine(displayIndex);
-    if (annotationAtLine) {
-      return annotationAtLine.key;
-    }
-
-    const isLastSelectedLine = displayIndex === ctx.lastSelectedLine && ctx.selection && !ctx.isDragging;
-    if (isLastSelectedLine && ctx.selection) {
-      return rangeToKey(ctx.selection);
-    }
-
-    return null;
-  }
-
   // Get alignment style for a column
   function getAlignStyle(colIndex: number): string {
     if (!tableInfo) return 'left';
@@ -117,11 +108,12 @@
       <tbody>
         {#each visibleLines as { line, displayIndex, lineIndex }, rowIdx}
           {@const sourceLineNum = getLineNumber(line)}
-          {@const rangeKey = computeRangeKey(displayIndex)}
+          {@const rangeKey = ctx.getRangeKeyForLine(displayIndex)}
           {@const cells = splitTableRow(line.content)}
           {@const isHeader = isHeaderRow(lineIndex)}
           {@const isFirst = displayIndex === firstDisplayIndex}
           {@const isLast = displayIndex === lastDisplayIndex}
+          {@const bookmarked = isLineBookmarked?.(displayIndex)}
 
           {@const isPreview = ctx.interaction.isLinePreview(displayIndex)}
           <tr
@@ -129,6 +121,7 @@
             class:selected={isSelected(displayIndex)}
             class:annotated={hasAnnotation(displayIndex)}
             class:preview={isPreview}
+            class:bookmarked
             class:table-header-row={isHeader}
             class:table-first-row={isFirst}
             class:table-last-row={isLast}
@@ -155,6 +148,9 @@
                   {sourceLineNum}
                 {/if}
               </span>
+              {#if bookmarked}
+                <span class="bookmark-indicator"><BookmarkIcon filled /></span>
+              {/if}
             </td>
             {#each cells as cell, colIndex}
               {@const cellHtml = line.html?.type === 'cells' ? line.html.value[colIndex] : null}
@@ -377,5 +373,34 @@
   /* Show add button on preview rows (hover state) */
   .content-row.preview .add-btn {
     display: flex;
+  }
+
+  /* Bookmarked rows - left border indicator */
+  .content-row.bookmarked {
+    position: relative;
+  }
+
+  .content-row.bookmarked::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--bookmark-color, #ef4444);
+    z-index: 5;
+  }
+
+  /* Bookmark indicator icon */
+  .bookmark-indicator {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 4px;
+    color: var(--bookmark-color, #ef4444);
+  }
+
+  .bookmark-indicator :global(.cp-icon) {
+    width: 14px;
+    height: 14px;
   }
 </style>

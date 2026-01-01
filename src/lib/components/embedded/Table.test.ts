@@ -31,6 +31,7 @@ vi.mock('$lib/context', () => ({
     selection: null,
     isDragging: false,
     lastSelectedLine: null,
+    getRangeKeyForLine: () => null,
   }),
 }));
 

@@ -1,20 +1,21 @@
 <script lang="ts">
   /**
    * CodeBlock - Renders fenced code blocks with syntax highlighting.
-   * Uses context for: interaction, annotations, markdownMetadata
+   * Uses LineRow for shared line-rendering logic and adds codeblock-specific styling.
    */
   import type { Snippet } from 'svelte';
   import type { Line } from '$lib/types';
   import { getLineNumber, isCodeBlockFence } from '$lib/line-utils';
-  import { rangeToKey } from '$lib/range';
   import { computePosition, offset, flip, shift } from '@floating-ui/dom';
   import Icon from '$lib/CommandPalette/Icon.svelte';
   import { getAnnotContext } from '$lib/context';
+  import LineRow from './LineRow.svelte';
 
   interface Props {
     lines: Array<{ line: Line; displayIndex: number }>;
     language: string | null;
     color: string | null;
+    isLineBookmarked?: (displayIdx: number) => boolean;
     onMermaidOpen?: () => void;
     onExcalidrawOpen?: () => void;
     excalidrawSupported?: boolean;
@@ -27,6 +28,7 @@
     lines,
     language,
     color,
+    isLineBookmarked,
     onMermaidOpen,
     onExcalidrawOpen,
     excalidrawSupported = true,
@@ -36,9 +38,6 @@
   }: Props = $props();
 
   const ctx = getAnnotContext();
-
-  // Convenience derived values
-  const markdownMetadata = $derived(ctx.markdownMetadata);
 
   let isMermaid = $derived(language === 'mermaid');
   let copied = $state(false);
@@ -118,31 +117,6 @@
     return contentLines.length > 0 && contentLines[0].displayIndex === displayIndex;
   }
 
-  // Check if a display index is selected
-  function isSelected(displayIdx: number): boolean {
-    return ctx.interaction.isLineHighlighted(displayIdx);
-  }
-
-  // Check if a display index has an annotation
-  function hasAnnotation(displayIdx: number): boolean {
-    return ctx.annotations.hasAnnotation(displayIdx);
-  }
-
-  // Compute the range key for annotation rendering at this line
-  function computeRangeKey(displayIndex: number): string | null {
-    const annotationAtLine = ctx.annotations.getAtLine(displayIndex);
-    if (annotationAtLine) {
-      return annotationAtLine.key;
-    }
-
-    const isLastSelectedLine = displayIndex === ctx.lastSelectedLine && ctx.selection && !ctx.isDragging;
-    if (isLastSelectedLine && ctx.selection) {
-      return rangeToKey(ctx.selection);
-    }
-
-    return null;
-  }
-
   // Check if line is a fence (start or end)
   function isFence(line: Line): boolean {
     return isCodeBlockFence(line);
@@ -180,44 +154,29 @@
 <div class="codeblock-group">
   {#each lines as { line, displayIndex }}
     {@const sourceLineNum = getLineNumber(line)}
-    {@const rangeKey = computeRangeKey(displayIndex)}
+    {@const rangeKey = ctx.getRangeKeyForLine(displayIndex)}
     {@const fence = isFence(line)}
     {@const startFence = isStartFence(line)}
     {@const endFence = isEndFence(line)}
-    {@const isPreview = ctx.interaction.isLinePreview(displayIndex)}
-    <div
-      class="line"
-      class:codeblock-header={startFence && language}
-      class:codeblock-fence={fence && !language}
-      class:codeblock-content={!fence}
-      class:codeblock-footer={endFence && language}
-      class:selected={isSelected(displayIndex)}
-      class:annotated={hasAnnotation(displayIndex)}
-      class:preview={isPreview}
-      data-display-idx={displayIndex}
-      onmouseenter={() => ctx.interaction.handleLineEnter(displayIndex)}
-      onmouseleave={() => ctx.interaction.handleLineLeave()}
-      role="presentation"
+    <LineRow
+      {line}
+      {displayIndex}
+      isBookmarked={isLineBookmarked?.(displayIndex)}
+      additionalClasses={{
+        'codeblock-header': startFence && !!language,
+        'codeblock-fence': fence && !language,
+        'codeblock-content': !fence,
+        'codeblock-footer': endFence && !!language,
+      }}
+      gutterClass="codeblock-gutter"
     >
-      <button
-        class="add-btn"
-        onpointerdown={(e) => ctx.interaction.handlePointerDown(displayIndex, e)}
-        aria-label="Add annotation"
-      >+</button>
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <span
-        class="gutter codeblock-gutter"
-        class:selected={isSelected(displayIndex)}
-        onpointerdown={(e) => ctx.interaction.handlePointerDown(displayIndex, e)}
-        onclick={() => ctx.interaction.handleGutterClick(displayIndex)}
-        role="button"
-        tabindex="-1"
-      >
+      {#snippet gutter()}
         {#if !endFence && sourceLineNum !== null}
           {sourceLineNum}
         {/if}
-      </span>
-      <span class="code" class:md={markdownMetadata}>
+      {/snippet}
+
+      {#snippet code()}
         {#if startFence && language}
           <span class="codeblock-header-info">
             <span class="lang-badge" style:--lang-color={color}>{language}</span>
@@ -297,8 +256,8 @@
             </span>
           {/if}
         {/if}
-      </span>
-    </div>
+      {/snippet}
+    </LineRow>
     {#if !fence}
       <div class="annotation-row">
         <span class="annotation-gutter"></span>
@@ -340,53 +299,54 @@
     transform: scaleY(1.5);
   }
 
-  .line.codeblock-header .code {
+  /* Styles targeting LineRow-rendered elements need :global() */
+  .codeblock-group :global(.line.codeblock-header .code) {
     border-bottom: 1px solid var(--border-subtle);
   }
 
-  .line.codeblock-footer .code {
+  .codeblock-group :global(.line.codeblock-footer .code) {
     border-top: 1px solid var(--border-subtle);
   }
 
   /* Fence lines (header/footer with language, or any fence without): minimal height */
-  .line.codeblock-fence,
-  .line.codeblock-header,
-  .line.codeblock-footer {
+  .codeblock-group :global(.line.codeblock-fence),
+  .codeblock-group :global(.line.codeblock-header),
+  .codeblock-group :global(.line.codeblock-footer) {
     height: auto;
     min-height: 0;
   }
 
-  .line.codeblock-fence .gutter,
-  .line.codeblock-fence .code,
-  .line.codeblock-footer .gutter,
-  .line.codeblock-footer .code {
+  .codeblock-group :global(.line.codeblock-fence .gutter),
+  .codeblock-group :global(.line.codeblock-fence .code),
+  .codeblock-group :global(.line.codeblock-footer .gutter),
+  .codeblock-group :global(.line.codeblock-footer .code) {
     display: none;
   }
 
   /* Hide add button for fence lines */
-  .line.codeblock-header .add-btn,
-  .line.codeblock-footer .add-btn,
-  .line.codeblock-fence .add-btn {
+  .codeblock-group :global(.line.codeblock-header .add-btn),
+  .codeblock-group :global(.line.codeblock-footer .add-btn),
+  .codeblock-group :global(.line.codeblock-fence .add-btn) {
     display: none !important;
   }
 
-  .gutter.codeblock-gutter {
+  .codeblock-group :global(.gutter.codeblock-gutter) {
     color: var(--text-muted);
     background: var(--bg-main);
   }
 
   /* Gutter highlight for selected/preview lines */
-  .line.selected .gutter.codeblock-gutter {
+  .codeblock-group :global(.line.selected .gutter.codeblock-gutter) {
     background: var(--selection-bg);
     color: var(--text-secondary);
   }
 
-  .line.preview .gutter.codeblock-gutter {
+  .codeblock-group :global(.line.preview .gutter.codeblock-gutter) {
     background: var(--selection-bg-preview);
     color: var(--text-secondary);
   }
 
-  .line.codeblock-header .gutter.codeblock-gutter {
+  .codeblock-group :global(.line.codeblock-header .gutter.codeblock-gutter) {
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -477,7 +437,7 @@
   }
 
   /* Ensure content lines have relative positioning for inline actions */
-  .line.codeblock-content .code {
+  .codeblock-group :global(.line.codeblock-content .code) {
     position: relative;
   }
 

@@ -41,6 +41,13 @@ export interface AnnotContext {
   showToast: (message: string, duration?: number) => void;
   isLineSelectable: (displayIdx: number) => boolean;
   getOriginalLinesForRange: (range: Range) => string;
+
+  /**
+   * Get the range key for a line, used to connect annotation slots to their content.
+   * Returns the annotation key if line has an annotation, or the selection key if
+   * this is the last selected line, or null otherwise.
+   */
+  getRangeKeyForLine: (displayIndex: number) => string | null;
 }
 
 const ANNOT_CONTEXT = Symbol('annot');

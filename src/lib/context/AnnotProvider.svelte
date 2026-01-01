@@ -11,6 +11,7 @@
   import type { Snippet } from 'svelte';
   import type { Line, ContentMetadata, Tag, JSONContent, MarkdownMetadata } from '$lib/types';
   import type { Range } from '$lib/range';
+  import { rangeToKey } from '$lib/range';
   import { setAnnotContext, type AnnotContext } from './annot-context.svelte';
   import type { useInteraction } from '$lib/composables/useInteraction.svelte';
   import type { useAnnotations } from '$lib/composables/useAnnotations.svelte';
@@ -83,6 +84,24 @@
     return Math.max(sel.start, sel.end);
   });
 
+  /**
+   * Get the range key for a line. Used by embedded components to connect
+   * annotation slots to their content.
+   */
+  function getRangeKeyForLine(displayIndex: number): string | null {
+    const annotationAtLine = annotations.getAtLine(displayIndex);
+    if (annotationAtLine) {
+      return annotationAtLine.key;
+    }
+
+    const isLast = displayIndex === lastSelectedLine && selection && !isDragging;
+    if (isLast && selection) {
+      return rangeToKey(selection);
+    }
+
+    return null;
+  }
+
   // Set context with getters for reactive updates
   setAnnotContext({
     get interaction() { return interaction; },
@@ -107,6 +126,7 @@
     get showToast() { return showToast; },
     get isLineSelectable() { return isLineSelectable; },
     get getOriginalLinesForRange() { return getOriginalLinesForRange; },
+    getRangeKeyForLine,
   });
 </script>
 

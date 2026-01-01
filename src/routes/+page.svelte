@@ -764,7 +764,7 @@
       >
       {#each lineSegmentation.segments as segment}
         {#if segment.type === 'portal'}
-          <Portal lines={segment.lines}>
+          <Portal lines={segment.lines} {isLineBookmarked}>
             {#snippet annotationSlot(displayIndex, rangeKey)}
               <AnnotationSlot {rangeKey} {...annotationSlotProps} />
             {/snippet}
@@ -783,6 +783,7 @@
             lines={segment.lines}
             language={segment.language}
             color={segment.color}
+            {isLineBookmarked}
             onMermaidOpen={mermaidBlock && !mermaidError ? () => mermaid.openMermaidWindow(mermaidBlock) : undefined}
             onExcalidrawOpen={mermaidBlock ? () => openExcalidrawFromMermaid(
               mermaidBlock,  // source block for content extraction
@@ -797,7 +798,7 @@
             {/snippet}
           </CodeBlock>
         {:else if segment.type === 'table'}
-          <Table lines={segment.lines}>
+          <Table lines={segment.lines} {isLineBookmarked}>
             {#snippet annotationSlot(displayIndex, rangeKey)}
               <AnnotationSlot {rangeKey} {...annotationSlotProps} />
             {/snippet}
