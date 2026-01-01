@@ -27,6 +27,8 @@
     gutter: Snippet<[]>;
     code: Snippet<[]>;
     trailing?: Snippet<[]>;
+    /** Optional wrapper for the code span. When provided, consumer controls the element and can attach actions. */
+    codeWrapper?: Snippet<[Snippet]>;
   }
 
   let {
@@ -38,6 +40,7 @@
     gutter,
     code,
     trailing,
+    codeWrapper,
   }: Props = $props();
 
   const ctx = getAnnotContext();
@@ -77,9 +80,13 @@
   >
     {@render gutter()}
   </span>
-  <span class="code" class:md={markdownMetadata}>
-    {@render code()}
-  </span>
+  {#if codeWrapper}
+    {@render codeWrapper(code)}
+  {:else}
+    <span class="code" class:md={markdownMetadata}>
+      {@render code()}
+    </span>
+  {/if}
   {#if isBookmarked}
     <span class="bookmark-indicator"><BookmarkIcon filled /></span>
   {/if}

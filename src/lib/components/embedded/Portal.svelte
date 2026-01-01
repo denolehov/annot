@@ -112,7 +112,8 @@
   }
 
   /* Gutter highlight for selected/preview lines */
-  .portal-group :global(.line.selected .gutter.portal-gutter) {
+  .portal-group :global(.line.selected .gutter.portal-gutter),
+  .portal-group :global(.line.annotated .gutter.portal-gutter) {
     background: var(--selection-bg);
     color: var(--text-secondary);
   }

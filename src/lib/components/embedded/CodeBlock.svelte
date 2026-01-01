@@ -336,7 +336,8 @@
   }
 
   /* Gutter highlight for selected/preview lines */
-  .codeblock-group :global(.line.selected .gutter.codeblock-gutter) {
+  .codeblock-group :global(.line.selected .gutter.codeblock-gutter),
+  .codeblock-group :global(.line.annotated .gutter.codeblock-gutter) {
     background: var(--selection-bg);
     color: var(--text-secondary);
   }
