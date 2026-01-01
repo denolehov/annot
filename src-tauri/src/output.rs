@@ -5,7 +5,7 @@ use crate::mcp::tools::SessionImage;
 use crate::portal::LoadedPortal;
 use crate::review::{FileKey, Review};
 use crate::state::{
-    Annotation, ContentMetadata, ContentModel, ContentNode, LineOrigin, LineSemantics,
+    Annotation, Bookmark, ContentMetadata, ContentModel, ContentNode, LineOrigin, LineSemantics,
     PortalSemantics,
 };
 
@@ -274,15 +274,17 @@ fn collect_unique_tags(review: &Review) -> BTreeMap<String, String> {
 }
 
 /// Collect unique bookmarks referenced from all content nodes (session comment + annotations).
-/// Returns a vector of (id, label) pairs in order of first occurrence.
-fn collect_unique_bookmarks(review: &Review) -> Vec<(String, String)> {
+/// Returns embedded Bookmark data in order of first occurrence (keyed by ID).
+fn collect_unique_bookmarks(review: &Review) -> Vec<Bookmark> {
     use indexmap::IndexMap;
-    let mut bookmarks: IndexMap<String, String> = IndexMap::new();
+    let mut bookmarks: IndexMap<String, Bookmark> = IndexMap::new();
 
     let mut process_nodes = |nodes: &[ContentNode]| {
         for node in nodes {
-            if let ContentNode::BookmarkRef { id, label } = node {
-                bookmarks.entry(id.clone()).or_insert_with(|| label.clone());
+            if let ContentNode::BookmarkRef { id, bookmark, .. } = node {
+                bookmarks
+                    .entry(id.clone())
+                    .or_insert_with(|| bookmark.clone());
             }
         }
     };
@@ -299,7 +301,7 @@ fn collect_unique_bookmarks(review: &Review) -> Vec<(String, String)> {
         }
     }
 
-    bookmarks.into_iter().collect()
+    bookmarks.into_values().collect()
 }
 
 /// Format all annotations as structured output for LLM consumption.
@@ -343,35 +345,31 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
     }
 
     // BOOKMARKS REFERENCED block (if any bookmarks are referenced)
+    // Uses embedded bookmark data — works even if bookmark was deleted (detached)
     let unique_bookmarks = collect_unique_bookmarks(review);
     if !unique_bookmarks.is_empty() {
         output.push_str("BOOKMARKS REFERENCED:\n");
-        for (id, cached_label) in &unique_bookmarks {
-            // Look up full bookmark from config for additional context
-            if let Some(bookmark) = review.config.get_bookmark(id) {
-                let short_id = &id[..id.len().min(3)];
-                // Use display_label() which derives from content if no user label
-                let display_label = bookmark.display_label();
-                output.push_str(&format!("  [@ {}] {}\n", short_id, display_label));
-                output.push_str(&format!("    Source: {}\n", bookmark.snapshot.source_title()));
-                if let Some(ref project) = bookmark.project_path {
-                    output.push_str(&format!("    Project: {}\n", project.display()));
-                }
-                output.push_str(&format!(
-                    "    Created: {}\n",
-                    bookmark.created_at.format("%Y-%m-%d")
-                ));
-                output.push_str("    ────────────────────────────────────\n");
-                // Show full bookmark content
-                for line in bookmark.snapshot.content().lines() {
-                    output.push_str(&format!("    {}\n", line));
-                }
-                output.push_str("    ────────────────────────────────────\n\n");
-            } else {
-                // Bookmark was deleted but still referenced - use cached label
-                let short_id = &id[..id.len().min(3)];
-                output.push_str(&format!("  [@ {}] {} (deleted)\n", short_id, cached_label));
+        for bookmark in &unique_bookmarks {
+            let short_id = &bookmark.id[..bookmark.id.len().min(3)];
+            let display_label = bookmark.display_label();
+            output.push_str(&format!("  [@ {}] {}\n", short_id, display_label));
+            output.push_str(&format!(
+                "    Source: {}\n",
+                bookmark.snapshot.source_title()
+            ));
+            if let Some(ref project) = bookmark.project_path {
+                output.push_str(&format!("    Project: {}\n", project.display()));
             }
+            output.push_str(&format!(
+                "    Created: {}\n",
+                bookmark.created_at.format("%Y-%m-%d")
+            ));
+            output.push_str("    ────────────────────────────────────\n");
+            // Show full bookmark content
+            for line in bookmark.snapshot.content().lines() {
+                output.push_str(&format!("    {}\n", line));
+            }
+            output.push_str("    ────────────────────────────────────\n\n");
         }
     }
 

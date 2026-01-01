@@ -188,7 +188,15 @@ pub enum ContentNode {
     /// Pasted text content collapsed into a chip (large paste).
     Paste { content: String },
     /// Reference to a bookmark (captured moment of attention).
-    BookmarkRef { id: String, label: String },
+    /// Embeds full bookmark data at insertion time for "detachment" —
+    /// if the bookmark is later deleted, the reference still renders fully.
+    BookmarkRef {
+        id: String,
+        label: String,
+        /// Full bookmark data captured at insertion time.
+        /// Used for output if the bookmark no longer exists (detached).
+        bookmark: Bookmark,
+    },
 }
 
 /// A normalized line range (start ≤ end).

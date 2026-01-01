@@ -201,6 +201,8 @@ export interface BookmarkRefNode {
   type: 'bookmarkref';
   id: string; // Full resolved bookmark ID
   label: string; // Cached label for display
+  /** Full bookmark data captured at insertion time (for detachment). */
+  bookmark: Bookmark;
 }
 
 // TipTap JSON content type for internal storage

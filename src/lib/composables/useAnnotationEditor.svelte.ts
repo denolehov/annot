@@ -163,6 +163,9 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
                     attrs: {
                       id: props.id,
                       label,
+                      // Embed full bookmark data for "detachment" — if bookmark is
+                      // deleted later, the reference still renders with full context
+                      bookmark: props,
                     },
                   },
                   { type: 'text', text: ' ' },

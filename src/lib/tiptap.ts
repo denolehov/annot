@@ -303,6 +303,8 @@ export const BookmarkChip = Node.create<BookmarkChipOptions>({
     return {
       id: { default: null },
       label: { default: null },
+      // Full bookmark data embedded at insertion time (for detachment)
+      bookmark: { default: null },
     };
   },
 
@@ -312,9 +314,11 @@ export const BookmarkChip = Node.create<BookmarkChipOptions>({
         tag: 'span[data-bookmark-chip]',
         getAttrs: (dom) => {
           const element = dom as HTMLElement;
+          const bookmarkData = element.getAttribute('data-bookmark');
           return {
             id: element.getAttribute('data-id') || null,
             label: element.getAttribute('data-label') || '',
+            bookmark: bookmarkData ? JSON.parse(bookmarkData) : null,
           };
         },
       },
@@ -331,6 +335,7 @@ export const BookmarkChip = Node.create<BookmarkChipOptions>({
         'data-bookmark-chip': '',
         'data-id': node.attrs.id || '',
         'data-label': node.attrs.label || '',
+        'data-bookmark': node.attrs.bookmark ? JSON.stringify(node.attrs.bookmark) : '',
         class: 'tag-chip bookmark-chip',
       }),
       `[@ ${shortId} · ${displayLabel}]`,
@@ -1609,6 +1614,7 @@ const CHIP_EXTRACTORS: Record<string, ChipExtractor> = {
     type: 'bookmarkref',
     id: attrs.id as string,
     label: attrs.label as string,
+    bookmark: attrs.bookmark as Bookmark,
   }),
 };
 
@@ -1897,12 +1903,13 @@ export function contentNodesToTipTap(nodes: ContentNode[] | null): JSONContent |
         },
       });
     } else if (node.type === 'bookmarkref') {
-      // Insert bookmark chip inline
+      // Insert bookmark chip inline with full embedded bookmark data
       currentParagraph.push({
         type: 'bookmarkChip',
         attrs: {
           id: node.id,
           label: node.label,
+          bookmark: node.bookmark,
         },
       });
     }
