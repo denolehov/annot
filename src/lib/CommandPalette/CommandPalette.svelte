@@ -452,7 +452,9 @@
     if (machineState.type === 'NAMESPACE_FILTER' || machineState.type === 'ITEM_FILTER' || machineState.type === 'ITEM_REORDER') {
       const idx = machineState.selectedIndex;
       requestAnimationFrame(() => {
-        const selected = listEl?.querySelector('.item.selected') as HTMLElement | null;
+        // Use nth-child to find the selected li - works for all filter/reorder states
+        // regardless of whether selection is indicated via .selected class or data-state
+        const selected = listEl?.querySelector(`li:nth-child(${idx + 1})`) as HTMLElement | null;
         selected?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       });
     }
