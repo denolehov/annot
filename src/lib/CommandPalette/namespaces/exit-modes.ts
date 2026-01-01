@@ -4,6 +4,7 @@
 import type { Namespace, Item } from '../engine/types';
 import { fuzzySearch } from '$lib/fuzzy';
 import { SimpleItem } from '../items';
+import { generateId } from '$lib/utils/id';
 
 export const exitModesNamespace: Namespace = {
   id: 'exit-modes',
@@ -66,7 +67,7 @@ export function reorderExitModeItems(orderedIds: string[]): void {
   items = orderedIds.map((id) => itemMap.get(id)!).filter(Boolean);
 }
 
-// Generate ID from name (slug-style)
-export function generateExitModeId(name: string): string {
-  return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+// jj-style ID generator (name parameter kept for backwards compat, but ignored)
+export function generateExitModeId(_name?: string): string {
+  return generateId();
 }

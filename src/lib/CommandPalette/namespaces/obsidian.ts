@@ -4,6 +4,7 @@
 import type { Namespace, Item } from '../engine/types';
 import { fuzzySearch } from '$lib/fuzzy';
 import { SimpleItem } from '../items';
+import { generateId } from '$lib/utils/id';
 
 export const obsidianNamespace: Namespace = {
   id: 'obsidian',
@@ -49,7 +50,7 @@ export function getObsidianItems(): Item[] {
  */
 export function setObsidianVaults(vaults: string[]): void {
   vaultItems = vaults.map((name) => ({
-    id: generateVaultId(),
+    id: generateId(),
     name,
     values: { name },
   }));
@@ -98,9 +99,5 @@ export function getVaultNames(): string[] {
   return vaultItems.map((v) => v.name);
 }
 
-/**
- * Generate a unique ID for new vaults
- */
-export function generateVaultId(): string {
-  return Math.random().toString(36).substring(2, 14);
-}
+// Re-export jj-style ID generator for backwards compatibility
+export { generateId as generateVaultId };

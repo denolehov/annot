@@ -4,6 +4,7 @@
 import type { Namespace, Item } from '../engine/types';
 import { fuzzySearch } from '$lib/fuzzy';
 import { SimpleItem } from '../items';
+import { generateId } from '$lib/utils/id';
 
 export const tagsNamespace: Namespace = {
   id: 'tags',
@@ -59,7 +60,5 @@ export function deleteTagItem(id: string): void {
   items = items.filter((i) => i.id !== id);
 }
 
-// Generate a simple ID for new items
-export function generateTagId(): string {
-  return Math.random().toString(36).substring(2, 14);
-}
+// Re-export jj-style ID generator for backwards compatibility
+export { generateId as generateTagId };
