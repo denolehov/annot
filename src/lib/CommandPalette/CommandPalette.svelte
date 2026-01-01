@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, setContext } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { reduce, computeItemList } from './engine/reducer';
@@ -92,6 +92,9 @@
 
   // Current theme preference (for showing checkmark in theme namespace)
   let currentThemePreference: string = $state('system');
+
+  // Expose to ThemeItem via context
+  setContext('currentThemeId', () => `theme-${currentThemePreference}`);
 
   // Fetch current theme on mount
   onMount(() => {
@@ -617,11 +620,7 @@
               onclick={() => dispatch({ type: 'SELECT', index: i })}
               onkeydown={() => {}}
             >
-              <ItemComponent
-                {item}
-                selectionState={itemState}
-                isCurrentTheme={machineState.namespace.id === 'theme' && item.id === `theme-${currentThemePreference}`}
-              />
+              <ItemComponent {item} selectionState={itemState} />
             </li>
           {/each}
           {#if itemListData.showCreate}

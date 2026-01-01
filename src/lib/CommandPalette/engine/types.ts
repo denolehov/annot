@@ -17,7 +17,6 @@ export type ItemSelectionState = 'idle' | 'preselected' | 'selected' | 'pending-
 export interface ItemComponentProps {
   item: Item;
   selectionState: ItemSelectionState;
-  isCurrentTheme?: boolean; // Badge indicator for theme namespace
 }
 
 // === Domain ===
