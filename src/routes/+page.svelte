@@ -656,19 +656,13 @@
     return rangeLines.join('\n');
   }
 
-  // Shared props for AnnotationSlot component (avoids repeating in template)
+  // Shared props for AnnotationSlot component (context provides most state)
   let annotationSlotProps = $derived({
-    annotationState,
-    interaction,
-    tags,
-    bookmarks,
-    allowsImagePaste,
     pendingTagInsertion,
     onUpdate: updateAnnotation,
     onDismiss: sealCurrentAnnotation,
     onRequestCreateTag: handleRequestCreateTag,
     onImagePasteBlocked: handleImagePasteBlocked,
-    getOriginalLinesForRange,
   });
 
   // Keyboard handling (composable)

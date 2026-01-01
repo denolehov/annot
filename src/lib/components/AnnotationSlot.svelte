@@ -1,26 +1,9 @@
 <script lang="ts" module>
-  import type { Range } from '$lib/range';
-  import type { JSONContent, Tag, Bookmark } from '$lib/types';
-
-  interface AnnotationEntry {
-    content: JSONContent;
-    sealed: boolean;
-  }
+  import type { JSONContent, Tag } from '$lib/types';
 
   /** Props for AnnotationSlot component (exported for use in other components) */
   export interface AnnotationSlotProps {
     rangeKey: string | null;
-    annotationState: {
-      getByKey(key: string): AnnotationEntry | undefined;
-      isSealed(key: string): boolean;
-      unseal(key: string): void;
-    };
-    interaction: {
-      setSelection(range: Range): void;
-    };
-    tags: Tag[];
-    bookmarks: Bookmark[];
-    allowsImagePaste: boolean;
     pendingTagInsertion: {
       editorKey: string;
       from: number;
@@ -31,7 +14,6 @@
     onDismiss: () => void;
     onRequestCreateTag: (rangeKey: string, text: string, from: number, to: number) => void;
     onImagePasteBlocked: () => void;
-    getOriginalLinesForRange: (range: Range) => string;
   }
 </script>
 
@@ -41,47 +23,46 @@
    *
    * Handles the conditional rendering, keying, and prop threading for annotations
    * in Portal, CodeBlock, Table, and regular line contexts.
+   *
+   * Uses context for: annotations, interaction, tags, bookmarks, allowsImagePaste, getOriginalLinesForRange
    */
   import AnnotationEditor from '$lib/AnnotationEditor.svelte';
   import { keyToRange } from '$lib/range';
+  import { getAnnotContext } from '$lib/context';
 
   let {
     rangeKey,
-    annotationState,
-    interaction,
-    tags,
-    bookmarks,
-    allowsImagePaste,
     pendingTagInsertion,
     onUpdate,
     onDismiss,
     onRequestCreateTag,
     onImagePasteBlocked,
-    getOriginalLinesForRange,
   }: AnnotationSlotProps = $props();
+
+  const ctx = getAnnotContext();
 </script>
 
 {#if rangeKey}
   {#key rangeKey}
     <AnnotationEditor
       {rangeKey}
-      content={annotationState.getByKey(rangeKey)?.content}
-      sealed={annotationState.isSealed(rangeKey)}
+      content={ctx.annotations.getByKey(rangeKey)?.content}
+      sealed={ctx.annotations.isSealed(rangeKey)}
       {onUpdate}
       onUnseal={() => {
-        interaction.setSelection(keyToRange(rangeKey));
-        annotationState.unseal(rangeKey);
+        ctx.interaction.setSelection(keyToRange(rangeKey));
+        ctx.annotations.unseal(rangeKey);
       }}
       {onDismiss}
-      {tags}
-      {bookmarks}
-      {allowsImagePaste}
+      tags={ctx.tags}
+      bookmarks={ctx.bookmarks}
+      allowsImagePaste={ctx.allowsImagePaste}
       {onImagePasteBlocked}
       onRequestCreateTag={(text, from, to) => onRequestCreateTag(rangeKey, text, from, to)}
       pendingTagInsertion={pendingTagInsertion?.editorKey === rangeKey
         ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag }
         : null}
-      getOriginalLines={() => getOriginalLinesForRange(keyToRange(rangeKey))}
+      getOriginalLines={() => ctx.getOriginalLinesForRange(keyToRange(rangeKey))}
     />
   {/key}
 {/if}
