@@ -535,7 +535,7 @@
     class="bookmark-suggestions"
   >
     {#each ann.bookmarkSuggestion.items as bookmark, i}
-      {@const displayLabel = bookmark.label ?? bookmark.snapshot.source_title}
+      {@const displayLabel = bookmark.label ?? (bookmark.snapshot.type === 'selection' ? bookmark.snapshot.selected_text : bookmark.snapshot.source_title)}
       {@const dateStr = new Date(bookmark.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
       <button
         type="button"

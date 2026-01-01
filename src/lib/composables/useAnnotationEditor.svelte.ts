@@ -153,7 +153,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
               (cmd) => { bookmarkCommand = cmd; }
             ),
             command: ({ editor, range, props }: { editor: Editor; range: Range; props: Bookmark }) => {
-              const label = props.label ?? props.snapshot.source_title;
+              const label = props.label ?? (props.snapshot.type === 'selection' ? props.snapshot.selected_text : props.snapshot.source_title);
               editor
                 .chain()
                 .focus()
