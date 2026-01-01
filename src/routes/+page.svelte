@@ -942,24 +942,7 @@
         {:else}
           <RegularLines
             lines={segment.lines}
-            {markdownMetadata}
-            selection={interactionSelection}
-            interactionRange={interaction.range}
-            interactionPhase={interaction.phase}
-            {lastSelectedLine}
-            searchMatches={search.matches}
-            currentSearchMatch={search.getCurrentMatch()}
-            {isSelected}
-            {isPreview}
-            {hasAnnotation}
             {isLineBookmarked}
-            {getAnnotationAtLine}
-            getMermaidBlockAt={mermaid.getMermaidBlockAt}
-            openMermaidWindow={mermaid.openMermaidWindow}
-            onPointerDown={interaction.handlePointerDown}
-            onGutterClick={interaction.handleGutterClick}
-            onLineEnter={interaction.handleLineEnter}
-            onLineLeave={interaction.handleLineLeave}
             {annotationSlotProps}
           />
         {/if}

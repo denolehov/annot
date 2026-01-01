@@ -3,11 +3,9 @@
    * RegularLines - Renders non-special line segments (not portal/codeblock/table).
    *
    * Handles regular markdown lines, diff lines, and their annotations.
+   * Uses context for: interaction, annotations, search, mermaid, markdownMetadata
    */
-  import type { Line, MarkdownMetadata, Tag, CodeBlockInfo, SectionInfo } from '$lib/types';
-  import type { Range } from '$lib/range';
-  import type { JSONContent } from '@tiptap/core';
-  import type { SearchMatch } from '$lib/composables/useSearch.svelte';
+  import type { Line, SectionInfo } from '$lib/types';
   import { rangeToKey } from '$lib/range';
   import { getLineNumber, getDiffKind } from '$lib/line-utils';
   import { highlightMatches, clearHighlights } from '$lib/search-highlight';
@@ -15,6 +13,7 @@
   import CopyButton from '$lib/components/CopyButton.svelte';
   import AnnotationSlot, { type AnnotationSlotProps } from '$lib/components/AnnotationSlot.svelte';
   import { BookmarkIcon } from '$lib/icons';
+  import { getAnnotContext } from '$lib/context';
 
   interface DisplayLine {
     line: Line;
@@ -23,57 +22,35 @@
 
   interface Props {
     lines: DisplayLine[];
-    markdownMetadata: MarkdownMetadata | null;
-    selection: Range | null;
-    interactionRange: Range | null;
-    interactionPhase: string;
-    lastSelectedLine: number | null;
-
-    // Search
-    searchMatches: SearchMatch[];
-    currentSearchMatch: SearchMatch | null;
-
-    // Functions
-    isSelected: (displayIdx: number) => boolean;
-    isPreview: (displayIdx: number) => boolean;
-    hasAnnotation: (displayIdx: number) => boolean;
     isLineBookmarked: (displayIdx: number) => boolean;
-    getAnnotationAtLine: (displayIdx: number) => { key: string; content: JSONContent } | null;
-    getMermaidBlockAt: (lineNum: number) => CodeBlockInfo | null;
-    openMermaidWindow: (block: CodeBlockInfo) => void;
-
-    // Interaction handlers
-    onPointerDown: (displayIdx: number, e: PointerEvent) => void;
-    onGutterClick: (displayIdx: number) => void;
-    onLineEnter: (displayIdx: number) => void;
-    onLineLeave: () => void;
-
-    // Annotation slot props
     annotationSlotProps: Omit<AnnotationSlotProps, 'rangeKey'>;
   }
 
   let {
     lines,
-    markdownMetadata,
-    selection,
-    interactionRange,
-    interactionPhase,
-    lastSelectedLine,
-    searchMatches,
-    currentSearchMatch,
-    isSelected,
-    isPreview,
-    hasAnnotation,
     isLineBookmarked,
-    getAnnotationAtLine,
-    getMermaidBlockAt,
-    openMermaidWindow,
-    onPointerDown,
-    onGutterClick,
-    onLineEnter,
-    onLineLeave,
     annotationSlotProps,
   }: Props = $props();
+
+  const ctx = getAnnotContext();
+
+  // Convenience derived values
+  const markdownMetadata = $derived(ctx.markdownMetadata);
+  const searchMatches = $derived(ctx.search.matches);
+  const lastSelectedLine = $derived(ctx.lastSelectedLine);
+
+  // Helper functions that use context
+  function isSelected(displayIdx: number): boolean {
+    return ctx.interaction.isLineHighlighted(displayIdx);
+  }
+
+  function isPreview(displayIdx: number): boolean {
+    return ctx.interaction.isLinePreview(displayIdx);
+  }
+
+  function hasAnnotation(displayIdx: number): boolean {
+    return ctx.annotations.hasAnnotation(displayIdx);
+  }
 
   // Map of display indices to code element refs for search highlighting
   let codeRefs: Map<number, HTMLElement> = new Map();
@@ -114,6 +91,7 @@
     }
 
     // Apply new highlights
+    const currentSearchMatch = ctx.search.getCurrentMatch();
     for (const match of searchMatches) {
       const el = codeRefs.get(match.displayIndex);
       if (el) {
@@ -129,7 +107,7 @@
 {#each lines as { line, displayIndex }}
   {@const sourceLineNum = getLineNumber(line)}
   {@const diffKind = getDiffKind(line)}
-  {@const mermaidBlock = sourceLineNum !== null ? getMermaidBlockAt(sourceLineNum) : null}
+  {@const mermaidBlock = sourceLineNum !== null ? ctx.mermaid.getMermaidBlockAt(sourceLineNum) : null}
   {@const sectionInfo = sourceLineNum !== null ? getSectionAt(sourceLineNum) : null}
   {@const bookmarked = isLineBookmarked(displayIndex)}
   <div
@@ -143,21 +121,21 @@
     class:diff-context={diffKind === 'context'}
     class:diff-header={diffKind === 'file_header' || diffKind === 'hunk_header'}
     data-display-idx={displayIndex}
-    onmouseenter={() => onLineEnter(displayIndex)}
-    onmouseleave={() => onLineLeave()}
+    onmouseenter={() => ctx.interaction.handleLineEnter(displayIndex)}
+    onmouseleave={() => ctx.interaction.handleLineLeave()}
     role="presentation"
   >
     <button
       class="add-btn"
-      onpointerdown={(e) => onPointerDown(displayIndex, e)}
+      onpointerdown={(e) => ctx.interaction.handlePointerDown(displayIndex, e)}
       aria-label="Add annotation"
     >+</button>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <span
       class="gutter"
       class:selected={isSelected(displayIndex)}
-      onpointerdown={(e) => onPointerDown(displayIndex, e)}
-      onclick={() => onGutterClick(displayIndex)}
+      onpointerdown={(e) => ctx.interaction.handlePointerDown(displayIndex, e)}
+      onclick={() => ctx.interaction.handleGutterClick(displayIndex)}
       role="button"
       tabindex="-1"
     >
@@ -176,7 +154,7 @@
     {#if mermaidBlock}
       <button
         class="mermaid-view-btn"
-        onclick={() => openMermaidWindow(mermaidBlock)}
+        onclick={() => ctx.mermaid.openMermaidWindow(mermaidBlock)}
         title="View diagram"
       >
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="14" height="14">
@@ -196,9 +174,9 @@
       <span class="bookmark-indicator"><BookmarkIcon filled /></span>
     {/if}
   </div>
-  {@const annotationAtLine = getAnnotationAtLine(displayIndex)}
-  {@const isLastSelectedLine = displayIndex === lastSelectedLine && interactionRange && interactionPhase !== 'selecting'}
-  {@const rangeKey = annotationAtLine?.key ?? (isLastSelectedLine && interactionRange ? rangeToKey(interactionRange) : null)}
+  {@const annotationAtLine = ctx.annotations.getAtLine(displayIndex)}
+  {@const isLastSelectedLine = displayIndex === lastSelectedLine && ctx.interaction.range && ctx.interaction.phase !== 'selecting'}
+  {@const rangeKey = annotationAtLine?.key ?? (isLastSelectedLine && ctx.interaction.range ? rangeToKey(ctx.interaction.range) : null)}
   <AnnotationSlot {rangeKey} {...annotationSlotProps} />
 {/each}
 
