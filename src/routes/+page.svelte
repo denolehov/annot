@@ -401,6 +401,13 @@
   function handleBookmarkUpdated(id: string, label: string) {
     // Sync bookmarks state so TipTap @ suggestions stay fresh
     bookmarks = bookmarks.map((b) => (b.id === id ? { ...b, label } : b));
+
+    // Show toast if edit was triggered via 'e' key
+    if (editBookmarkId === id) {
+      const shortId = id.slice(0, 3);
+      const displayLabel = label ? `"${label}"` : '(no label)';
+      showToast(`${shortId} → ${displayLabel}`);
+    }
   }
 
   // Handle events from CommandPalette (e.g., theme change)
