@@ -167,32 +167,9 @@
     constrainToBounds: selectionBounds.constrainToSelectionBounds,
   });
 
-  // Derived values for component compatibility (temporary during migration)
-  let interactionSelection = $derived(interaction.range);
-  let interactionIsDragging = $derived(interaction.phase === 'selecting');
-  let interactionHoveredIdx = $derived(interaction.hoverLine);
-
-  // Adapter handlers for embedded components (MouseEvent → PointerEvent)
-  function handleGutterPointerDown(displayIdx: number, e: MouseEvent) {
-    interaction.handlePointerDown(displayIdx, e as PointerEvent);
-  }
-
-  function handleAddPointerDown(displayIdx: number, e: MouseEvent) {
-    interaction.handlePointerDown(displayIdx, e as PointerEvent);
-  }
-
   // Annotation state (composable)
   const annotationState = useAnnotations({
     getLines: () => lines,
-  });
-
-  // Derived Map for Portal compatibility (converts Record to Map)
-  let annotationsMap = $derived.by(() => {
-    const map = new Map<string, JSONContent>();
-    for (const [key, entry] of Object.entries(annotationState.annotations)) {
-      map.set(key, entry.content);
-    }
-    return map;
   });
 
   // Exit mode state (composable)
@@ -282,13 +259,6 @@
     const start = Math.min(sel.start, sel.end);
     const end = Math.max(sel.start, sel.end);
     return { key: rangeToKey({ start, end }), start, end };
-  });
-
-  // Derived: last line of current selection (for positioning editor)
-  let lastSelectedLine = $derived.by(() => {
-    const sel = interaction.range;
-    if (!sel) return null;
-    return Math.max(sel.start, sel.end);
   });
 
   async function updateAnnotation(content: JSONContent | null) {
@@ -585,26 +555,6 @@
     exitModeState.setModes(newModes);
   }
 
-  // Get annotation info for a specific display index (is it the last line of any annotation?)
-  function getAnnotationAtLine(displayIdx: number): { key: string; content: JSONContent } | null {
-    return annotationState.getAtLine(displayIdx);
-  }
-
-  // Check if a display index is selected (full selection highlight)
-  function isSelected(displayIdx: number): boolean {
-    const sel = interaction.range;
-    if (!sel) return false;
-    // Show selection highlight for selecting/committed/editing phases
-    const phase = interaction.phase;
-    if (phase === 'idle' || phase === 'hovering') return false;
-    return isLineInRange(displayIdx, sel);
-  }
-
-  // Check if a display index is in preview state (hover - lighter highlight)
-  function isPreview(displayIdx: number): boolean {
-    return interaction.isLinePreview(displayIdx);
-  }
-
   // Open excalidraw from a mermaid code block (keeps annotation coupling here)
   async function openExcalidrawFromMermaid(
     sourceBlock: { start_line: number; end_line: number },
@@ -635,11 +585,6 @@
     } catch (e) {
       showToast(`Failed to convert mermaid: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }
-
-  // Check if a display index has an annotation
-  function hasAnnotation(displayIdx: number): boolean {
-    return annotationState.hasAnnotation(displayIdx);
   }
 
   // Get original lines content for a given range (for /replace command)
