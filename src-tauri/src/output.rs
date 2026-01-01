@@ -413,9 +413,22 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
         }
 
         // Exit mode (original format: "Name (instruction)")
+        // If it's a command exit mode, also include the command path and content
         if let Some(ref mode_id) = review.selected_exit_mode_id {
             if let Some(exit_mode) = review.config.exit_modes().iter().find(|m| &m.id == mode_id) {
                 output.push_str(&format!("  {} ({})\n", exit_mode.name, exit_mode.instruction));
+                // Include command path and content for command exit modes
+                if let Some(cmd_path) = exit_mode.command_path() {
+                    output.push_str(&format!("    Command: {}\n", cmd_path.display()));
+                    // Read and include the command file content
+                    if let Ok(cmd_content) = std::fs::read_to_string(cmd_path) {
+                        output.push_str("    ────────────────────────────────────\n");
+                        for line in cmd_content.lines() {
+                            output.push_str(&format!("    {}\n", line));
+                        }
+                        output.push_str("    ────────────────────────────────────\n");
+                    }
+                }
             }
         }
 
@@ -776,7 +789,7 @@ fn render_content(
 mod tests {
     use super::*;
     use crate::input::{CliSource, ContentSource};
-    use crate::state::{ContentModel, ExitMode, ExitModeOrigin, Line, LineRange, UserConfig};
+    use crate::state::{ContentModel, ExitMode, ExitModeSource, Line, LineRange, UserConfig};
     use std::collections::HashMap;
     use std::path::PathBuf;
 
@@ -983,7 +996,7 @@ mod tests {
                 color: "#22c55e".to_string(),
                 instruction: "Apply the suggested changes".to_string(),
                 order: 0,
-                origin: ExitModeOrigin::Persisted,
+                source: ExitModeSource::Persisted,
             }],
         );
         let content = ContentModel {
@@ -1015,7 +1028,7 @@ mod tests {
                 color: "#ef4444".to_string(),
                 instruction: "Do not apply".to_string(),
                 order: 0,
-                origin: ExitModeOrigin::Persisted,
+                source: ExitModeSource::Persisted,
             }],
         );
 
@@ -1095,7 +1108,7 @@ mod tests {
                 color: "#22c55e".to_string(),
                 instruction: "Apply changes".to_string(),
                 order: 0,
-                origin: ExitModeOrigin::Persisted,
+                source: ExitModeSource::Persisted,
             }],
         );
         let content = ContentModel {
@@ -1900,5 +1913,95 @@ mod tests {
         let input = "Content\n- - -";
         let result = super::trim_trailing_separators(input);
         assert_eq!(result, "Content");
+    }
+
+    // ====== Command Exit Mode Tests ======
+
+    #[test]
+    fn command_exit_mode_includes_path_and_content() {
+        use tempfile::TempDir;
+        use std::fs;
+
+        // Create a temp command file
+        let temp = TempDir::new().unwrap();
+        let cmd_path = temp.path().join("test-cmd.md");
+        fs::write(&cmd_path, r#"---
+description: "Test command"
+---
+## Instructions
+
+Do something useful.
+"#).unwrap();
+
+        let source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from("test.rs"),
+        });
+        let config = UserConfig::with_data(
+            vec![],
+            vec![ExitMode {
+                id: "cmd-test".to_string(),
+                name: "/test-cmd".to_string(),
+                color: "#8b5cf6".to_string(),
+                instruction: "Test command".to_string(),
+                order: 0,
+                source: crate::state::ExitModeSource::Command { path: cmd_path.clone() },
+            }],
+        );
+        let content = ContentModel {
+            label: "test.rs".to_string(),
+            lines: vec![],
+            source,
+            metadata: ContentMetadata::Plain,
+            portals: Vec::new(),
+        };
+        let mut review = Review::cli(content, config, "main".to_string());
+        review.selected_exit_mode_id = Some("cmd-test".to_string());
+
+        let output = format_output(&review, OutputMode::Cli).text;
+
+        // Should include the exit mode name and instruction
+        assert!(output.contains("/test-cmd (Test command)"), "Should have exit mode header");
+        // Should include the command path
+        assert!(output.contains("Command:"), "Should have Command: line");
+        assert!(output.contains("test-cmd.md"), "Should include command file name");
+        // Should include the command content
+        assert!(output.contains("## Instructions"), "Should include command content heading");
+        assert!(output.contains("Do something useful"), "Should include command content body");
+        // Should have separator lines
+        assert!(output.contains("────────────────────────────────────"), "Should have content separators");
+    }
+
+    #[test]
+    fn regular_exit_mode_does_not_include_command_content() {
+        let source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from("test.rs"),
+        });
+        let config = UserConfig::with_data(
+            vec![],
+            vec![ExitMode {
+                id: "apply".to_string(),
+                name: "Apply".to_string(),
+                color: "#22c55e".to_string(),
+                instruction: "Apply changes".to_string(),
+                order: 0,
+                source: ExitModeSource::Persisted,
+            }],
+        );
+        let content = ContentModel {
+            label: "test.rs".to_string(),
+            lines: vec![],
+            source,
+            metadata: ContentMetadata::Plain,
+            portals: Vec::new(),
+        };
+        let mut review = Review::cli(content, config, "main".to_string());
+        review.selected_exit_mode_id = Some("apply".to_string());
+
+        let output = format_output(&review, OutputMode::Cli).text;
+
+        // Should have exit mode but NOT command-specific content
+        assert!(output.contains("Apply (Apply changes)"), "Should have exit mode");
+        assert!(!output.contains("Command:"), "Should NOT have Command: line for regular exit mode");
+        assert!(!output.contains("────────────────────────────────────"), "Should NOT have content separators");
     }
 }

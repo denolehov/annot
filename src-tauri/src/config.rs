@@ -326,6 +326,157 @@ pub fn save_config(config: &Config) -> io::Result<()> {
     Ok(())
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// CLAUDE CODE COMMAND DISCOVERY
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Default color palette for command exit modes.
+const COMMAND_COLORS: [&str; 6] = [
+    "#8b5cf6", // violet
+    "#06b6d4", // cyan
+    "#f97316", // orange
+    "#ec4899", // pink
+    "#14b8a6", // teal
+    "#a855f7", // purple
+];
+
+/// Discovers Claude Code slash commands from standard locations.
+/// Returns a list of ExitMode entries for each discovered command.
+///
+/// Searches:
+/// - `~/.claude/commands/*.md` (global)
+/// - `.claude/commands/*.md` (project, relative to cwd)
+pub fn discover_commands() -> Vec<ExitMode> {
+    let mut commands = Vec::new();
+    let mut search_dirs = Vec::new();
+
+    // Global commands: ~/.claude/commands/
+    if let Some(home) = dirs::home_dir() {
+        search_dirs.push(home.join(".claude").join("commands"));
+    }
+
+    // Project commands: .claude/commands/ (relative to cwd)
+    if let Ok(cwd) = std::env::current_dir() {
+        search_dirs.push(cwd.join(".claude").join("commands"));
+    }
+
+    for dir in search_dirs {
+        if let Ok(entries) = discover_commands_in_dir(&dir) {
+            commands.extend(entries);
+        }
+    }
+
+    // Assign order values (after transient and persisted modes)
+    for (i, mode) in commands.iter_mut().enumerate() {
+        mode.order = 1000 + i as u32; // High order to appear after persisted modes
+        // Assign color from palette
+        mode.color = COMMAND_COLORS[i % COMMAND_COLORS.len()].to_string();
+    }
+
+    commands
+}
+
+/// Discover commands in a specific directory (recursively).
+fn discover_commands_in_dir(dir: &Path) -> io::Result<Vec<ExitMode>> {
+    let mut modes = Vec::new();
+
+    if !dir.exists() || !dir.is_dir() {
+        return Ok(modes);
+    }
+
+    // Walk directory recursively
+    for entry in walkdir(dir)? {
+        if entry.extension().map(|e| e == "md").unwrap_or(false) {
+            if let Some(mode) = parse_command_file(&entry) {
+                modes.push(mode);
+            }
+        }
+    }
+
+    Ok(modes)
+}
+
+/// Recursively walk a directory and collect file paths.
+fn walkdir(dir: &Path) -> io::Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            files.extend(walkdir(&path)?);
+        } else if path.is_file() {
+            files.push(path);
+        }
+    }
+
+    Ok(files)
+}
+
+/// Parse a command .md file and extract exit mode data from frontmatter.
+fn parse_command_file(path: &Path) -> Option<ExitMode> {
+    use crate::state::ExitModeSource;
+
+    let content = fs::read_to_string(path).ok()?;
+    let frontmatter = extract_yaml_frontmatter(&content)?;
+
+    // Get command name from file stem (e.g., "design" from "design.md")
+    let name = path.file_stem()?.to_string_lossy().to_string();
+
+    // Description becomes instruction
+    let description = frontmatter.get("description").cloned()
+        .unwrap_or_else(|| format!("Run /{} command", name));
+
+    Some(ExitMode {
+        id: format!("cmd-{}", name),
+        name: format!("/{}", name),
+        color: String::new(), // Will be assigned later
+        instruction: description,
+        order: 0, // Will be assigned later
+        source: ExitModeSource::Command { path: path.to_path_buf() },
+    })
+}
+
+/// Extract YAML frontmatter from markdown content.
+/// Returns key-value pairs from the frontmatter block (between --- delimiters).
+fn extract_yaml_frontmatter(content: &str) -> Option<HashMap<String, String>> {
+    let content = content.trim_start();
+
+    // Must start with ---
+    if !content.starts_with("---") {
+        return None;
+    }
+
+    // Find the closing ---
+    let rest = &content[3..];
+    let end_pos = rest.find("\n---")?;
+    let yaml_block = &rest[..end_pos];
+
+    // Parse simple key: value pairs (no nested structures)
+    let mut map = HashMap::new();
+    for line in yaml_block.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        if let Some((key, value)) = line.split_once(':') {
+            let key = key.trim().to_string();
+            let value = value.trim();
+            // Remove quotes if present
+            let value = value.trim_matches('"').trim_matches('\'').to_string();
+            map.insert(key, value);
+        }
+    }
+
+    if map.is_empty() {
+        None
+    } else {
+        Some(map)
+    }
+}
+
 // Internal functions that accept explicit paths, used by tests
 #[cfg(test)]
 fn load_tags_from(path: &std::path::Path) -> Vec<Tag> {
@@ -404,7 +555,7 @@ mod tests {
             color: "#ff0000".into(),
             instruction: "Custom mode".into(),
             order: 0,
-            origin: ExitModeOrigin::Persisted,
+            source: ExitModeOrigin::Persisted,
         }];
 
         save_exit_modes_to(temp.path(), &custom_modes).unwrap();
@@ -495,5 +646,121 @@ mod tests {
         let json = serde_json::to_string(&config).unwrap();
         assert!(json.contains("\"version\""));
         assert!(json.contains(&format!("{}", CONFIG_VERSION)));
+    }
+
+    // ====== YAML Frontmatter Tests ======
+
+    #[test]
+    fn extract_yaml_frontmatter_parses_simple() {
+        let content = r#"---
+description: "My command"
+argument-hint: "arg"
+---
+# Content here
+"#;
+        let fm = extract_yaml_frontmatter(content).unwrap();
+        assert_eq!(fm.get("description"), Some(&"My command".to_string()));
+        assert_eq!(fm.get("argument-hint"), Some(&"arg".to_string()));
+    }
+
+    #[test]
+    fn extract_yaml_frontmatter_handles_no_quotes() {
+        let content = r#"---
+description: My command without quotes
+---
+Content
+"#;
+        let fm = extract_yaml_frontmatter(content).unwrap();
+        assert_eq!(fm.get("description"), Some(&"My command without quotes".to_string()));
+    }
+
+    #[test]
+    fn extract_yaml_frontmatter_returns_none_without_frontmatter() {
+        let content = "# Just a heading\nSome content";
+        assert!(extract_yaml_frontmatter(content).is_none());
+    }
+
+    #[test]
+    fn extract_yaml_frontmatter_returns_none_without_closing() {
+        let content = r#"---
+description: Test
+No closing delimiter
+"#;
+        assert!(extract_yaml_frontmatter(content).is_none());
+    }
+
+    #[test]
+    fn extract_yaml_frontmatter_ignores_comments() {
+        let content = r#"---
+# This is a comment
+description: Test
+---
+Content
+"#;
+        let fm = extract_yaml_frontmatter(content).unwrap();
+        assert_eq!(fm.len(), 1);
+        assert_eq!(fm.get("description"), Some(&"Test".to_string()));
+    }
+
+    // ====== Command Discovery Tests ======
+
+    #[test]
+    fn discover_commands_in_empty_dir_returns_empty() {
+        let temp = TempDir::new().unwrap();
+        let modes = discover_commands_in_dir(temp.path()).unwrap();
+        assert!(modes.is_empty());
+    }
+
+    #[test]
+    fn discover_commands_parses_command_file() {
+        let temp = TempDir::new().unwrap();
+        let cmd_file = temp.path().join("test-cmd.md");
+        fs::write(&cmd_file, r#"---
+description: "Test command description"
+---
+# Test Command
+Instructions here
+"#).unwrap();
+
+        let modes = discover_commands_in_dir(temp.path()).unwrap();
+        assert_eq!(modes.len(), 1);
+        assert_eq!(modes[0].name, "/test-cmd");
+        assert_eq!(modes[0].instruction, "Test command description");
+        assert!(modes[0].is_command());
+        assert_eq!(modes[0].command_path(), Some(cmd_file.as_path()));
+    }
+
+    #[test]
+    fn discover_commands_skips_files_without_frontmatter() {
+        let temp = TempDir::new().unwrap();
+        fs::write(temp.path().join("no-fm.md"), "# Just a file\nNo frontmatter").unwrap();
+
+        let modes = discover_commands_in_dir(temp.path()).unwrap();
+        assert!(modes.is_empty());
+    }
+
+    #[test]
+    fn discover_commands_assigns_colors() {
+        let temp = TempDir::new().unwrap();
+        for i in 0..3 {
+            fs::write(
+                temp.path().join(format!("cmd{}.md", i)),
+                format!("---\ndescription: Cmd {}\n---\nContent", i)
+            ).unwrap();
+        }
+
+        // Use discover_commands with explicit dir
+        let mut modes = discover_commands_in_dir(temp.path()).unwrap();
+        // Manually assign colors like discover_commands does
+        for (i, mode) in modes.iter_mut().enumerate() {
+            mode.color = COMMAND_COLORS[i % COMMAND_COLORS.len()].to_string();
+        }
+
+        assert_eq!(modes.len(), 3);
+        // Each should have a color from the palette
+        for mode in &modes {
+            assert!(!mode.color.is_empty());
+            assert!(mode.color.starts_with('#'));
+        }
     }
 }

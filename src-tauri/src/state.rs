@@ -228,22 +228,31 @@ pub struct Annotation {
 /// Where an exit mode was defined.
 ///
 /// ```text
-/// ExitModeOrigin (persist?)  x  ContentSource (where from?)
+/// ExitModeSource (persist?)  x  ContentSource (where from?)
 ///      Persisted                    Cli::File
 ///      Transient                    Cli::Stdin
-///                                   Mcp::File
+///      Command                      Mcp::File
 ///                                   Mcp::Content
 ///                                   Mcp::Diff
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum ExitModeOrigin {
+pub enum ExitModeSource {
     /// Loaded from config file — will be saved on exit.
     #[default]
     Persisted,
     /// Provided in MCP tool call params — session-only, not saved.
     Transient,
+    /// Discovered from Claude Code slash command file.
+    #[serde(rename = "command")]
+    Command {
+        /// Path to the command .md file.
+        path: std::path::PathBuf,
+    },
 }
+
+// Backwards compatibility alias
+pub type ExitModeOrigin = ExitModeSource;
 
 /// An exit mode representing a user decision (Apply, Reject, Revise, etc.).
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -255,9 +264,9 @@ pub struct ExitMode {
     /// LLM-facing instruction text
     pub instruction: String,
     pub order: u32,
-    /// Where this exit mode came from (config or MCP params).
-    #[serde(default)]
-    pub origin: ExitModeOrigin,
+    /// Where this exit mode came from (config, MCP params, or command file).
+    #[serde(default, alias = "origin")]
+    pub source: ExitModeSource,
 }
 
 impl ExitMode {
@@ -269,13 +278,26 @@ impl ExitMode {
             color,
             instruction,
             order,
-            origin: ExitModeOrigin::Persisted,
+            source: ExitModeSource::Persisted,
         }
     }
 
     /// Whether this exit mode is transient (from MCP params, not persisted).
     pub fn is_transient(&self) -> bool {
-        matches!(self.origin, ExitModeOrigin::Transient)
+        matches!(self.source, ExitModeSource::Transient)
+    }
+
+    /// Whether this exit mode is from a command file.
+    pub fn is_command(&self) -> bool {
+        matches!(self.source, ExitModeSource::Command { .. })
+    }
+
+    /// Get the command path if this is a command exit mode.
+    pub fn command_path(&self) -> Option<&std::path::Path> {
+        match &self.source {
+            ExitModeSource::Command { path } => Some(path),
+            _ => None,
+        }
     }
 }
 
@@ -487,10 +509,18 @@ pub struct UserConfig {
 
 impl UserConfig {
     /// Load configuration from disk.
+    /// Also discovers Claude Code command files as exit modes.
     pub fn load() -> Self {
+        // Load persisted exit modes
+        let mut exit_modes = config::load_exit_modes();
+
+        // Discover and append command exit modes
+        let commands = config::discover_commands();
+        exit_modes.extend(commands);
+
         Self {
             tags: config::load_tags(),
-            exit_modes: config::load_exit_modes(),
+            exit_modes,
             bookmarks: config::load_bookmarks(),
             deleted_tags: HashSet::new(),
             deleted_exit_modes: HashSet::new(),
@@ -545,7 +575,7 @@ impl UserConfig {
     }
 
     /// Insert or update an exit mode, then save to disk.
-    /// Only persists non-transient modes.
+    /// Only persists modes with Persisted source (not transient or command).
     pub fn upsert_exit_mode(&mut self, mode: ExitMode) {
         if let Some(existing) = self.exit_modes.iter_mut().find(|m| m.id == mode.id) {
             *existing = mode;
@@ -554,11 +584,11 @@ impl UserConfig {
         }
         // Sort by order
         self.exit_modes.sort_by_key(|m| m.order);
-        // Only save persisted modes
+        // Only save persisted modes (not transient or command)
         let persisted: Vec<_> = self
             .exit_modes
             .iter()
-            .filter(|m| !m.is_transient())
+            .filter(|m| matches!(m.source, ExitModeSource::Persisted))
             .cloned()
             .collect();
         let _ = config::save_exit_modes(&persisted, &self.deleted_exit_modes);
@@ -571,7 +601,7 @@ impl UserConfig {
         let persisted: Vec<_> = self
             .exit_modes
             .iter()
-            .filter(|m| !m.is_transient())
+            .filter(|m| matches!(m.source, ExitModeSource::Persisted))
             .cloned()
             .collect();
         let _ = config::save_exit_modes(&persisted, &self.deleted_exit_modes);
@@ -589,7 +619,7 @@ impl UserConfig {
         let persisted: Vec<_> = self
             .exit_modes
             .iter()
-            .filter(|m| !m.is_transient())
+            .filter(|m| matches!(m.source, ExitModeSource::Persisted))
             .cloned()
             .collect();
         let _ = config::save_exit_modes(&persisted, &self.deleted_exit_modes);
@@ -599,6 +629,11 @@ impl UserConfig {
     pub fn prepend_transient_modes(&mut self, modes: Vec<ExitMode>) {
         // Insert at beginning, shifting existing modes
         self.exit_modes.splice(0..0, modes);
+    }
+
+    /// Append command exit modes (from discovered command files) at the end.
+    pub fn append_command_modes(&mut self, modes: Vec<ExitMode>) {
+        self.exit_modes.extend(modes);
     }
 
     /// Get all bookmarks.
