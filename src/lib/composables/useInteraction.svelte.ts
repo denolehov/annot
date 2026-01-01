@@ -261,6 +261,17 @@ export function useInteraction(options: UseInteractionOptions) {
     isShiftHeld = false;
   }
 
+  /** Get context for bookmark creation: committed selection or hovered line. */
+  function getBookmarkContext(): { start: number; end: number } | null {
+    if (state.phase === 'committed' && state.range) {
+      return { start: state.range.start, end: state.range.end };
+    }
+    if (state.phase === 'hovering' && state.hoverLine !== null) {
+      return { start: state.hoverLine, end: state.hoverLine };
+    }
+    return null;
+  }
+
   return {
     // State getters
     get phase() { return phase; },
@@ -298,6 +309,9 @@ export function useInteraction(options: UseInteractionOptions) {
     // Keyboard
     handleShiftKeyDown,
     handleShiftKeyUp,
+
+    // Bookmark context
+    getBookmarkContext,
   };
 }
 

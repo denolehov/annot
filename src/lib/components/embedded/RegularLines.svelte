@@ -14,6 +14,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import CopyButton from '$lib/components/CopyButton.svelte';
   import AnnotationSlot, { type AnnotationSlotProps } from '$lib/components/AnnotationSlot.svelte';
+  import { BookmarkIcon } from '$lib/icons';
 
   interface DisplayLine {
     line: Line;
@@ -36,6 +37,7 @@
     isSelected: (displayIdx: number) => boolean;
     isPreview: (displayIdx: number) => boolean;
     hasAnnotation: (displayIdx: number) => boolean;
+    isLineBookmarked: (displayIdx: number) => boolean;
     getAnnotationAtLine: (displayIdx: number) => { key: string; content: JSONContent } | null;
     getMermaidBlockAt: (lineNum: number) => CodeBlockInfo | null;
     openMermaidWindow: (block: CodeBlockInfo) => void;
@@ -62,6 +64,7 @@
     isSelected,
     isPreview,
     hasAnnotation,
+    isLineBookmarked,
     getAnnotationAtLine,
     getMermaidBlockAt,
     openMermaidWindow,
@@ -128,11 +131,13 @@
   {@const diffKind = getDiffKind(line)}
   {@const mermaidBlock = sourceLineNum !== null ? getMermaidBlockAt(sourceLineNum) : null}
   {@const sectionInfo = sourceLineNum !== null ? getSectionAt(sourceLineNum) : null}
+  {@const bookmarked = isLineBookmarked(displayIndex)}
   <div
     class="line"
     class:selected={isSelected(displayIndex)}
     class:annotated={hasAnnotation(displayIndex)}
     class:preview={isPreview(displayIndex)}
+    class:bookmarked
     class:diff-added={diffKind === 'added'}
     class:diff-deleted={diffKind === 'deleted'}
     class:diff-context={diffKind === 'context'}
@@ -186,6 +191,9 @@
         hoverOnly
         class="copy-section-btn"
       />
+    {/if}
+    {#if bookmarked}
+      <span class="bookmark-indicator"><BookmarkIcon filled /></span>
     {/if}
   </div>
   {@const annotationAtLine = getAnnotationAtLine(displayIndex)}

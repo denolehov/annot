@@ -226,8 +226,14 @@ export type BookmarkSnapshot =
       source_type: SessionType;
       source_title: string;
       context: string;
+    }
+  | {
+      type: 'selection';
+      source_type: SessionType;
+      source_title: string;
+      context: string;
+      selected_text: string;
     };
-// Phase 4: Selection variant will be added here
 
 /** A bookmark capturing a moment of attention during an annot session. */
 export interface Bookmark {

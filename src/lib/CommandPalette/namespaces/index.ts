@@ -47,7 +47,7 @@ export function createQueryContext(): QueryContext {
 // Re-export namespace modules for direct item manipulation
 export { tagsNamespace, getTagItems, setTagItems, filterTagItems, saveTagItem, deleteTagItem, generateTagId } from './tags';
 export { exitModesNamespace, getExitModeItems, setExitModeItems, filterExitModeItems, saveExitModeItem, deleteExitModeItem, reorderExitModeItems, generateExitModeId } from './exit-modes';
-export { bookmarksNamespace, getBookmarkItems, setBookmarkItems, filterBookmarkItems, saveBookmarkItem, deleteBookmarkItem, loadBookmarks, createBookmark, bookmarkToItem } from './bookmarks';
+export { bookmarksNamespace, getBookmarkItems, setBookmarkItems, filterBookmarkItems, saveBookmarkItem, deleteBookmarkItem, loadBookmarks, createBookmark, createSelectionBookmark, bookmarkToItem } from './bookmarks';
 export { copyNamespace, getCopyItems, filterCopyItems } from './copy';
 export { saveNamespace, getSaveItems, filterSaveItems } from './save';
 export { obsidianNamespace, getObsidianItems, filterObsidianItems, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId, getRawVaultItems } from './obsidian';

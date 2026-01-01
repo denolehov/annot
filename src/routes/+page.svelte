@@ -10,7 +10,7 @@
   import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
   import AnnotationSlot from "$lib/components/AnnotationSlot.svelte";
   import CopyDropdown from "$lib/CopyDropdown.svelte";
-  import { CommandPalette, createBookmark, deleteBookmarkItem } from "$lib/CommandPalette";
+  import { CommandPalette, createBookmark, createSelectionBookmark, deleteBookmarkItem } from "$lib/CommandPalette";
   import SaveModal from "$lib/SaveModal.svelte";
   import Portal from "$lib/components/embedded/Portal.svelte";
   import CodeBlock from "$lib/components/embedded/CodeBlock.svelte";
@@ -62,6 +62,8 @@
   let lastCreatedBookmarkId = $state<string | null>(null);
   // Bookmark ID to edit when opening command palette (set by e key, cleared after use)
   let editBookmarkId = $state<string | null>(null);
+  // Track bookmarked line ranges for visual indicators (display indices)
+  let bookmarkedLineRanges = $state<Array<{ start: number; end: number; id: string }>>([]);
 
   function showToast(message: string, duration = 3000) {
     if (toastTimeout) clearTimeout(toastTimeout);
@@ -370,6 +372,44 @@
     }
   }
 
+  // Create or toggle selection bookmark handler
+  async function handleCreateSelectionBookmark(context: { start: number; end: number }) {
+    const start = Math.min(context.start, context.end);
+    const end = Math.max(context.start, context.end);
+
+    // Check if this exact range is already bookmarked
+    const existingIdx = bookmarkedLineRanges.findIndex(
+      range => range.start === start && range.end === end
+    );
+
+    if (existingIdx !== -1) {
+      // Toggle off - delete the bookmark
+      const existing = bookmarkedLineRanges[existingIdx];
+      await deleteBookmarkItem(existing.id);
+      bookmarkedLineRanges = bookmarkedLineRanges.filter((_, i) => i !== existingIdx);
+      bookmarks = bookmarks.filter(b => b.id !== existing.id);
+      if (lastCreatedBookmarkId === existing.id) {
+        lastCreatedBookmarkId = null;
+      }
+      showToast('Bookmark removed');
+    } else {
+      // Create new bookmark
+      const bookmark = await createSelectionBookmark(context.start, context.end);
+      const shortId = bookmark.id.slice(0, 3);
+      lastCreatedBookmarkId = bookmark.id;
+      bookmarks = [...bookmarks, bookmark];
+      bookmarkedLineRanges = [...bookmarkedLineRanges, { start, end, id: bookmark.id }];
+      showToast(`Bookmarked as ${shortId} · [e] edit`);
+    }
+  }
+
+  // Check if a display index is in any bookmarked range
+  function isLineBookmarked(displayIdx: number): boolean {
+    return bookmarkedLineRanges.some(
+      range => displayIdx >= range.start && displayIdx <= range.end
+    );
+  }
+
   // Edit last created bookmark handler
   function handleEditLastBookmark() {
     if (lastCreatedBookmarkId) {
@@ -640,7 +680,8 @@
       onOpenCommandPalette: () => commandPaletteOpen = true,
       onOpenSaveModal: openSaveModal,
       onOpenSearch: () => search.open(),
-      onCreateBookmark: handleToggleBookmark,
+      onCreateSessionBookmark: handleToggleBookmark,
+      onCreateSelectionBookmark: handleCreateSelectionBookmark,
       onEditLastBookmark: handleEditLastBookmark,
       onZoomIn: () => contentZoom = Math.min(contentZoom + 0.1, 3.0),
       onZoomOut: () => contentZoom = Math.max(contentZoom - 0.1, 0.5),
@@ -660,6 +701,7 @@
       hasExitModes: () => exitModeState.modes.length > 0,
       isHoveredLineSelectable: () => interaction.hoverLine !== null && isLineSelectable(interaction.hoverLine),
       hasLastCreatedBookmark: () => !!lastCreatedBookmarkId,
+      getBookmarkContext: () => interaction.getBookmarkContext(),
     }
   );
 
@@ -902,6 +944,7 @@
             {isSelected}
             {isPreview}
             {hasAnnotation}
+            {isLineBookmarked}
             {getAnnotationAtLine}
             getMermaidBlockAt={mermaid.getMermaidBlockAt}
             openMermaidWindow={mermaid.openMermaidWindow}

@@ -25,7 +25,10 @@ export const bookmarksNamespace: Namespace = {
 let items: Item[] = [];
 
 export function getBookmarkItems(): Item[] {
-  return items;
+  // Sort by created_at descending (newest first)
+  return [...items].sort((a, b) =>
+    (b.values.created_at as string).localeCompare(a.values.created_at as string)
+  );
 }
 
 export function setBookmarkItems(data: Item[]): void {
@@ -33,23 +36,57 @@ export function setBookmarkItems(data: Item[]): void {
 }
 
 export function filterBookmarkItems(query: string): Item[] {
-  return fuzzySearch(items, query, [
+  // Sort by created_at descending before filtering (fuzzy search preserves relevance order)
+  const sorted = [...items].sort((a, b) =>
+    (b.values.created_at as string).localeCompare(a.values.created_at as string)
+  );
+  return fuzzySearch(sorted, query, [
     { name: 'id', weight: 3 }, // ID prefix highest priority
     { name: 'name', weight: 2 }, // Label
     { name: 'values.source_title', weight: 1 },
   ]);
 }
 
+/** Truncate string to max length with ellipsis. */
+function truncate(str: string, maxLen: number): string {
+  return str.length > maxLen ? str.slice(0, maxLen) + '…' : str;
+}
+
+/** Extract first markdown heading from content. */
+function extractFirstHeading(content: string): string | null {
+  const line = content.split('\n').find(l => l.startsWith('#'));
+  return line ? line.replace(/^#+\s*/, '').trim() : null;
+}
+
+/** Get display label for a bookmark (user label, or derived from content). */
+function getDisplayLabel(bookmark: Bookmark): string {
+  if (bookmark.label) {
+    return bookmark.label;
+  }
+  // Derive from content when no user label
+  if (bookmark.snapshot.type === 'selection') {
+    const firstLine = bookmark.snapshot.selected_text.split('\n')[0];
+    return truncate(firstLine, 50);
+  }
+  // Session bookmark: try heading for .md, else source_title
+  if (bookmark.snapshot.source_title.endsWith('.md')) {
+    const heading = extractFirstHeading(bookmark.snapshot.context);
+    if (heading) {
+      return truncate(heading, 50);
+    }
+  }
+  return bookmark.snapshot.source_title;
+}
+
 /** Convert a Bookmark from the backend to a command palette Item. */
 export function bookmarkToItem(bookmark: Bookmark): Item {
-  // Label derivation: user-set label, or source title as fallback
-  const displayLabel = bookmark.label ?? bookmark.snapshot.source_title;
+  const displayLabel = getDisplayLabel(bookmark);
 
   return {
     id: bookmark.id,
-    name: displayLabel, // Just the label for display and search
+    name: displayLabel, // For display and search
     values: {
-      label: bookmark.label ?? '',
+      label: bookmark.label ?? '', // User-set label only (empty for selection bookmarks by default)
       source_title: bookmark.snapshot.source_title,
       created_at: bookmark.created_at,
       project_path: bookmark.project_path ?? '',
@@ -98,6 +135,21 @@ export async function deleteBookmarkItem(id: string): Promise<void> {
 /** Create a new bookmark for the current session. */
 export async function createBookmark(label?: string): Promise<Bookmark> {
   const bookmark = await invoke<Bookmark>('create_bookmark', { label: label ?? null });
+  await loadBookmarks(); // Reload to sync
+  return bookmark;
+}
+
+/** Create a selection bookmark for a line range. */
+export async function createSelectionBookmark(
+  startLine: number,
+  endLine: number,
+  label?: string
+): Promise<Bookmark> {
+  const bookmark = await invoke<Bookmark>('create_selection_bookmark', {
+    startLine,
+    endLine,
+    label: label ?? null,
+  });
   await loadBookmarks(); // Reload to sync
   return bookmark;
 }

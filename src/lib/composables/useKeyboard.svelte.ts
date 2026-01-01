@@ -1,3 +1,6 @@
+/** Context for creating a selection bookmark (start === end for single line). */
+export type BookmarkContext = { start: number; end: number };
+
 export interface KeyboardHandlers {
   onShiftDown?: () => void;
   onShiftUp?: () => void;
@@ -6,7 +9,8 @@ export interface KeyboardHandlers {
   onOpenCommandPalette?: () => void;
   onOpenSaveModal?: () => void;
   onOpenSearch?: () => void;
-  onCreateBookmark?: () => void;
+  onCreateSessionBookmark?: () => void;
+  onCreateSelectionBookmark?: (context: BookmarkContext) => void;
   onEditLastBookmark?: () => void;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
@@ -32,6 +36,8 @@ export interface KeyboardState {
   isHoveredLineSelectable: () => boolean;
   /** Whether there's a last created bookmark that can be edited */
   hasLastCreatedBookmark: () => boolean;
+  /** Get bookmark context (hover or selection), null if neither */
+  getBookmarkContext: () => BookmarkContext | null;
 }
 
 export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
@@ -90,11 +96,24 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
       return;
     }
 
-    // 'b' for bookmark
+    // Cmd+b for session bookmark (full document)
+    if (e.key === 'b' && (e.metaKey || e.ctrlKey) && !state.isEditorActive()) {
+      if (isInEditorOrInput()) return;
+      e.preventDefault();
+      handlers.onCreateSessionBookmark?.();
+      return;
+    }
+
+    // 'b' for context-aware bookmark (hover/selection → selection bookmark, else session)
     if (e.key === 'b' && !e.metaKey && !e.ctrlKey && !state.isEditorActive()) {
       if (isInEditorOrInput()) return;
       e.preventDefault();
-      handlers.onCreateBookmark?.();
+      const context = state.getBookmarkContext();
+      if (context) {
+        handlers.onCreateSelectionBookmark?.(context);
+      } else {
+        handlers.onCreateSessionBookmark?.();
+      }
       return;
     }
 

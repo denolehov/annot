@@ -328,6 +328,56 @@ pub fn create_bookmark(
 }
 
 #[tauri::command]
+pub fn create_selection_bookmark(
+    review_state: State<ActiveReview>,
+    start_line: usize,
+    end_line: usize,
+    label: Option<String>,
+) -> Result<Bookmark, String> {
+    with_review!(review_state, |review| {
+        // Determine session type from the content source
+        let source = &review.root_view.content().source;
+        let source_type = match source {
+            ContentSource::Mcp(McpSource::Diff { .. }) => SessionType::Diff,
+            ContentSource::Mcp(McpSource::Content { .. }) => SessionType::Content,
+            _ => SessionType::File,
+        };
+
+        let lines = &review.root_view.content().lines;
+
+        // Extract selected text (display indices are 1-indexed)
+        let selected_text = lines
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i + 1 >= start_line && *i + 1 <= end_line)
+            .map(|(_, l)| l.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // Get source title and full context
+        let source_title = review.root_view.content().label.clone();
+        let context = lines
+            .iter()
+            .map(|l| l.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let snapshot = BookmarkSnapshot::Selection {
+            source_type,
+            source_title,
+            context,
+            selected_text,
+        };
+
+        let project_path = std::env::current_dir().ok();
+        let bookmark = Bookmark::new(label, project_path, snapshot);
+        review.config.upsert_bookmark(bookmark.clone());
+
+        Ok(bookmark)
+    })
+}
+
+#[tauri::command]
 pub fn update_bookmark(
     review_state: State<ActiveReview>,
     id: String,

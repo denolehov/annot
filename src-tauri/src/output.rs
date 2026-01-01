@@ -346,11 +346,13 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
     let unique_bookmarks = collect_unique_bookmarks(review);
     if !unique_bookmarks.is_empty() {
         output.push_str("BOOKMARKS REFERENCED:\n");
-        for (id, label) in &unique_bookmarks {
+        for (id, cached_label) in &unique_bookmarks {
             // Look up full bookmark from config for additional context
             if let Some(bookmark) = review.config.get_bookmark(id) {
                 let short_id = &id[..id.len().min(3)];
-                output.push_str(&format!("  [@ {}] {}\n", short_id, label));
+                // Use display_label() which derives from content if no user label
+                let display_label = bookmark.display_label();
+                output.push_str(&format!("  [@ {}] {}\n", short_id, display_label));
                 output.push_str(&format!("    Source: {}\n", bookmark.snapshot.source_title()));
                 if let Some(ref project) = bookmark.project_path {
                     output.push_str(&format!("    Project: {}\n", project.display()));
@@ -366,9 +368,9 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
                 }
                 output.push_str("    ────────────────────────────────────\n\n");
             } else {
-                // Bookmark was deleted but still referenced
+                // Bookmark was deleted but still referenced - use cached label
                 let short_id = &id[..id.len().min(3)];
-                output.push_str(&format!("  [@ {}] {} (deleted)\n", short_id, label));
+                output.push_str(&format!("  [@ {}] {} (deleted)\n", short_id, cached_label));
             }
         }
     }

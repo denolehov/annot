@@ -16,6 +16,7 @@ describe('useKeyboard', () => {
     hasExitModes: () => true,
     isHoveredLineSelectable: () => true,
     hasLastCreatedBookmark: () => false,
+    getBookmarkContext: () => null,
   };
 
   function createKeyboardEvent(key: string, options: Partial<KeyboardEvent> = {}): KeyboardEvent {

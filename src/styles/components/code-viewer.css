@@ -182,6 +182,31 @@ div.line.annotated::before {
 	background: var(--selection-border);
 }
 
+/* Bookmarked lines - left border dominates annotated/selected ::before */
+div.line.bookmarked::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 3px;
+	background: var(--bookmark-color, #ef4444);
+	z-index: 1;
+}
+
+/* Bookmark indicator - inline, always rightmost */
+.bookmark-indicator {
+	display: inline-flex;
+	align-items: center;
+	margin-left: 8px;
+	color: var(--bookmark-color, #ef4444);
+}
+
+.bookmark-indicator :global(.cp-icon) {
+	width: 14px;
+	height: 14px;
+}
+
 /* Shift+drag cursor */
 .content.shift-held .code {
 	cursor: pointer;

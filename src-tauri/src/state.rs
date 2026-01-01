@@ -301,7 +301,15 @@ pub enum BookmarkSnapshot {
         /// Full document snapshot.
         context: String,
     },
-    // Phase 4: Selection variant will be added here
+    /// Inline selection within session.
+    Selection {
+        source_type: SessionType,
+        source_title: String,
+        /// Full document snapshot.
+        context: String,
+        /// The text the user selected.
+        selected_text: String,
+    },
 }
 
 /// Type of session where the bookmark was created.
@@ -317,7 +325,8 @@ impl BookmarkSnapshot {
     /// Get the source title for this snapshot.
     pub fn source_title(&self) -> &str {
         match self {
-            BookmarkSnapshot::Session { source_title, .. } => source_title,
+            BookmarkSnapshot::Session { source_title, .. }
+            | BookmarkSnapshot::Selection { source_title, .. } => source_title,
         }
     }
 
@@ -333,31 +342,40 @@ impl BookmarkSnapshot {
     /// Get the full content of this snapshot.
     pub fn content(&self) -> &str {
         match self {
-            BookmarkSnapshot::Session { context, .. } => context,
+            BookmarkSnapshot::Session { context, .. }
+            | BookmarkSnapshot::Selection { context, .. } => context,
         }
     }
 }
 
 impl Bookmark {
-    /// Creates a new bookmark with auto-derived label if not provided.
+    /// Creates a new bookmark.
+    /// Label is user-provided only; display_label() derives from content for output.
     pub fn new(
         label: Option<String>,
         project_path: Option<std::path::PathBuf>,
         snapshot: BookmarkSnapshot,
     ) -> Self {
-        let derived_label = label.or_else(|| Some(Self::derive_label(&snapshot)));
         Self {
             id: crate::id::generate(),
-            label: derived_label,
+            label, // User-provided only, no auto-derivation
             created_at: Utc::now(),
             project_path,
             snapshot,
         }
     }
 
-    /// Derive a label from the snapshot content.
-    fn derive_label(snapshot: &BookmarkSnapshot) -> String {
-        match snapshot {
+    /// Get display label for output: user label if set, otherwise derived from content.
+    /// - Selection bookmarks: first ~50 chars of selected_text
+    /// - Session bookmarks: first heading (for .md) or source_title
+    pub fn display_label(&self) -> String {
+        if let Some(ref label) = self.label {
+            return label.clone();
+        }
+        match &self.snapshot {
+            BookmarkSnapshot::Selection { selected_text, .. } => {
+                Self::truncate(selected_text.lines().next().unwrap_or(selected_text), 50)
+            }
             BookmarkSnapshot::Session {
                 source_title,
                 context,
@@ -369,7 +387,6 @@ impl Bookmark {
                         return Self::truncate(&heading, 50);
                     }
                 }
-                // Fallback: use filename
                 source_title.clone()
             }
         }
