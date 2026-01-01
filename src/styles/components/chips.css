@@ -102,6 +102,7 @@
 		color-mix(in srgb, var(--bg-code-block) 95%, #8b5cf6 5%);
 	background-size: var(--chip-pattern-size), auto;
 	color: var(--text-secondary);
+	cursor: default;
 }
 
 .bookmark-chip:hover {
