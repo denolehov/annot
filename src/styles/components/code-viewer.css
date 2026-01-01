@@ -182,6 +182,11 @@ div.line.annotated::before {
 	background: var(--selection-border);
 }
 
+div.line.annotated .gutter {
+	background-color: var(--selection-bg);
+	color: var(--text-secondary);
+}
+
 /* Bookmarked lines - left border dominates annotated/selected ::before */
 div.line.bookmarked::before {
 	content: "";
