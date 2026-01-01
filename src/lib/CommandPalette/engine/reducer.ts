@@ -320,8 +320,8 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
         return { state, commands };
       }
 
-      // DELETE only works in navigating mode
-      if (action.type === 'DELETE' && state.inputMode === 'navigating') {
+      // DELETE: Cmd-D+Cmd-D pattern (works in both filtering and navigating modes)
+      if (action.type === 'DELETE') {
         // Check namespace capability
         if (!canDelete(state.namespace)) {
           return { state, commands };
@@ -595,6 +595,7 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
           state: {
             ...state,
             values: { ...state.values, [action.key]: action.value },
+            pendingDelete: false, // Clear pending delete on any field change
           },
           commands,
         };
@@ -603,7 +604,7 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
       if (action.type === 'TAB') {
         const fieldCount = state.namespace.fields.length;
         const nextField = (state.focusedField + 1) % fieldCount;
-        return { state: { ...state, focusedField: nextField }, commands };
+        return { state: { ...state, focusedField: nextField, pendingDelete: false }, commands };
       }
 
       if (action.type === 'ENTER') {
@@ -626,6 +627,48 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
           return { state: { type: 'IDLE' }, commands };
         }
 
+        return {
+          state: {
+            type: 'ITEM_FILTER',
+            namespace: state.namespace,
+            query: '',
+            selectedIndex: 0,
+            pendingDelete: false,
+            inputMode: 'filtering',
+          },
+          commands,
+        };
+      }
+
+      // DELETE: Cmd-D+Cmd-D pattern to delete item being edited
+      if (action.type === 'DELETE') {
+        if (!canDelete(state.namespace) || !isItemEditable(state.item)) {
+          return { state, commands };
+        }
+        if (!state.pendingDelete) {
+          // First Cmd-D: arm the delete
+          return { state: { ...state, pendingDelete: true }, commands };
+        }
+        // Second Cmd-D: confirm deletion
+        commands.push({
+          type: 'DELETE_ITEM',
+          namespace: state.namespace.id,
+          itemId: state.item.id,
+        });
+        commands.push({
+          type: 'EMIT_EVENT',
+          event: 'commandpalette:item-deleted',
+          payload: { namespace: state.namespace.id, itemId: state.item.id },
+        });
+
+        // If this was the last item and namespace can't create, go back to NAMESPACE_FILTER
+        const remainingItems = ctx.getItems(state.namespace).filter((i) => i.id !== state.item.id);
+        if (remainingItems.length === 0 && !canCreate(state.namespace)) {
+          return {
+            state: { type: 'NAMESPACE_FILTER', query: '', selectedIndex: 0, inputMode: 'filtering' },
+            commands,
+          };
+        }
         return {
           state: {
             type: 'ITEM_FILTER',

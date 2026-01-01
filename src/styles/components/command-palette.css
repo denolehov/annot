@@ -49,6 +49,12 @@
 	flex-direction: column;
 }
 
+/* Pending delete state in form view */
+.form-view.pending-delete {
+	outline: 2px solid var(--error-border);
+	outline-offset: -2px;
+}
+
 /* Input row - namespace prefix + separator + input inline */
 .input-row {
 	display: flex;

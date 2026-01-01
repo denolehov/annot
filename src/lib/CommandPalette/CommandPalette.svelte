@@ -5,7 +5,7 @@
   import { reduce, computeItemList } from './engine/reducer';
   import { createQueryContext, setTagItems, setExitModeItems, setBookmarkItems, bookmarkToItem, saveTagItem, deleteTagItem, saveExitModeItem, deleteExitModeItem, saveBookmarkItem, deleteBookmarkItem, reorderExitModeItems, generateTagId, generateExitModeId, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId } from './namespaces';
   import type { State, Action, Command, Item, Namespace, InitialState } from './engine/types';
-  import { getFilterPlaceholder } from './engine/types';
+  import { getFilterPlaceholder, canDelete, isItemEditable } from './engine/types';
   import type { Tag, ExitMode, Bookmark } from '$lib/types';
   import Icon from './Icon.svelte';
 
@@ -289,6 +289,12 @@
         dispatch({ type: 'TAB' });
         return;
       }
+      // Cmd-D: delete item being edited (EDIT_FORM only)
+      if (e.key === 'd' && e.metaKey && machineState.type === 'EDIT_FORM') {
+        e.preventDefault();
+        dispatch({ type: 'DELETE' });
+        return;
+      }
       return; // Let input handle other keys
     }
 
@@ -337,6 +343,10 @@
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       dispatch({ type: 'ARROW_DOWN' });
+    } else if (e.key === 'd' && e.metaKey && machineState.type === 'ITEM_FILTER') {
+      // Cmd-D: delete selected/preselected item
+      e.preventDefault();
+      dispatch({ type: 'DELETE' });
     } else if (e.key === 'Backspace') {
       // Only dispatch if input is empty or not in input
       if (inInput) {
@@ -519,10 +529,17 @@
     }
     if (machineState.type === 'ITEM_FILTER') {
       const hints: Array<{ key: string; label: string }> = [{ key: '↑↓', label: 'navigate' }];
+      // Add namespace hotkeys (excluding 'd' which is now Cmd-D globally)
       if (machineState.inputMode === 'navigating' && machineState.namespace.hotkeys) {
         for (const hk of machineState.namespace.hotkeys) {
-          hints.push({ key: hk.display || hk.key, label: hk.label });
+          if (hk.key !== 'd') {
+            hints.push({ key: hk.display || hk.key, label: hk.label });
+          }
         }
+      }
+      // Add Cmd-D delete hint if namespace allows deletion
+      if (canDelete(machineState.namespace)) {
+        hints.push({ key: '⌘D', label: 'delete' });
       }
       hints.push({ key: '↵', label: 'select' });
       hints.push({ key: 'Esc', label: 'back' });
@@ -535,7 +552,19 @@
         { key: '↵', label: 'save' },
       ];
     }
-    if (machineState.type === 'EDIT_FORM' || machineState.type === 'CREATE_FORM') {
+    if (machineState.type === 'EDIT_FORM') {
+      const hints = [
+        { key: '⌘↵', label: 'save' },
+        { key: 'Tab', label: 'next field' },
+      ];
+      // Add Cmd-D delete hint if item can be deleted
+      if (canDelete(machineState.namespace) && isItemEditable(machineState.item)) {
+        hints.push({ key: '⌘D', label: 'delete' });
+      }
+      hints.push({ key: 'Esc', label: 'cancel' });
+      return hints;
+    }
+    if (machineState.type === 'CREATE_FORM') {
       return [
         { key: '⌘↵', label: 'save' },
         { key: 'Tab', label: 'next field' },
@@ -668,7 +697,7 @@
     </div>
 
   {:else if machineState.type === 'EDIT_FORM' || machineState.type === 'CREATE_FORM'}
-    <div class="form-view">
+    <div class="form-view" class:pending-delete={machineState.type === 'EDIT_FORM' && machineState.pendingDelete}>
       <div class="input-row">
         <span class="search-icon"><Icon name={machineState.type === 'CREATE_FORM' ? 'plus' : 'edit'} /></span>
         <span class="ns-prefix"><Icon name={getNamespaceIcon(machineState.namespace)} /> {machineState.namespace.label}</span>

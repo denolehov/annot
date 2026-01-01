@@ -123,6 +123,7 @@ export type State =
       values: Record<string, string>;
       focusedField: number;
       closeOnSave?: boolean; // If true, close CP after save instead of returning to ITEM_FILTER
+      pendingDelete?: boolean; // First Cmd-D arms delete, second confirms
     }
   | {
       type: 'CREATE_FORM';

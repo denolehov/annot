@@ -12,10 +12,7 @@ export const obsidianNamespace: Namespace = {
   icon: 'obsidian',
   ItemComponent: SimpleItem,
   fields: [{ key: 'name', label: 'Vault Name', type: 'text', required: true }],
-  hotkeys: [
-    { key: 'd', display: 'dd', label: 'delete', action: 'DELETE' },
-    { key: 'e', label: 'edit', action: 'EDIT' },
-  ],
+  hotkeys: [{ key: 'e', label: 'edit', action: 'EDIT' }],
   examples: [{ name: 'Personal Notes' }, { name: 'Work' }, { name: 'Research' }],
 };
 

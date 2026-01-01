@@ -17,7 +17,6 @@ export const exitModesNamespace: Namespace = {
   ],
   hotkeys: [
     { key: 's', label: 'set', action: 'SET' },
-    { key: 'd', display: 'dd', label: 'delete', action: 'DELETE' },
     { key: 'e', label: 'edit', action: 'EDIT' },
     { key: 'r', label: 'reorder', action: 'REORDER' },
   ],

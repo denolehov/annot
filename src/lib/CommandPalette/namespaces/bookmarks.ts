@@ -12,10 +12,7 @@ export const bookmarksNamespace: Namespace = {
   icon: 'bookmark',
   ItemComponent: BookmarkItem,
   fields: [{ key: 'label', label: 'Label', type: 'text', required: true, placeholder: 'Enter a label...' }],
-  hotkeys: [
-    { key: 'd', display: 'dd', label: 'delete', action: 'DELETE' },
-    { key: 'e', label: 'edit', action: 'EDIT' },
-  ],
+  hotkeys: [{ key: 'e', label: 'edit', action: 'EDIT' }],
   examples: [],
   capabilities: { create: false },
 };

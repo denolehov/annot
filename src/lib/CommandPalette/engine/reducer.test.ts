@@ -13,10 +13,7 @@ const tagsNamespace: Namespace = {
   icon: 'hashtag',
   ItemComponent: MockItemComponent,
   fields: [{ key: 'name', label: 'Name', type: 'text', required: true }],
-  hotkeys: [
-    { key: 'd', display: 'dd', label: 'delete', action: 'DELETE' },
-    { key: 'e', label: 'edit', action: 'EDIT' },
-  ],
+  hotkeys: [{ key: 'e', label: 'edit', action: 'EDIT' }],
 };
 
 // Test namespace with action items (no fields = action-only, no CRUD)
@@ -262,10 +259,7 @@ describe('reducer: obsidian namespace special handling', () => {
     icon: 'obsidian',
     ItemComponent: MockItemComponent,
     fields: [{ key: 'name', label: 'Vault Name', type: 'text', required: true }],
-    hotkeys: [
-      { key: 'd', display: 'dd', label: 'delete', action: 'DELETE' },
-      { key: 'e', label: 'edit', action: 'EDIT' },
-    ],
+    hotkeys: [{ key: 'e', label: 'edit', action: 'EDIT' }],
   };
 
   // Obsidian vault items have both values (for CRUD) and action (for export)
@@ -747,10 +741,7 @@ describe('reducer: delete last item in no-create namespace', () => {
     icon: 'bookmark',
     ItemComponent: MockItemComponent,
     fields: [{ key: 'label', label: 'Label', type: 'text' }],
-    hotkeys: [
-      { key: 'd', display: 'dd', label: 'delete', action: 'DELETE' },
-      { key: 'e', label: 'edit', action: 'EDIT' },
-    ],
+    hotkeys: [{ key: 'e', label: 'edit', action: 'EDIT' }],
     capabilities: { create: false },
   };
 

@@ -15,10 +15,7 @@ export const tagsNamespace: Namespace = {
     { key: 'name', label: 'Name', type: 'text', required: true },
     { key: 'instruction', label: 'Instruction', type: 'textarea', required: false },
   ],
-  hotkeys: [
-    { key: 'd', display: 'dd', label: 'delete', action: 'DELETE' },
-    { key: 'e', label: 'edit', action: 'EDIT' },
-  ],
+  hotkeys: [{ key: 'e', label: 'edit', action: 'EDIT' }],
   examples: [
     { name: 'TODO', instruction: 'Mark for future implementation' },
     { name: 'SECURITY', instruction: 'Security-sensitive code requiring careful review' },
