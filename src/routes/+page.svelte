@@ -3,14 +3,14 @@
   import { listen, emit } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
-  import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, Bookmark, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
+  import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
   import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, isHorizontalRule, getFilePath } from "$lib/line-utils";
   import { rangeToKey, keyToRange, isLineInRange, validateRange, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap, findExcalidrawChip } from "$lib/tiptap";
   import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
   import AnnotationSlot from "$lib/components/AnnotationSlot.svelte";
   import CopyDropdown from "$lib/CopyDropdown.svelte";
-  import { CommandPalette, createBookmark, createSelectionBookmark, deleteBookmarkItem } from "$lib/CommandPalette";
+  import { CommandPalette } from "$lib/CommandPalette";
   import SaveModal from "$lib/SaveModal.svelte";
   import Portal from "$lib/components/embedded/Portal.svelte";
   import CodeBlock from "$lib/components/embedded/CodeBlock.svelte";
@@ -26,6 +26,7 @@
   import { useMermaid } from "$lib/composables/useMermaid.svelte";
   import { useLineSegments } from "$lib/composables/useLineSegments.svelte";
   import { useSearch } from "$lib/composables/useSearch.svelte";
+  import { useBookmarks } from "$lib/composables/useBookmarks.svelte";
   import SearchBar from "$lib/components/SearchBar.svelte";
   import { AnnotProvider } from "$lib/context";
   import type { SaveContentResponse } from "$lib/types";
@@ -59,12 +60,11 @@
   let toastExiting = $state(false);
   let toastTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  // Last created bookmark for [e] edit flow
-  let lastCreatedBookmarkId = $state<string | null>(null);
   // Bookmark ID to edit when opening command palette (set by e key, cleared after use)
   let editBookmarkId = $state<string | null>(null);
-  // Track bookmarked line ranges for visual indicators (display indices)
-  let bookmarkedLineRanges = $state<Array<{ start: number; end: number; id: string }>>([]);
+
+  // Bookmarks composable (initialized in onMount after data is loaded)
+  let bookmarkState: ReturnType<typeof useBookmarks> | null = $state(null);
 
   function showToast(message: string, duration = 3000) {
     if (toastTimeout) clearTimeout(toastTimeout);
@@ -201,7 +201,6 @@
   // CommandPalette state
   let commandPaletteOpen = $state(false);
   let tags: Tag[] = $state([]);
-  let bookmarks: Bookmark[] = $state([]);
 
   // Tag creation from selection state
   let pendingTagCreation = $state<{
@@ -220,10 +219,6 @@
 
   // Save modal state
   let saveModalOpen = $state(false);
-
-  // Bookmark state (tracks if current session has been bookmarked)
-  let isBookmarked = $state(false);
-  let currentBookmarkId = $state<string | null>(null);
 
   // Content zoom state
   let contentZoom = $state(1.0);
@@ -322,69 +317,39 @@
 
   // Bookmark toggle handler
   async function handleToggleBookmark() {
-    if (isBookmarked && currentBookmarkId) {
-      const idToDelete = currentBookmarkId;
-      await deleteBookmarkItem(idToDelete);
-      isBookmarked = false;
-      currentBookmarkId = null;
-      lastCreatedBookmarkId = null;
-      // Sync bookmarks state so TipTap @ suggestions stay fresh
-      bookmarks = bookmarks.filter((b) => b.id !== idToDelete);
+    if (!bookmarkState) return;
+    const wasBookmarked = bookmarkState.isSessionBookmarked;
+    await bookmarkState.toggleSession();
+    if (wasBookmarked) {
       showToast('Bookmark removed');
     } else {
-      const bookmark = await createBookmark();
-      const shortId = bookmark.id.slice(0, 3);
-      isBookmarked = true;
-      currentBookmarkId = bookmark.id;
-      lastCreatedBookmarkId = bookmark.id;
-      // Sync bookmarks state so TipTap @ suggestions see the new bookmark
-      bookmarks = [...bookmarks, bookmark];
+      const shortId = bookmarkState.lastCreatedId?.slice(0, 3) ?? '';
       showToast(`Bookmarked as ${shortId} · [e] edit`);
     }
   }
 
   // Create or toggle selection bookmark handler
   async function handleCreateSelectionBookmark(context: { start: number; end: number }) {
-    const start = Math.min(context.start, context.end);
-    const end = Math.max(context.start, context.end);
-
-    // Check if this exact range is already bookmarked
-    const existingIdx = bookmarkedLineRanges.findIndex(
-      range => range.start === start && range.end === end
-    );
-
-    if (existingIdx !== -1) {
-      // Toggle off - delete the bookmark
-      const existing = bookmarkedLineRanges[existingIdx];
-      await deleteBookmarkItem(existing.id);
-      bookmarkedLineRanges = bookmarkedLineRanges.filter((_, i) => i !== existingIdx);
-      bookmarks = bookmarks.filter(b => b.id !== existing.id);
-      if (lastCreatedBookmarkId === existing.id) {
-        lastCreatedBookmarkId = null;
-      }
+    if (!bookmarkState) return;
+    const existing = bookmarkState.findByLineRange(context.start, context.end);
+    await bookmarkState.toggleSelection(context.start, context.end);
+    if (existing) {
       showToast('Bookmark removed');
     } else {
-      // Create new bookmark
-      const bookmark = await createSelectionBookmark(context.start, context.end);
-      const shortId = bookmark.id.slice(0, 3);
-      lastCreatedBookmarkId = bookmark.id;
-      bookmarks = [...bookmarks, bookmark];
-      bookmarkedLineRanges = [...bookmarkedLineRanges, { start, end, id: bookmark.id }];
+      const shortId = bookmarkState.lastCreatedId?.slice(0, 3) ?? '';
       showToast(`Bookmarked as ${shortId} · [e] edit`);
     }
   }
 
   // Check if a display index is in any bookmarked range
   function isLineBookmarked(displayIdx: number): boolean {
-    return bookmarkedLineRanges.some(
-      range => displayIdx >= range.start && displayIdx <= range.end
-    );
+    return bookmarkState?.isLineInBookmarkedRange(displayIdx) ?? false;
   }
 
   // Edit last created bookmark handler
   function handleEditLastBookmark() {
-    if (lastCreatedBookmarkId) {
-      editBookmarkId = lastCreatedBookmarkId;
+    if (bookmarkState?.lastCreatedId) {
+      editBookmarkId = bookmarkState.lastCreatedId;
       commandPaletteOpen = true;
     }
   }
@@ -397,21 +362,14 @@
     editBookmarkId = null;
   }
 
-  function handleBookmarkDeleted(id: string) {
-    if (currentBookmarkId === id) {
-      isBookmarked = false;
-      currentBookmarkId = null;
-    }
-    if (lastCreatedBookmarkId === id) {
-      lastCreatedBookmarkId = null;
-    }
-    // Sync bookmarks state so TipTap @ suggestions stay fresh
-    bookmarks = bookmarks.filter((b) => b.id !== id);
+  async function handleBookmarkDeleted(id: string) {
+    // Composable handles all state updates
+    await bookmarkState?.delete(id);
   }
 
-  function handleBookmarkUpdated(id: string, label: string) {
-    // Sync bookmarks state so TipTap @ suggestions stay fresh
-    bookmarks = bookmarks.map((b) => (b.id === id ? { ...b, label } : b));
+  async function handleBookmarkUpdated(id: string, label: string) {
+    // Composable handles state update
+    await bookmarkState?.update(id, label);
 
     // Show toast if edit was triggered via 'e' key
     if (editBookmarkId === id) {
@@ -640,7 +598,7 @@
       hasHoveredLine: () => interaction.hoverLine !== null,
       hasExitModes: () => exitModeState.modes.length > 0,
       isHoveredLineSelectable: () => interaction.hoverLine !== null && isLineSelectable(interaction.hoverLine),
-      hasLastCreatedBookmark: () => !!lastCreatedBookmarkId,
+      hasLastCreatedBookmark: () => !!bookmarkState?.lastCreatedId,
       getBookmarkContext: () => interaction.getBookmarkContext(),
     }
   );
@@ -656,7 +614,7 @@
       label = res.label;
       lines = res.lines;
       tags = res.tags;
-      bookmarks = res.bookmarks;
+      bookmarkState = useBookmarks(res.bookmarks);
       exitModeState.initialize(res.exit_modes, res.selected_exit_mode_id);
       metadata = res.metadata;
       allowsImagePaste = res.allows_image_paste;
@@ -730,17 +688,22 @@
 <svelte:window onkeydown={keyboard.handleKeyDown} onkeyup={keyboard.handleKeyUp} />
 
 <main class="viewer" style:--mode-color={exitModeState.selectedMode?.color ?? 'transparent'}>
+  {#if error}
+    <div class="error">{error}</div>
+  {:else if !bookmarkState || lines.length === 0}
+    <div class="loading">Loading...</div>
+  {:else}
   <AnnotProvider
     {lines}
     {metadata}
     {tags}
-    {bookmarks}
     {allowsImagePaste}
     interaction={interaction}
     annotations={annotationState}
     exitModes={exitModeState}
     {search}
     {mermaid}
+    bookmarks={bookmarkState}
     {showToast}
     {isLineSelectable}
     {getOriginalLinesForRange}
@@ -757,7 +720,6 @@
       onOpenSessionEditor={openSessionEditor}
       onOpenSaveModal={openSaveModal}
       onCreateBookmark={handleToggleBookmark}
-      {isBookmarked}
       zoomLevel={contentZoom}
     />
     <SessionEditor
@@ -772,11 +734,6 @@
     />
   </div>
 
-  {#if error}
-    <div class="error">{error}</div>
-  {:else if lines.length === 0}
-    <div class="loading">Loading...</div>
-  {:else}
     <div
       class="content"
       class:shift-held={interaction.isShiftHeld}
@@ -854,19 +811,19 @@
       {/each}
       </div>
     </div>
-  {/if}
 
   <!-- Footer / Status Bar -->
   <StatusBar />
   </AnnotProvider>
+  {/if}
 </main>
 
 <SearchBar {search} />
 
-{#if commandPaletteOpen}
+{#if commandPaletteOpen && bookmarkState}
   <CommandPalette
     {tags}
-    {bookmarks}
+    bookmarks={bookmarkState.all}
     exitModes={exitModeState.modes}
     onClose={handleCommandPaletteClose}
     onSetExitMode={handleSetExitModeFromPalette}

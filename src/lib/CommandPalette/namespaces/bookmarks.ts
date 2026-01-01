@@ -4,7 +4,6 @@
 import type { Namespace, Item } from '../engine/types';
 import type { Bookmark } from '$lib/types';
 import { fuzzySearch } from '$lib/fuzzy';
-import { invoke } from '@tauri-apps/api/core';
 import { BookmarkItem } from '../items';
 
 export const bookmarksNamespace: Namespace = {
@@ -41,9 +40,8 @@ export function filterBookmarkItems(query: string): Item[] {
     (b.values.created_at as string).localeCompare(a.values.created_at as string)
   );
   return fuzzySearch(sorted, query, [
-    { name: 'id', weight: 3 }, // ID prefix highest priority
     { name: 'name', weight: 2 }, // Label
-    { name: 'values.source_title', weight: 1 },
+    { name: 'id', weight: 1 },
   ]);
 }
 
@@ -94,62 +92,16 @@ export function bookmarkToItem(bookmark: Bookmark): Item {
   };
 }
 
-/** Load bookmarks from the backend and populate the in-memory store. */
-export async function loadBookmarks(): Promise<void> {
-  try {
-    const bookmarks = await invoke<Bookmark[]>('get_bookmarks');
-    items = bookmarks.map(bookmarkToItem);
-  } catch (e) {
-    console.error('Failed to load bookmarks:', e);
-    items = [];
-  }
+/** Optimistically update a bookmark item in local store (IPC handled by callback). */
+export function saveBookmarkItem(item: Item): void {
+  items = items.map((i) =>
+    i.id === item.id
+      ? { ...i, name: item.values.label || item.name, values: { ...i.values, label: item.values.label } }
+      : i
+  );
 }
 
-/** Save a bookmark item (update label). */
-export async function saveBookmarkItem(item: Item): Promise<void> {
-  try {
-    await invoke('update_bookmark', {
-      id: item.id,
-      label: item.values.label || item.name,
-    });
-    await loadBookmarks(); // Reload to sync
-  } catch (e) {
-    console.error('Failed to save bookmark:', e);
-    throw e;
-  }
-}
-
-/** Delete a bookmark by ID. */
-export async function deleteBookmarkItem(id: string): Promise<void> {
-  // Optimistically remove from UI first (like tags)
+/** Optimistically remove a bookmark from local store (IPC handled by callback). */
+export function deleteBookmarkItem(id: string): void {
   items = items.filter((i) => i.id !== id);
-  try {
-    await invoke('delete_bookmark', { id });
-  } catch (e) {
-    console.error('Failed to delete bookmark:', e);
-    // Could restore item here on failure, but for now just log
-    throw e;
-  }
-}
-
-/** Create a new bookmark for the current session. */
-export async function createBookmark(label?: string): Promise<Bookmark> {
-  const bookmark = await invoke<Bookmark>('create_bookmark', { label: label ?? null });
-  await loadBookmarks(); // Reload to sync
-  return bookmark;
-}
-
-/** Create a selection bookmark for a line range. */
-export async function createSelectionBookmark(
-  startLine: number,
-  endLine: number,
-  label?: string
-): Promise<Bookmark> {
-  const bookmark = await invoke<Bookmark>('create_selection_bookmark', {
-    startLine,
-    endLine,
-    label: label ?? null,
-  });
-  await loadBookmarks(); // Reload to sync
-  return bookmark;
 }

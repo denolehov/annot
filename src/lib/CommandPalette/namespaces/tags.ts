@@ -40,10 +40,7 @@ export function setTagItems(data: Item[]): void {
 }
 
 export function filterTagItems(query: string): Item[] {
-  return fuzzySearch(items, query, [
-    { name: 'name', weight: 2 },
-    { name: 'values.instruction', weight: 1 },
-  ]);
+  return fuzzySearch(items, query, [{ name: 'name', weight: 1 }]);
 }
 
 export function saveTagItem(item: Item): void {

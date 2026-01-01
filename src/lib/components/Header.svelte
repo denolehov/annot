@@ -16,7 +16,6 @@
     onOpenSessionEditor: () => void;
     onOpenSaveModal: () => void;
     onCreateBookmark: () => void;
-    isBookmarked: boolean;
     zoomLevel: number;
   }
 
@@ -31,13 +30,13 @@
     onOpenSessionEditor,
     onOpenSaveModal,
     onCreateBookmark,
-    isBookmarked,
     zoomLevel
   }: Props = $props();
 
   const ctx = getAnnotContext();
   const metadata = $derived(ctx.metadata);
   const showToast = ctx.showToast;
+  const isBookmarked = $derived(ctx.bookmarks.isSessionBookmarked);
 
   const diffMetadata = $derived(metadata.type === 'diff' ? metadata : null);
   const markdownMetadata = $derived(metadata.type === 'markdown' ? metadata : null);

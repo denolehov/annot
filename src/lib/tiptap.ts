@@ -1240,15 +1240,7 @@ export function createTagSuggestion(
   return {
     char: '#',
     items: ({ query }) => {
-      return fuzzySearch(
-        tags,
-        query,
-        [
-          { name: 'name', weight: 2 },
-          { name: 'instruction', weight: 1 },
-        ],
-        5
-      );
+      return fuzzySearch(tags, query, [{ name: 'name', weight: 1 }], 5);
     },
     command: ({ editor, range, props }) => {
       editor
@@ -1407,10 +1399,7 @@ export function createSlashSuggestion(
   return {
     char: '/',
     items: ({ query }) => {
-      return fuzzySearch(commands, query, [
-        { name: 'name', weight: 2 },
-        { name: 'description', weight: 1 },
-      ]);
+      return fuzzySearch(commands, query, [{ name: 'name', weight: 1 }]);
     },
     command: ({ editor, range, props }) => {
       props.action(editor, range);

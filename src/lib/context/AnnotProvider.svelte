@@ -9,7 +9,7 @@
    * then passes them here to be set as context for child components.
    */
   import type { Snippet } from 'svelte';
-  import type { Line, ContentMetadata, Tag, Bookmark, JSONContent, MarkdownMetadata } from '$lib/types';
+  import type { Line, ContentMetadata, Tag, JSONContent, MarkdownMetadata } from '$lib/types';
   import type { Range } from '$lib/range';
   import { setAnnotContext, type AnnotContext } from './annot-context.svelte';
   import type { useInteraction } from '$lib/composables/useInteraction.svelte';
@@ -17,13 +17,13 @@
   import type { useExitModes } from '$lib/composables/useExitModes.svelte';
   import type { useSearch } from '$lib/composables/useSearch.svelte';
   import type { useMermaid } from '$lib/composables/useMermaid.svelte';
+  import type { useBookmarks } from '$lib/composables/useBookmarks.svelte';
 
   interface Props {
     // Reactive data
     lines: Line[];
     metadata: ContentMetadata;
     tags: Tag[];
-    bookmarks: Bookmark[];
     allowsImagePaste: boolean;
 
     // Composables (created by page)
@@ -32,6 +32,7 @@
     exitModes: ReturnType<typeof useExitModes>;
     search: ReturnType<typeof useSearch>;
     mermaid: ReturnType<typeof useMermaid>;
+    bookmarks: ReturnType<typeof useBookmarks>;
 
     // Utilities
     showToast: (message: string, duration?: number) => void;
@@ -45,13 +46,13 @@
     lines,
     metadata,
     tags,
-    bookmarks,
     allowsImagePaste,
     interaction,
     annotations,
     exitModes,
     search,
     mermaid,
+    bookmarks,
     showToast,
     isLineSelectable,
     getOriginalLinesForRange,
@@ -89,6 +90,7 @@
     get exitModes() { return exitModes; },
     get search() { return search; },
     get mermaid() { return mermaid; },
+    get bookmarks() { return bookmarks; },
 
     get selection() { return selection; },
     get isDragging() { return isDragging; },
@@ -99,7 +101,6 @@
     get lines() { return lines; },
     get metadata() { return metadata; },
     get tags() { return tags; },
-    get bookmarks() { return bookmarks; },
     get allowsImagePaste() { return allowsImagePaste; },
     get markdownMetadata() { return markdownMetadata; },
 

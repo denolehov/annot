@@ -55,7 +55,7 @@
       }}
       {onDismiss}
       tags={ctx.tags}
-      bookmarks={ctx.bookmarks}
+      bookmarks={ctx.bookmarks.all}
       allowsImagePaste={ctx.allowsImagePaste}
       {onImagePasteBlocked}
       onRequestCreateTag={(text, from, to) => onRequestCreateTag(rangeKey, text, from, to)}

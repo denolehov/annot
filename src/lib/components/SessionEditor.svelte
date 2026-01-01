@@ -41,7 +41,7 @@
       onUnseal={onOpen}
       onDismiss={onClose}
       tags={ctx.tags}
-      bookmarks={ctx.bookmarks}
+      bookmarks={ctx.bookmarks.all}
       allowsImagePaste={ctx.allowsImagePaste}
       {onImagePasteBlocked}
       {onRequestCreateTag}

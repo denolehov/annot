@@ -109,10 +109,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
           suggestion: {
             char: '#',
             items: ({ query }: { query: string }) => {
-              return fuzzySearch(getTags(), query, [
-                { name: 'name', weight: 2 },
-                { name: 'instruction', weight: 1 },
-              ]);
+              return fuzzySearch(getTags(), query, [{ name: 'name', weight: 1 }]);
             },
             render: createSuggestionRender<Tag>(
               () => tagSuggestion,
@@ -144,11 +141,9 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
             char: '@',
             items: ({ query }: { query: string }) => {
               const bookmarks = getBookmarks();
-              // Fuzzy search with priority: ID prefix > label > source_title
               return fuzzySearch(bookmarks, query, [
-                { name: 'id', weight: 3 },
                 { name: 'label', weight: 2 },
-                { name: 'snapshot.source_title', weight: 1 },
+                { name: 'id', weight: 1 },
               ]);
             },
             render: createSuggestionRender<Bookmark>(
