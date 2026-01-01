@@ -2,11 +2,11 @@
   import CopyDropdown from '$lib/CopyDropdown.svelte';
   import Icon from '$lib/CommandPalette/Icon.svelte';
   import { BookmarkIcon } from '$lib/icons';
-  import type { DiffMetadata, MarkdownMetadata, DiffFileInfo, HunkInfo, SectionInfo, JSONContent } from '$lib/types';
+  import { getAnnotContext } from '$lib/context';
+  import type { DiffFileInfo, HunkInfo, SectionInfo } from '$lib/types';
 
   interface Props {
     label: string;
-    metadata: { type: 'plain' } | ({ type: 'diff' } & DiffMetadata) | ({ type: 'markdown' } & MarkdownMetadata);
     currentFile: DiffFileInfo | null;
     currentFileIndex: number;
     currentHunk: HunkInfo | null;
@@ -17,13 +17,11 @@
     onOpenSaveModal: () => void;
     onCreateBookmark: () => void;
     isBookmarked: boolean;
-    showToast: (message: string) => void;
     zoomLevel: number;
   }
 
   let {
     label,
-    metadata,
     currentFile,
     currentFileIndex,
     currentHunk,
@@ -34,9 +32,12 @@
     onOpenSaveModal,
     onCreateBookmark,
     isBookmarked,
-    showToast,
     zoomLevel
   }: Props = $props();
+
+  const ctx = getAnnotContext();
+  const metadata = $derived(ctx.metadata);
+  const showToast = ctx.showToast;
 
   const diffMetadata = $derived(metadata.type === 'diff' ? metadata : null);
   const markdownMetadata = $derived(metadata.type === 'markdown' ? metadata : null);

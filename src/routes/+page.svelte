@@ -809,7 +809,6 @@
   <div class="sticky-header">
     <Header
       {label}
-      {metadata}
       {currentFile}
       currentFileIndex={contentTracking.currentFileIndex}
       {currentHunk}
@@ -820,7 +819,6 @@
       onOpenSaveModal={openSaveModal}
       onCreateBookmark={handleToggleBookmark}
       {isBookmarked}
-      {showToast}
       zoomLevel={contentZoom}
     />
     <SessionEditor
