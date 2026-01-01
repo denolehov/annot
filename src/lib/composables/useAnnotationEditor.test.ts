@@ -45,6 +45,7 @@ vi.mock('../tiptap', () => ({
   trimContent: vi.fn((content) => content),
   isContentEmpty: vi.fn(() => true),
   TagChip: { configure: vi.fn(() => ({})) },
+  BookmarkChip: { configure: vi.fn(() => ({})) },
   MediaChip: {},
   PasteChip: {},
   ExcalidrawChip: {},

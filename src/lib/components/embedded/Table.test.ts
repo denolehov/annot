@@ -13,6 +13,27 @@ beforeAll(() => {
   };
 });
 
+// Mock the context - Table uses getAnnotContext()
+vi.mock('$lib/context', () => ({
+  getAnnotContext: () => ({
+    interaction: {
+      isLineHighlighted: () => false,
+      isLinePreview: () => false,
+      handleLineEnter: vi.fn(),
+      handleLineLeave: vi.fn(),
+      handlePointerDown: vi.fn(),
+      handleGutterClick: vi.fn(),
+    },
+    annotations: {
+      hasAnnotation: () => false,
+      getAtLine: () => null,
+    },
+    selection: null,
+    isDragging: false,
+    lastSelectedLine: null,
+  }),
+}));
+
 // Helper to create a table row line with per-cell HTML
 function makeTableLine(
   num: number,
@@ -27,21 +48,10 @@ function makeTableLine(
   };
 }
 
-// Minimal props for Table component
+// Minimal props for Table component (context-based - only needs lines and annotationSlot)
 function createTableProps(lines: Array<{ line: Line; displayIndex: number }>) {
   return {
     lines,
-    selection: null as Range | null,
-    isDragging: false,
-    hoveredDisplayIdx: null as number | null,
-    markdownMetadata: null as MarkdownMetadata | null,
-    annotations: new Map(),
-    lastSelectedLine: null as number | null,
-    onGutterMouseDown: vi.fn(),
-    onGutterClick: vi.fn(),
-    onAddMouseDown: vi.fn(),
-    onMouseEnter: vi.fn(),
-    onMouseLeave: vi.fn(),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     annotationSlot: (() => null) as any,
   };

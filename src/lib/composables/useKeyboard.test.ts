@@ -82,11 +82,11 @@ describe('useKeyboard', () => {
     expect(onTabCycle).not.toHaveBeenCalled();
   });
 
-  it('calls onOpenSessionEditor on g key', () => {
+  it('calls onOpenSessionEditor on Shift+C', () => {
     const onOpenSessionEditor = vi.fn();
     const keyboard = useKeyboard({ onOpenSessionEditor }, defaultState);
 
-    const event = createKeyboardEvent('g');
+    const event = createKeyboardEvent('C'); // Capital C means Shift+C
     keyboard.handleKeyDown(event);
 
     expect(event.preventDefault).toHaveBeenCalled();
