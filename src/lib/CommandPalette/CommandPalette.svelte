@@ -554,10 +554,11 @@
       ];
     }
     if (machineState.type === 'EDIT_FORM') {
-      const hints = [
-        { key: '⌘↵', label: 'save' },
-        { key: 'Tab', label: 'next field' },
-      ];
+      const hints = [{ key: '⌘↵', label: 'save' }];
+      // Only show Tab hint if there are multiple fields to navigate
+      if (machineState.namespace.fields.length > 1) {
+        hints.push({ key: 'Tab', label: 'next field' });
+      }
       // Add Cmd-D delete hint if item can be deleted
       if (canDelete(machineState.namespace) && isItemEditable(machineState.item)) {
         hints.push({ key: '⌘D', label: 'delete' });
@@ -566,11 +567,13 @@
       return hints;
     }
     if (machineState.type === 'CREATE_FORM') {
-      return [
-        { key: '⌘↵', label: 'save' },
-        { key: 'Tab', label: 'next field' },
-        { key: 'Esc', label: 'cancel' },
-      ];
+      const hints = [{ key: '⌘↵', label: 'save' }];
+      // Only show Tab hint if there are multiple fields to navigate
+      if (machineState.namespace.fields.length > 1) {
+        hints.push({ key: 'Tab', label: 'next field' });
+      }
+      hints.push({ key: 'Esc', label: 'cancel' });
+      return hints;
     }
     return [];
   });
