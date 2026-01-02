@@ -22,6 +22,9 @@
 	z-index: 1001;
 	width: 90%;
 	max-width: 520px;
+	max-height: calc(80vh - 40px);
+	display: flex;
+	flex-direction: column;
 	background: var(--bg-portal);
 	border: 1px solid var(--border-strong);
 	border-radius: 12px;
@@ -47,6 +50,12 @@
 .form-view {
 	display: flex;
 	flex-direction: column;
+	min-height: 0;
+	flex: 1;
+}
+
+.form-view {
+	overflow-y: auto;
 }
 
 /* Pending delete state in form view */
@@ -64,6 +73,7 @@
 	border-bottom: 1px solid var(--border-subtle);
 	background: transparent;
 	font-size: 14px;
+	flex-shrink: 0;
 }
 
 .search-icon {
@@ -289,23 +299,28 @@
 	gap: 12px;
 	font-size: 11px;
 	color: var(--text-muted);
+	flex-shrink: 0;
 }
 
-/* Scrollbar styling for item list */
-.item-list::-webkit-scrollbar {
+/* Scrollbar styling for item list and form view */
+.item-list::-webkit-scrollbar,
+.form-view::-webkit-scrollbar {
 	width: 6px;
 }
 
-.item-list::-webkit-scrollbar-track {
+.item-list::-webkit-scrollbar-track,
+.form-view::-webkit-scrollbar-track {
 	background: transparent;
 }
 
-.item-list::-webkit-scrollbar-thumb {
+.item-list::-webkit-scrollbar-thumb,
+.form-view::-webkit-scrollbar-thumb {
 	background: var(--border-strong);
 	border-radius: 99px;
 }
 
-.item-list::-webkit-scrollbar-thumb:hover {
+.item-list::-webkit-scrollbar-thumb:hover,
+.form-view::-webkit-scrollbar-thumb:hover {
 	background: var(--border-hover);
 }
 
