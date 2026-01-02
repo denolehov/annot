@@ -16,6 +16,8 @@
     language: string | null;
     color: string | null;
     isLineBookmarked?: (displayIdx: number) => boolean;
+    isFirstLineOfBookmark?: (displayIdx: number) => boolean;
+    deleteBookmarkAtLine?: (displayIdx: number) => void;
     onMermaidOpen?: () => void;
     onExcalidrawOpen?: () => void;
     excalidrawSupported?: boolean;
@@ -29,6 +31,8 @@
     language,
     color,
     isLineBookmarked,
+    isFirstLineOfBookmark,
+    deleteBookmarkAtLine,
     onMermaidOpen,
     onExcalidrawOpen,
     excalidrawSupported = true,
@@ -162,6 +166,8 @@
       {line}
       {displayIndex}
       isBookmarked={isLineBookmarked?.(displayIndex)}
+      showBookmarkIcon={isFirstLineOfBookmark?.(displayIndex)}
+      onDeleteBookmark={deleteBookmarkAtLine ? () => deleteBookmarkAtLine(displayIndex) : undefined}
       additionalClasses={{
         'codeblock-header': startFence && !!language,
         'codeblock-fence': fence && !language,

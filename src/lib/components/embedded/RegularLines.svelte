@@ -23,12 +23,16 @@
   interface Props {
     lines: DisplayLine[];
     isLineBookmarked: (displayIdx: number) => boolean;
+    isFirstLineOfBookmark: (displayIdx: number) => boolean;
+    deleteBookmarkAtLine: (displayIdx: number) => void;
     annotationSlotProps: Omit<AnnotationSlotProps, 'rangeKey'>;
   }
 
   let {
     lines,
     isLineBookmarked,
+    isFirstLineOfBookmark,
+    deleteBookmarkAtLine,
     annotationSlotProps,
   }: Props = $props();
 
@@ -100,6 +104,8 @@
     {line}
     {displayIndex}
     isBookmarked={isLineBookmarked(displayIndex)}
+    showBookmarkIcon={isFirstLineOfBookmark(displayIndex)}
+    onDeleteBookmark={() => deleteBookmarkAtLine(displayIndex)}
     additionalClasses={{
       'diff-added': diffKind === 'added',
       'diff-deleted': diffKind === 'deleted',

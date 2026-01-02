@@ -35,6 +35,8 @@ export interface UseBookmarks {
   // Query
   findByLineRange(start: number, end: number): Bookmark | undefined;
   isLineInBookmarkedRange(displayIdx: number): boolean;
+  isFirstLineOfBookmark(displayIdx: number): boolean;
+  getBookmarkIdAtStart(displayIdx: number): string | undefined;
 
   // Clear last created (for edit flow)
   clearLastCreated(): void;
@@ -166,6 +168,14 @@ export function useBookmarks(initialBookmarks: Bookmark[] = []): UseBookmarks {
     );
   }
 
+  function isFirstLineOfBookmark(displayIdx: number): boolean {
+    return lineRanges.some((range) => displayIdx === range.start);
+  }
+
+  function getBookmarkIdAtStart(displayIdx: number): string | undefined {
+    return lineRanges.find((range) => displayIdx === range.start)?.id;
+  }
+
   function clearLastCreated(): void {
     lastCreatedId = null;
   }
@@ -198,6 +208,8 @@ export function useBookmarks(initialBookmarks: Bookmark[] = []): UseBookmarks {
     toggleSelection,
     findByLineRange,
     isLineInBookmarkedRange,
+    isFirstLineOfBookmark,
+    getBookmarkIdAtStart,
     clearLastCreated,
   };
 }

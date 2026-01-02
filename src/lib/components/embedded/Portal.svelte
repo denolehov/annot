@@ -12,10 +12,12 @@
   interface Props {
     lines: Array<{ line: Line; displayIndex: number }>;
     isLineBookmarked?: (displayIdx: number) => boolean;
+    isFirstLineOfBookmark?: (displayIdx: number) => boolean;
+    deleteBookmarkAtLine?: (displayIdx: number) => void;
     annotationSlot: Snippet<[displayIndex: number, rangeKey: string | null]>;
   }
 
-  let { lines, isLineBookmarked, annotationSlot }: Props = $props();
+  let { lines, isLineBookmarked, isFirstLineOfBookmark, deleteBookmarkAtLine, annotationSlot }: Props = $props();
 
   const ctx = getAnnotContext();
 
@@ -37,6 +39,8 @@
       {line}
       {displayIndex}
       isBookmarked={isLineBookmarked?.(displayIndex)}
+      showBookmarkIcon={isFirstLineOfBookmark?.(displayIndex)}
+      onDeleteBookmark={deleteBookmarkAtLine ? () => deleteBookmarkAtLine(displayIndex) : undefined}
       additionalClasses={{
         'portal-header': portalSemantics?.kind === 'header',
         'portal-content': portalSemantics?.kind === 'content',

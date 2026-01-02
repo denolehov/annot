@@ -354,6 +354,20 @@
     return bookmarkState?.isLineInBookmarkedRange(displayIdx) ?? false;
   }
 
+  // Check if a display index is the first line of any bookmark
+  function isFirstLineOfBookmark(displayIdx: number): boolean {
+    return bookmarkState?.isFirstLineOfBookmark(displayIdx) ?? false;
+  }
+
+  // Delete bookmark by display index (for inline delete button)
+  function deleteBookmarkAtLine(displayIdx: number): void {
+    const id = bookmarkState?.getBookmarkIdAtStart(displayIdx);
+    if (id) {
+      bookmarkState?.delete(id);
+      showToast('Bookmark removed');
+    }
+  }
+
   // Edit last created bookmark handler
   function handleEditLastBookmark() {
     if (bookmarkState?.lastCreatedId) {
@@ -779,7 +793,7 @@
       >
       {#each lineSegmentation.segments as segment}
         {#if segment.type === 'portal'}
-          <Portal lines={segment.lines} {isLineBookmarked}>
+          <Portal lines={segment.lines} {isLineBookmarked} {isFirstLineOfBookmark} {deleteBookmarkAtLine}>
             {#snippet annotationSlot(displayIndex, rangeKey)}
               <AnnotationSlot {rangeKey} {...annotationSlotProps} />
             {/snippet}
@@ -799,6 +813,8 @@
             language={segment.language}
             color={segment.color}
             {isLineBookmarked}
+            {isFirstLineOfBookmark}
+            {deleteBookmarkAtLine}
             onMermaidOpen={mermaidBlock && !mermaidError ? () => mermaid.openMermaidWindow(mermaidBlock) : undefined}
             onExcalidrawOpen={mermaidBlock ? () => openExcalidrawFromMermaid(
               mermaidBlock,  // source block for content extraction
@@ -813,7 +829,7 @@
             {/snippet}
           </CodeBlock>
         {:else if segment.type === 'table'}
-          <Table lines={segment.lines} {isLineBookmarked}>
+          <Table lines={segment.lines} {isLineBookmarked} {isFirstLineOfBookmark} {deleteBookmarkAtLine}>
             {#snippet annotationSlot(displayIndex, rangeKey)}
               <AnnotationSlot {rangeKey} {...annotationSlotProps} />
             {/snippet}
@@ -827,6 +843,8 @@
           <RegularLines
             lines={segment.lines}
             {isLineBookmarked}
+            {isFirstLineOfBookmark}
+            {deleteBookmarkAtLine}
             {annotationSlotProps}
           />
         {/if}

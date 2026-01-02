@@ -203,13 +203,26 @@ div.line.bookmarked::before {
 .bookmark-indicator {
 	display: inline-flex;
 	align-items: center;
-	margin-left: 8px;
+	justify-content: center;
+	margin-left: 2px;
+	margin-right: 4px;
+	padding: 2px;
+	background: transparent;
+	border: none;
+	border-radius: 4px;
 	color: var(--bookmark-color, #ef4444);
+	cursor: pointer;
+	font-size: 16px;
+	transition: color 0.15s ease, background 0.15s ease;
 }
 
-.bookmark-indicator :global(.cp-icon) {
-	width: 14px;
-	height: 14px;
+.bookmark-indicator:hover {
+	background: var(--bg-hover);
+}
+
+.bookmark-indicator:focus-visible {
+	outline: 1px solid var(--focus-ring);
+	outline-offset: 2px;
 }
 
 /* Shift+drag cursor */

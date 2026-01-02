@@ -21,10 +21,12 @@
   interface Props {
     lines: Array<{ line: Line; displayIndex: number }>;
     isLineBookmarked?: (displayIdx: number) => boolean;
+    isFirstLineOfBookmark?: (displayIdx: number) => boolean;
+    deleteBookmarkAtLine?: (displayIdx: number) => void;
     annotationSlot: Snippet<[displayIndex: number, rangeKey: string | null]>;
   }
 
-  let { lines, isLineBookmarked, annotationSlot }: Props = $props();
+  let { lines, isLineBookmarked, isFirstLineOfBookmark, deleteBookmarkAtLine, annotationSlot }: Props = $props();
 
   const ctx = getAnnotContext();
 

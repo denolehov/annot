@@ -23,6 +23,8 @@
     line: Line;
     displayIndex: number;
     isBookmarked?: boolean;
+    showBookmarkIcon?: boolean;
+    onDeleteBookmark?: () => void;
     additionalClasses?: Record<string, boolean>;
     gutterClass?: string;
     gutter: Snippet<[]>;
@@ -36,6 +38,8 @@
     line,
     displayIndex,
     isBookmarked = false,
+    showBookmarkIcon = false,
+    onDeleteBookmark,
     additionalClasses = {},
     gutterClass = '',
     gutter,
@@ -110,11 +114,13 @@
       {@render code()}
     </span>
   {/if}
-  {#if isBookmarked}
-    <span class="bookmark-indicator"><BookmarkIcon filled /></span>
-  {/if}
   {#if trailing}
     {@render trailing()}
+  {/if}
+  {#if showBookmarkIcon}
+    <button class="bookmark-indicator" onclick={onDeleteBookmark} title="Remove bookmark">
+      <BookmarkIcon filled />
+    </button>
   {/if}
 </div>
 {#if showChoiceButtons}
