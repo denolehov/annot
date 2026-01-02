@@ -22,6 +22,8 @@ export interface KeyboardHandlers {
   onDragModifierPress?: (key: 'c' | 'b') => void;
   /** Called when 'c' or 'b' is pressed to confirm pending choice (after shift-drag-release) */
   onConfirmChoice?: (action: 'annotate' | 'bookmark') => void;
+  /** Called when Escape is pressed to cancel pending choice */
+  onCancelChoice?: () => void;
 }
 
 export interface KeyboardState {
@@ -64,6 +66,15 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
     if (e.key === 'Shift') {
       handlers.onShiftDown?.();
       return;
+    }
+
+    // Escape to cancel pending choice
+    if (e.key === 'Escape') {
+      if (state.isPendingChoice()) {
+        e.preventDefault();
+        handlers.onCancelChoice?.();
+        return;
+      }
     }
 
     if (e.key === 'Tab') {

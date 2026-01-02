@@ -621,6 +621,7 @@
       },
       onDragModifierPress: (key) => interaction.setDragModifier(key),
       onConfirmChoice: (action) => interaction.confirmChoice(action),
+      onCancelChoice: () => interaction.cancelChoice(),
     },
     {
       isEditorActive: () => !!interaction.range || sessionEditorOpen,
