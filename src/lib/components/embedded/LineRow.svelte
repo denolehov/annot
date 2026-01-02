@@ -17,6 +17,7 @@
   import type { Line } from '$lib/types';
   import { getAnnotContext } from '$lib/context';
   import { BookmarkIcon } from '$lib/icons';
+  import ChoiceButtons from '$lib/components/ChoiceButtons.svelte';
 
   interface Props {
     line: Line;
@@ -51,6 +52,13 @@
   const preview = $derived(ctx.interaction.isLinePreview(displayIndex));
   const markdownMetadata = $derived(ctx.markdownMetadata);
 
+  // Show choice buttons on the last line of selection when pending choice
+  const showChoiceButtons = $derived(
+    ctx.interaction.pendingChoice &&
+    ctx.interaction.range !== null &&
+    displayIndex === Math.max(ctx.interaction.range.start, ctx.interaction.range.end)
+  );
+
   // Convert additionalClasses object to class string
   const extraClasses = $derived(
     Object.entries(additionalClasses)
@@ -58,6 +66,14 @@
       .map(([k]) => k)
       .join(' ')
   );
+
+  function handleChooseAnnotate() {
+    ctx.interaction.confirmChoice('annotate');
+  }
+
+  function handleChooseBookmark() {
+    ctx.interaction.confirmChoice('bookmark');
+  }
 </script>
 
 <div
@@ -101,3 +117,6 @@
     {@render trailing()}
   {/if}
 </div>
+{#if showChoiceButtons}
+  <ChoiceButtons onAnnotate={handleChooseAnnotate} onBookmark={handleChooseBookmark} />
+{/if}

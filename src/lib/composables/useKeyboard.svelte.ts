@@ -18,6 +18,10 @@ export interface KeyboardHandlers {
   onZoomReset?: () => void;
   onCommentHoveredLine?: () => void;
   onSelectAllContent?: () => void;
+  /** Called when 'c' or 'b' is pressed during 'selecting' phase (drag in progress) */
+  onDragModifierPress?: (key: 'c' | 'b') => void;
+  /** Called when 'c' or 'b' is pressed to confirm pending choice (after shift-drag-release) */
+  onConfirmChoice?: (action: 'annotate' | 'bookmark') => void;
 }
 
 export interface KeyboardState {
@@ -39,6 +43,12 @@ export interface KeyboardState {
   hasLastCreatedBookmark: () => boolean;
   /** Get bookmark context (hover or selection), null if neither */
   getBookmarkContext: () => BookmarkContext | null;
+  /** Get current interaction phase */
+  getPhase: () => string;
+  /** Whether shift key is currently held */
+  isShiftHeld: () => boolean;
+  /** Whether choice buttons are pending (after shift-drag-release) */
+  isPendingChoice: () => boolean;
 }
 
 export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
@@ -68,13 +78,33 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
       return;
     }
 
-    // 'c' to comment hovered line
-    if (e.key === 'c' && !e.metaKey && !e.ctrlKey && state.hasHoveredLine() && !state.isEditorActive()) {
+    // 'c' key handling
+    if (e.key === 'c' && !e.metaKey && !e.ctrlKey) {
       if (isInEditorOrInput()) return;
-      if (!state.isHoveredLineSelectable()) return;
-      e.preventDefault();
-      handlers.onCommentHoveredLine?.();
-      return;
+
+      // During drag (selecting phase): set as drag modifier
+      if (state.getPhase() === 'selecting') {
+        e.preventDefault();
+        handlers.onDragModifierPress?.('c');
+        return;
+      }
+
+      // Pending choice: confirm annotate (check BEFORE isEditorActive since range is still set)
+      if (state.isPendingChoice()) {
+        e.preventDefault();
+        handlers.onConfirmChoice?.('annotate');
+        return;
+      }
+
+      // Block if editor is active
+      if (state.isEditorActive()) return;
+
+      // Default: comment hovered line
+      if (state.hasHoveredLine() && state.isHoveredLineSelectable()) {
+        e.preventDefault();
+        handlers.onCommentHoveredLine?.();
+        return;
+      }
     }
 
     // Shift+C for global/session comment
@@ -109,9 +139,34 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
       return;
     }
 
-    // 'b' for selection bookmark (hover/selection context only)
-    if (e.key === 'b' && !e.metaKey && !e.ctrlKey && !state.isEditorActive()) {
+    // 'b' key handling
+    if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
       if (isInEditorOrInput()) return;
+
+      // During drag (selecting phase): set as drag modifier
+      if (state.getPhase() === 'selecting') {
+        e.preventDefault();
+        handlers.onDragModifierPress?.('b');
+        return;
+      }
+
+      // Pending choice: confirm bookmark (check BEFORE isEditorActive since range is still set)
+      if (state.isPendingChoice()) {
+        e.preventDefault();
+        handlers.onConfirmChoice?.('bookmark');
+        return;
+      }
+
+      // Block if editor is active
+      if (state.isEditorActive()) return;
+
+      // Guard: Don't fire if shift is held and we're not in committed state
+      // (Trap #2 from D-Mail: prevents Shift+B+drag from creating bookmark before drag completes)
+      if (state.isShiftHeld() && state.getPhase() !== 'committed') {
+        return;
+      }
+
+      // Default: selection bookmark for hover/selection context
       const context = state.getBookmarkContext();
       if (!context) return;
       e.preventDefault();

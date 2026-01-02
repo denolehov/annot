@@ -670,3 +670,50 @@ div.line.separator-line:hover {
 		var(--hl-mid)
 	);
 }
+
+/* ===========================================
+   CHOICE BUTTONS - Annotate/Bookmark choice after shift-drag
+   =========================================== */
+
+.choice-buttons {
+	display: flex;
+	gap: 8px;
+	padding: 6px 0 6px calc(var(--gutter-width) + 8px);
+	animation: choice-fade-in 0.15s ease;
+}
+
+.choice-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 8px;
+	background: var(--bg-window);
+	border: 1px solid var(--border-strong);
+	border-radius: 4px;
+	font-size: 12px;
+	font-family: var(--font-ui);
+	color: var(--text-primary);
+	cursor: pointer;
+	transition: border-color 0.1s ease, background 0.1s ease;
+}
+
+.choice-button:hover,
+.choice-button:focus {
+	background: var(--bg-main);
+	border-color: var(--selection-border);
+}
+
+.choice-button:focus {
+	outline: none;
+}
+
+@keyframes choice-fade-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}

@@ -150,7 +150,7 @@
   </LineRow>
   {@const annotationAtLine = ctx.annotations.getAtLine(displayIndex)}
   {@const isLastSelectedLine = displayIndex === lastSelectedLine && ctx.interaction.range && ctx.interaction.phase !== 'selecting'}
-  {@const rangeKey = annotationAtLine?.key ?? (isLastSelectedLine && ctx.interaction.range ? rangeToKey(ctx.interaction.range) : null)}
+  {@const rangeKey = ctx.interaction.pendingChoice ? null : (annotationAtLine?.key ?? (isLastSelectedLine && ctx.interaction.range ? rangeToKey(ctx.interaction.range) : null))}
   <AnnotationSlot {rangeKey} {...annotationSlotProps} />
 {/each}
 

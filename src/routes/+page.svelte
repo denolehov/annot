@@ -165,6 +165,13 @@
   const interaction = useInteraction({
     isLineSelectable,
     constrainToBounds: selectionBounds.constrainToSelectionBounds,
+    onImmediateBookmark: async (context) => {
+      // Called when 'b' was held during drag — create bookmark immediately
+      if (!bookmarkState) return;
+      await bookmarkState.toggleSelection(context.start, context.end);
+      const shortId = bookmarkState.lastCreatedId?.slice(0, 3) ?? '';
+      showToast(`Bookmarked as ${shortId} · [e] edit`);
+    },
   });
 
   // Annotation state (composable)
@@ -598,6 +605,8 @@
           interaction.selectLine(interaction.hoverLine);
         }
       },
+      onDragModifierPress: (key) => interaction.setDragModifier(key),
+      onConfirmChoice: (action) => interaction.confirmChoice(action),
     },
     {
       isEditorActive: () => !!interaction.range || sessionEditorOpen,
@@ -609,6 +618,9 @@
       isHoveredLineSelectable: () => interaction.hoverLine !== null && isLineSelectable(interaction.hoverLine),
       hasLastCreatedBookmark: () => !!bookmarkState?.lastCreatedId,
       getBookmarkContext: () => interaction.getBookmarkContext(),
+      getPhase: () => interaction.phase,
+      isShiftHeld: () => interaction.isShiftHeld,
+      isPendingChoice: () => interaction.pendingChoice,
     }
   );
 

@@ -16,6 +16,7 @@
     splitTableRow,
   } from '$lib/utils/tableParser';
   import { getAnnotContext } from '$lib/context';
+  import ChoiceButtons from '$lib/components/ChoiceButtons.svelte';
 
   interface Props {
     lines: Array<{ line: Line; displayIndex: number }>;
@@ -99,6 +100,21 @@
   // Track first and last for border styling
   let firstDisplayIndex = $derived(visibleLines[0]?.displayIndex ?? -1);
   let lastDisplayIndex = $derived(visibleLines[visibleLines.length - 1]?.displayIndex ?? -1);
+
+  // Check if choice buttons should show for a given display index
+  function shouldShowChoiceButtons(displayIdx: number): boolean {
+    if (!ctx.interaction.pendingChoice || ctx.interaction.range === null) return false;
+    const rangeEnd = Math.max(ctx.interaction.range.start, ctx.interaction.range.end);
+    return displayIdx === rangeEnd;
+  }
+
+  function handleChooseAnnotate() {
+    ctx.interaction.confirmChoice('annotate');
+  }
+
+  function handleChooseBookmark() {
+    ctx.interaction.confirmChoice('bookmark');
+  }
 </script>
 
 <div class="table-wrapper" class:can-scroll-left={canScrollLeft} class:can-scroll-right={canScrollRight} class:is-dragging={ctx.isDragging}>
@@ -107,7 +123,7 @@
       <tbody>
         {#each visibleLines as { line, displayIndex, lineIndex }, rowIdx}
           {@const sourceLineNum = getLineNumber(line)}
-          {@const rangeKey = ctx.getRangeKeyForLine(displayIndex)}
+          {@const rangeKey = ctx.interaction.pendingChoice ? null : ctx.getRangeKeyForLine(displayIndex)}
           {@const cells = splitTableRow(line.content)}
           {@const isHeader = isHeaderRow(lineIndex)}
           {@const isFirst = displayIndex === firstDisplayIndex}
@@ -167,6 +183,15 @@
               <td class="gutter-cell annotation-gutter"></td>
               <td colspan={columnCount - 1} class="annotation-cell">
                 {@render annotationSlot(displayIndex, rangeKey)}
+              </td>
+            </tr>
+          {/if}
+
+          {#if shouldShowChoiceButtons(displayIndex)}
+            <tr class="choice-buttons-row">
+              <td class="gutter-cell"></td>
+              <td colspan={columnCount - 1} class="choice-buttons-cell">
+                <ChoiceButtons onAnnotate={handleChooseAnnotate} onBookmark={handleChooseBookmark} />
               </td>
             </tr>
           {/if}
@@ -386,5 +411,17 @@
   .content-row.bookmarked .gutter-cell,
   .content-row.bookmarked .table-cell {
     background-color: color-mix(in srgb, var(--bookmark-color, #ef4444) 8%, transparent);
+  }
+
+  /* Choice buttons row */
+  .choice-buttons-row {
+    background:
+      var(--chip-pattern-bg),
+      var(--bg-code-block);
+    background-size: var(--chip-pattern-size), auto;
+  }
+
+  .choice-buttons-cell {
+    padding: 4px 0 4px 8px;
   }
 </style>

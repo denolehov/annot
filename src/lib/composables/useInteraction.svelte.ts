@@ -16,6 +16,8 @@ export interface UseInteractionOptions {
   isLineSelectable: (displayIdx: number) => boolean;
   /** Constrain selection to bounds (e.g., hunk bounds in diff mode) */
   constrainToBounds: (displayIdx: number, anchorIdx: number) => number;
+  /** Called when 'b' was held during drag — create bookmark immediately */
+  onImmediateBookmark?: (context: { start: number; end: number }) => void;
 }
 
 interface InteractionState {
@@ -23,6 +25,8 @@ interface InteractionState {
   hoverLine: number | null;   // Only set in 'hovering' phase
   anchor: number | null;      // Drag start point in 'selecting' phase
   range: Range | null;        // Selection range in selecting/committed/editing
+  dragModifier: 'c' | 'b' | null;  // Key held during drag (for immediate action on release)
+  pendingChoice: boolean;          // Show choice buttons after plain shift-drag-release
 }
 
 export function useInteraction(options: UseInteractionOptions) {
@@ -31,6 +35,8 @@ export function useInteraction(options: UseInteractionOptions) {
     hoverLine: null,
     anchor: null,
     range: null,
+    dragModifier: null,
+    pendingChoice: false,
   });
 
   // Shift key tracking (for cursor styling)
@@ -40,6 +46,7 @@ export function useInteraction(options: UseInteractionOptions) {
   let phase = $derived(state.phase);
   let range = $derived(state.range);
   let hoverLine = $derived(state.hoverLine);
+  let pendingChoice = $derived(state.pendingChoice);
 
   /**
    * Check if a line should show selection highlight.
@@ -85,6 +92,8 @@ export function useInteraction(options: UseInteractionOptions) {
       hoverLine: null,
       anchor: displayIdx,
       range: { start: displayIdx, end: displayIdx },
+      dragModifier: null,
+      pendingChoice: false,
     };
   }
 
@@ -110,14 +119,22 @@ export function useInteraction(options: UseInteractionOptions) {
     (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
 
     if (state.range) {
-      state = {
-        phase: 'committed',
-        hoverLine: null,
-        anchor: null,
-        range: state.range,
-      };
+      const modifier = state.dragModifier;
+      const rangeContext = { start: state.range.start, end: state.range.end };
+
+      if (modifier === 'b') {
+        // Immediate bookmark: call callback and clear selection
+        options.onImmediateBookmark?.(rangeContext);
+        state = { phase: 'idle', hoverLine: null, anchor: null, range: null, dragModifier: null, pendingChoice: false };
+      } else if (modifier === 'c') {
+        // Immediate annotate: transition to committed (editor will open via existing flow)
+        state = { phase: 'committed', hoverLine: null, anchor: null, range: state.range, dragModifier: null, pendingChoice: false };
+      } else {
+        // No modifier: show choice buttons
+        state = { phase: 'committed', hoverLine: null, anchor: null, range: state.range, dragModifier: null, pendingChoice: true };
+      }
     } else {
-      state = { phase: 'idle', hoverLine: null, anchor: null, range: null };
+      state = { phase: 'idle', hoverLine: null, anchor: null, range: null, dragModifier: null, pendingChoice: false };
     }
   }
 
@@ -125,14 +142,19 @@ export function useInteraction(options: UseInteractionOptions) {
   function handleGlobalPointerUp() {
     if (state.phase === 'selecting') {
       if (state.range) {
-        state = {
-          phase: 'committed',
-          hoverLine: null,
-          anchor: null,
-          range: state.range,
-        };
+        const modifier = state.dragModifier;
+        const rangeContext = { start: state.range.start, end: state.range.end };
+
+        if (modifier === 'b') {
+          options.onImmediateBookmark?.(rangeContext);
+          state = { phase: 'idle', hoverLine: null, anchor: null, range: null, dragModifier: null, pendingChoice: false };
+        } else if (modifier === 'c') {
+          state = { phase: 'committed', hoverLine: null, anchor: null, range: state.range, dragModifier: null, pendingChoice: false };
+        } else {
+          state = { phase: 'committed', hoverLine: null, anchor: null, range: state.range, dragModifier: null, pendingChoice: true };
+        }
       } else {
-        state = { phase: 'idle', hoverLine: null, anchor: null, range: null };
+        state = { phase: 'idle', hoverLine: null, anchor: null, range: null, dragModifier: null, pendingChoice: false };
       }
     }
   }
@@ -155,6 +177,8 @@ export function useInteraction(options: UseInteractionOptions) {
       hoverLine: null,
       anchor: displayIdx,
       range: { start: displayIdx, end: displayIdx },
+      dragModifier: null,
+      pendingChoice: false,
     };
   }
 
@@ -169,6 +193,8 @@ export function useInteraction(options: UseInteractionOptions) {
           hoverLine: displayIdx,
           anchor: null,
           range: null,
+          dragModifier: null,
+          pendingChoice: false,
         };
       }
     } else if (state.phase === 'hovering') {
@@ -181,13 +207,13 @@ export function useInteraction(options: UseInteractionOptions) {
 
   function handleLineLeave() {
     if (state.phase === 'hovering') {
-      state = { phase: 'idle', hoverLine: null, anchor: null, range: null };
+      state = { phase: 'idle', hoverLine: null, anchor: null, range: null, dragModifier: null, pendingChoice: false };
     }
   }
 
   function handleContentLeave() {
     if (state.phase === 'hovering') {
-      state = { phase: 'idle', hoverLine: null, anchor: null, range: null };
+      state = { phase: 'idle', hoverLine: null, anchor: null, range: null, dragModifier: null, pendingChoice: false };
     }
   }
 
@@ -202,13 +228,15 @@ export function useInteraction(options: UseInteractionOptions) {
 
     // Toggle: if clicking same single-line selection, clear it
     if (state.range?.start === displayIdx && state.range?.end === displayIdx) {
-      state = { phase: 'idle', hoverLine: null, anchor: null, range: null };
+      state = { phase: 'idle', hoverLine: null, anchor: null, range: null, dragModifier: null, pendingChoice: false };
     } else {
       state = {
         phase: 'committed',
         hoverLine: null,
         anchor: null,
         range: { start: displayIdx, end: displayIdx },
+        dragModifier: null,
+        pendingChoice: false,
       };
     }
   }
@@ -228,7 +256,7 @@ export function useInteraction(options: UseInteractionOptions) {
   }
 
   function clearSelection() {
-    state = { phase: 'idle', hoverLine: null, anchor: null, range: null };
+    state = { phase: 'idle', hoverLine: null, anchor: null, range: null, dragModifier: null, pendingChoice: false };
   }
 
   function setSelection(range: Range) {
@@ -237,6 +265,8 @@ export function useInteraction(options: UseInteractionOptions) {
       hoverLine: null,
       anchor: null,
       range,
+      dragModifier: null,
+      pendingChoice: false,
     };
   }
 
@@ -247,7 +277,39 @@ export function useInteraction(options: UseInteractionOptions) {
         hoverLine: null,
         anchor: null,
         range: { start: displayIdx, end: displayIdx },
+        dragModifier: null,
+        pendingChoice: false,
       };
+    }
+  }
+
+  // --- Drag modifier methods (for shift+drag + key hold) ---
+
+  /** Set drag modifier when 'c' or 'b' is pressed during selecting phase */
+  function setDragModifier(key: 'c' | 'b') {
+    if (state.phase === 'selecting') {
+      state = { ...state, dragModifier: key };
+    }
+  }
+
+  /** Confirm the pending choice (called from choice buttons or keyboard) */
+  function confirmChoice(action: 'annotate' | 'bookmark') {
+    if (!state.pendingChoice || !state.range) return;
+
+    if (action === 'bookmark') {
+      const context = { start: state.range.start, end: state.range.end };
+      options.onImmediateBookmark?.(context);
+      state = { phase: 'idle', hoverLine: null, anchor: null, range: null, dragModifier: null, pendingChoice: false };
+    } else {
+      // annotate: clear pendingChoice, stay committed so editor opens
+      state = { ...state, pendingChoice: false };
+    }
+  }
+
+  /** Cancel pending choice (dismiss buttons without action) */
+  function cancelChoice() {
+    if (state.pendingChoice) {
+      state = { phase: 'idle', hoverLine: null, anchor: null, range: null, dragModifier: null, pendingChoice: false };
     }
   }
 
@@ -278,6 +340,7 @@ export function useInteraction(options: UseInteractionOptions) {
     get range() { return range; },
     get hoverLine() { return hoverLine; },
     get isShiftHeld() { return isShiftHeld; },
+    get pendingChoice() { return pendingChoice; },
 
     // Query functions
     isLineHighlighted,
@@ -312,6 +375,11 @@ export function useInteraction(options: UseInteractionOptions) {
 
     // Bookmark context
     getBookmarkContext,
+
+    // Drag modifier / choice methods
+    setDragModifier,
+    confirmChoice,
+    cancelChoice,
   };
 }
 
