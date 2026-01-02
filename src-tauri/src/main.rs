@@ -62,22 +62,32 @@ enum BookmarksCommand {
         /// Bookmark ID or prefix
         id: String,
     },
+    /// Open a bookmark for annotation
+    Open {
+        /// Bookmark ID or prefix
+        id: String,
+    },
 }
 
 fn main() {
     let cli = Cli::parse();
 
-    // Handle subcommands that don't need Tauri
-    match &cli.command {
-        Some(Command::Bookmarks(cmd)) => {
+    // Handle bookmark subcommands that don't need Tauri (list/show/delete)
+    if let Some(Command::Bookmarks(cmd)) = &cli.command {
+        if !matches!(cmd, BookmarksCommand::Open { .. }) {
             handle_bookmarks_command(cmd);
             return;
         }
-        _ => {}
     }
 
     // Generate context once (avoids duplicate symbol errors)
     let context = tauri::generate_context!();
+
+    // Handle bookmark open (needs Tauri window)
+    if let Some(Command::Bookmarks(BookmarksCommand::Open { id })) = &cli.command {
+        handle_bookmark_open(id, context);
+        return;
+    }
 
     // Handle MCP subcommand
     if let Some(Command::Mcp) = cli.command {
@@ -224,6 +234,9 @@ fn handle_bookmarks_command(cmd: &BookmarksCommand) {
                 process::exit(1);
             }
         }
+
+        // Handled separately in main() since it needs Tauri context
+        BookmarksCommand::Open { .. } => unreachable!(),
     }
 }
 
@@ -285,4 +298,65 @@ fn print_bookmark_markdown(bookmark: &annot_lib::state::Bookmark) {
         // For session bookmarks, show context
         println!("{}", bookmark.snapshot.content());
     }
+}
+
+fn handle_bookmark_open(id: &str, context: tauri::Context) {
+    use annot_lib::input::{CliSource, ContentSource};
+    use annot_lib::state::{BookmarkSnapshot, ContentModel, SessionType, UserConfig};
+
+    let config = UserConfig::load();
+
+    // Find bookmark with prefix matching (reuse existing helper)
+    let bookmark = match find_bookmark(&config, id) {
+        Ok(b) => b.clone(),
+        Err(e) => {
+            eprintln!("{}", e);
+            process::exit(1);
+        }
+    };
+
+    // Extract content and type from snapshot
+    let (source_type, source_title, content_str) = match &bookmark.snapshot {
+        BookmarkSnapshot::Session {
+            source_type,
+            source_title,
+            context,
+        } => (source_type, source_title.clone(), context.clone()),
+        BookmarkSnapshot::Selection {
+            source_type,
+            source_title,
+            context,
+            ..
+        } => {
+            // Show full context (per requirements)
+            (source_type, source_title.clone(), context.clone())
+        }
+    };
+
+    // Create ContentSource with original label (for syntax highlighting)
+    let content_source = ContentSource::Cli(CliSource::Stdin {
+        label: source_title.clone(),
+    });
+
+    // Build ContentModel based on source_type
+    let content = match source_type {
+        SessionType::Diff => match ContentModel::from_diff(&content_str, content_source) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Error parsing bookmark diff: {}", e);
+                process::exit(1);
+            }
+        },
+        SessionType::Content | SessionType::File => {
+            // Check if markdown by label extension
+            if source_title.ends_with(".md") {
+                ContentModel::from_markdown(&content_str, content_source)
+            } else {
+                ContentModel::from_file(&content_str, content_source)
+            }
+        }
+    };
+
+    let state = AppState::new(content, config);
+    annot_lib::run(state, context);
 }
