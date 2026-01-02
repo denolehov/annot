@@ -18,28 +18,59 @@ export interface SuggestionState<T> {
 /**
  * Factory to create suggestion render callbacks for TipTap suggestion plugins.
  * Deduplicates the identical render logic between TagChip and SlashCommands.
+ *
+ * @param isSelectable Optional predicate to determine if an item can be selected.
+ *                     Used to skip section headers in navigation.
  */
 export function createSuggestionRender<T>(
   getState: () => SuggestionState<T>,
   setState: (state: SuggestionState<T>) => void,
   getCommand: () => ((item: T) => void) | null,
-  setCommand: (cmd: ((item: T) => void) | null) => void
+  setCommand: (cmd: ((item: T) => void) | null) => void,
+  isSelectable?: (item: T) => boolean
 ) {
+  // Find first selectable index, skipping non-selectable items (like section headers)
+  const findFirstSelectable = (items: T[]): number => {
+    if (!isSelectable) return 0;
+    const idx = items.findIndex(isSelectable);
+    return idx >= 0 ? idx : 0;
+  };
+
+  // Find next selectable index in given direction, wrapping around
+  const findNextSelectable = (items: T[], currentIndex: number, direction: 1 | -1): number => {
+    if (!isSelectable) {
+      return (currentIndex + direction + items.length) % items.length;
+    }
+    let idx = currentIndex;
+    for (let i = 0; i < items.length; i++) {
+      idx = (idx + direction + items.length) % items.length;
+      if (isSelectable(items[idx])) return idx;
+    }
+    return currentIndex; // No selectable item found, stay put
+  };
+
   return () => ({
     onStart: (props: SuggestionProps<T>) => {
       setCommand(props.command);
       setState({
         active: true,
         items: props.items,
-        selectedIndex: 0,
+        selectedIndex: findFirstSelectable(props.items),
         clientRect: props.clientRect ?? null,
       });
     },
     onUpdate: (props: SuggestionProps<T>) => {
       setCommand(props.command);
+      const currentState = getState();
+      // Preserve selection if still valid, otherwise find first selectable
+      let newIndex = currentState.selectedIndex;
+      if (newIndex >= props.items.length || (isSelectable && !isSelectable(props.items[newIndex]))) {
+        newIndex = findFirstSelectable(props.items);
+      }
       setState({
-        ...getState(),
+        ...currentState,
         items: props.items,
+        selectedIndex: newIndex,
         clientRect: props.clientRect ?? null,
       });
     },
@@ -49,14 +80,14 @@ export function createSuggestionRender<T>(
       if (props.event.key === 'ArrowUp') {
         setState({
           ...state,
-          selectedIndex: (state.selectedIndex - 1 + state.items.length) % state.items.length,
+          selectedIndex: findNextSelectable(state.items, state.selectedIndex, -1),
         });
         return true;
       }
       if (props.event.key === 'ArrowDown') {
         setState({
           ...state,
-          selectedIndex: (state.selectedIndex + 1) % state.items.length,
+          selectedIndex: findNextSelectable(state.items, state.selectedIndex, 1),
         });
         return true;
       }
@@ -673,11 +704,21 @@ const CHIP_EXTRACTORS: Record<string, ChipExtractor> = {
     label: attrs.label as string,
     bookmark: attrs.bookmark as Bookmark,
   }),
-  refChip: (attrs) => ({
-    type: 'ref',
-    ref_type: attrs.refType as 'annotation' | 'bookmark',
-    snapshot: attrs.snapshot as RefSnapshot,
-  }),
+  refChip: (attrs) => {
+    // File refs have a path attribute instead of snapshot
+    if (attrs.refType === 'file' && attrs.path) {
+      return {
+        type: 'file',
+        path: attrs.path as string,
+      };
+    }
+    // Annotation/bookmark refs have snapshot
+    return {
+      type: 'ref',
+      ref_type: attrs.refType as 'annotation' | 'bookmark',
+      snapshot: attrs.snapshot as RefSnapshot,
+    };
+  },
 };
 
 /**
@@ -981,6 +1022,15 @@ export function contentNodesToTipTap(nodes: ContentNode[] | null): JSONContent |
         attrs: {
           refType: node.ref_type,
           snapshot: node.snapshot,
+        },
+      });
+    } else if (node.type === 'file') {
+      // File ref chip inline
+      currentParagraph.push({
+        type: 'refChip',
+        attrs: {
+          refType: 'file',
+          path: node.path,
         },
       });
     }

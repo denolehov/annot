@@ -10,6 +10,7 @@ pub mod config;
 pub mod diff;
 pub mod error;
 pub mod excalidraw_window;
+pub mod files;
 pub mod highlight;
 pub mod id;
 pub mod input;
@@ -34,6 +35,7 @@ use excalidraw_window::{
     excalidraw_cancel, excalidraw_save, get_excalidraw_context, open_excalidraw_window,
     ExcalidrawWindowState,
 };
+use files::{invalidate_file_cache, list_project_files, FileCache, FileCacheState};
 use mermaid_window::{get_mermaid_source, open_mermaid_window, MermaidWindowState};
 
 /// All IPC commands exposed to the frontend.
@@ -72,7 +74,9 @@ macro_rules! all_commands {
             save_config,
             export_to_obsidian,
             get_theme,
-            set_theme
+            set_theme,
+            list_project_files,
+            invalidate_file_cache
         ]
     };
 }
@@ -98,6 +102,7 @@ pub fn run(state: AppState, context: tauri::Context) {
         .manage::<ShouldExit>(Arc::new(AtomicBool::new(true))) // CLI mode: allow exit
         .manage(Mutex::new(MermaidWindowState::new()))
         .manage(Mutex::new(ExcalidrawWindowState::new()))
+        .manage::<FileCacheState>(Mutex::new(FileCache::new()))
         .invoke_handler(all_commands!())
         .setup(|app| {
             // Create window programmatically (not from config, for MCP compatibility)
@@ -153,6 +158,7 @@ pub fn run_mcp(context: tauri::Context) {
         .manage::<SessionLock>(Mutex::new(()))
         .manage(Mutex::new(MermaidWindowState::new()))
         .manage(Mutex::new(ExcalidrawWindowState::new()))
+        .manage::<FileCacheState>(Mutex::new(FileCache::new()))
         .invoke_handler(all_commands!())
         .setup(|app| {
             // Set accessory mode on macOS (hide dock icon)

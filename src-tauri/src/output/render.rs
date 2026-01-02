@@ -113,5 +113,9 @@ fn render_node(
                 }
             }
         }
+        ContentNode::File { path } => {
+            // File reference format: @ref:file:path/to/file.ts
+            format!("@ref:file:{}", path)
+        }
     }
 }

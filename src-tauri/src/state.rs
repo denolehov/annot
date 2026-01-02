@@ -205,6 +205,11 @@ pub enum ContentNode {
         /// Self-contained snapshot (survives source deletion)
         snapshot: RefSnapshot,
     },
+    /// Reference to a project file (@ file references).
+    File {
+        /// Path relative to project root.
+        path: String,
+    },
 }
 
 // ════════════════════════════════════════════════════════════════════════════

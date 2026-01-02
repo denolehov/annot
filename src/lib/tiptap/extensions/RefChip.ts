@@ -7,10 +7,15 @@ import type { RefSnapshot, Bookmark, AnnotationRefSnapshot } from '$lib/types';
 
 const RefSuggestionPluginKey = new PluginKey('refSuggestion');
 
-/** Unified suggestion item for @ menu - either an annotation or a bookmark. */
+/** Section header for grouped @ menu. */
+export type RefSuggestionSection = { type: 'section'; label: string };
+
+/** Unified suggestion item for @ menu - annotation, bookmark, or file. */
 export type RefSuggestionItem =
 	| { type: 'annotation'; key: string; preview: string; content: import('$lib/types').ContentNode[] }
-	| { type: 'bookmark'; bookmark: Bookmark };
+	| { type: 'bookmark'; bookmark: Bookmark }
+	| { type: 'file'; path: string }
+	| RefSuggestionSection;
 
 export type RefChipOptions = {
 	suggestion: Omit<SuggestionOptions<RefSuggestionItem>, 'editor' | 'pluginKey'>;
@@ -24,8 +29,9 @@ export const RefChip = Node.create<RefChipOptions>({
 
 	addAttributes() {
 		return {
-			refType: { default: null }, // 'annotation' | 'bookmark'
-			snapshot: { default: null }, // RefSnapshot
+			refType: { default: null }, // 'annotation' | 'bookmark' | 'file'
+			snapshot: { default: null }, // RefSnapshot (for annotation/bookmark)
+			path: { default: null }, // string (for file refs)
 		};
 	},
 
@@ -39,6 +45,7 @@ export const RefChip = Node.create<RefChipOptions>({
 					return {
 						refType: element.getAttribute('data-ref-type') || null,
 						snapshot: snapshotData ? JSON.parse(snapshotData) : null,
+						path: element.getAttribute('data-path') || null,
 					};
 				},
 			},
@@ -48,10 +55,14 @@ export const RefChip = Node.create<RefChipOptions>({
 	renderHTML({ node, HTMLAttributes }) {
 		const refType = node.attrs.refType as string;
 		const snapshot = node.attrs.snapshot as RefSnapshot | null;
+		const path = node.attrs.path as string | null;
 
 		// Build display text based on type
 		let displayText = '[@?]';
-		if (snapshot) {
+		if (refType === 'file' && path) {
+			const filename = path.split('/').pop() || path;
+			displayText = `[@${filename}]`;
+		} else if (snapshot) {
 			if (refType === 'annotation' && snapshot.type === 'annotation') {
 				const annSnap = snapshot as AnnotationRefSnapshot;
 				const preview = annSnap.preview?.slice(0, 20) || '';
@@ -70,6 +81,7 @@ export const RefChip = Node.create<RefChipOptions>({
 				'data-ref-chip': '',
 				'data-ref-type': refType || '',
 				'data-snapshot': snapshot ? JSON.stringify(snapshot) : '',
+				'data-path': path || '',
 				class: `tag-chip ref-chip ref-${refType || 'unknown'}`,
 			}),
 			displayText,

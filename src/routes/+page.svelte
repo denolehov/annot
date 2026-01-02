@@ -718,6 +718,13 @@
     }
     // Show window after content is ready (started hidden to avoid flash)
     await window.show();
+
+    // Invalidate file cache on window focus (for @ file references)
+    await listen('tauri://focus', () => {
+      invoke('invalidate_file_cache').catch(() => {
+        // Ignore errors - cache invalidation is best-effort
+      });
+    });
   });
 </script>
 

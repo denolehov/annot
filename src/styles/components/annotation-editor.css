@@ -432,6 +432,24 @@
 	text-overflow: ellipsis;
 }
 
+/* File suggestion - inline layout with center alignment */
+.ref-suggestion.ref-file {
+	align-items: center;
+	gap: 6px;
+}
+
+.ref-suggestion.ref-file .ref-key {
+	padding-top: 0;
+}
+
+.ref-suggestion.ref-file .ref-label {
+	flex: 0 0 auto;
+}
+
+.ref-suggestion.ref-file .ref-meta {
+	flex: 1;
+}
+
 /* ===========================================
    SELECTION POPOVER (Create Tag from Selection)
    =========================================== */

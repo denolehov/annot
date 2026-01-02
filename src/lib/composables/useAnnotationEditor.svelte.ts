@@ -1,4 +1,5 @@
 import { untrack } from 'svelte';
+import { invoke } from '@tauri-apps/api/core';
 import { Editor, type JSONContent, type Range } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -161,11 +162,11 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
             },
           },
         }),
-        // Unified RefChip with @ trigger for both annotations and bookmarks
+        // Unified RefChip with @ trigger for annotations, bookmarks, and files
         RefChip.configure({
           suggestion: {
             char: '@',
-            items: ({ query }: { query: string }): RefSuggestionItem[] => {
+            items: async ({ query }: { query: string }): Promise<RefSuggestionItem[]> => {
               const currentKey = getCurrentRangeKey();
               const annotations = getAnnotationEntries();
               const bookmarks = getBookmarks();
@@ -190,28 +191,80 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
                 bookmark: b,
               }));
 
-              // Combine and filter by query
-              const allItems = [...annotationItems, ...bookmarkItems];
-              if (!query) return allItems;
-
-              // Simple search: check if query matches key, preview, or label
-              const q = query.toLowerCase();
-              return allItems.filter((item) => {
-                if (item.type === 'annotation') {
-                  return item.key.includes(q) || item.preview.toLowerCase().includes(q);
-                } else {
-                  const label = item.bookmark.label || item.bookmark.snapshot.source_title || '';
-                  return item.bookmark.id.toLowerCase().includes(q) || label.toLowerCase().includes(q);
+              // Fetch file items (only if query >= 2 chars for performance)
+              let fileItems: RefSuggestionItem[] = [];
+              if (query.length >= 2) {
+                try {
+                  const files = await invoke<string[]>('list_project_files', { query, limit: 20 });
+                  fileItems = files.map((path) => ({
+                    type: 'file' as const,
+                    path,
+                  }));
+                } catch {
+                  // Ignore errors - file search is best-effort
                 }
-              });
+              }
+
+              // Filter annotations and bookmarks by query
+              const q = query.toLowerCase();
+              const filteredAnnotations = q ? annotationItems.filter((item) => {
+                if (item.type !== 'annotation') return false;
+                return item.key.includes(q) || item.preview.toLowerCase().includes(q);
+              }) : annotationItems;
+
+              const filteredBookmarks = q ? bookmarkItems.filter((item) => {
+                if (item.type !== 'bookmark') return false;
+                const label = item.bookmark.label || item.bookmark.snapshot.source_title || '';
+                return item.bookmark.id.toLowerCase().includes(q) || label.toLowerCase().includes(q);
+              }) : bookmarkItems;
+
+              // Build sectioned results
+              const result: RefSuggestionItem[] = [];
+
+              if (filteredAnnotations.length > 0) {
+                result.push({ type: 'section', label: 'Annotations' });
+                result.push(...filteredAnnotations);
+              }
+
+              if (filteredBookmarks.length > 0) {
+                result.push({ type: 'section', label: 'Bookmarks' });
+                result.push(...filteredBookmarks);
+              }
+
+              if (fileItems.length > 0) {
+                result.push({ type: 'section', label: 'Files' });
+                result.push(...fileItems);
+              }
+
+              return result;
             },
             render: createSuggestionRender<RefSuggestionItem>(
               () => refSuggestion,
               (state) => { refSuggestion = state; },
               () => refCommand,
-              (cmd) => { refCommand = cmd; }
+              (cmd) => { refCommand = cmd; },
+              (item) => item.type !== 'section' // Skip section headers in navigation
             ),
             command: ({ editor, range, props }: { editor: Editor; range: Range; props: RefSuggestionItem }) => {
+              // Skip section headers - they're not selectable
+              if (props.type === 'section') return;
+
+              if (props.type === 'file') {
+                // File reference - no snapshot, just path
+                editor
+                  .chain()
+                  .focus()
+                  .insertContentAt(range, [
+                    {
+                      type: 'refChip',
+                      attrs: { refType: 'file', path: props.path },
+                    },
+                    { type: 'text', text: ' ' },
+                  ])
+                  .run();
+                return;
+              }
+
               let snapshot: RefSnapshot;
               let refType: 'annotation' | 'bookmark';
 

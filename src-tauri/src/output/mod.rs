@@ -302,7 +302,8 @@ fn collect_unique_bookmarks(review: &Review) -> Vec<Bookmark> {
                 | ContentNode::Excalidraw { .. }
                 | ContentNode::Replace { .. }
                 | ContentNode::Error { .. }
-                | ContentNode::Paste { .. } => {}
+                | ContentNode::Paste { .. }
+                | ContentNode::File { .. } => {}
             }
         }
     };

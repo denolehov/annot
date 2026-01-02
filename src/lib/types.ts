@@ -154,7 +154,7 @@ export interface Tag {
 }
 
 // Content node types for structured annotation content (output format)
-export type ContentNode = TextNode | TagNode | MediaNode | ExcalidrawNode | ReplaceNode | ErrorNode | PasteNode | BookmarkRefNode | RefNode;
+export type ContentNode = TextNode | TagNode | MediaNode | ExcalidrawNode | ReplaceNode | ErrorNode | PasteNode | BookmarkRefNode | RefNode | FileNode;
 
 export interface TextNode {
   type: 'text';
@@ -232,6 +232,13 @@ export interface RefNode {
   ref_type: 'annotation' | 'bookmark';
   /** Self-contained snapshot (survives source deletion) */
   snapshot: RefSnapshot;
+}
+
+/** Reference to a project file via @ mention. */
+export interface FileNode {
+  type: 'file';
+  /** Path relative to project root. */
+  path: string;
 }
 
 // TipTap JSON content type for internal storage

@@ -532,21 +532,21 @@
 
 <!-- Portal ref suggestions (@ menu) to body, positioned with Floating UI -->
 {#if ann.refSuggestion.active && ann.refSuggestion.items.length > 0}
-  {@const annotationItems = ann.refSuggestion.items.filter((i): i is RefSuggestionItem & { type: 'annotation' } => i.type === 'annotation')}
-  {@const bookmarkItems = ann.refSuggestion.items.filter((i): i is RefSuggestionItem & { type: 'bookmark' } => i.type === 'bookmark')}
+  {@const selectableItems = ann.refSuggestion.items.filter((i) => i.type !== 'section')}
   <div
     bind:this={refSuggestionsEl}
     use:portal
     use:floating={{ getRect: () => ann.refSuggestion.clientRect?.() ?? null }}
     class="ref-suggestions"
   >
-    {#if annotationItems.length > 0}
-      <div class="ref-section-header">ANNOTATIONS</div>
-      {#each annotationItems as item, i}
+    {#each ann.refSuggestion.items as item, idx}
+      {#if item.type === 'section'}
+        <div class="ref-section-header">{item.label.toUpperCase()}</div>
+      {:else if item.type === 'annotation'}
         <button
           type="button"
           class="ref-suggestion"
-          class:selected={ann.refSuggestion.items.indexOf(item) === ann.refSuggestion.selectedIndex}
+          class:selected={idx === ann.refSuggestion.selectedIndex}
           onmousedown={(e) => {
             e.preventDefault();
             ann.selectRefItem(item);
@@ -555,17 +555,13 @@
           <span class="ref-key">L{item.key}</span>
           <span class="ref-preview">{item.preview || '(empty)'}</span>
         </button>
-      {/each}
-    {/if}
-    {#if bookmarkItems.length > 0}
-      <div class="ref-section-header">BOOKMARKS</div>
-      {#each bookmarkItems as item, i}
+      {:else if item.type === 'bookmark'}
         {@const displayLabel = item.bookmark.label ?? (item.bookmark.snapshot.type === 'selection' ? item.bookmark.snapshot.selected_text : item.bookmark.snapshot.source_title)}
         {@const dateStr = new Date(item.bookmark.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
         <button
           type="button"
           class="ref-suggestion"
-          class:selected={ann.refSuggestion.items.indexOf(item) === ann.refSuggestion.selectedIndex}
+          class:selected={idx === ann.refSuggestion.selectedIndex}
           onmousedown={(e) => {
             e.preventDefault();
             ann.selectRefItem(item);
@@ -577,8 +573,26 @@
             <span class="ref-meta">{item.bookmark.snapshot.source_title} · {dateStr}</span>
           </div>
         </button>
-      {/each}
-    {/if}
+      {:else if item.type === 'file'}
+        {@const filename = item.path.split('/').pop() || item.path}
+        {@const parent = item.path.split('/').slice(-2, -1)[0] || ''}
+        <button
+          type="button"
+          class="ref-suggestion ref-file"
+          class:selected={idx === ann.refSuggestion.selectedIndex}
+          onmousedown={(e) => {
+            e.preventDefault();
+            ann.selectRefItem(item);
+          }}
+        >
+          <span class="ref-key file-icon">@</span>
+          <span class="ref-label">{filename}</span>
+          {#if parent}
+            <span class="ref-meta">({parent})</span>
+          {/if}
+        </button>
+      {/if}
+    {/each}
   </div>
 {/if}
 
