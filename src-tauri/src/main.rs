@@ -62,11 +62,6 @@ enum BookmarksCommand {
         /// Bookmark ID or prefix
         id: String,
     },
-    /// Export bookmark as markdown
-    Export {
-        /// Bookmark ID or prefix
-        id: String,
-    },
 }
 
 fn main() {
@@ -157,7 +152,7 @@ fn handle_bookmarks_command(cmd: &BookmarksCommand) {
                 if *json {
                     println!("[]");
                 } else {
-                    println!("No bookmarks.");
+                    println!("*No bookmarks.*");
                 }
                 return;
             }
@@ -165,26 +160,23 @@ fn handle_bookmarks_command(cmd: &BookmarksCommand) {
             if *json {
                 println!("{}", serde_json::to_string_pretty(bookmarks).unwrap());
             } else {
-                // Table format
-                println!(
-                    "{:<12} {:<40} {:<20} {}",
-                    "ID", "LABEL", "SOURCE", "PROJECT"
-                );
-                println!("{}", "─".repeat(90));
+                // Markdown table
+                println!("| ID | Label | Source | Project |");
+                println!("|-----|-------|--------|---------|");
 
                 for bookmark in bookmarks {
-                    let label = bookmark.display_label();
+                    let label = bookmark.display_label().replace('|', "\\|");
                     let label_display = if label.len() > 38 {
                         format!("{}…", &label[..37])
                     } else {
                         label
                     };
 
-                    let source = bookmark.snapshot.source_title();
+                    let source = bookmark.snapshot.source_title().replace('|', "\\|");
                     let source_display = if source.len() > 18 {
                         format!("{}…", &source[..17])
                     } else {
-                        source.to_string()
+                        source
                     };
 
                     let project = bookmark
@@ -195,7 +187,7 @@ fn handle_bookmarks_command(cmd: &BookmarksCommand) {
                         .unwrap_or_else(|| "—".to_string());
 
                     println!(
-                        "{:<12} {:<40} {:<20} {}",
+                        "| {} | {} | {} | {} |",
                         &bookmark.id[..12.min(bookmark.id.len())],
                         label_display,
                         source_display,
@@ -207,7 +199,7 @@ fn handle_bookmarks_command(cmd: &BookmarksCommand) {
 
         BookmarksCommand::Show { id } => {
             match find_bookmark(&config, id) {
-                Ok(bookmark) => print_bookmark_full(bookmark),
+                Ok(bookmark) => print_bookmark_markdown(bookmark),
                 Err(e) => {
                     eprintln!("{}", e);
                     process::exit(1);
@@ -230,16 +222,6 @@ fn handle_bookmarks_command(cmd: &BookmarksCommand) {
             } else {
                 eprintln!("Failed to delete bookmark {}", full_id);
                 process::exit(1);
-            }
-        }
-
-        BookmarksCommand::Export { id } => {
-            match find_bookmark(&config, id) {
-                Ok(bookmark) => print_bookmark_markdown(bookmark),
-                Err(e) => {
-                    eprintln!("{}", e);
-                    process::exit(1);
-                }
             }
         }
     }
@@ -270,51 +252,6 @@ fn find_bookmark<'a>(
             ))
         }
     }
-}
-
-fn print_bookmark_full(bookmark: &annot_lib::state::Bookmark) {
-    use annot_lib::state::BookmarkSnapshot;
-
-    let source_type = match &bookmark.snapshot {
-        BookmarkSnapshot::Session { source_type, .. }
-        | BookmarkSnapshot::Selection { source_type, .. } => match source_type {
-            annot_lib::state::SessionType::File => "file",
-            annot_lib::state::SessionType::Diff => "diff",
-            annot_lib::state::SessionType::Content => "content",
-        },
-    };
-
-    let project = bookmark
-        .project_path
-        .as_ref()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|| "(none)".to_string());
-
-    println!("Bookmark: {}", bookmark.id);
-    println!("Label: {}", bookmark.display_label());
-    println!(
-        "Source: {} ({})",
-        bookmark.snapshot.source_title(),
-        source_type
-    );
-    println!("Project: {}", project);
-    println!(
-        "Created: {}",
-        bookmark.created_at.format("%Y-%m-%d %H:%M:%S UTC")
-    );
-    println!();
-
-    // Add selected text for selection bookmarks
-    if let BookmarkSnapshot::Selection { selected_text, .. } = &bookmark.snapshot {
-        println!("─── Selected Text ──────────────────────────────────────");
-        println!("{}", selected_text);
-        println!("─────────────────────────────────────────────────────────");
-        println!();
-    }
-
-    println!("─── Snapshot ───────────────────────────────────────────");
-    println!("{}", bookmark.snapshot.content());
-    println!("─────────────────────────────────────────────────────────");
 }
 
 fn print_bookmark_markdown(bookmark: &annot_lib::state::Bookmark) {
