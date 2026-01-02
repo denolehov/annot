@@ -5,7 +5,6 @@ import Placeholder from '@tiptap/extension-placeholder';
 import {
   trimContent,
   isContentEmpty,
-  BookmarkChip,
   ImagePasteHandler,
   TextPasteHandler,
   ExcalidrawChip,
@@ -21,7 +20,7 @@ import {
   type SlashCommand,
   type SuggestionState,
 } from '../tiptap';
-import { ErrorChip, TagChip, PasteChip, MediaChip } from '../tiptap/extensions';
+import { ErrorChip, TagChip, PasteChip, MediaChip, BookmarkChip } from '../tiptap/extensions';
 import type { Tag, Bookmark } from '../types';
 import { fuzzySearch } from '../fuzzy';
 
