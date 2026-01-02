@@ -1,7 +1,7 @@
 import { Extension, type JSONContent } from '@tiptap/core';
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import Suggestion, { type SuggestionOptions, type SuggestionProps, type SuggestionKeyDownProps } from '@tiptap/suggestion';
-import type { ContentNode, Tag, Bookmark } from './types';
+import type { ContentNode, Tag, Bookmark, RefSnapshot } from './types';
 import { fuzzySearch } from './fuzzy';
 
 /**
@@ -673,6 +673,11 @@ const CHIP_EXTRACTORS: Record<string, ChipExtractor> = {
     label: attrs.label as string,
     bookmark: attrs.bookmark as Bookmark,
   }),
+  refChip: (attrs) => ({
+    type: 'ref',
+    ref_type: attrs.refType as 'annotation' | 'bookmark',
+    snapshot: attrs.snapshot as RefSnapshot,
+  }),
 };
 
 /**
@@ -960,13 +965,22 @@ export function contentNodesToTipTap(nodes: ContentNode[] | null): JSONContent |
         },
       });
     } else if (node.type === 'bookmarkref') {
-      // Insert bookmark chip inline with full embedded bookmark data
+      // Legacy: Insert bookmark chip inline with full embedded bookmark data
       currentParagraph.push({
         type: 'bookmarkChip',
         attrs: {
           id: node.id,
           label: node.label,
           bookmark: node.bookmark,
+        },
+      });
+    } else if (node.type === 'ref') {
+      // Unified ref chip inline - handles both annotation and bookmark refs
+      currentParagraph.push({
+        type: 'refChip',
+        attrs: {
+          refType: node.ref_type,
+          snapshot: node.snapshot,
         },
       });
     }

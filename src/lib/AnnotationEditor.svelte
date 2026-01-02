@@ -4,8 +4,9 @@
   import { invoke } from '@tauri-apps/api/core';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
   import { computePosition, offset, flip, shift, type Placement } from '@floating-ui/dom';
-  import { useAnnotationEditor } from './composables';
+  import { useAnnotationEditor, type AnnotationEntry } from './composables';
   import { trimContent, isContentEmpty } from './tiptap';
+  import type { RefSuggestionItem } from './tiptap/extensions';
   import type { Tag, Bookmark } from './types';
   import Icon from './CommandPalette/Icon.svelte';
 
@@ -103,6 +104,7 @@
     onDismiss?: () => void;
     tags?: Tag[];
     bookmarks?: Bookmark[];
+    annotationEntries?: Record<string, AnnotationEntry>;
     allowsImagePaste?: boolean;
     onImagePasteBlocked?: () => void;
     onRequestCreateTag?: (text: string, from: number, to: number) => void;
@@ -111,7 +113,7 @@
     getOriginalLines?: () => string; // Returns original lines content for /replace
   }
 
-  let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], bookmarks = [], allowsImagePaste = false, onImagePasteBlocked, onRequestCreateTag, pendingTagInsertion, rangeKey = '', getOriginalLines }: Props = $props();
+  let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], bookmarks = [], annotationEntries = {}, allowsImagePaste = false, onImagePasteBlocked, onRequestCreateTag, pendingTagInsertion, rangeKey = '', getOriginalLines }: Props = $props();
 
   let container: HTMLDivElement | undefined = $state();
   let element: HTMLDivElement | undefined = $state();
@@ -128,6 +130,8 @@
     getSealed: () => sealed,
     getTags: () => tags,
     getBookmarks: () => bookmarks,
+    getAnnotationEntries: () => annotationEntries,
+    getCurrentRangeKey: () => rangeKey,
     getAllowsImagePaste: () => allowsImagePaste,
     getOnUpdate: () => onUpdate,
     getOnDismiss: () => () => onDismiss?.(),
@@ -152,7 +156,7 @@
 
   let suggestionsEl: HTMLDivElement | undefined = $state();
   let slashSuggestionsEl: HTMLDivElement | undefined = $state();
-  let bookmarkSuggestionsEl: HTMLDivElement | undefined = $state();
+  let refSuggestionsEl: HTMLDivElement | undefined = $state();
 
   // Sync Excalidraw window state with composable (prevents blur dismiss)
   $effect(() => {
@@ -179,12 +183,12 @@
     });
   });
 
-  // Scroll selected bookmark suggestion into view on keyboard navigation
+  // Scroll selected ref suggestion into view on keyboard navigation
   $effect(() => {
-    if (!ann.bookmarkSuggestion.active) return;
-    const _idx = ann.bookmarkSuggestion.selectedIndex; // Track changes
+    if (!ann.refSuggestion.active) return;
+    const _idx = ann.refSuggestion.selectedIndex; // Track changes
     requestAnimationFrame(() => {
-      const selected = bookmarkSuggestionsEl?.querySelector('.bookmark-suggestion.selected') as HTMLElement | null;
+      const selected = refSuggestionsEl?.querySelector('.ref-suggestion.selected') as HTMLElement | null;
       selected?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
   });
@@ -465,7 +469,7 @@
   {#if !sealed}
     <div class="toolbar">
       <span class="kbd-hint"><kbd>#</kbd> tags</span>
-      <span class="kbd-hint"><kbd>@</kbd> bookmarks</span>
+      <span class="kbd-hint"><kbd>@</kbd> refs</span>
       <span class="kbd-hint"><kbd>/</kbd> commands</span>
       <span class="kbd-hint"><kbd>⌘↵</kbd> done</span>
       <span class="kbd-hint"><kbd>Esc</kbd> cancel</span>
@@ -526,33 +530,55 @@
   </div>
 {/if}
 
-<!-- Portal bookmark suggestions to body, positioned with Floating UI -->
-{#if ann.bookmarkSuggestion.active && ann.bookmarkSuggestion.items.length > 0}
+<!-- Portal ref suggestions (@ menu) to body, positioned with Floating UI -->
+{#if ann.refSuggestion.active && ann.refSuggestion.items.length > 0}
+  {@const annotationItems = ann.refSuggestion.items.filter((i): i is RefSuggestionItem & { type: 'annotation' } => i.type === 'annotation')}
+  {@const bookmarkItems = ann.refSuggestion.items.filter((i): i is RefSuggestionItem & { type: 'bookmark' } => i.type === 'bookmark')}
   <div
-    bind:this={bookmarkSuggestionsEl}
+    bind:this={refSuggestionsEl}
     use:portal
-    use:floating={{ getRect: () => ann.bookmarkSuggestion.clientRect?.() ?? null }}
-    class="bookmark-suggestions"
+    use:floating={{ getRect: () => ann.refSuggestion.clientRect?.() ?? null }}
+    class="ref-suggestions"
   >
-    {#each ann.bookmarkSuggestion.items as bookmark, i}
-      {@const displayLabel = bookmark.label ?? (bookmark.snapshot.type === 'selection' ? bookmark.snapshot.selected_text : bookmark.snapshot.source_title)}
-      {@const dateStr = new Date(bookmark.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-      <button
-        type="button"
-        class="bookmark-suggestion"
-        class:selected={i === ann.bookmarkSuggestion.selectedIndex}
-        onmousedown={(e) => {
-          e.preventDefault();
-          ann.selectBookmarkItem(bookmark);
-        }}
-      >
-        <span class="bookmark-id">{bookmark.id.slice(0, 3)}</span>
-        <div class="bookmark-info">
-          <span class="bookmark-label">{displayLabel}</span>
-          <span class="bookmark-meta">{bookmark.snapshot.source_title} · {dateStr}</span>
-        </div>
-      </button>
-    {/each}
+    {#if annotationItems.length > 0}
+      <div class="ref-section-header">ANNOTATIONS</div>
+      {#each annotationItems as item, i}
+        <button
+          type="button"
+          class="ref-suggestion"
+          class:selected={ann.refSuggestion.items.indexOf(item) === ann.refSuggestion.selectedIndex}
+          onmousedown={(e) => {
+            e.preventDefault();
+            ann.selectRefItem(item);
+          }}
+        >
+          <span class="ref-key">L{item.key}</span>
+          <span class="ref-preview">{item.preview || '(empty)'}</span>
+        </button>
+      {/each}
+    {/if}
+    {#if bookmarkItems.length > 0}
+      <div class="ref-section-header">BOOKMARKS</div>
+      {#each bookmarkItems as item, i}
+        {@const displayLabel = item.bookmark.label ?? (item.bookmark.snapshot.type === 'selection' ? item.bookmark.snapshot.selected_text : item.bookmark.snapshot.source_title)}
+        {@const dateStr = new Date(item.bookmark.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+        <button
+          type="button"
+          class="ref-suggestion"
+          class:selected={ann.refSuggestion.items.indexOf(item) === ann.refSuggestion.selectedIndex}
+          onmousedown={(e) => {
+            e.preventDefault();
+            ann.selectRefItem(item);
+          }}
+        >
+          <span class="ref-key">{item.bookmark.id.slice(0, 3)}</span>
+          <div class="ref-info">
+            <span class="ref-label">{displayLabel}</span>
+            <span class="ref-meta">{item.bookmark.snapshot.source_title} · {dateStr}</span>
+          </div>
+        </button>
+      {/each}
+    {/if}
   </div>
 {/if}
 

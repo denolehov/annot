@@ -340,6 +340,99 @@
 }
 
 /* ===========================================
+   UNIFIED REFERENCE SUGGESTIONS (@ menu)
+   =========================================== */
+.ref-suggestions {
+	position: fixed;
+	background: var(--bg-window);
+	border: 1px solid var(--border-strong);
+	border-radius: 6px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+	z-index: 100;
+	min-width: 300px;
+	max-width: 420px;
+	max-height: 320px;
+	overflow-y: auto;
+	scroll-padding-block: 40px;
+	padding: 4px;
+	font-family: var(--font-ui);
+}
+
+.ref-section-header {
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	padding: 6px 10px 4px;
+	margin-top: 4px;
+}
+
+.ref-section-header:first-child {
+	margin-top: 0;
+}
+
+.ref-suggestion {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	width: 100%;
+	padding: 8px 10px;
+	border: none;
+	border-radius: 4px;
+	background: none;
+	cursor: pointer;
+	text-align: left;
+}
+
+.ref-suggestion:hover,
+.ref-suggestion.selected {
+	background: var(--bg-panel);
+}
+
+.ref-suggestion .ref-key {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--selection-border);
+	flex-shrink: 0;
+	padding-top: 1px;
+}
+
+.ref-suggestion .ref-preview {
+	font-size: 12px;
+	color: var(--text-secondary);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	flex: 1;
+}
+
+.ref-suggestion .ref-info {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.ref-suggestion .ref-label {
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--text-primary);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.ref-suggestion .ref-meta {
+	font-size: 11px;
+	color: var(--text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* ===========================================
    SELECTION POPOVER (Create Tag from Selection)
    =========================================== */
 .selection-popover {

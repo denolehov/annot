@@ -42,6 +42,7 @@
       onDismiss={onClose}
       tags={ctx.tags}
       bookmarks={ctx.bookmarks.all}
+      annotationEntries={ctx.annotations.allEntries()}
       allowsImagePaste={ctx.allowsImagePaste}
       {onImagePasteBlocked}
       {onRequestCreateTag}

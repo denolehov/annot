@@ -154,7 +154,7 @@ export interface Tag {
 }
 
 // Content node types for structured annotation content (output format)
-export type ContentNode = TextNode | TagNode | MediaNode | ExcalidrawNode | ReplaceNode | ErrorNode | PasteNode | BookmarkRefNode;
+export type ContentNode = TextNode | TagNode | MediaNode | ExcalidrawNode | ReplaceNode | ErrorNode | PasteNode | BookmarkRefNode | RefNode;
 
 export interface TextNode {
   type: 'text';
@@ -203,6 +203,35 @@ export interface BookmarkRefNode {
   label: string; // Cached label for display
   /** Full bookmark data captured at insertion time (for detachment). */
   bookmark: Bookmark;
+}
+
+// =============================================================================
+// Unified Reference System (@ mentions)
+// =============================================================================
+
+/** Snapshot for annotation references (self-contained). */
+export interface AnnotationRefSnapshot {
+  type: 'annotation';
+  /** Line range key, e.g., "50-55" */
+  source_key: string;
+  /** File path (for cross-file display, null for same-file) */
+  source_file: string | null;
+  /** First ~50 chars of annotation content for tooltip preview */
+  preview: string;
+  /** Full annotation content captured at insertion time (self-contained) */
+  content: ContentNode[];
+}
+
+/** Unified reference snapshot - either annotation or bookmark. */
+export type RefSnapshot = AnnotationRefSnapshot | { type: 'bookmark'; bookmark: Bookmark };
+
+/** Unified reference node - replaces BookmarkRefNode for new references. */
+export interface RefNode {
+  type: 'ref';
+  /** Discriminator for ref type: 'annotation' or 'bookmark' */
+  ref_type: 'annotation' | 'bookmark';
+  /** Self-contained snapshot (survives source deletion) */
+  snapshot: RefSnapshot;
 }
 
 // TipTap JSON content type for internal storage

@@ -14,6 +14,7 @@ import {
   parseFenceFromJson,
   transformReplaceFenceToPreview,
   transformReplacePreviewToFence,
+  extractContentNodes,
   type SlashCommand,
   type SuggestionState,
 } from '../tiptap';
@@ -23,11 +24,14 @@ import {
   PasteChip,
   MediaChip,
   BookmarkChip,
+  RefChip,
+  type RefSuggestionItem,
   ReplacePreview,
   ExcalidrawChip,
   ExcalidrawPlaceholder,
 } from '../tiptap/extensions';
-import type { Tag, Bookmark } from '../types';
+import type { Tag, Bookmark, RefSnapshot, AnnotationRefSnapshot, ContentNode } from '../types';
+import type { AnnotationEntry } from './useAnnotations.svelte';
 import { fuzzySearch } from '../fuzzy';
 
 export interface AnnotationEditorOptions {
@@ -41,6 +45,10 @@ export interface AnnotationEditorOptions {
   getTags: () => Tag[];
   /** Returns available bookmarks for @ autocomplete (reactive) */
   getBookmarks: () => Bookmark[];
+  /** Returns all annotation entries for @ autocomplete (reactive) */
+  getAnnotationEntries: () => Record<string, AnnotationEntry>;
+  /** Returns the current annotation's range key (to exclude from suggestions) */
+  getCurrentRangeKey: () => string;
   /** Returns whether image paste is allowed */
   getAllowsImagePaste: () => boolean;
   /** Returns the onUpdate callback (reactive) */
@@ -67,14 +75,31 @@ function createInitialSuggestionState<T>(): SuggestionState<T> {
  * Composable for managing TipTap editor lifecycle, extensions, and suggestion state.
  * Centralizes editor creation/destruction across N+1 AnnotationEditor instances.
  */
+/** Extract a preview string from ContentNode array (first ~50 chars of text) */
+function extractPreviewFromContent(nodes: ContentNode[]): string {
+  const textParts: string[] = [];
+  for (const node of nodes) {
+    if (node.type === 'text') {
+      textParts.push(node.text);
+    } else if (node.type === 'tag') {
+      textParts.push(`#${node.name}`);
+    }
+    // Stop after ~50 chars
+    if (textParts.join('').length > 50) break;
+  }
+  const full = textParts.join('').trim();
+  return full.length > 50 ? full.slice(0, 47) + '...' : full;
+}
+
 export function useAnnotationEditor(options: AnnotationEditorOptions) {
   let editor: Editor | null = $state(null);
   let tagSuggestion = $state<SuggestionState<Tag>>(createInitialSuggestionState());
   let slashSuggestion = $state<SuggestionState<SlashCommand>>(createInitialSuggestionState());
   let bookmarkSuggestion = $state<SuggestionState<Bookmark>>(createInitialSuggestionState());
+  let refSuggestion = $state<SuggestionState<RefSuggestionItem>>(createInitialSuggestionState());
   let tagCommand: ((item: Tag) => void) | null = null;
   let slashCommandFn: ((item: SlashCommand) => void) | null = null;
-  let bookmarkCommand: ((item: Bookmark) => void) | null = null;
+  let refCommand: ((item: RefSuggestionItem) => void) | null = null;
 
   // Track if Excalidraw modal is open (prevents blur dismiss)
   let excalidrawModalOpen = false;
@@ -93,7 +118,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
     const el = options.element();
     if (!el) return;
 
-    const { getSealed, getTags, getBookmarks, getOnUpdate, getOnDismiss } = options;
+    const { getSealed, getTags, getBookmarks, getAnnotationEntries, getCurrentRangeKey, getOnUpdate, getOnDismiss } = options;
 
     editor = new Editor({
       element: el,
@@ -138,37 +163,86 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
             },
           },
         }),
-        BookmarkChip.configure({
+        // Legacy BookmarkChip - kept for hydrating old data, but no suggestion
+        BookmarkChip,
+        // Unified RefChip with @ trigger for both annotations and bookmarks
+        RefChip.configure({
           suggestion: {
             char: '@',
-            items: ({ query }: { query: string }) => {
+            items: ({ query }: { query: string }): RefSuggestionItem[] => {
+              const currentKey = getCurrentRangeKey();
+              const annotations = getAnnotationEntries();
               const bookmarks = getBookmarks();
-              return fuzzySearch(bookmarks, query, [
-                { name: 'label', weight: 2 },
-                { name: 'id', weight: 1 },
-              ]);
+
+              // Build annotation items (exclude current annotation)
+              const annotationItems: RefSuggestionItem[] = Object.entries(annotations)
+                .filter(([key, entry]) => key !== currentKey && entry.content)
+                .map(([key, entry]) => {
+                  const nodes = extractContentNodes(entry.content);
+                  const preview = extractPreviewFromContent(nodes);
+                  return {
+                    type: 'annotation' as const,
+                    key,
+                    preview,
+                    content: nodes,
+                  };
+                });
+
+              // Build bookmark items
+              const bookmarkItems: RefSuggestionItem[] = bookmarks.map((b) => ({
+                type: 'bookmark' as const,
+                bookmark: b,
+              }));
+
+              // Combine and filter by query
+              const allItems = [...annotationItems, ...bookmarkItems];
+              if (!query) return allItems;
+
+              // Simple search: check if query matches key, preview, or label
+              const q = query.toLowerCase();
+              return allItems.filter((item) => {
+                if (item.type === 'annotation') {
+                  return item.key.includes(q) || item.preview.toLowerCase().includes(q);
+                } else {
+                  const label = item.bookmark.label || item.bookmark.snapshot.source_title || '';
+                  return item.bookmark.id.toLowerCase().includes(q) || label.toLowerCase().includes(q);
+                }
+              });
             },
-            render: createSuggestionRender<Bookmark>(
-              () => bookmarkSuggestion,
-              (state) => { bookmarkSuggestion = state; },
-              () => bookmarkCommand,
-              (cmd) => { bookmarkCommand = cmd; }
+            render: createSuggestionRender<RefSuggestionItem>(
+              () => refSuggestion,
+              (state) => { refSuggestion = state; },
+              () => refCommand,
+              (cmd) => { refCommand = cmd; }
             ),
-            command: ({ editor, range, props }: { editor: Editor; range: Range; props: Bookmark }) => {
-              const label = props.label ?? (props.snapshot.type === 'selection' ? props.snapshot.selected_text : props.snapshot.source_title);
+            command: ({ editor, range, props }: { editor: Editor; range: Range; props: RefSuggestionItem }) => {
+              let snapshot: RefSnapshot;
+              let refType: 'annotation' | 'bookmark';
+
+              if (props.type === 'annotation') {
+                refType = 'annotation';
+                snapshot = {
+                  type: 'annotation',
+                  source_key: props.key,
+                  source_file: null, // Same file
+                  preview: props.preview,
+                  content: props.content,
+                } as AnnotationRefSnapshot;
+              } else {
+                refType = 'bookmark';
+                snapshot = {
+                  type: 'bookmark',
+                  bookmark: props.bookmark,
+                };
+              }
+
               editor
                 .chain()
                 .focus()
                 .insertContentAt(range, [
                   {
-                    type: 'bookmarkChip',
-                    attrs: {
-                      id: props.id,
-                      label,
-                      // Embed full bookmark data for "detachment" — if bookmark is
-                      // deleted later, the reference still renders with full context
-                      bookmark: props,
-                    },
+                    type: 'refChip',
+                    attrs: { refType, snapshot },
                   },
                   { type: 'text', text: ' ' },
                 ])
@@ -214,8 +288,8 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
               slashSuggestion = { ...slashSuggestion, active: false };
               return;
             }
-            if (bookmarkSuggestion.active) {
-              bookmarkSuggestion = { ...bookmarkSuggestion, active: false };
+            if (refSuggestion.active) {
+              refSuggestion = { ...refSuggestion, active: false };
               return;
             }
             editor?.commands.blur();
@@ -234,7 +308,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
       },
       onBlur: ({ editor: blurEditor }) => {
         // Don't dismiss while Excalidraw modal is open or suggestion menus are active
-        if (!getSealed() && !tagSuggestion.active && !bookmarkSuggestion.active && !excalidrawModalOpen) {
+        if (!getSealed() && !tagSuggestion.active && !refSuggestion.active && !excalidrawModalOpen) {
           const editorDom = blurEditor.view.dom as HTMLElement;
           const json = blurEditor.getJSON();
 
@@ -304,6 +378,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
     get tagSuggestion() { return tagSuggestion; },
     get slashSuggestion() { return slashSuggestion; },
     get bookmarkSuggestion() { return bookmarkSuggestion; },
+    get refSuggestion() { return refSuggestion; },
 
     /** Execute selected tag item */
     selectTagItem(item: Tag) {
@@ -315,9 +390,9 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
       slashCommandFn?.(item);
     },
 
-    /** Execute selected bookmark item */
-    selectBookmarkItem(item: Bookmark) {
-      bookmarkCommand?.(item);
+    /** Execute selected ref item */
+    selectRefItem(item: RefSuggestionItem) {
+      refCommand?.(item);
     },
 
     /** Insert a tag chip at the specified position (for pending tag insertion) */

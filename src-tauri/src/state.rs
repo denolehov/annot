@@ -197,6 +197,39 @@ pub enum ContentNode {
         /// Used for output if the bookmark no longer exists (detached).
         bookmark: Bookmark,
     },
+    /// Unified reference (annotation or bookmark).
+    /// New format that supports referencing other annotations within the session.
+    Ref {
+        /// Discriminator: "annotation" or "bookmark"
+        ref_type: String,
+        /// Self-contained snapshot (survives source deletion)
+        snapshot: RefSnapshot,
+    },
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// UNIFIED REFERENCE SYSTEM — @ mentions for annotations and bookmarks
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Snapshot for annotation references (self-contained).
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct AnnotationRefSnapshot {
+    /// Line range key, e.g., "50-55"
+    pub source_key: String,
+    /// File path (for cross-file display, None for same-file)
+    pub source_file: Option<String>,
+    /// First ~50 chars of annotation content for preview
+    pub preview: String,
+    /// Full annotation content captured at insertion time (self-contained)
+    pub content: Vec<ContentNode>,
+}
+
+/// Unified reference snapshot — either annotation or bookmark.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum RefSnapshot {
+    Annotation(AnnotationRefSnapshot),
+    Bookmark { bookmark: Bookmark },
 }
 
 /// A normalized line range (start ≤ end).

@@ -6,7 +6,7 @@ use crate::portal::LoadedPortal;
 use crate::review::{FileKey, Review};
 use crate::state::{
     Annotation, Bookmark, ContentMetadata, ContentModel, ContentNode, LineOrigin, LineSemantics,
-    PortalSemantics,
+    PortalSemantics, RefSnapshot,
 };
 
 /// Output mode determines how content is formatted.
@@ -281,10 +281,27 @@ fn collect_unique_bookmarks(review: &Review) -> Vec<Bookmark> {
 
     let mut process_nodes = |nodes: &[ContentNode]| {
         for node in nodes {
-            if let ContentNode::BookmarkRef { id, bookmark, .. } = node {
-                bookmarks
-                    .entry(id.clone())
-                    .or_insert_with(|| bookmark.clone());
+            match node {
+                ContentNode::BookmarkRef { id, bookmark, .. } => {
+                    bookmarks
+                        .entry(id.clone())
+                        .or_insert_with(|| bookmark.clone());
+                }
+                ContentNode::Ref { snapshot, .. } => {
+                    if let RefSnapshot::Bookmark { bookmark } = snapshot {
+                        bookmarks
+                            .entry(bookmark.id.clone())
+                            .or_insert_with(|| bookmark.clone());
+                    }
+                }
+                // Other node types don't contain bookmark references
+                ContentNode::Text { .. }
+                | ContentNode::Tag { .. }
+                | ContentNode::Media { .. }
+                | ContentNode::Excalidraw { .. }
+                | ContentNode::Replace { .. }
+                | ContentNode::Error { .. }
+                | ContentNode::Paste { .. } => {}
             }
         }
     };
@@ -776,9 +793,22 @@ fn render_content(
                 content.clone()
             }
             ContentNode::BookmarkRef { id, .. } => {
-                // Output bookmark reference with short ID (first 3-4 chars)
+                // Legacy format: output as new unified ref format for consistency
                 let short_id = &id[..id.len().min(3)];
-                format!("[@{}]", short_id)
+                format!("[ref:bookmark@{}]", short_id)
+            }
+            ContentNode::Ref { ref_type: _, snapshot } => {
+                // Unified reference format: [ref:TYPE@TARGET]
+                use crate::state::RefSnapshot;
+                match snapshot {
+                    RefSnapshot::Annotation(snap) => {
+                        format!("[ref:annotation@L{}]", snap.source_key)
+                    }
+                    RefSnapshot::Bookmark { bookmark } => {
+                        let short_id = &bookmark.id[..bookmark.id.len().min(3)];
+                        format!("[ref:bookmark@{}]", short_id)
+                    }
+                }
             }
         })
         .collect::<Vec<_>>()

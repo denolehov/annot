@@ -148,6 +148,84 @@
 	text-overflow: ellipsis;
 }
 
+/* Color variant for unified references (@ mentions) */
+.ref-chip {
+	background:
+		var(--chip-pattern-bg),
+		color-mix(in srgb, var(--bg-code-block) 95%, #10b981 5%);
+	background-size: var(--chip-pattern-size), auto;
+	color: var(--text-secondary);
+	cursor: default;
+}
+
+.ref-chip:hover {
+	border-color: #10b981;
+}
+
+/* Annotation ref variant - green tint */
+.ref-chip.ref-annotation {
+	background:
+		var(--chip-pattern-bg),
+		color-mix(in srgb, var(--bg-code-block) 95%, #10b981 5%);
+	background-size: var(--chip-pattern-size), auto;
+}
+
+.ref-chip.ref-annotation:hover {
+	border-color: #10b981;
+}
+
+/* Bookmark ref variant - purple tint (matches legacy bookmark-chip) */
+.ref-chip.ref-bookmark {
+	background:
+		var(--chip-pattern-bg),
+		color-mix(in srgb, var(--bg-code-block) 95%, #8b5cf6 5%);
+	background-size: var(--chip-pattern-size), auto;
+}
+
+.ref-chip.ref-bookmark:hover {
+	border-color: #8b5cf6;
+}
+
+.ref-chip .ref-icon {
+	display: inline-flex;
+	align-items: center;
+}
+
+.ref-chip .ref-icon.annotation-icon {
+	color: #10b981;
+}
+
+.ref-chip .ref-icon.bookmark-icon {
+	color: #ef4444;
+}
+
+.ref-chip .ref-icon svg {
+	width: 12px;
+	height: 12px;
+}
+
+.ref-chip .ref-key {
+	font-family: var(--font-mono);
+	font-size: 10px;
+	font-weight: 600;
+	opacity: 0.8;
+	margin-left: 4px;
+}
+
+.ref-chip .ref-divider {
+	margin: 0 4px;
+	opacity: 0.4;
+}
+
+.ref-chip .ref-preview,
+.ref-chip .ref-label {
+	font-weight: 500;
+	white-space: nowrap;
+	max-width: 120px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 /* Paste tooltip has wider max-width for code preview */
 .paste-tooltip .chip-tooltip-content {
 	max-width: 500px;
