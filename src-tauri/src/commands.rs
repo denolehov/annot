@@ -607,6 +607,60 @@ fn sanitize_obsidian_filename(name: &str) -> String {
     name.chars().filter(|c| !matches!(c, '\\' | '/' | ':')).collect()
 }
 
+// --- Replace diff (word-level) ---
+
+/// A span within a diff line, with emphasis marking changed words.
+#[derive(Serialize, Debug, PartialEq)]
+pub struct DiffSpan {
+    pub text: String,
+    pub emphasized: bool,
+}
+
+/// A line in the replace diff output.
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum ReplaceDiffLine {
+    Equal { spans: Vec<DiffSpan> },
+    Insert { spans: Vec<DiffSpan> },
+    Delete { spans: Vec<DiffSpan> },
+}
+
+/// Compute a word-level diff between original and replacement text.
+/// Returns interleaved lines: each changed line pair shows delete then insert.
+pub fn compute_word_diff(original: &str, replacement: &str) -> Vec<ReplaceDiffLine> {
+    use similar::{ChangeTag, TextDiff};
+
+    let diff = TextDiff::from_lines(original, replacement);
+    let mut result = Vec::new();
+
+    for op in diff.ops() {
+        for change in diff.iter_inline_changes(op) {
+            let spans: Vec<DiffSpan> = change
+                .iter_strings_lossy()
+                .map(|(emphasized, text)| DiffSpan {
+                    text: text.to_string(),
+                    emphasized,
+                })
+                .collect();
+
+            let line = match change.tag() {
+                ChangeTag::Equal => ReplaceDiffLine::Equal { spans },
+                ChangeTag::Insert => ReplaceDiffLine::Insert { spans },
+                ChangeTag::Delete => ReplaceDiffLine::Delete { spans },
+            };
+            result.push(line);
+        }
+    }
+
+    result
+}
+
+/// Tauri command wrapper for compute_word_diff.
+#[tauri::command]
+pub fn compute_replace_diff(original: String, replacement: String) -> Vec<ReplaceDiffLine> {
+    compute_word_diff(&original, &replacement)
+}
+
 // --- Theme commands ---
 
 #[tauri::command]
@@ -663,5 +717,64 @@ mod tests {
             sanitize_obsidian_filename("Normal Title Here"),
             "Normal Title Here"
         );
+    }
+
+    #[test]
+    fn compute_word_diff_identical_returns_equal() {
+        let result = compute_word_diff("hello\n", "hello\n");
+        assert_eq!(
+            result,
+            vec![ReplaceDiffLine::Equal {
+                spans: vec![DiffSpan {
+                    text: "hello\n".to_string(),
+                    emphasized: false
+                }]
+            }]
+        );
+    }
+
+    #[test]
+    fn compute_word_diff_word_change_emphasizes_changed_words() {
+        let result = compute_word_diff("The quick fox\n", "The slow fox\n");
+        // Should have delete then insert (interleaved)
+        assert_eq!(result.len(), 2);
+
+        // First line: delete with "quick" emphasized
+        match &result[0] {
+            ReplaceDiffLine::Delete { spans } => {
+                assert!(spans.iter().any(|s| s.text == "quick" && s.emphasized));
+                assert!(spans.iter().any(|s| s.text == "The " && !s.emphasized));
+            }
+            _ => panic!("Expected Delete, got {:?}", result[0]),
+        }
+
+        // Second line: insert with "slow" emphasized
+        match &result[1] {
+            ReplaceDiffLine::Insert { spans } => {
+                assert!(spans.iter().any(|s| s.text == "slow" && s.emphasized));
+                assert!(spans.iter().any(|s| s.text == "The " && !s.emphasized));
+            }
+            _ => panic!("Expected Insert, got {:?}", result[1]),
+        }
+    }
+
+    #[test]
+    fn compute_word_diff_multiline_preserves_unchanged() {
+        let result = compute_word_diff("line one\nline two\n", "line one\nline TWO\n");
+        // First line unchanged (equal), second line changed (delete + insert)
+        assert_eq!(result.len(), 3);
+
+        match &result[0] {
+            ReplaceDiffLine::Equal { .. } => {}
+            _ => panic!("Expected Equal for first line"),
+        }
+        match &result[1] {
+            ReplaceDiffLine::Delete { .. } => {}
+            _ => panic!("Expected Delete for changed line"),
+        }
+        match &result[2] {
+            ReplaceDiffLine::Insert { .. } => {}
+            _ => panic!("Expected Insert for changed line"),
+        }
     }
 }

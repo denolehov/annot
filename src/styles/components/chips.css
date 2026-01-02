@@ -573,3 +573,14 @@ body > .chip-tooltip.error-tooltip .chip-tooltip-content {
 	word-break: break-word;
 }
 
+/* Word-level emphasis within changed lines */
+.replace-preview-line.removed .emphasized {
+	background: var(--diff-remove-word-bg);
+	border-radius: 2px;
+}
+
+.replace-preview-line.added .emphasized {
+	background: var(--diff-add-word-bg);
+	border-radius: 2px;
+}
+

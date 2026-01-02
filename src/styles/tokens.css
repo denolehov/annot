@@ -188,6 +188,8 @@
 	/* Diff colors (for /replace) */
 	--diff-remove-bg: rgba(220, 38, 38, 0.18);
 	--diff-add-bg: rgba(22, 163, 74, 0.18);
+	--diff-remove-word-bg: rgba(220, 38, 38, 0.35);
+	--diff-add-word-bg: rgba(22, 163, 74, 0.35);
 	--diff-gutter: var(--text-muted);
 
 	/* Focus */
@@ -360,6 +362,8 @@
 	/* --- DIFF COLORS --- */
 	--diff-remove-bg: rgba(239, 68, 68, 0.22);
 	--diff-add-bg: rgba(34, 197, 94, 0.22);
+	--diff-remove-word-bg: rgba(239, 68, 68, 0.4);
+	--diff-add-word-bg: rgba(34, 197, 94, 0.4);
 	--diff-gutter: var(--text-muted);
 
 	/* --- ACCENTS --- */
