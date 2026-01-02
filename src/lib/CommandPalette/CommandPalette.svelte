@@ -8,6 +8,7 @@
   import { getFilterPlaceholder, canDelete, isItemEditable } from './engine/types';
   import type { Tag, ExitMode, Bookmark } from '$lib/types';
   import Icon from './Icon.svelte';
+  import BookmarkEditView from './BookmarkEditView.svelte';
 
   // Config type matching Rust
   interface Config {
@@ -697,46 +698,63 @@
     </div>
 
   {:else if machineState.type === 'EDIT_FORM' || machineState.type === 'CREATE_FORM'}
-    <div class="form-view" class:pending-delete={machineState.type === 'EDIT_FORM' && machineState.pendingDelete}>
-      <div class="input-row">
-        <span class="search-icon"><Icon name={machineState.type === 'CREATE_FORM' ? 'plus' : 'edit'} /></span>
-        <span class="ns-prefix"><Icon name={getNamespaceIcon(machineState.namespace)} /> {machineState.namespace.label}</span>
-        <span class="separator">›</span>
-        <span class="mode-prefix">{machineState.type === 'CREATE_FORM' ? 'New' : 'Edit'}</span>
-      </div>
-      <form>
-        {#each machineState.namespace.fields as field, i}
-          <div class="field" class:focused={machineState.focusedField === i}>
-            <label for={field.key}>{field.label}</label>
-            {#if field.type === 'text'}
-              {@const placeholder = machineState.type === 'CREATE_FORM' ? examplePlaceholders[field.key] || field.placeholder : field.placeholder}
-              <input
-                type="text"
-                id={field.key}
-                name={field.key}
-                value={machineState.values[field.key] || ''}
-                {placeholder}
-                readonly={machineState.type === 'EDIT_FORM' && field.readOnlyInEdit}
-              />
-            {:else if field.type === 'textarea'}
-              {@const placeholder = machineState.type === 'CREATE_FORM' ? examplePlaceholders[field.key] || field.placeholder : field.placeholder}
-              <textarea
-                id={field.key}
-                name={field.key}
-                {placeholder}
-                readonly={machineState.type === 'EDIT_FORM' && field.readOnlyInEdit}
-              >{machineState.values[field.key] || ''}</textarea>
-            {:else if field.type === 'select'}
-              <select id={field.key} name={field.key} value={machineState.values[field.key] || ''}>
-                {#each field.options as option}
-                  <option value={option}>{option}</option>
-                {/each}
-              </select>
-            {/if}
-          </div>
-        {/each}
-      </form>
+    <!-- Header row (shared between bookmark and generic forms) -->
+    <div class="input-row">
+      <span class="search-icon"><Icon name={machineState.type === 'CREATE_FORM' ? 'plus' : 'edit'} /></span>
+      <span class="ns-prefix"><Icon name={getNamespaceIcon(machineState.namespace)} /> {machineState.namespace.label}</span>
+      <span class="separator">›</span>
+      <span class="mode-prefix">{machineState.type === 'CREATE_FORM' ? 'New' : 'Edit'}</span>
     </div>
+
+    {#if machineState.type === 'EDIT_FORM' && machineState.namespace.id === 'bookmarks'}
+      <!-- Bookmark-specific edit view with context/metadata -->
+      {@const editState = machineState}
+      {@const fullBookmark = bookmarks.find(b => b.id === editState.item.id)}
+      {#if fullBookmark}
+        <BookmarkEditView
+          bookmark={fullBookmark}
+          labelValue={machineState.values.label || ''}
+          focusedField={machineState.focusedField}
+          pendingDelete={machineState.pendingDelete}
+        />
+      {/if}
+    {:else}
+      <!-- Generic form rendering -->
+      <div class="form-view" class:pending-delete={machineState.type === 'EDIT_FORM' && machineState.pendingDelete}>
+        <form>
+          {#each machineState.namespace.fields as field, i}
+            <div class="field" class:focused={machineState.focusedField === i}>
+              <label for={field.key}>{field.label}</label>
+              {#if field.type === 'text'}
+                {@const placeholder = machineState.type === 'CREATE_FORM' ? examplePlaceholders[field.key] || field.placeholder : field.placeholder}
+                <input
+                  type="text"
+                  id={field.key}
+                  name={field.key}
+                  value={machineState.values[field.key] || ''}
+                  {placeholder}
+                  readonly={machineState.type === 'EDIT_FORM' && field.readOnlyInEdit}
+                />
+              {:else if field.type === 'textarea'}
+                {@const placeholder = machineState.type === 'CREATE_FORM' ? examplePlaceholders[field.key] || field.placeholder : field.placeholder}
+                <textarea
+                  id={field.key}
+                  name={field.key}
+                  {placeholder}
+                  readonly={machineState.type === 'EDIT_FORM' && field.readOnlyInEdit}
+                >{machineState.values[field.key] || ''}</textarea>
+              {:else if field.type === 'select'}
+                <select id={field.key} name={field.key} value={machineState.values[field.key] || ''}>
+                  {#each field.options as option}
+                    <option value={option}>{option}</option>
+                  {/each}
+                </select>
+              {/if}
+            </div>
+          {/each}
+        </form>
+      </div>
+    {/if}
   {/if}
 
   <!-- Footer with keyboard hints -->

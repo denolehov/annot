@@ -309,3 +309,85 @@
 .item-list::-webkit-scrollbar-thumb:hover {
 	background: var(--border-hover);
 }
+
+/* =========================================
+   BOOKMARK EDIT VIEW
+   Metadata and snapshot preview for bookmark editing
+   ========================================= */
+
+/* Metadata section - source, created, project */
+.metadata-section {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding-top: 12px;
+	border-top: 1px solid var(--border-subtle);
+	margin-top: 4px;
+}
+
+.metadata-row {
+	display: flex;
+	gap: 8px;
+	font-size: 12px;
+	line-height: 1.4;
+}
+
+.metadata-label {
+	color: var(--text-muted);
+	min-width: 56px;
+	flex-shrink: 0;
+}
+
+.metadata-value {
+	color: var(--text-primary);
+	word-break: break-word;
+}
+
+.metadata-value.project-path {
+	font-family: var(--font-mono);
+	font-size: 11px;
+}
+
+/* Snapshot boxes - selection and context previews */
+.snapshot-box {
+	border: 1px solid var(--border-subtle);
+	border-radius: 6px;
+	overflow: hidden;
+	margin-top: 8px;
+}
+
+.snapshot-header {
+	padding: 6px 10px;
+	background: var(--bg-panel);
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+.snapshot-content {
+	padding: 10px;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	line-height: 1.5;
+	overflow-x: auto;
+	max-height: 300px;
+	overflow-y: auto;
+	background: var(--bg-code-block);
+}
+
+.snapshot-line {
+	white-space: pre;
+	color: var(--text-primary);
+}
+
+.snapshot-footer {
+	padding: 6px 10px;
+	background: var(--bg-panel);
+	font-size: 11px;
+	color: var(--text-muted);
+	border-top: 1px solid var(--border-subtle);
+	text-align: center;
+}
