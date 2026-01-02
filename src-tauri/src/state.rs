@@ -155,12 +155,23 @@ pub struct Line {
     pub semantics: LineSemantics,
 }
 
+/// Trait for types that have a stable ID.
+pub trait HasId {
+    fn id(&self) -> &str;
+}
+
 /// A tag is a composable mini-prompt that can be embedded in annotations.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Tag {
     pub id: String,
     pub name: String,
     pub instruction: String,
+}
+
+impl HasId for Tag {
+    fn id(&self) -> &str {
+        &self.id
+    }
 }
 
 impl Tag {
@@ -307,6 +318,12 @@ pub struct ExitMode {
     pub source: ExitModeSource,
 }
 
+impl HasId for ExitMode {
+    fn id(&self) -> &str {
+        &self.id
+    }
+}
+
 impl ExitMode {
     /// Creates a new exit mode with a generated 12-character ID (jj-style alphabet).
     pub fn new(name: String, color: String, instruction: String, order: u32) -> Self {
@@ -356,6 +373,12 @@ pub struct Bookmark {
     pub project_path: Option<std::path::PathBuf>,
     /// The captured content snapshot.
     pub snapshot: BookmarkSnapshot,
+}
+
+impl HasId for Bookmark {
+    fn id(&self) -> &str {
+        &self.id
+    }
 }
 
 /// The content snapshot captured by a bookmark.
@@ -565,6 +588,50 @@ impl UserConfig {
             deleted_bookmarks: HashSet::new(),
             usage_stats: config::load_tag_usage(),
         }
+    }
+
+    /// Reload config from disk, merging new items while preserving in-session state.
+    ///
+    /// Merge strategy:
+    /// - Items already in memory are preserved (memory wins on conflict)
+    /// - New items from disk are added
+    /// - Items deleted this session stay deleted (not resurrected)
+    pub fn reload_from_disk(&mut self) {
+        // Re-read from disk
+        let disk_tags = config::load_tags();
+        let mut disk_exit_modes = config::load_exit_modes();
+        let disk_commands = config::discover_commands();
+        disk_exit_modes.extend(disk_commands);
+        let disk_bookmarks = config::load_bookmarks();
+
+        // Merge: add new items from disk that aren't already in memory and weren't deleted
+        self.tags = Self::merge_for_reload(&self.tags, disk_tags, &self.deleted_tags);
+        self.exit_modes =
+            Self::merge_for_reload(&self.exit_modes, disk_exit_modes, &self.deleted_exit_modes);
+        self.bookmarks =
+            Self::merge_for_reload(&self.bookmarks, disk_bookmarks, &self.deleted_bookmarks);
+    }
+
+    /// Merge memory and disk collections: memory wins, new disk items added, deleted items excluded.
+    fn merge_for_reload<T: HasId + Clone>(
+        memory: &[T],
+        disk: Vec<T>,
+        deleted: &HashSet<String>,
+    ) -> Vec<T> {
+        let memory_ids: HashSet<_> = memory.iter().map(|x| x.id()).collect();
+        let mut result = memory.to_vec();
+
+        // Add disk items that:
+        // 1. Aren't already in memory (preserves local edits)
+        // 2. Weren't deleted this session
+        for item in disk {
+            let id = item.id();
+            if !memory_ids.contains(id) && !deleted.contains(id) {
+                result.push(item);
+            }
+        }
+
+        result
     }
 
     /// Create empty config (for testing).

@@ -88,6 +88,13 @@ export interface ContentResponse {
   bookmarks: Bookmark[];
 }
 
+/** Config snapshot returned by reload_config command. */
+export interface ConfigSnapshot {
+  tags: Tag[];
+  exit_modes: ExitMode[];
+  bookmarks: Bookmark[];
+}
+
 // Diff types
 export interface DiffMetadata {
   files: DiffFileInfo[];

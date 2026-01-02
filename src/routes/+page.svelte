@@ -3,7 +3,7 @@
   import { listen, emit } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
-  import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo } from "$lib/types";
+  import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo, ConfigSnapshot } from "$lib/types";
   import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, isHorizontalRule, getFilePath } from "$lib/line-utils";
   import { rangeToKey, keyToRange, isLineInRange, validateRange, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap, findExcalidrawChip } from "$lib/tiptap";
@@ -719,11 +719,22 @@
     // Show window after content is ready (started hidden to avoid flash)
     await window.show();
 
-    // Invalidate file cache on window focus (for @ file references)
-    await listen('tauri://focus', () => {
+    // Reload config and invalidate file cache on window focus
+    await listen('tauri://focus', async () => {
+      // Invalidate file cache (for @ file references)
       invoke('invalidate_file_cache').catch(() => {
         // Ignore errors - cache invalidation is best-effort
       });
+
+      // Reload config from disk (picks up changes from other windows)
+      try {
+        const snapshot = await invoke<ConfigSnapshot>('reload_config');
+        tags = snapshot.tags;
+        exitModeState.setModes(snapshot.exit_modes);
+        bookmarkState?.reloadFromSnapshot(snapshot.bookmarks);
+      } catch {
+        // Ignore errors - reload is best-effort
+      }
     });
   });
 </script>

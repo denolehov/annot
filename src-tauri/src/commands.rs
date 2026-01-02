@@ -14,6 +14,14 @@ use crate::state::{
     Bookmark, BookmarkSnapshot, ContentMetadata, ContentNode, ContentResponse, ExitMode,
     SessionType, Tag, TagUsageStats,
 };
+
+/// Snapshot of config data for reload_config command.
+#[derive(Serialize)]
+pub struct ConfigSnapshot {
+    pub tags: Vec<Tag>,
+    pub exit_modes: Vec<ExitMode>,
+    pub bookmarks: Vec<Bookmark>,
+}
 use crate::ShouldExit;
 
 #[derive(Deserialize)]
@@ -284,6 +292,22 @@ pub fn get_bookmarks(review_state: State<ActiveReview>) -> Result<Vec<Bookmark>,
     let guard = review_state.lock();
     let review = guard.as_ref().ok_or("No active review")?;
     Ok(review.config.bookmarks().to_vec())
+}
+
+/// Reload config from disk, merging new items while preserving in-session edits.
+/// Called on window focus to pick up changes from other annot windows.
+#[tauri::command]
+pub fn reload_config(review_state: State<ActiveReview>) -> Result<ConfigSnapshot, String> {
+    let mut guard = review_state.lock();
+    let review = guard.as_mut().ok_or("No active review")?;
+
+    review.config.reload_from_disk();
+
+    Ok(ConfigSnapshot {
+        tags: review.config.tags().to_vec(),
+        exit_modes: review.config.exit_modes().to_vec(),
+        bookmarks: review.config.bookmarks().to_vec(),
+    })
 }
 
 #[tauri::command]

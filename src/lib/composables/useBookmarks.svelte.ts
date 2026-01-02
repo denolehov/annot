@@ -40,6 +40,9 @@ export interface UseBookmarks {
 
   // Clear last created (for edit flow)
   clearLastCreated(): void;
+
+  // Reload from disk (window focus)
+  reloadFromSnapshot(diskBookmarks: Bookmark[]): void;
 }
 
 export function useBookmarks(initialBookmarks: Bookmark[] = []): UseBookmarks {
@@ -180,6 +183,15 @@ export function useBookmarks(initialBookmarks: Bookmark[] = []): UseBookmarks {
     lastCreatedId = null;
   }
 
+  /** Merge bookmarks from disk reload (adds new items, preserves local state). */
+  function reloadFromSnapshot(diskBookmarks: Bookmark[]): void {
+    const existingIds = new Set(bookmarks.map((b) => b.id));
+    const newBookmarks = diskBookmarks.filter((b) => !existingIds.has(b.id));
+    if (newBookmarks.length > 0) {
+      bookmarks = [...bookmarks, ...newBookmarks];
+    }
+  }
+
   return {
     get all() {
       return bookmarks;
@@ -211,5 +223,6 @@ export function useBookmarks(initialBookmarks: Bookmark[] = []): UseBookmarks {
     isFirstLineOfBookmark,
     getBookmarkIdAtStart,
     clearLastCreated,
+    reloadFromSnapshot,
   };
 }

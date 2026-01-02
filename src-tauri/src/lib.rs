@@ -28,9 +28,9 @@ use commands::{
     compute_replace_diff, copy_section, copy_to_clipboard, create_bookmark,
     create_selection_bookmark, cycle_exit_mode, delete_annotation, delete_bookmark,
     delete_exit_mode, delete_tag, export_to_obsidian, finish_review, get_bookmarks, get_config,
-    get_content, get_exit_modes, get_tags, get_theme, reorder_exit_modes, save_config,
-    save_content, set_exit_mode, set_session_comment, set_theme, update_bookmark, upsert_annotation,
-    upsert_exit_mode, upsert_tag,
+    get_content, get_exit_modes, get_tags, get_theme, reload_config, reorder_exit_modes,
+    save_config, save_content, set_exit_mode, set_session_comment, set_theme, update_bookmark,
+    upsert_annotation, upsert_exit_mode, upsert_tag,
 };
 use excalidraw_window::{
     excalidraw_cancel, excalidraw_save, get_excalidraw_context, open_excalidraw_window,
@@ -58,6 +58,7 @@ macro_rules! all_commands {
             delete_exit_mode,
             reorder_exit_modes,
             get_bookmarks,
+            reload_config,
             create_bookmark,
             create_selection_bookmark,
             update_bookmark,
