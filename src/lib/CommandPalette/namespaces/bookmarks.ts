@@ -81,7 +81,7 @@ export function bookmarkToItem(bookmark: Bookmark): Item {
     id: bookmark.id,
     name: displayLabel, // For display and search
     values: {
-      label: bookmark.label ?? '', // User-set label only (empty for selection bookmarks by default)
+      label: displayLabel, // Always show derived label as default (user can override)
       source_title: bookmark.snapshot.source_title,
       created_at: bookmark.created_at,
       project_path: bookmark.project_path ?? '',
