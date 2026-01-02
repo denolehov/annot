@@ -44,8 +44,6 @@ vi.mock('@tiptap/extension-placeholder', () => ({
 vi.mock('../tiptap', () => ({
   trimContent: vi.fn((content) => content),
   isContentEmpty: vi.fn(() => true),
-  ExcalidrawChip: {},
-  ExcalidrawPlaceholder: {},
   ImagePasteHandler: { configure: vi.fn(() => ({})) },
   TextPasteHandler: {},
   SlashCommands: { configure: vi.fn(() => ({})) },
@@ -70,6 +68,8 @@ vi.mock('../tiptap/extensions', () => ({
   MediaChip: {},
   BookmarkChip: { configure: vi.fn(() => ({})) },
   ReplacePreview: {},
+  ExcalidrawChip: {},
+  ExcalidrawPlaceholder: {},
 }));
 
 import { useAnnotationEditor } from './useAnnotationEditor.svelte';
