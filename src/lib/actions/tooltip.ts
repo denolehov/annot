@@ -3,8 +3,10 @@ import { computePosition, flip, shift, offset, arrow } from '@floating-ui/dom';
 export interface TooltipOptions {
 	content: string;
 	placement?: 'top' | 'bottom' | 'left' | 'right';
-	/** Additional CSS class for tooltip variants (e.g., 'error-tooltip') */
+	/** Additional CSS class for tooltip variants (e.g., 'error-tooltip', 'paste-tooltip') */
 	variant?: string;
+	/** If true, content is treated as HTML (use with caution) */
+	html?: boolean;
 }
 
 /**
@@ -34,7 +36,7 @@ export function tooltip(node: HTMLElement, options: TooltipOptions) {
 		// Create content
 		const contentEl = document.createElement('div');
 		contentEl.className = 'chip-tooltip-content';
-		contentEl.innerHTML = escapeHtml(options.content);
+		contentEl.innerHTML = options.html ? options.content : escapeHtml(options.content);
 		tooltipEl.appendChild(contentEl);
 
 		// Create arrow
@@ -53,7 +55,13 @@ export function tooltip(node: HTMLElement, options: TooltipOptions) {
 
 		const { x, y, placement, middlewareData } = await computePosition(node, tooltipEl, {
 			placement: options.placement ?? 'top',
-			middleware: [offset(8), flip(), shift({ padding: 8 }), arrow({ element: arrowEl })],
+			strategy: 'fixed',
+			middleware: [
+				offset(8),
+				flip({ padding: { top: 50, bottom: 8, left: 8, right: 8 } }), // Account for header
+				shift({ padding: 8 }),
+				arrow({ element: arrowEl }),
+			],
 		});
 
 		Object.assign(tooltipEl.style, {
