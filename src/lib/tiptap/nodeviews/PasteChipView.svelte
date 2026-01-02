@@ -2,6 +2,7 @@
 	import { NodeViewWrapper } from 'svelte-tiptap';
 	import type { NodeViewProps } from '@tiptap/core';
 	import { tooltip } from '$lib/actions/tooltip';
+	import { ClipboardIcon } from '$lib/icons';
 
 	let { node, selected }: NodeViewProps = $props();
 
@@ -36,7 +37,7 @@
 	data-paste-chip
 >
 	<span class="chip-hover-target" use:tooltip={{ content: tooltipHtml, variant: 'paste-tooltip', html: true }}>
-		<span class="tag-icon">&#x1F4CB;</span>
+		<span class="tag-icon"><ClipboardIcon /></span>
 		<span class="tag-content">{label}</span>
 	</span>
 </NodeViewWrapper>

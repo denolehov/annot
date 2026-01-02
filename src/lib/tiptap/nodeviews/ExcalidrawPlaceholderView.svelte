@@ -2,6 +2,7 @@
 	import { NodeViewWrapper } from 'svelte-tiptap';
 	import type { NodeViewProps } from '@tiptap/core';
 	import { onMount } from 'svelte';
+	import { ExcalidrawIcon } from '$lib/icons';
 
 	let { node, getPos }: NodeViewProps = $props();
 
@@ -28,7 +29,7 @@
 	data-excalidraw-placeholder
 >
 	<span class="chip-hover-target" bind:this={chipEl}>
-		<span class="tag-icon">&#x1F4D0;</span>
+		<span class="tag-icon"><ExcalidrawIcon /></span>
 		<span class="tag-content">Drawing...</span>
 	</span>
 </NodeViewWrapper>

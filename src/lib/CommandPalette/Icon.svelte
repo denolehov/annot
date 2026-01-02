@@ -16,7 +16,9 @@
     SunIcon,
     MoonIcon,
     ExcalidrawIcon,
-    WarningIcon
+    WarningIcon,
+    ImageIcon,
+    ClipboardIcon
   } from '$lib/icons';
 
   interface Props {
@@ -43,7 +45,9 @@
     sun: SunIcon,
     moon: MoonIcon,
     excalidraw: ExcalidrawIcon,
-    warning: WarningIcon
+    warning: WarningIcon,
+    image: ImageIcon,
+    clipboard: ClipboardIcon
   };
 
   const IconComponent = $derived(icons[name]);

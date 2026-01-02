@@ -2,6 +2,7 @@
 	import { NodeViewWrapper } from 'svelte-tiptap';
 	import type { NodeViewProps } from '@tiptap/core';
 	import { onMount } from 'svelte';
+	import { ExcalidrawIcon } from '$lib/icons';
 
 	let { node, getPos, selected }: NodeViewProps = $props();
 
@@ -30,7 +31,7 @@
 >
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->
 	<span class="chip-hover-target" bind:this={chipEl} onclick={handleClick}>
-		<span class="tag-icon">&#x1F4D0;</span>
-		<span class="tag-content">Diagram</span>
+		<span class="tag-icon"><ExcalidrawIcon /></span>
+		<span class="tag-content">Excalidraw</span>
 	</span>
 </NodeViewWrapper>
