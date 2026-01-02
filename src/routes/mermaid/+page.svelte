@@ -107,19 +107,43 @@
 			smoothScroll: false,
 		});
 
-		// Position diagram in canvas (canvas already offset by title bar via CSS margin-top)
+		// Calculate fit scale to decide initial zoom strategy
+		const availWidth = finalWidth - DIAGRAM_PADDING;
 		const canvasHeight = finalHeight - TITLE_BAR_HEIGHT;
-		const availableHeight = canvasHeight - TOOLBAR_HEIGHT;
-		const offsetX = (finalWidth - diagramWidth) / 2;
-		// For tall diagrams, show from top; otherwise center vertically
-		const offsetY = diagramHeight > availableHeight
-			? DIAGRAM_PADDING / 2
-			: (availableHeight - diagramHeight) / 2;
-		panzoomInstance.zoomAbs(0, 0, 1);
-		panzoomInstance.moveTo(offsetX, offsetY);
+		const availHeight = canvasHeight - TOOLBAR_HEIGHT - DIAGRAM_PADDING;
+		const diagramAspect = diagramWidth / diagramHeight;
+		const windowAspect = availWidth / availHeight;
+		const fitScale = diagramAspect > windowAspect
+			? availWidth / diagramWidth
+			: availHeight / diagramHeight;
+
+		// Auto-fit if zoom would be >= 70%, otherwise show at 100%
+		if (fitScale >= 0.7) {
+			// Fit to window
+			let offsetX: number;
+			let offsetY: number;
+			if (diagramAspect > windowAspect) {
+				offsetX = DIAGRAM_PADDING / 2;
+				offsetY = (availHeight - diagramHeight * fitScale) / 2 + DIAGRAM_PADDING / 2;
+			} else {
+				offsetX = (finalWidth - diagramWidth * fitScale) / 2;
+				offsetY = DIAGRAM_PADDING / 2;
+			}
+			panzoomInstance.zoomAbs(0, 0, fitScale);
+			panzoomInstance.moveTo(offsetX, offsetY);
+		} else {
+			// Show at 100%, centered
+			const offsetX = (finalWidth - diagramWidth) / 2;
+			const availableHeight = canvasHeight - TOOLBAR_HEIGHT;
+			const offsetY = diagramHeight > availableHeight
+				? DIAGRAM_PADDING / 2
+				: (availableHeight - diagramHeight) / 2;
+			panzoomInstance.zoomAbs(0, 0, 1);
+			panzoomInstance.moveTo(offsetX, offsetY);
+		}
 
 		// Track scale changes
-		currentScale = 1;
+		currentScale = fitScale >= 0.7 ? fitScale : 1;
 		panzoomInstance.on('zoom', () => {
 			if (panzoomInstance) {
 				currentScale = panzoomInstance.getTransform().scale;
