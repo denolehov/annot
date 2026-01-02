@@ -50,15 +50,22 @@
   const annotated = $derived(ctx.annotations.hasAnnotation(displayIndex));
   const preview = $derived(ctx.interaction.isLinePreview(displayIndex));
   const markdownMetadata = $derived(ctx.markdownMetadata);
+
+  // Convert additionalClasses object to class string
+  const extraClasses = $derived(
+    Object.entries(additionalClasses)
+      .filter(([_, v]) => v)
+      .map(([k]) => k)
+      .join(' ')
+  );
 </script>
 
 <div
-  class="line"
+  class="line {extraClasses}"
   class:selected
   class:annotated
   class:preview
   class:bookmarked={isBookmarked}
-  {...additionalClasses}
   data-display-idx={displayIndex}
   onmouseenter={() => ctx.interaction.handleLineEnter(displayIndex)}
   onmouseleave={() => ctx.interaction.handleLineLeave()}
