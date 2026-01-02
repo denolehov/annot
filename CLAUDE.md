@@ -134,6 +134,7 @@ Tauri IPC commands replace the HTTP API from the Go version:
 
 ## Reference Materials
 
+- `docs/features.md` — **Canonical product features list (keep up-to-date when adding features)**
 - `docs/manifesto.md` — annot's philosophy, identity, and directional feature model
 - `HL_REFERENCE.md` — Original hl feature set, data models, output format
 - `COMPONENTS.md` — UI component inventory with files, styles, states
