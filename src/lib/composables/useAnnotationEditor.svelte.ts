@@ -14,7 +14,6 @@ import {
   ExcalidrawChip,
   ExcalidrawPlaceholder,
   ReplacePreview,
-  ErrorChip,
   SlashCommands,
   createSlashSuggestion,
   EditorShortcuts,
@@ -25,6 +24,7 @@ import {
   type SlashCommand,
   type SuggestionState,
 } from '../tiptap';
+import { ErrorChip } from '../tiptap/extensions';
 import type { Tag, Bookmark } from '../types';
 import { fuzzySearch } from '../fuzzy';
 

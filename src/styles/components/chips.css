@@ -23,6 +23,12 @@
 	transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* Hover target wrapper for Svelte component chips (tooltip action host) */
+.chip-hover-target {
+	display: inline-flex;
+	align-items: center;
+}
+
 .tag-icon {
 	font-weight: 700;
 	font-size: var(--chip-font);
@@ -283,6 +289,41 @@
 .tag-chip:focus .chip-tooltip {
 	opacity: 1;
 	visibility: visible;
+}
+
+/* Portal tooltips (rendered to document.body via Svelte action) */
+body > .chip-tooltip {
+	width: max-content;
+	max-width: 450px;
+}
+
+body > .chip-tooltip .chip-tooltip-content {
+	background: var(--tooltip-bg);
+	border-radius: 4px;
+	padding: 6px 10px;
+	font-size: 11px;
+	line-height: 1.4;
+	color: var(--tooltip-text);
+	word-wrap: break-word;
+	white-space: normal;
+	box-shadow: var(--shadow-md);
+}
+
+body > .chip-tooltip .chip-tooltip-arrow {
+	position: absolute;
+	width: 8px;
+	height: 8px;
+	background: var(--tooltip-bg);
+	transform: rotate(45deg);
+}
+
+/* Error tooltip variant (portal) */
+body > .chip-tooltip.error-tooltip .chip-tooltip-content {
+	max-width: 350px;
+	font-family: var(--font-mono);
+	font-size: 10px;
+	white-space: pre-wrap;
+	word-break: break-word;
 }
 
 /* ===========================================
