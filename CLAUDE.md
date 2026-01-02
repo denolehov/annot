@@ -183,3 +183,7 @@ pnpm tauri dev -- -- --diff fixtures/diffs/mixed-changes.diff  # Diff mode
 ## Testing Patterns
 - **Rust**: Behavior-focused tests on public API (ContentResponse format)
 - **Frontend**: Mock IPC with `vi.mock("@tauri-apps/api/core")`, test rendered output
+
+## Code Style Preferences
+
+- **Prefer declarative over imperative**: Use functional composition (`map`/`collect`/`join`), builder patterns with closures, and data-driven approaches over manual loops with mutable state
