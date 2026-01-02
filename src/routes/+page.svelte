@@ -807,8 +807,7 @@
     >
       <div
         class="content-inner"
-        style:transform="scale({contentZoom})"
-        style:width="calc(100% / {contentZoom})"
+        style:zoom={contentZoom}
       >
       {#each lineSegmentation.segments as segment}
         {#if segment.type === 'portal'}

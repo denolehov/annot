@@ -116,7 +116,7 @@ header.header {
 	padding-bottom: 1rem;
 }
 
-/* Inner wrapper for zoom scaling */
+/* Inner wrapper for zoom scaling - uses CSS zoom for crisp rendering */
 .content-inner {
 	transform-origin: top left;
 }
