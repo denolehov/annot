@@ -23,7 +23,6 @@ import {
   TagChip,
   PasteChip,
   MediaChip,
-  BookmarkChip,
   RefChip,
   type RefSuggestionItem,
   ReplacePreview,
@@ -95,7 +94,6 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
   let editor: Editor | null = $state(null);
   let tagSuggestion = $state<SuggestionState<Tag>>(createInitialSuggestionState());
   let slashSuggestion = $state<SuggestionState<SlashCommand>>(createInitialSuggestionState());
-  let bookmarkSuggestion = $state<SuggestionState<Bookmark>>(createInitialSuggestionState());
   let refSuggestion = $state<SuggestionState<RefSuggestionItem>>(createInitialSuggestionState());
   let tagCommand: ((item: Tag) => void) | null = null;
   let slashCommandFn: ((item: SlashCommand) => void) | null = null;
@@ -163,8 +161,6 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
             },
           },
         }),
-        // Legacy BookmarkChip - kept for hydrating old data, but no suggestion
-        BookmarkChip,
         // Unified RefChip with @ trigger for both annotations and bookmarks
         RefChip.configure({
           suggestion: {
@@ -377,7 +373,6 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
     get editor() { return editor; },
     get tagSuggestion() { return tagSuggestion; },
     get slashSuggestion() { return slashSuggestion; },
-    get bookmarkSuggestion() { return bookmarkSuggestion; },
     get refSuggestion() { return refSuggestion; },
 
     /** Execute selected tag item */

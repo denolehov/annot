@@ -67,7 +67,6 @@ vi.mock('../tiptap/extensions', () => ({
   TagChip: { configure: vi.fn(() => ({})) },
   PasteChip: {},
   MediaChip: {},
-  BookmarkChip: {},
   RefChip: { configure: vi.fn(() => ({})) },
   ReplacePreview: {},
   ExcalidrawChip: {},
