@@ -124,4 +124,7 @@ pub struct ListBookmarksInput {
 
     #[schemars(description = "Filter by project path")]
     pub project: Option<String>,
+
+    #[schemars(description = "Sort order by creation date: \"asc\" (oldest first, default) or \"desc\" (newest first)")]
+    pub sort: Option<String>,
 }

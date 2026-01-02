@@ -173,7 +173,7 @@ impl AnnotServer {
         }
     }
 
-    #[tool(description = "List all bookmarks, optionally filtered by search query, project path, or limited to a maximum count. Returns a summary list with IDs, labels, sources, and creation dates.")]
+    #[tool(description = "List all bookmarks, optionally filtered by search query, project path, or limited to a maximum count. Returns a summary list with IDs, labels, creation dates, sources, and projects. Sorted by creation date ascending (oldest first) by default; use sort=\"desc\" for newest first.")]
     async fn list_bookmarks(
         &self,
         params: Parameters<ListBookmarksInput>,
@@ -213,8 +213,15 @@ impl AnnotServer {
                 })
                 .collect();
 
-            // Sort by created_at descending (newest first)
-            filtered.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+            // Sort by created_at (ascending/oldest first by default)
+            let descending = input.sort.as_deref() == Some("desc");
+            filtered.sort_by(|a, b| {
+                if descending {
+                    b.created_at.cmp(&a.created_at)
+                } else {
+                    a.created_at.cmp(&b.created_at)
+                }
+            });
 
             // Apply limit
             if let Some(limit) = input.limit {
