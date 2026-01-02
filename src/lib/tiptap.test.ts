@@ -7,9 +7,9 @@ import {
   parseFenceFromJson,
   transformReplaceFenceToPreview,
   transformReplacePreviewToFence,
-  ReplacePreview,
   shouldChip,
 } from './tiptap';
+import { ReplacePreview } from './tiptap/extensions';
 import { Editor, type JSONContent } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 
