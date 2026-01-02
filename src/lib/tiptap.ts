@@ -1,5 +1,5 @@
 import { Node, Extension, mergeAttributes, type JSONContent } from '@tiptap/core';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import Suggestion, { type SuggestionOptions, type SuggestionProps, type SuggestionKeyDownProps } from '@tiptap/suggestion';
 import { computePosition, offset, flip, shift, arrow } from '@floating-ui/dom';
 import type { ContentNode, Tag, Bookmark } from './types';
@@ -1396,6 +1396,18 @@ export function createSlashSuggestion(
           .focus()
           .deleteRange(range)
           .insertContent(contentNodes)
+          .command(({ tr, dispatch }) => {
+            // Position cursor at end of last content line (before closing fence)
+            const doc = tr.doc;
+            const lastChild = doc.lastChild;
+            if (lastChild && lastChild.type.name === 'paragraph') {
+              // Move cursor to end of the paragraph before the closing fence
+              const endOfContent = doc.content.size - lastChild.nodeSize - 1;
+              tr.setSelection(TextSelection.create(doc, endOfContent));
+            }
+            if (dispatch) dispatch(tr);
+            return true;
+          })
           .run();
       },
     },
