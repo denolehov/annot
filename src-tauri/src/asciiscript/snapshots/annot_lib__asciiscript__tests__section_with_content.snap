@@ -1,0 +1,7 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        section \"General\" {\n            checkbox \"Option 1\"\n            checkbox \"Option 2\" checked\n        }\n    }\"#).unwrap()"
+---
+## General
+  [ ] Option 1
+  [x] Option 2

@@ -1,0 +1,9 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        box \"Settings\" {\n            text \"Box content\"\n        }\n    }\"#).unwrap()"
+---
++-- Settings --+
+|              |
+| Box content  |
+|              |
++--------------+

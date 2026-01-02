@@ -1,0 +1,18 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        table {\n            header { col \"Row\" width:5 col \"Value\" width:15 }\n            tr { td \"1\" td \"First\" }\n            tr { td \"2\" td \"Second\" }\n            tr { td \"3\" td \"Third\" }\n            tr { td \"4\" td \"Fourth\" }\n            tr { td \"5\" td \"Fifth\" }\n            tr { td \"6\" td \"Sixth\" }\n            tr { td \"7\" td \"Seventh\" }\n            tr { td \"8\" td \"Eighth\" }\n            tr { td \"9\" td \"Ninth\" }\n            tr { td \"10\" td \"Tenth\" }\n        }\n    }\"#).unwrap()"
+---
++-------+-----------------+
+| Row   | Value           |
++-------+-----------------+
+| 1     | First           |
+| 2     | Second          |
+| 3     | Third           |
+| 4     | Fourth          |
+| 5     | Fifth           |
+| 6     | Sixth           |
+| 7     | Seventh         |
+| 8     | Eighth          |
+| 9     | Ninth           |
+| 10    | Tenth           |
++-------+-----------------+

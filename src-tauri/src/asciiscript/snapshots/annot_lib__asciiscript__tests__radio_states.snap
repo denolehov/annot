@@ -1,0 +1,7 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        radio \"Option A\"\n        radio \"Option B\" selected\n        radio \"Option C\"\n    }\"#).unwrap()"
+---
+( ) Option A
+(o) Option B
+( ) Option C

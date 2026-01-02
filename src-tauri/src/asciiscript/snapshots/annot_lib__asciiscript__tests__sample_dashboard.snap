@@ -1,0 +1,18 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n  window \"Dashboard\" width:60 {\n    section \"Build Status\" {\n      row {\n        text \"main\"\n        progress 100\n        text \"passing\" style:bold\n      }\n      row {\n        text \"develop\"\n        progress 75\n        text \"building...\"\n      }\n      row {\n        text \"feature/auth\"\n        progress 30\n        text \"failing\" style:danger\n      }\n    }\n    separator\n    section \"Quick Actions\" {\n      row gap:2 {\n        button \"New Build\"\n        button \"Settings\"\n        spacer\n        link \"View Logs\"\n      }\n    }\n    alert type:info { text \"Last deploy: 2 hours ago\" }\n  }\n}\"#).unwrap()"
+---
++-- Dashboard ---------------------------------------------+
+|                                                          |
+| ## Build Status                                          |
+|   main [█████████████] 100% passing                      |
+|   develop [█████████░░░░] 75% building...                |
+|   feature/auth [███░░░░░░░░░░] 30% failing               |
+| -------------------------------------------------------- |
+| ## Quick Actions                                         |
+|   [ New Build ]  [ Settings ]                View Logs   |
+| ┌─ INFO ───────────────────────────────────────────────┐ |
+| │ Last deploy: 2 hours ago                             │ |
+| └──────────────────────────────────────────────────────┘ |
+|                                                          |
++----------------------------------------------------------+
