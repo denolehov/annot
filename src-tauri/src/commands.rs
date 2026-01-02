@@ -11,8 +11,8 @@ use crate::output::{export_content, export_section, format_output, OutputMode};
 use crate::review::ActiveReview;
 use crate::input::{ContentSource, McpSource};
 use crate::state::{
-    Bookmark, BookmarkSnapshot, ContentNode, ContentResponse, ExitMode, SessionType, Tag,
-    TagUsageStats,
+    Bookmark, BookmarkSnapshot, ContentMetadata, ContentNode, ContentResponse, ExitMode,
+    SessionType, Tag, TagUsageStats,
 };
 use crate::ShouldExit;
 
@@ -316,6 +316,15 @@ pub fn create_bookmark(
             source_title,
             context,
         };
+
+        // Auto-derive label from H1 heading for markdown content if not provided
+        let label = label.or_else(|| {
+            if let ContentMetadata::Markdown(md) = &review.root_view.content().metadata {
+                md.sections.iter().find(|s| s.level == 1).map(|s| s.title.clone())
+            } else {
+                None
+            }
+        });
 
         // Get current working directory as project path
         let project_path = std::env::current_dir().ok();
