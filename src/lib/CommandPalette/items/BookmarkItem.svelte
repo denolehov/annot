@@ -16,6 +16,14 @@
       day: 'numeric',
     })
   );
+
+  // Extract project folder name from full path
+  const projectName = $derived(() => {
+    const path = item.values.project_path as string;
+    if (!path) return null;
+    const segments = path.split('/').filter(Boolean);
+    return segments[segments.length - 1] || null;
+  });
 </script>
 
 <div class="bookmark-item" data-state={selectionState}>
@@ -28,7 +36,7 @@
     {/if}
   </div>
   <div class="secondary">
-    {item.values.source_title} &bull; {dateStr}
+    {#if projectName()}<span class="project">{projectName()}</span> &bull; {/if}{item.values.source_title} &bull; {dateStr}
   </div>
 </div>
 
@@ -97,5 +105,9 @@
     font-size: 11px;
     color: var(--text-secondary);
     padding-left: 36px;
+  }
+
+  .project {
+    color: var(--text-tertiary);
   }
 </style>
