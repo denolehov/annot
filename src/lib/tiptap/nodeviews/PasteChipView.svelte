@@ -33,11 +33,6 @@
 
 <NodeViewWrapper
 	as="span"
-	class="tag-chip paste-chip {selected ? 'selected' : ''}"
+	class="tag-chip-wrapper"
 	data-paste-chip
->
-	<span class="chip-hover-target" use:tooltip={{ content: tooltipHtml, variant: 'paste-tooltip', html: true }}>
-		<span class="tag-icon"><ClipboardIcon /></span>
-		<span class="tag-content">{label}</span>
-	</span>
-</NodeViewWrapper>
+><span class="tag-chip paste-chip {selected ? 'selected' : ''}"><span class="chip-hover-target" use:tooltip={{ content: tooltipHtml, variant: 'paste-tooltip', html: true }}><span class="tag-icon"><ClipboardIcon /></span><span class="tag-content">{label}</span></span></span></NodeViewWrapper>

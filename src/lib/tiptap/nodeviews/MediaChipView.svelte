@@ -8,9 +8,6 @@
 
 <NodeViewWrapper
 	as="span"
-	class="tag-chip media-chip {selected ? 'selected' : ''}"
+	class="tag-chip-wrapper"
 	data-media-chip
->
-	<span class="tag-icon"><ImageIcon /></span>
-	<span class="tag-content">Image</span>
-</NodeViewWrapper>
+><span class="tag-chip media-chip {selected ? 'selected' : ''}"><span class="tag-icon"><ImageIcon /></span><span class="tag-content">Image</span></span></NodeViewWrapper>

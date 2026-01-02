@@ -2,6 +2,14 @@
    COMPONENT: TAG CHIPS
    Dithered background matching inline code blocks
    =========================================== */
+
+/* Outer wrapper for cursor positioning - minimal styling */
+.tag-chip-wrapper {
+	display: inline;
+	vertical-align: middle;
+}
+
+/* Visual chip styling */
 .tag-chip {
 	display: inline-flex;
 	align-items: center;
@@ -13,6 +21,7 @@
 	font-family: var(--font-ui);
 	vertical-align: middle;
 	margin: 0 2px;
+	margin-left: 1px; /* Space for cursor before chip */
 	position: relative;
 	cursor: default;
 	/* Dot pattern base - tactile, warm */
@@ -23,6 +32,7 @@
 	border: 1px solid var(--border-code);
 	transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
+
 
 /* Hover target wrapper for Svelte component chips (tooltip action host) */
 .chip-hover-target {
@@ -306,7 +316,9 @@
 }
 
 /* Selected chip (via backspace or click) */
-.tag-chip.ProseMirror-selectednode {
+.tag-chip.ProseMirror-selectednode,
+.tag-chip-wrapper.ProseMirror-selectednode .tag-chip,
+.tag-chip.selected {
 	outline: none;
 	border-color: var(--selection-border);
 	box-shadow: 0 0 0 2px var(--selection-bg);

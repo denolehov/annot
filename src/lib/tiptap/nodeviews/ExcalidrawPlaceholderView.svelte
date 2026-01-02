@@ -25,11 +25,6 @@
 
 <NodeViewWrapper
 	as="span"
-	class="tag-chip excalidraw-placeholder"
+	class="tag-chip-wrapper"
 	data-excalidraw-placeholder
->
-	<span class="chip-hover-target" bind:this={chipEl}>
-		<span class="tag-icon"><ExcalidrawIcon /></span>
-		<span class="tag-content">Drawing...</span>
-	</span>
-</NodeViewWrapper>
+><span class="tag-chip excalidraw-placeholder"><span class="chip-hover-target" bind:this={chipEl}><span class="tag-icon"><ExcalidrawIcon /></span><span class="tag-content">Drawing...</span></span></span></NodeViewWrapper>

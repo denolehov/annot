@@ -26,12 +26,6 @@
 
 <NodeViewWrapper
 	as="span"
-	class="tag-chip excalidraw-chip {selected ? 'selected' : ''}"
+	class="tag-chip-wrapper"
 	data-excalidraw-chip
->
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->
-	<span class="chip-hover-target" bind:this={chipEl} onclick={handleClick}>
-		<span class="tag-icon"><ExcalidrawIcon /></span>
-		<span class="tag-content">Excalidraw</span>
-	</span>
-</NodeViewWrapper>
+><span class="tag-chip excalidraw-chip {selected ? 'selected' : ''}"><!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions --><span class="chip-hover-target" bind:this={chipEl} onclick={handleClick}><span class="tag-icon"><ExcalidrawIcon /></span><span class="tag-content">Excalidraw</span></span></span></NodeViewWrapper>

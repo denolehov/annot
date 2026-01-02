@@ -15,17 +15,6 @@
 
 <NodeViewWrapper
 	as="span"
-	class="tag-chip ref-chip ref-{refType || 'unknown'} {selected ? 'selected' : ''}"
+	class="tag-chip-wrapper"
 	data-ref-chip
->
-	{#if refType === 'file' && path}
-		<FileRefChip {path} />
-	{:else if refType === 'annotation' && snapshot?.type === 'annotation'}
-		<AnnotationRefChip {snapshot} />
-	{:else if refType === 'bookmark' && snapshot?.type === 'bookmark'}
-		<BookmarkRefChip snapshot={snapshot.bookmark} />
-	{:else}
-		<span class="ref-icon">@</span>
-		<span class="ref-content">?</span>
-	{/if}
-</NodeViewWrapper>
+><span class="tag-chip ref-chip ref-{refType || 'unknown'} {selected ? 'selected' : ''}">{#if refType === 'file' && path}<FileRefChip {path} />{:else if refType === 'annotation' && snapshot?.type === 'annotation'}<AnnotationRefChip {snapshot} />{:else if refType === 'bookmark' && snapshot?.type === 'bookmark'}<BookmarkRefChip snapshot={snapshot.bookmark} />{:else}<span class="ref-icon">@</span><span class="ref-content">?</span>{/if}</span></NodeViewWrapper>

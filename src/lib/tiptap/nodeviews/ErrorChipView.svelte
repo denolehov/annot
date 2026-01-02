@@ -9,11 +9,6 @@
 
 <NodeViewWrapper
 	as="span"
-	class="tag-chip error-chip {selected ? 'selected' : ''}"
+	class="tag-chip-wrapper"
 	data-error-chip
->
-	<span class="chip-hover-target" use:tooltip={{ content: node.attrs.message, variant: 'error-tooltip' }}>
-		<span class="tag-icon"><WarningIcon /></span>
-		<span class="tag-content">{node.attrs.source} syntax error</span>
-	</span>
-</NodeViewWrapper>
+><span class="tag-chip error-chip {selected ? 'selected' : ''}"><span class="chip-hover-target" use:tooltip={{ content: node.attrs.message, variant: 'error-tooltip' }}><span class="tag-icon"><WarningIcon /></span><span class="tag-content">{node.attrs.source} syntax error</span></span></span></NodeViewWrapper>
