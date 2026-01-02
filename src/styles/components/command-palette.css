@@ -85,8 +85,7 @@
 	flex-shrink: 0;
 }
 
-.filter-view .separator,
-.form-view .separator {
+.input-row .separator {
 	display: flex;
 	align-items: center;
 	padding: 0 6px;

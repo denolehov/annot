@@ -614,8 +614,12 @@ impl UserConfig {
 
     /// Insert or update an exit mode, then save to disk.
     /// Only persists modes with Persisted source (not transient or command).
-    pub fn upsert_exit_mode(&mut self, mode: ExitMode) {
+    pub fn upsert_exit_mode(&mut self, mut mode: ExitMode) {
         if let Some(existing) = self.exit_modes.iter_mut().find(|m| m.id == mode.id) {
+            // Preserve the original source to prevent command/transient modes
+            // from being accidentally converted to persisted (frontend doesn't
+            // understand the Command variant and sends Persisted by default).
+            mode.source = existing.source.clone();
             *existing = mode;
         } else {
             self.exit_modes.push(mode);
