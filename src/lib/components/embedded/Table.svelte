@@ -16,6 +16,7 @@
     splitTableRow,
   } from '$lib/utils/tableParser';
   import { getAnnotContext } from '$lib/context';
+  import { highlightMatches, clearHighlights } from '$lib/search-highlight';
   import ChoiceButtons from '$lib/components/ChoiceButtons.svelte';
 
   interface Props {
@@ -29,6 +30,74 @@
   let { lines, isLineBookmarked, isFirstLineOfBookmark, deleteBookmarkAtLine, annotationSlot }: Props = $props();
 
   const ctx = getAnnotContext();
+
+  // Search highlighting state - track refs per cell to avoid cross-cell DOM manipulation
+  const searchMatches = $derived(ctx.search.matches);
+  let cellRefs: Map<string, HTMLElement> = new Map();
+
+  // Svelte action to track cell element refs for search highlighting
+  // Key format: "displayIndex-colIndex"
+  function setCellRef(el: HTMLElement, key: { displayIndex: number; colIndex: number }) {
+    const refKey = `${key.displayIndex}-${key.colIndex}`;
+    cellRefs.set(refKey, el);
+    return {
+      destroy() {
+        cellRefs.delete(refKey);
+      },
+    };
+  }
+
+  // Apply search highlights when matches change
+  $effect(() => {
+    // Clear all previous highlights first
+    for (const el of cellRefs.values()) {
+      clearHighlights(el);
+    }
+
+    // Apply highlights per cell
+    const currentSearchMatch = ctx.search.getCurrentMatch();
+    for (const match of searchMatches) {
+      // Find the line data for this match
+      const lineData = lines.find(l => l.displayIndex === match.displayIndex);
+      if (!lineData) continue;
+
+      const cells = splitTableRow(lineData.line.content);
+      const isCurrent = currentSearchMatch?.displayIndex === match.displayIndex;
+
+      // Calculate cell boundaries (cumulative offsets)
+      const cellBoundaries: Array<{ start: number; end: number }> = [];
+      let offset = 0;
+      for (const cell of cells) {
+        const cellText = lineData.line.html?.type === 'cells'
+          ? (() => { const div = document.createElement('div'); div.innerHTML = lineData.line.html.value[cellBoundaries.length]; return div.textContent ?? cell; })()
+          : cell;
+        cellBoundaries.push({ start: offset, end: offset + cellText.length });
+        offset += cellText.length;
+      }
+
+      // For each match range, split it across cells
+      for (let rangeIdx = 0; rangeIdx < match.ranges.length; rangeIdx++) {
+        const range = match.ranges[rangeIdx];
+        const isCurrentRange = isCurrent && rangeIdx === 0;
+
+        for (let colIndex = 0; colIndex < cellBoundaries.length; colIndex++) {
+          const cell = cellBoundaries[colIndex];
+
+          // Check if this range overlaps with this cell
+          if (range.end <= cell.start || range.start >= cell.end) continue;
+
+          // Calculate the intersection
+          const cellRangeStart = Math.max(0, range.start - cell.start);
+          const cellRangeEnd = Math.min(cell.end - cell.start, range.end - cell.start);
+
+          const el = cellRefs.get(`${match.displayIndex}-${colIndex}`);
+          if (el) {
+            highlightMatches(el, [{ start: cellRangeStart, end: cellRangeEnd }], isCurrentRange ? 0 : null);
+          }
+        }
+      }
+    }
+  });
 
   // Scroll state for edge shadows
   let canScrollLeft = $state(false);
@@ -170,11 +239,15 @@
               {@const cellHtml = line.html?.type === 'cells' ? line.html.value[colIndex] : null}
               {#if isHeader}
                 <th class="table-cell" style:text-align={getAlignStyle(colIndex)}>
-                  {#if cellHtml}{@html cellHtml}{:else}{cell}{/if}
+                  <span class="cell-content" use:setCellRef={{ displayIndex, colIndex }}>
+                    {#if cellHtml}{@html cellHtml}{:else}{cell}{/if}
+                  </span>
                 </th>
               {:else}
                 <td class="table-cell" style:text-align={getAlignStyle(colIndex)}>
-                  {#if cellHtml}{@html cellHtml}{:else}{cell}{/if}
+                  <span class="cell-content" use:setCellRef={{ displayIndex, colIndex }}>
+                    {#if cellHtml}{@html cellHtml}{:else}{cell}{/if}
+                  </span>
                 </td>
               {/if}
             {/each}
@@ -314,6 +387,11 @@
     padding: 0 12px;
     white-space: pre;
     vertical-align: middle;
+  }
+
+  /* Cell content wrapper for search highlighting */
+  .cell-content {
+    display: inline;
   }
 
   /* First row top border */

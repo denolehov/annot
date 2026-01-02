@@ -7,6 +7,7 @@
   import type { Line, PortalSemantics } from '$lib/types';
   import { getLineNumber } from '$lib/line-utils';
   import { getAnnotContext } from '$lib/context';
+  import { highlightMatches, clearHighlights } from '$lib/search-highlight';
   import LineRow from './LineRow.svelte';
 
   interface Props {
@@ -20,6 +21,39 @@
   let { lines, isLineBookmarked, isFirstLineOfBookmark, deleteBookmarkAtLine, annotationSlot }: Props = $props();
 
   const ctx = getAnnotContext();
+
+  // Search highlighting state
+  const searchMatches = $derived(ctx.search.matches);
+  let codeRefs: Map<number, HTMLElement> = new Map();
+
+  // Svelte action to track code element refs for search highlighting
+  function setCodeRef(el: HTMLElement, displayIndex: number) {
+    codeRefs.set(displayIndex, el);
+    return {
+      destroy() {
+        codeRefs.delete(displayIndex);
+      },
+    };
+  }
+
+  // Apply search highlights when matches change
+  $effect(() => {
+    // Clear all previous highlights first
+    for (const el of codeRefs.values()) {
+      clearHighlights(el);
+    }
+
+    // Apply new highlights
+    const currentSearchMatch = ctx.search.getCurrentMatch();
+    for (const match of searchMatches) {
+      const el = codeRefs.get(match.displayIndex);
+      if (el) {
+        const isCurrent = currentSearchMatch?.displayIndex === match.displayIndex;
+        const currentRangeIndex = isCurrent ? 0 : null;
+        highlightMatches(el, match.ranges, currentRangeIndex);
+      }
+    }
+  });
 
   // Get portal semantics from a line
   function getPortalSemantics(line: Line): PortalSemantics | null {
@@ -72,6 +106,12 @@
         {:else}
           {line.content}
         {/if}
+      {/snippet}
+
+      {#snippet codeWrapper(innerContent)}
+        <span class="code" use:setCodeRef={displayIndex}>
+          {@render innerContent()}
+        </span>
       {/snippet}
     </LineRow>
     {@render annotationSlot(displayIndex, rangeKey)}

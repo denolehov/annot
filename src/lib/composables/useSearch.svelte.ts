@@ -24,7 +24,8 @@ function getRenderedText(line: Line): string {
   if (line.html.type === 'full') {
     div.innerHTML = line.html.value;
   } else if (line.html.type === 'cells') {
-    div.innerHTML = line.html.value.join(' ');
+    // Join without spaces to match DOM structure (cells are adjacent in TreeWalker)
+    div.innerHTML = line.html.value.join('');
   } else {
     // Exhaustive check: if a new LineHtml type is added, TypeScript will error here
     const _exhaustive: never = line.html;

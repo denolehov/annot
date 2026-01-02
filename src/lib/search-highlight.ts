@@ -13,10 +13,27 @@ interface TextNodeInfo {
 
 /**
  * Collects all text nodes within a container, with their cumulative character offsets.
+ * Skips elements with class "gutter-cell" or "gutter" to avoid offset misalignment in tables.
  */
 function getTextNodes(container: HTMLElement): TextNodeInfo[] {
   const nodes: TextNodeInfo[] = [];
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+  const walker = document.createTreeWalker(
+    container,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode(node: Node): number {
+        // Skip text nodes inside gutter elements
+        let parent = node.parentElement;
+        while (parent && parent !== container) {
+          if (parent.classList.contains('gutter-cell') || parent.classList.contains('gutter')) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          parent = parent.parentElement;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    }
+  );
 
   let offset = 0;
   let node: Text | null;
