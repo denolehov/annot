@@ -1,3 +1,13 @@
+//! Output formatting for annotation sessions.
+//!
+//! This module formats review sessions into structured text for LLM consumption.
+//! It uses a declarative OutputBuilder to construct output with automatic
+//! indentation and alignment.
+
+mod builder;
+mod formatters;
+mod render;
+
 use std::collections::{BTreeMap, HashMap};
 
 use crate::lang;
@@ -5,9 +15,14 @@ use crate::mcp::tools::SessionImage;
 use crate::portal::LoadedPortal;
 use crate::review::{FileKey, Review};
 use crate::state::{
-    Annotation, Bookmark, ContentMetadata, ContentModel, ContentNode, LineOrigin, LineSemantics,
-    PortalSemantics, RefSnapshot,
+    Annotation, Bookmark, ContentModel, ContentNode, LineSemantics,
+    PortalSemantics,
 };
+
+pub use builder::{BuilderMode, OutputBuilder, SECTION_DIVIDER, SEPARATOR};
+pub use render::render_content;
+
+use formatters::{calculate_builder_mode, format_annotation, format_bookmark, format_legend, format_session};
 
 /// Output mode determines how content is formatted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -32,18 +47,6 @@ pub struct FormatResult {
 /// When content contains portal links (e.g., `[label](file.rs#L10-L20)`),
 /// the exported text includes the portal content as fenced code blocks
 /// immediately after the source line containing the link.
-///
-/// Example output:
-/// ```markdown
-/// Check the [validation logic](src/auth.rs#L42-L58).
-///
-/// <!-- portal: src/auth.rs#L42-L58 -->
-/// ```rust
-/// pub fn validate(token: &str) -> bool {
-///     // code from lines 42-58
-/// }
-/// ```
-/// ```
 pub fn export_content(content: &ContentModel) -> String {
     // If no portals, just join all lines
     if content.portals.is_empty() {
@@ -177,8 +180,6 @@ pub fn export_section(content: &ContentModel, start_line: u32, end_line: u32) ->
 
         // Skip lines outside our range
         if current_line < start_line || current_line > end_line {
-            // But still need to emit portals if any were at this line
-            // (shouldn't happen since portal.insert_at is within range check above)
             continue;
         }
 
@@ -288,7 +289,7 @@ fn collect_unique_bookmarks(review: &Review) -> Vec<Bookmark> {
                         .or_insert_with(|| bookmark.clone());
                 }
                 ContentNode::Ref { snapshot, .. } => {
-                    if let RefSnapshot::Bookmark { bookmark } = snapshot {
+                    if let crate::state::RefSnapshot::Bookmark { bookmark } = snapshot {
                         bookmarks
                             .entry(bookmark.id.clone())
                             .or_insert_with(|| bookmark.clone());
@@ -347,155 +348,98 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
         };
     }
 
-    let mut output = String::new();
     let mut images = Vec::new();
     let mut figure_counter = 0usize;
+
+    // Calculate max line number for builder mode
+    let max_line = calculate_max_line(review);
+    let builder_mode = calculate_builder_mode(content, max_line);
+    let mut out = OutputBuilder::new(builder_mode);
 
     // LEGEND block (if any tags are used)
     let unique_tags = collect_unique_tags(review);
     if !unique_tags.is_empty() {
-        output.push_str("LEGEND:\n");
-        for (name, instruction) in &unique_tags {
-            output.push_str(&format!("  [# {}] {}\n", name, instruction));
-        }
-        output.push('\n');
+        out.section("LEGEND", |b| {
+            format_legend(b, &unique_tags);
+        });
     }
 
     // BOOKMARKS REFERENCED block (if any bookmarks are referenced)
-    // Uses embedded bookmark data — works even if bookmark was deleted (detached)
     let unique_bookmarks = collect_unique_bookmarks(review);
     if !unique_bookmarks.is_empty() {
-        output.push_str("BOOKMARKS REFERENCED:\n");
-        for bookmark in &unique_bookmarks {
-            let short_id = &bookmark.id[..bookmark.id.len().min(3)];
-            let display_label = bookmark.display_label();
-
-            if review.session_created_bookmarks.contains(&bookmark.id) {
-                // Condensed: created this session, agent already has context
-                output.push_str(&format!(
-                    "  [@ {}] {} (this session)\n",
-                    short_id, display_label
-                ));
-            } else {
-                // Full: pre-existing bookmark, emit full context
-                output.push_str(&format!("  [@ {}] {}\n", short_id, display_label));
-                output.push_str(&format!(
-                    "    Source: {}\n",
-                    bookmark.snapshot.source_title()
-                ));
-                if let Some(ref project) = bookmark.project_path {
-                    output.push_str(&format!("    Project: {}\n", project.display()));
-                }
-                output.push_str(&format!(
-                    "    Created: {}\n",
-                    bookmark.created_at.format("%Y-%m-%d")
-                ));
-                output.push_str("    ────────────────────────────────────\n");
-                // Show full bookmark content
-                for line in bookmark.snapshot.content().lines() {
-                    output.push_str(&format!("    {}\n", line));
-                }
-                output.push_str("    ────────────────────────────────────\n\n");
+        out.section("BOOKMARKS REFERENCED", |b| {
+            for bookmark in &unique_bookmarks {
+                let created_this_session = review.session_created_bookmarks.contains(&bookmark.id);
+                format_bookmark(b, bookmark, created_this_session);
             }
-        }
+        });
     }
 
     // SESSION block (if exit mode selected or session comment exists)
     if has_exit_mode || has_session_comment {
-        output.push_str("SESSION:\n");
-
-        // If there are portals, show "Reviewing X with embedded files: Y, Z"
-        if !content.portals.is_empty() {
+        // Prepare session data
+        let portals_header = if !content.portals.is_empty() {
             let root_name = &content.label;
             let embedded_files: Vec<_> = content
                 .portals
                 .iter()
                 .map(|p| p.source_path.display().to_string())
                 .collect();
-            output.push_str(&format!(
-                "  Reviewing {} with embedded files: {}\n",
+            Some(format!(
+                "Reviewing {} with embedded files: {}",
                 root_name,
                 embedded_files.join(", ")
-            ));
-        }
+            ))
+        } else {
+            None
+        };
 
-        // Session comment (no prefix, directly indented)
-        if let Some(ref comment) = review.session_comment {
-            if !comment.is_empty() {
-                let comment_text = render_content(comment, &mut images, &mut figure_counter, mode);
-                for line in comment_text.lines() {
-                    output.push_str(&format!("  {}\n", line));
-                }
+        let session_comment_text = review.session_comment.as_ref().and_then(|comment| {
+            if comment.is_empty() {
+                None
+            } else {
+                Some(render_content(comment, &mut images, &mut figure_counter, mode))
             }
-        }
+        });
 
-        // Exit mode (original format: "Name (instruction)")
-        // If it's a command exit mode, also include the command path and content
-        if let Some(ref mode_id) = review.selected_exit_mode_id {
-            if let Some(exit_mode) = review.config.exit_modes().iter().find(|m| &m.id == mode_id) {
-                output.push_str(&format!("  {} ({})\n", exit_mode.name, exit_mode.instruction));
-                // Include command path and content for command exit modes
-                if let Some(cmd_path) = exit_mode.command_path() {
-                    output.push_str(&format!("    Command: {}\n", cmd_path.display()));
-                    // Read and include the command file content
-                    if let Ok(cmd_content) = std::fs::read_to_string(cmd_path) {
-                        output.push_str("    ────────────────────────────────────\n");
-                        for line in cmd_content.lines() {
-                            output.push_str(&format!("    {}\n", line));
-                        }
-                        output.push_str("    ────────────────────────────────────\n");
-                    }
-                }
-            }
-        }
+        let exit_mode_info = review.selected_exit_mode_id.as_ref().and_then(|mode_id| {
+            review
+                .config
+                .exit_modes()
+                .iter()
+                .find(|m| &m.id == mode_id)
+                .map(|em| (em.name.as_str(), em.instruction.as_str(), em.command_path()))
+        });
 
+        let command_content = exit_mode_info.as_ref().and_then(|(_, _, cmd_path)| {
+            cmd_path.and_then(|path| {
+                std::fs::read_to_string(path)
+                    .ok()
+                    .map(|content| (path.display().to_string(), content))
+            })
+        });
+
+        out.section("SESSION", |b| {
+            format_session(
+                b,
+                portals_header.as_deref(),
+                session_comment_text.as_deref(),
+                exit_mode_info.map(|(name, instr, _)| (name, instr)),
+                command_content.as_ref().map(|(p, c)| (p.as_str(), c.as_str())),
+            );
+        });
+
+        // Remove the trailing blank line from section, add divider if annotations follow
+        // Actually section adds blank line, we need divider before annotations
         if has_annotations {
-            output.push_str("\n---\n\n");
+            // Section already added blank line, we need "---" separator
+            out.raw("---\n\n");
         }
     }
 
     // Build annotation blocks (if any)
     if has_annotations {
-        let files_with_annotations: Vec<(String, &_)> = if let Some(diff_files) = review.root_view.diff_files() {
-            // Diff mode: use DiffFileView for display paths, enumerate for index
-            diff_files
-                .iter()
-                .enumerate()
-                .filter_map(|(index, df)| {
-                    let key = FileKey::diff_file(index);
-                    review.files.get(&key).and_then(|target| {
-                        if target.annotations.is_empty() {
-                            None
-                        } else {
-                            Some((df.path.display().to_string(), target))
-                        }
-                    })
-                })
-                .collect()
-        } else {
-            // File mode: extract display string from FileKey
-            review
-                .files
-                .iter()
-                .filter(|(_, target)| !target.annotations.is_empty())
-                .filter_map(|(key, target)| {
-                    match key {
-                        FileKey::Path(p) => Some((p.display().to_string(), target)),
-                        FileKey::Ephemeral { label } => Some((label.clone(), target)),
-                        FileKey::DiffFile { .. } => None, // Should not happen in file mode
-                    }
-                })
-                .collect()
-        };
-
-        // Calculate max line number width across all annotations
-        let max_line = files_with_annotations
-            .iter()
-            .flat_map(|(_, target)| target.annotations.values())
-            .map(|a| a.end_line)
-            .max()
-            .unwrap_or(0);
-        let line_num_width = max_line.to_string().len();
+        let files_with_annotations = collect_files_with_annotations(review);
 
         let mut first_block = true;
         for (display_path, target) in &files_with_annotations {
@@ -505,15 +449,14 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
 
             for ann in sorted_annotations {
                 if !first_block {
-                    output.push_str("\n---\n\n");
+                    out.divider();
                 }
                 first_block = false;
-                format_annotation_block(
-                    &mut output,
+                format_annotation(
+                    &mut out,
                     content,
                     ann,
                     display_path,
-                    line_num_width,
                     &mut images,
                     &mut figure_counter,
                     mode,
@@ -524,302 +467,67 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
 
     // Saved path (single location, always runs)
     if let Some(ref saved_path) = review.saved_to {
-        if !output.is_empty() {
-            output.push('\n');
+        if !out.is_empty() {
+            out.blank_line();
         }
-        output.push_str(&format!("Saved to {}\n", saved_path.display()));
+        out.raw_line(&format!("Saved to {}", saved_path.display()));
     }
 
     FormatResult {
-        text: output,
+        text: out.build(),
         images,
     }
 }
 
-/// Format a single annotation block with context and content.
-fn format_annotation_block(
-    out: &mut String,
-    content: &ContentModel,
-    ann: &Annotation,
-    file_path: &str,
-    line_num_width: usize,
-    images: &mut Vec<SessionImage>,
-    figure_counter: &mut usize,
-    mode: OutputMode,
-) {
-    let is_diff = matches!(content.metadata, ContentMetadata::Diff(_));
-    let file_label = file_path;
-
-    // File header: "file.rs:10-15" or "file.rs:10"
-    // For diffs, include old/new line numbers if available
-    if is_diff {
-        format_diff_header(out, content, ann, file_path);
-    } else if ann.start_line == ann.end_line {
-        out.push_str(&format!("{}:{}\n", file_label, ann.start_line));
-    } else {
-        out.push_str(&format!(
-            "{}:{}-{}\n",
-            file_label, ann.start_line, ann.end_line
-        ));
-    }
-
-    // Context line (1 line before, if exists and non-empty)
-    if ann.start_line > 1 {
-        let context_line_num = ann.start_line - 1;
-        if let Some(line) = content.find_line(file_path, context_line_num) {
-            if !line.content.trim().is_empty() {
-                // Format: "    N | content" (3 extra spaces for ">" prefix alignment)
-                if is_diff {
-                    format_diff_line(out, content, file_path, context_line_num, &line.content, false, line_num_width);
-                } else {
-                    out.push_str(&format!(
-                        "{:>width$} | {}\n",
-                        context_line_num,
-                        line.content,
-                        width = line_num_width + 3
-                    ));
-                }
-            }
-        }
-    }
-
-    // Selected lines with ">" prefix
-    for line_num in ann.start_line..=ann.end_line {
-        if let Some(line) = content.find_line(file_path, line_num) {
-            if is_diff {
-                format_diff_line(out, content, file_path, line_num, &line.content, true, line_num_width);
-            } else {
-                // Format: ">  N | content"
-                out.push_str(&format!(
-                    "> {:>width$} | {}\n",
-                    line_num,
-                    line.content,
-                    width = line_num_width + 1
-                ));
-            }
-        }
-    }
-
-    // Annotation content with arrow (aligned with the pipe "|")
-    // For non-diff: "> {:>width$} | " - pipe at position 2 + (line_num_width+1) + 1
-    // For diff: "{}{:>w$}:{:<w$} | " - pipe at position 2 + w + 1 + w + 1
-    let arrow_indent = if is_diff {
-        " ".repeat(2 * line_num_width + 4)
-    } else {
-        " ".repeat(line_num_width + 4)
-    };
-    let content_text = render_content(&ann.content, images, figure_counter, mode);
-
-    for (i, content_line) in content_text.lines().enumerate() {
-        if i == 0 {
-            out.push_str(&format!("{}└──> {}\n", arrow_indent, content_line));
-        } else {
-            // Continuation lines: align with content after arrow
-            let continuation_indent = format!("{}     ", arrow_indent); // 5 chars for "└──> "
-            out.push_str(&format!("{}{}\n", continuation_indent, content_line));
-        }
-    }
+/// Calculate max line number across all annotations.
+fn calculate_max_line(review: &Review) -> u32 {
+    review
+        .files
+        .values()
+        .flat_map(|target| target.annotations.values())
+        .map(|a| a.end_line)
+        .max()
+        .unwrap_or(0)
 }
 
-/// Format diff header with file info from annotation range.
-fn format_diff_header(
-    out: &mut String,
-    content: &ContentModel,
-    ann: &Annotation,
-    file_path: &str,
-) {
-    // Use the file path we already have (from Review.files key)
-    let file_name = file_path;
-
-    // Collect old/new line ranges from the annotated lines
-    // Look up each line by path and source line number, extract info from Line.origin
-    let mut old_lines: Vec<u32> = Vec::new();
-    let mut new_lines: Vec<u32> = Vec::new();
-
-    for line_num in ann.start_line..=ann.end_line {
-        if let Some(line) = content.find_line(file_path, line_num) {
-            if let LineOrigin::Diff { old_line, new_line, .. } = &line.origin {
-                if let Some(old) = old_line {
-                    old_lines.push(*old);
-                }
-                if let Some(new) = new_line {
-                    new_lines.push(*new);
-                }
-            }
-        }
-    }
-
-    // Format header with available line info
-    let old_range = format_line_range(&old_lines);
-    let new_range = format_line_range(&new_lines);
-
-    match (old_range.as_str(), new_range.as_str()) {
-        ("", "") => out.push_str(&format!("{}:\n", file_name)),
-        (old, "") => out.push_str(&format!("{} (old:{}):\n", file_name, old)),
-        ("", new) => out.push_str(&format!("{} (new:{}):\n", file_name, new)),
-        (old, new) => out.push_str(&format!("{} (old:{} new:{}):\n", file_name, old, new)),
-    }
-}
-
-/// Format a line range like "10" or "10-15".
-fn format_line_range(lines: &[u32]) -> String {
-    if lines.is_empty() {
-        return String::new();
-    }
-    let min = *lines.iter().min().unwrap();
-    let max = *lines.iter().max().unwrap();
-    if min == max {
-        min.to_string()
-    } else {
-        format!("{}-{}", min, max)
-    }
-}
-
-/// Format a single diff line with old:new line numbers.
-fn format_diff_line(
-    out: &mut String,
-    content_model: &ContentModel,
-    file_path: &str,
-    line_num: u32,
-    content: &str,
-    is_selected: bool,
-    line_num_width: usize,
-) {
-    let prefix = if is_selected { "> " } else { "  " };
-
-    // Look up line by path and source line number, extract old/new from origin
-    let (old_str, new_str) = content_model
-        .find_line(file_path, line_num)
-        .and_then(|line| {
-            if let LineOrigin::Diff { old_line, new_line, .. } = &line.origin {
-                let old = old_line.map(|n| n.to_string()).unwrap_or_default();
-                let new = new_line.map(|n| n.to_string()).unwrap_or_default();
-                Some((old, new))
-            } else {
-                None
-            }
-        })
-        .unwrap_or_default();
-
-    // Format: "> old:new | content" or "  old:new | content"
-    out.push_str(&format!(
-        "{}{:>w$}:{:<w$} | {}\n",
-        prefix,
-        old_str,
-        new_str,
-        content,
-        w = line_num_width
-    ));
-}
-
-/// Render content nodes to plain text, collecting images with figure numbers.
-fn render_content(
-    nodes: &[ContentNode],
-    images: &mut Vec<SessionImage>,
-    figure_counter: &mut usize,
-    mode: OutputMode,
-) -> String {
-    nodes
-        .iter()
-        .map(|node| match node {
-            ContentNode::Text { text } => text.clone(),
-            ContentNode::Tag { name, .. } => format!("[# {}]", name),
-            ContentNode::Media { image, mime_type } => {
-                *figure_counter += 1;
-                let figure_num = *figure_counter;
-
-                // Extract base64 data from data URL (strip "data:image/png;base64," prefix)
-                let data = if let Some(idx) = image.find(",") {
-                    image[idx + 1..].to_string()
-                } else {
-                    image.clone()
-                };
-
-                images.push(SessionImage {
-                    figure: figure_num,
-                    data,
-                    mime_type: mime_type.clone(),
-                });
-
-                format!("[Figure {}]", figure_num)
-            }
-            ContentNode::Excalidraw { elements, image } => {
-                *figure_counter += 1;
-                let figure_num = *figure_counter;
-
-                // If PNG is available, include it for MCP
-                if let Some(ref png_data) = image {
-                    let data = if let Some(idx) = png_data.find(",") {
-                        png_data[idx + 1..].to_string()
+/// Collect files with annotations in display order.
+fn collect_files_with_annotations(review: &Review) -> Vec<(String, &crate::review::AnnotationTarget)> {
+    if let Some(diff_files) = review.root_view.diff_files() {
+        // Diff mode: use DiffFileView for display paths, enumerate for index
+        diff_files
+            .iter()
+            .enumerate()
+            .filter_map(|(index, df)| {
+                let key = FileKey::diff_file(index);
+                review.files.get(&key).and_then(|target| {
+                    if target.annotations.is_empty() {
+                        None
                     } else {
-                        png_data.clone()
-                    };
-                    images.push(SessionImage {
-                        figure: figure_num,
-                        data,
-                        mime_type: "image/png".to_string(),
-                    });
-                }
-
-                match mode {
-                    // CLI: include JSON so diagram data is preserved in stdout
-                    OutputMode::Cli => format!("[EXCALIDRAW Figure {}]\n{}", figure_num, elements),
-                    // MCP/Clipboard: just figure reference, no JSON blob
-                    OutputMode::Mcp | OutputMode::Clipboard => {
-                        format!("[EXCALIDRAW Figure {}]", figure_num)
+                        Some((df.path.display().to_string(), target))
                     }
-                }
-            }
-            ContentNode::Replace {
-                original,
-                replacement,
-            } => {
-                // Format as a diff block
-                let mut diff = String::from("[REPLACE]\n```diff\n");
-                for line in original.lines() {
-                    diff.push_str(&format!("- {}\n", line));
-                }
-                for line in replacement.lines() {
-                    diff.push_str(&format!("+ {}\n", line));
-                }
-                diff.push_str("```");
-                diff
-            }
-            ContentNode::Error { source, message } => {
-                format!("[ERROR:{}] {}", source, message)
-            }
-            ContentNode::Paste { content } => {
-                // Output pasted content as plain text
-                content.clone()
-            }
-            ContentNode::BookmarkRef { id, .. } => {
-                // Legacy format: output as new unified ref format for consistency
-                let short_id = &id[..id.len().min(3)];
-                format!("[ref:bookmark@{}]", short_id)
-            }
-            ContentNode::Ref { ref_type: _, snapshot } => {
-                // Unified reference format: [ref:TYPE@TARGET]
-                use crate::state::RefSnapshot;
-                match snapshot {
-                    RefSnapshot::Annotation(snap) => {
-                        format!("[ref:annotation@L{}]", snap.source_key)
-                    }
-                    RefSnapshot::Bookmark { bookmark } => {
-                        let short_id = &bookmark.id[..bookmark.id.len().min(3)];
-                        format!("[ref:bookmark@{}]", short_id)
-                    }
-                }
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("")
+                })
+            })
+            .collect()
+    } else {
+        // File mode: extract display string from FileKey
+        review
+            .files
+            .iter()
+            .filter(|(_, target)| !target.annotations.is_empty())
+            .filter_map(|(key, target)| match key {
+                FileKey::Path(p) => Some((p.display().to_string(), target)),
+                FileKey::Ephemeral { label } => Some((label.clone(), target)),
+                FileKey::DiffFile { .. } => None, // Should not happen in file mode
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::input::{CliSource, ContentSource};
-    use crate::state::{ContentModel, ExitMode, ExitModeSource, Line, LineRange, UserConfig};
+    use crate::state::{ContentMetadata, ContentModel, ExitMode, ExitModeSource, Line, LineRange, UserConfig};
     use std::collections::HashMap;
     use std::path::PathBuf;
 
@@ -1444,7 +1152,7 @@ mod tests {
 
         lines.push(make_line(3, "More text"));
 
-        let portal = LoadedPortal {
+        let portal = crate::portal::LoadedPortal {
             source_path: PathBuf::from("src/lib.rs"),
             label: "code".to_string(),
             start_line: 10,
@@ -1511,7 +1219,7 @@ mod tests {
         ));
         lines.push(make_portal_line("", PortalSemantics::Footer));
 
-        let portal = LoadedPortal {
+        let portal = crate::portal::LoadedPortal {
             source_path: PathBuf::from("empty.rs"),
             label: "code".to_string(),
             start_line: 1,
@@ -1577,7 +1285,7 @@ mod tests {
         lines.push(make_portal_line("}", PortalSemantics::Content));
         lines.push(make_portal_line("", PortalSemantics::Footer));
 
-        let portal1 = LoadedPortal {
+        let portal1 = crate::portal::LoadedPortal {
             source_path: PathBuf::from("a.rs"),
             label: "first".to_string(),
             start_line: 1,
@@ -1595,7 +1303,7 @@ mod tests {
             ],
         };
 
-        let portal2 = LoadedPortal {
+        let portal2 = crate::portal::LoadedPortal {
             source_path: PathBuf::from("b.go"),
             label: "second".to_string(),
             start_line: 5,
@@ -1647,8 +1355,6 @@ mod tests {
     // ========== Diff annotation output tests ==========
 
     /// Regression test: diff annotations must include line numbers in output.
-    /// Previously, find_line() only matched LineOrigin::Source, causing diff
-    /// annotations to show just "file.rs:" without old/new line numbers.
     #[test]
     fn diff_annotation_includes_line_numbers() {
         use crate::input::{DiffSource, McpSource};
@@ -1673,12 +1379,11 @@ mod tests {
         let config = UserConfig::empty();
         let mut review = Review::cli(content, config, "main".to_string());
 
-        // The added line "+    more_code();" is at new_line=3 in file.rs (unambiguous)
-        // Find the correct FileKey for the diff file
+        // The added line "+    more_code();" is at new_line=3 in file.rs
         let diff_file_key = FileKey::diff_file(0);
         let target = review.files.get_mut(&diff_file_key).unwrap();
 
-        // Add annotation at line 3 (the more_code line - only has new_line, no old_line)
+        // Add annotation at line 3
         target.upsert_annotation(
             3,
             3,
@@ -1690,14 +1395,13 @@ mod tests {
         let output = format_output(&review, OutputMode::Cli).text;
 
         // The output should include the file name with line number info
-        // Format: "file.rs (new:3):" for an added line
         assert!(
             output.contains("file.rs (new:3):"),
             "Diff annotation header should include new line number. Got:\n{}",
             output
         );
 
-        // The output should include the line content with old:new format
+        // The output should include the line content
         assert!(
             output.contains("more_code"),
             "Diff annotation should include the line content. Got:\n{}",
@@ -1739,7 +1443,7 @@ mod tests {
         let diff_file_key = FileKey::diff_file(0);
         let target = review.files.get_mut(&diff_file_key).unwrap();
 
-        // Add annotation at line 2 (the deleted line - matched by old_line)
+        // Add annotation at line 2
         target.upsert_annotation(
             2,
             2,
@@ -1786,7 +1490,7 @@ mod tests {
         let diff_file_key = FileKey::diff_file(0);
         let target = review.files.get_mut(&diff_file_key).unwrap();
 
-        // Add annotation at line 1 (the context line)
+        // Add annotation at line 1
         target.upsert_annotation(
             1,
             1,
@@ -1998,7 +1702,7 @@ Do something useful.
         assert!(output.contains("## Instructions"), "Should include command content heading");
         assert!(output.contains("Do something useful"), "Should include command content body");
         // Should have separator lines
-        assert!(output.contains("────────────────────────────────────"), "Should have content separators");
+        assert!(output.contains(SEPARATOR), "Should have content separators");
     }
 
     #[test]
@@ -2032,6 +1736,6 @@ Do something useful.
         // Should have exit mode but NOT command-specific content
         assert!(output.contains("Apply (Apply changes)"), "Should have exit mode");
         assert!(!output.contains("Command:"), "Should NOT have Command: line for regular exit mode");
-        assert!(!output.contains("────────────────────────────────────"), "Should NOT have content separators");
+        assert!(!output.contains(SEPARATOR), "Should NOT have content separators");
     }
 }
