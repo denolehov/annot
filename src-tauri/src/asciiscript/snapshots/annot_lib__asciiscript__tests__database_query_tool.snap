@@ -1,0 +1,25 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"SQL Query\" width:65 {\n            text \"Enter query:\"\n            code ```\nSELECT id, name, email\nFROM users\nWHERE active = true\nORDER BY name;\n```\n            separator\n            alert type:info { text \"Query executed in 0.023s\" }\n            table {\n                header {\n                    col \"id\" width:5 align:right\n                    col \"name\" width:15\n                    col \"email\" width:25\n                }\n                tr { td \"1\" td \"Alice\" td \"alice@example.com\" }\n                tr { td \"2\" td \"Bob\" td \"bob@example.com\" }\n            }\n            separator\n            row { text \"2 rows\" spacer button \"Export\" button \"Run\" }\n        }\n    }\"#).unwrap()"
+---
++-- SQL Query --------------------------------------------------+
+|                                                               |
+| Enter query:                                                  |
+| SELECT id, name, email                                        |
+| FROM users                                                    |
+| WHERE active = true                                           |
+| ORDER BY name;                                                |
+| ------------------------------------------------------------- |
+| ┌─ INFO ────────────────────────────────────────────────────┐ |
+| │ Query executed in 0.023s                                  │ |
+| └───────────────────────────────────────────────────────────┘ |
+| +-------+-----------------+---------------------------+       |
+| |    id | name            | email                     |       |
+| +-------+-----------------+---------------------------+       |
+| |     1 | Alice           | alice@example.com         |       |
+| |     2 | Bob             | bob@example.com           |       |
+| +-------+-----------------+---------------------------+       |
+| ------------------------------------------------------------- |
+| 2 rows                                    [ Export ] [ Run ]  |
+|                                                               |
++---------------------------------------------------------------+

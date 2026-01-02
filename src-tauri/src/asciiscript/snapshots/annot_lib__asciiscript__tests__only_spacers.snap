@@ -1,0 +1,9 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window width:30 {\n            row { spacer spacer spacer }\n        }\n    }\"#).unwrap()"
+---
++----------------------------+
+|                            |
+|                            |
+|                            |
++----------------------------+

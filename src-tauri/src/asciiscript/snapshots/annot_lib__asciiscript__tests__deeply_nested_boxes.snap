@@ -1,0 +1,21 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Level 1\" {\n            box \"Level 2\" {\n                box \"Level 3\" {\n                    box \"Level 4\" {\n                        text \"Deep inside\"\n                    }\n                }\n            }\n        }\n    }\"#).unwrap()"
+---
++-- Level 1 --------------+
+|                         |
+| +-- Level 2 ----------+ |
+| |                     | |
+| | +-- Level 3 ------+ | |
+| | |                 | | |
+| | | +-- Level 4 --+ | | |
+| | | |             | | | |
+| | | | Deep inside | | | |
+| | | |             | | | |
+| | | +-------------+ | | |
+| | |                 | | |
+| | +-----------------+ | |
+| |                     | |
+| +---------------------+ |
+|                         |
++-------------------------+

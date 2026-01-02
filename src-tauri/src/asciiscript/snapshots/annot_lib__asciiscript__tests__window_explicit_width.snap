@@ -1,0 +1,9 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Fixed Width\" width:40 {\n            text \"Content\"\n        }\n    }\"#).unwrap()"
+---
++-- Fixed Width -----------------------+
+|                                      |
+| Content                              |
+|                                      |
++--------------------------------------+

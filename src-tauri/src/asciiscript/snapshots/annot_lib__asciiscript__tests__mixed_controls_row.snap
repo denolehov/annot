@@ -1,0 +1,9 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window width:60 {\n            row {\n                text \"Status:\"\n                checkbox \"Active\" checked\n                select \"Priority\" width:12\n                button \"Save\"\n                button \"Cancel\"\n            }\n        }\n    }\"#).unwrap()"
+---
++----------------------------------------------------------+
+|                                                          |
+| Status: [x] Active [Priority  v] [ Save ] [ Cancel ]     |
+|                                                          |
++----------------------------------------------------------+

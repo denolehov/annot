@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 
 use tauri::WebviewWindowBuilder;
 
+pub mod asciiscript;
 pub mod commands;
 pub mod config;
 pub mod diff;

@@ -1,0 +1,12 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Login\" width:40 {\n            row { text \"Username:\" input width:20 }\n            row { text \"Password:\" input width:20 }\n            spacer\n            separator\n            row { spacer button \"Cancel\" button \"Login\" }\n        }\n    }\"#).unwrap()"
+---
++-- Login -----------------------------+
+|                                      |
+| Username: [__________________]       |
+| Password: [__________________]       |
+| ------------------------------------ |
+|                 [ Cancel ] [ Login ] |
+|                                      |
++--------------------------------------+

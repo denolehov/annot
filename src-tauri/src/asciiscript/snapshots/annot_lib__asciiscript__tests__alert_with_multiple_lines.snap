@@ -1,0 +1,9 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        alert type:error {\n            text \"Error: Operation failed\"\n            text \"Reason: Network timeout\"\n            text \"Action: Please retry\"\n        }\n    }\"#).unwrap()"
+---
+╔═ ERROR ═════════════════╗
+║ Error: Operation failed ║
+║ Reason: Network timeout ║
+║ Action: Please retry    ║
+╚═════════════════════════╝

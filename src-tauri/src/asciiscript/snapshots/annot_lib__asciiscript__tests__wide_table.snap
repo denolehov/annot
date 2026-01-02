@@ -1,0 +1,11 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        table {\n            header {\n                col \"ID\" width:5\n                col \"First Name\" width:12\n                col \"Last Name\" width:12\n                col \"Email\" width:25\n                col \"Status\" width:10\n            }\n            tr { td \"1\" td \"Alice\" td \"Johnson\" td \"alice.j@example.com\" td \"Active\" }\n            tr { td \"2\" td \"Bob\" td \"Smith\" td \"bob.smith@example.com\" td \"Inactive\" }\n            tr { td \"3\" td \"Charlie\" td \"Brown\" td \"charlie.b@company.org\" td \"Pending\" }\n        }\n    }\"#).unwrap()"
+---
++-------+--------------+--------------+---------------------------+------------+
+| ID    | First Name   | Last Name    | Email                     | Status     |
++-------+--------------+--------------+---------------------------+------------+
+| 1     | Alice        | Johnson      | alice.j@example.com       | Active     |
+| 2     | Bob          | Smith        | bob.smith@example.com     | Inactive   |
+| 3     | Charlie      | Brown        | charlie.b@company.org     | Pending    |
++-------+--------------+--------------+---------------------------+------------+

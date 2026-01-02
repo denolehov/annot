@@ -1,0 +1,7 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"No Padding\" padding:0 {\n            text \"Tight fit\"\n        }\n    }\"#).unwrap()"
+---
++-- No Padding +
+|Tight fit     |
++--------------+

@@ -1,0 +1,15 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Build Status\" width:40 {\n            text \"Compiling project...\"\n            progress 65\n            separator\n            alert type:warn {\n                text \"unused variable `x`\"\n            }\n            spacer\n            row { spacer button \"Cancel\" }\n        }\n    }\"#).unwrap()"
+---
++-- Build Status ----------------------+
+|                                      |
+| Compiling project...                 |
+| [██████████████████░░░░░░░░░░░] 65%  |
+| ------------------------------------ |
+| ┌─ WARNING ────────────────────────┐ |
+| │ unused variable `x`              │ |
+| └──────────────────────────────────┘ |
+|                           [ Cancel ] |
+|                                      |
++--------------------------------------+

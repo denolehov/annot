@@ -1037,6 +1037,39 @@ impl ContentModel {
             }
         }
 
+        // Pre-render asciiscript blocks
+        struct AsciiScriptBlock {
+            rendered_lines: Vec<String>,
+            original_line_count: u32,
+        }
+        let mut asciiscript_blocks: HashMap<u32, AsciiScriptBlock> = HashMap::new();
+        for block in &md_metadata.code_blocks {
+            if block.language.as_deref() == Some("asciiscript") {
+                // Collect content lines (between fences, 1-indexed)
+                let content_start = block.start_line as usize; // fence line
+                let content_end = block.end_line as usize; // closing fence
+                let content_lines: Vec<&str> = content
+                    .lines()
+                    .skip(content_start) // skip opening fence
+                    .take(content_end - content_start - 1) // exclude closing fence
+                    .collect();
+                let source = content_lines.join("\n");
+
+                let rendered_lines = match crate::asciiscript::render(&source) {
+                    Ok(output) => output.lines().map(String::from).collect(),
+                    Err(_) => continue, // On error, skip replacement (show raw source)
+                };
+
+                asciiscript_blocks.insert(
+                    block.start_line + 1, // First content line (after fence)
+                    AsciiScriptBlock {
+                        rendered_lines,
+                        original_line_count: (content_end - content_start - 1) as u32,
+                    },
+                );
+            }
+        }
+
         // Build set of table lines and map line numbers to their HTML cells
         let mut table_lines: HashSet<u32> = HashSet::new();
         let mut table_replacements: HashMap<u32, String> = HashMap::new();
@@ -1065,10 +1098,17 @@ impl ContentModel {
             }
         }
 
+        // Helper: check if line is inside asciiscript block (but not the first content line)
+        let is_asciiscript_skip_line = |line_num: u32| -> bool {
+            asciiscript_blocks.iter().any(|(&start, block)| {
+                line_num > start && line_num < start + block.original_line_count
+            })
+        };
+
         let mut lines: Vec<Line> = content
             .lines()
             .enumerate()
-            .map(|(i, line_content)| {
+            .flat_map(|(i, line_content)| {
                 let line_num = (i + 1) as u32;
 
                 // Use table replacement if available
@@ -1081,6 +1121,26 @@ impl ContentModel {
                     path: routing_path.clone(),
                     line: line_num,
                 };
+
+                // Check if this is the first content line of an asciiscript block
+                if let Some(block) = asciiscript_blocks.get(&line_num) {
+                    // Output all rendered lines instead of source
+                    return block
+                        .rendered_lines
+                        .iter()
+                        .map(|rendered| Line {
+                            content: rendered.clone(),
+                            html: Some(LineHtml::Full(html_escape(rendered))),
+                            origin: LineOrigin::Virtual,
+                            semantics: LineSemantics::Markdown(MarkdownSemantics::CodeBlockContent),
+                        })
+                        .collect::<Vec<_>>();
+                }
+
+                // Skip subsequent content lines inside asciiscript block
+                if is_asciiscript_skip_line(line_num) {
+                    return vec![];
+                }
 
                 // Determine HTML rendering strategy and semantics
                 if let Some(info) = code_block_lines.get(&line_num) {
@@ -1113,24 +1173,24 @@ impl ContentModel {
                         Some(html_escape(&display_content))
                     };
 
-                    Line {
+                    vec![Line {
                         content: display_content,
                         html: html.map(LineHtml::Full),
                         origin,
                         semantics,
-                    }
+                    }]
                 } else if table_lines.contains(&line_num) {
                     // Table row: use per-cell HTML if available
                     let html = table_html_cells
                         .get(&line_num)
                         .cloned()
                         .map(LineHtml::Cells);
-                    Line {
+                    vec![Line {
                         content: display_content.clone(),
                         html,
                         origin,
                         semantics: LineSemantics::Markdown(MarkdownSemantics::TableRow),
-                    }
+                    }]
                 } else {
                     // Regular markdown: render with structural markers preserved
                     let rendered = markdown::render_line(line_content);
@@ -1138,12 +1198,12 @@ impl ContentModel {
                         Some(md_sem) => LineSemantics::Markdown(md_sem),
                         None => LineSemantics::Plain,
                     };
-                    Line {
+                    vec![Line {
                         content: display_content,
                         html: Some(LineHtml::Full(rendered.html)),
                         origin,
                         semantics,
-                    }
+                    }]
                 }
             })
             .collect();
@@ -1577,5 +1637,74 @@ mod tests {
                 panic!("Expected Cells HTML for table row, got Full: {:?}", s);
             }
         }
+    }
+
+    #[test]
+    fn asciiscript_in_markdown_renders_ascii_art() {
+        let markdown_with_asciiscript = r#"# Test
+
+```asciiscript
+layout {
+  window "Test" width:30 {
+    text "Hello"
+  }
+}
+```
+
+Done.
+"#;
+
+        let state = test_markdown_state(markdown_with_asciiscript, "test.md");
+        let response = state.to_response();
+
+        // Find lines with rendered ASCII art (should have box characters)
+        let has_box_chars = response
+            .lines
+            .iter()
+            .any(|l| l.content.contains('+') && l.content.contains('-'));
+        assert!(has_box_chars, "Should have rendered ASCII box art");
+
+        // Should NOT have original source (layout { ... })
+        let has_source = response
+            .lines
+            .iter()
+            .any(|l| l.content.contains("layout {"));
+        assert!(!has_source, "Should NOT have original asciiscript source");
+
+        // Fence lines should still be present
+        let has_open_fence = response
+            .lines
+            .iter()
+            .any(|l| l.content.contains("```asciiscript"));
+        let has_close_fence = response
+            .lines
+            .iter()
+            .filter(|l| l.content.trim() == "```")
+            .count()
+            >= 1;
+        assert!(has_open_fence, "Should have opening fence");
+        assert!(has_close_fence, "Should have closing fence");
+    }
+
+    #[test]
+    fn asciiscript_parse_error_shows_raw_source() {
+        let markdown_with_invalid_asciiscript = r#"# Test
+
+```asciiscript
+invalid { not valid syntax
+```
+
+Done.
+"#;
+
+        let state = test_markdown_state(markdown_with_invalid_asciiscript, "test.md");
+        let response = state.to_response();
+
+        // On parse error, should show raw source
+        let has_source = response
+            .lines
+            .iter()
+            .any(|l| l.content.contains("invalid {"));
+        assert!(has_source, "Should show raw source on parse error");
     }
 }

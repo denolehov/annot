@@ -1,0 +1,8 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        alert type:warn {\n            text \"Deprecation warning:\"\n            code \"use_old_api() -> use_new_api()\"\n        }\n    }\"#).unwrap()"
+---
+┌─ WARNING ──────────────────────┐
+│ Deprecation warning:           │
+│ use_old_api() -> use_new_api() │
+└────────────────────────────────┘

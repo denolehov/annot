@@ -1,0 +1,7 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        button \"OK\"\n        button \"Cancel\"\n        button \"Submit Form\"\n    }\"#).unwrap()"
+---
+[ OK ]
+[ Cancel ]
+[ Submit Form ]

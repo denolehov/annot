@@ -1,0 +1,11 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        table {\n            header { col \"Name\" width:12 col \"Age\" width:5 }\n            tr { td \"Alice\" td \"30\" }\n            tr { td \"Bob\" td \"25\" }\n            tr { td \"Charlie\" td \"35\" }\n        }\n    }\"#).unwrap()"
+---
++--------------+-------+
+| Name         | Age   |
++--------------+-------+
+| Alice        | 30    |
+| Bob          | 25    |
+| Charlie      | 35    |
++--------------+-------+

@@ -1,0 +1,9 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window width:30 {\n            text \"This is a very long piece of text that should overflow the window boundaries\"\n        }\n    }\"#).unwrap()"
+---
++------------------------------------------------------------------------------+
+|                                                                              |
+| This is a very long piece of text that should overflow the window boundaries |
+|                                                                              |
++------------------------------------------------------------------------------+

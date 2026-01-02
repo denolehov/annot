@@ -1,0 +1,19 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Package Manager\" width:60 {\n            row { text \"Search:\" input width:35 button \"Search\" }\n            separator\n            table {\n                header {\n                    col \"Package\" width:20\n                    col \"Version\" width:10\n                    col \"Status\" width:12\n                }\n                tr { td \"react\" td \"18.2.0\" td \"Installed\" }\n                tr { td \"typescript\" td \"5.0.0\" td \"Outdated\" }\n                tr { td \"webpack\" td \"5.88.0\" td \"Available\" }\n            }\n            separator\n            row { text \"3 packages\" spacer button \"Update All\" button \"Install\" }\n        }\n    }\"#).unwrap()"
+---
++-- Package Manager ---------------------------------------+
+|                                                          |
+| Search: [_________________________________] [ Search ]   |
+| -------------------------------------------------------- |
+| +----------------------+------------+--------------+     |
+| | Package              | Version    | Status       |     |
+| +----------------------+------------+--------------+     |
+| | react                | 18.2.0     | Installed    |     |
+| | typescript           | 5.0.0      | Outdated     |     |
+| | webpack              | 5.88.0     | Available    |     |
+| +----------------------+------------+--------------+     |
+| -------------------------------------------------------- |
+| 3 packages                   [ Update All ] [ Install ]  |
+|                                                          |
++----------------------------------------------------------+

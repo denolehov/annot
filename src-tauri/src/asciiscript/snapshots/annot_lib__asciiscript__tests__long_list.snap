@@ -1,0 +1,16 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        list {\n            item \"Item 1\"\n            item \"Item 2\"\n            item \"Item 3\"\n            item \"Item 4\"\n            item \"Item 5\" selected\n            item \"Item 6\"\n            item \"Item 7\"\n            item \"Item 8\"\n            item \"Item 9\"\n            item \"Item 10\"\n            item \"Item 11\"\n            item \"Item 12\"\n        }\n    }\"#).unwrap()"
+---
+   Item 1
+   Item 2
+   Item 3
+   Item 4
+ > Item 5
+   Item 6
+   Item 7
+   Item 8
+   Item 9
+   Item 10
+   Item 11
+   Item 12

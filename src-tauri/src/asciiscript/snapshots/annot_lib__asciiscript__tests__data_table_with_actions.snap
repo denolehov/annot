@@ -1,0 +1,17 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Users\" width:50 {\n            table {\n                header {\n                    col \"ID\" width:5 align:right\n                    col \"Name\" width:15\n                    col \"Email\" width:20\n                }\n                tr { td \"1\" td \"Alice\" td \"alice@example.com\" }\n                tr { td \"2\" td \"Bob\" td \"bob@example.com\" }\n                tr { td \"3\" td \"Charlie\" td \"charlie@ex.com\" }\n            }\n            separator\n            row { text \"3 users\" spacer button \"Add\" button \"Delete\" }\n        }\n    }\"#).unwrap()"
+---
++-- Users -------------------------------------------+
+|                                                    |
+| +-------+-----------------+----------------------+ |
+| |    ID | Name            | Email                | |
+| +-------+-----------------+----------------------+ |
+| |     1 | Alice           | alice@example.com    | |
+| |     2 | Bob             | bob@example.com      | |
+| |     3 | Charlie         | charlie@ex.com       | |
+| +-------+-----------------+----------------------+ |
+| -------------------------------------------------- |
+| 3 users                        [ Add ] [ Delete ]  |
+|                                                    |
++----------------------------------------------------+

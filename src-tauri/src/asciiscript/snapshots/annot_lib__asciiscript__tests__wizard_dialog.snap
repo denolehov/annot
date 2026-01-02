@@ -1,0 +1,17 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Setup Wizard - Step 2 of 4\" width:50 {\n            progress 50\n            separator\n            section \"Select Installation Type\" {\n                radio \"Standard (recommended)\" selected\n                radio \"Custom\"\n                radio \"Minimal\"\n            }\n            spacer\n            text \"Standard installation includes all features.\"\n            separator\n            row { button \"Back\" spacer button \"Next\" }\n        }\n    }\"#).unwrap()"
+---
++-- Setup Wizard - Step 2 of 4 ------------------+
+|                                                |
+| [███████████████████░░░░░░░░░░░░░░░░░░░░] 50%  |
+| ---------------------------------------------- |
+| ## Select Installation Type                    |
+|   (o) Standard (recommended)                   |
+|   ( ) Custom                                   |
+|   ( ) Minimal                                  |
+| Standard installation includes all features.   |
+| ---------------------------------------------- |
+| [ Back ]                             [ Next ]  |
+|                                                |
++------------------------------------------------+

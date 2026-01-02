@@ -1,0 +1,5 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        row {\n            button \"A\"\n            button \"B\"\n            button \"C\"\n            button \"D\"\n            button \"E\"\n            button \"F\"\n            button \"G\"\n        }\n    }\"#).unwrap()"
+---
+[ A ] [ B ] [ C ] [ D ] [ E ] [ F ] [ G ]

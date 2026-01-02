@@ -1,0 +1,15 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Open File\" width:40 {\n            list {\n                item \"Documents\" selected\n                item \"Downloads\"\n                item \"Pictures\"\n                item \"Videos\"\n            }\n            separator\n            row { text \"File:\" input width:20 }\n            row { spacer button \"Cancel\" button \"Open\" }\n        }\n    }\"#).unwrap()"
+---
++-- Open File -------------------------+
+|                                      |
+|  > Documents                         |
+|    Downloads                         |
+|    Pictures                          |
+|    Videos                            |
+| ------------------------------------ |
+| File: [__________________]           |
+|                  [ Cancel ] [ Open ] |
+|                                      |
++--------------------------------------+

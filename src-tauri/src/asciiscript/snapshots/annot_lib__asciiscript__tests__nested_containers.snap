@@ -1,0 +1,13 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Outer\" {\n            box \"Inner\" {\n                text \"Deeply nested\"\n            }\n        }\n    }\"#).unwrap()"
+---
++-- Outer ----------+
+|                   |
+| +-- Inner ------+ |
+| |               | |
+| | Deeply nested | |
+| |               | |
+| +---------------+ |
+|                   |
++-------------------+

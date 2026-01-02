@@ -1,0 +1,13 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Confirm Delete\" width:35 {\n            alert type:error {\n                text \"This action cannot be undone!\"\n            }\n            spacer\n            text \"Delete 5 selected files?\"\n            spacer\n            row { spacer button \"Cancel\" button \"Delete\" style:danger }\n        }\n    }\"#).unwrap()"
+---
++-- Confirm Delete -----------------+
+|                                   |
+| ╔═ ERROR ═══════════════════════╗ |
+| ║ This action cannot be undone! ║ |
+| ╚═══════════════════════════════╝ |
+| Delete 5 selected files?          |
+|             [ Cancel ] [ Delete ] |
+|                                   |
++-----------------------------------+

@@ -1,0 +1,18 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window width:40 {\n            row { text \"Row 1\" input width:10 }\n            row { text \"Row 2\" input width:10 }\n            row { text \"Row 3\" input width:10 }\n            row { text \"Row 4\" input width:10 }\n            row { text \"Row 5\" input width:10 }\n            row { text \"Row 6\" input width:10 }\n            row { text \"Row 7\" input width:10 }\n            row { text \"Row 8\" input width:10 }\n            row { text \"Row 9\" input width:10 }\n            row { text \"Row 10\" input width:10 }\n        }\n    }\"#).unwrap()"
+---
++--------------------------------------+
+|                                      |
+| Row 1 [________]                     |
+| Row 2 [________]                     |
+| Row 3 [________]                     |
+| Row 4 [________]                     |
+| Row 5 [________]                     |
+| Row 6 [________]                     |
+| Row 7 [________]                     |
+| Row 8 [________]                     |
+| Row 9 [________]                     |
+| Row 10 [________]                    |
+|                                      |
++--------------------------------------+
