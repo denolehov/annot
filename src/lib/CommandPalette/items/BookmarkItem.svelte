@@ -36,7 +36,7 @@
     {/if}
   </div>
   <div class="secondary">
-    {#if projectName()}<span class="project">{projectName()}</span> &bull; {/if}{item.values.source_title} &bull; {dateStr}
+    {#if projectName()}<span class="project">{projectName()}</span><span class="sep"> · </span>{/if}{item.values.source_title}<span class="sep"> · </span>{dateStr}
   </div>
 </div>
 
@@ -109,5 +109,9 @@
 
   .project {
     color: var(--text-tertiary);
+  }
+
+  .sep {
+    padding: 0 4px;
   }
 </style>
