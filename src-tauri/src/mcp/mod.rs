@@ -500,10 +500,10 @@ fn format_bookmark_list(bookmarks: &[&crate::state::Bookmark]) -> String {
     let mut lines = Vec::new();
 
     lines.push(format!(
-        "{:<12} {:<40} {:<20} {}",
-        "ID", "LABEL", "SOURCE", "PROJECT"
+        "{:<12} {:<40} {:<12} {:<20} {}",
+        "ID", "LABEL", "CREATED", "SOURCE", "PROJECT"
     ));
-    lines.push("─".repeat(90));
+    lines.push("─".repeat(100));
 
     for bookmark in bookmarks {
         let label = bookmark.display_label();
@@ -512,6 +512,8 @@ fn format_bookmark_list(bookmarks: &[&crate::state::Bookmark]) -> String {
         } else {
             label
         };
+
+        let created = bookmark.created_at.format("%Y-%m-%d").to_string();
 
         let source = bookmark.snapshot.source_title();
         let source_display = if source.len() > 18 {
@@ -528,9 +530,10 @@ fn format_bookmark_list(bookmarks: &[&crate::state::Bookmark]) -> String {
             .unwrap_or_else(|| "—".to_string());
 
         lines.push(format!(
-            "{:<12} {:<40} {:<20} {}",
+            "{:<12} {:<40} {:<12} {:<20} {}",
             &bookmark.id[..12.min(bookmark.id.len())],
             label_display,
+            created,
             source_display,
             project
         ));
