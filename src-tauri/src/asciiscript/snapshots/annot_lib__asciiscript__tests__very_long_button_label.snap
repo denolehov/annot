@@ -1,0 +1,5 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout { button \"This is an extremely long button label\" }\"#).unwrap()"
+---
+[ This is an extremely long button label ]

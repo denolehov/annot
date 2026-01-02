@@ -1,0 +1,17 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Search\" width:45 {\n            row { text \"Query:\" input width:30 button \"Search\" }\n            separator\n            section \"Filters\" {\n                row { text \"Category:\" select \"All\" width:15 }\n                row { text \"Date:\" select \"Any time\" width:15 }\n                checkbox \"Include archived\" checked\n                checkbox \"Exact match\"\n            }\n            separator\n            row { text \"0 results\" spacer button \"Clear\" button \"Apply\" }\n        }\n    }\"#).unwrap()"
+---
++-- Search ----------------------------------------+
+|                                                  |
+| Query: [____________________________] [ Search ] |
+| ------------------------------------------------ |
+| ## Filters                                       |
+|   Category: [All          v]                     |
+|   Date: [Any time     v]                         |
+|   [x] Include archived                           |
+|   [ ] Exact match                                |
+| ------------------------------------------------ |
+| 0 results                   [ Clear ] [ Apply ]  |
+|                                                  |
++--------------------------------------------------+

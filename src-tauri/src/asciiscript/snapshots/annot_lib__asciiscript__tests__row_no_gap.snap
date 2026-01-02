@@ -1,0 +1,5 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        row gap:0 { button \"A\" button \"B\" button \"C\" }\n    }\"#).unwrap()"
+---
+[ A ][ B ][ C ]

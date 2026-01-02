@@ -52,6 +52,6 @@ sublime_fuzzy = "0.7"
 similar = { version = "2", features = ["inline"] }
 
 [dev-dependencies]
-insta = "1.45"
+insta = "1.45.1"
 tempfile = "3.23.0"
 

@@ -1,0 +1,10 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        code ```\nfn factorial(n: u64) -> u64 {\n    match n {\n        0 | 1 => 1,\n        _ => n * factorial(n - 1),\n    }\n}\n```\n    }\"#).unwrap()"
+---
+fn factorial(n: u64) -> u64 {
+    match n {
+        0 | 1 => 1,
+        _ => n * factorial(n - 1),
+    }
+}
