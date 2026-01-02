@@ -46,7 +46,6 @@ vi.mock('../tiptap', () => ({
   isContentEmpty: vi.fn(() => true),
   ExcalidrawChip: {},
   ExcalidrawPlaceholder: {},
-  ReplacePreview: {},
   ImagePasteHandler: { configure: vi.fn(() => ({})) },
   TextPasteHandler: {},
   SlashCommands: { configure: vi.fn(() => ({})) },
@@ -70,6 +69,7 @@ vi.mock('../tiptap/extensions', () => ({
   PasteChip: {},
   MediaChip: {},
   BookmarkChip: { configure: vi.fn(() => ({})) },
+  ReplacePreview: {},
 }));
 
 import { useAnnotationEditor } from './useAnnotationEditor.svelte';

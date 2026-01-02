@@ -9,7 +9,6 @@ import {
   TextPasteHandler,
   ExcalidrawChip,
   ExcalidrawPlaceholder,
-  ReplacePreview,
   SlashCommands,
   createSlashSuggestion,
   EditorShortcuts,
@@ -20,7 +19,7 @@ import {
   type SlashCommand,
   type SuggestionState,
 } from '../tiptap';
-import { ErrorChip, TagChip, PasteChip, MediaChip, BookmarkChip } from '../tiptap/extensions';
+import { ErrorChip, TagChip, PasteChip, MediaChip, BookmarkChip, ReplacePreview } from '../tiptap/extensions';
 import type { Tag, Bookmark } from '../types';
 import { fuzzySearch } from '../fuzzy';
 
