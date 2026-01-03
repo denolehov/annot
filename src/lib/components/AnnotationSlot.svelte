@@ -10,7 +10,8 @@
       to: number;
       tag: Tag;
     } | null;
-    onUpdate: (content: JSONContent | null) => Promise<void>;
+    /** Called when annotation content changes. rangeKey identifies which annotation. */
+    onUpdate: (rangeKey: string, content: JSONContent | null) => Promise<void>;
     onDismiss: () => void;
     onRequestCreateTag: (rangeKey: string, text: string, from: number, to: number) => void;
     onImagePasteBlocked: () => void;
@@ -48,7 +49,7 @@
       {rangeKey}
       content={ctx.annotations.getByKey(rangeKey)?.content}
       sealed={ctx.annotations.isSealed(rangeKey)}
-      {onUpdate}
+      onUpdate={(content) => onUpdate(rangeKey, content)}
       onUnseal={() => {
         ctx.interaction.setSelection(keyToRange(rangeKey));
         ctx.annotations.unseal(rangeKey);

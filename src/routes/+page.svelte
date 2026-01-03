@@ -269,10 +269,9 @@
     return { key: rangeToKey({ start, end }), start, end };
   });
 
-  async function updateAnnotation(content: JSONContent | null) {
-    const sel = interaction.range;
-    if (!sel) return;
-    await annotationState.upsert(sel, content);
+  async function updateAnnotation(rangeKey: string, content: JSONContent | null) {
+    const range = keyToRange(rangeKey);
+    await annotationState.upsert(range, content);
   }
 
   function sealCurrentAnnotation() {
