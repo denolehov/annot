@@ -89,11 +89,20 @@
   /**
    * Get the range key for a line. Used by embedded components to connect
    * annotation slots to their content.
+   *
+   * Always returns existing annotation keys. Only returns new selection key
+   * when not in pendingChoice mode (waiting for user to choose annotate/bookmark).
    */
   function getRangeKeyForLine(displayIndex: number): string | null {
+    // Always show existing annotations
     const annotationAtLine = annotations.getAtLine(displayIndex);
     if (annotationAtLine) {
       return annotationAtLine.key;
+    }
+
+    // Don't show new editor during pendingChoice (user choosing annotate vs bookmark)
+    if (interaction.pendingChoice) {
+      return null;
     }
 
     const isLast = displayIndex === lastSelectedLine && selection && !isDragging;

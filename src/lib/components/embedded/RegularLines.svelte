@@ -6,7 +6,6 @@
    * Uses LineRow for shared line-rendering logic and adds search highlighting via codeWrapper.
    */
   import type { Line, SectionInfo } from '$lib/types';
-  import { rangeToKey } from '$lib/range';
   import { getLineNumber, getDiffKind } from '$lib/line-utils';
   import { highlightMatches, clearHighlights } from '$lib/search-highlight';
   import { invoke } from '@tauri-apps/api/core';
@@ -41,7 +40,6 @@
   // Convenience derived values
   const markdownMetadata = $derived(ctx.markdownMetadata);
   const searchMatches = $derived(ctx.search.matches);
-  const lastSelectedLine = $derived(ctx.lastSelectedLine);
 
   // Map of display indices to code element refs for search highlighting
   let codeRefs: Map<number, HTMLElement> = new Map();
@@ -154,9 +152,7 @@
       {/if}
     {/snippet}
   </LineRow>
-  {@const annotationAtLine = ctx.annotations.getAtLine(displayIndex)}
-  {@const isLastSelectedLine = displayIndex === lastSelectedLine && ctx.interaction.range && ctx.interaction.phase !== 'selecting'}
-  {@const rangeKey = ctx.interaction.pendingChoice ? null : (annotationAtLine?.key ?? (isLastSelectedLine && ctx.interaction.range ? rangeToKey(ctx.interaction.range) : null))}
+  {@const rangeKey = ctx.getRangeKeyForLine(displayIndex)}
   <AnnotationSlot {rangeKey} {...annotationSlotProps} />
 {/each}
 

@@ -68,7 +68,7 @@
   {#each lines as { line, displayIndex }}
     {@const sourceLineNum = getLineNumber(line)}
     {@const portalSemantics = getPortalSemantics(line)}
-    {@const rangeKey = ctx.interaction.pendingChoice ? null : ctx.getRangeKeyForLine(displayIndex)}
+    {@const rangeKey = ctx.getRangeKeyForLine(displayIndex)}
     <LineRow
       {line}
       {displayIndex}
