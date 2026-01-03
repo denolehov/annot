@@ -100,6 +100,9 @@ export function useInteraction(options: UseInteractionOptions) {
   function handlePointerMove(e: PointerEvent) {
     if (state.phase !== 'selecting' || state.anchor === null) return;
 
+    // Prevent native text selection during line selection drag
+    e.preventDefault();
+
     // Get element under pointer (works even with capture)
     const el = document.elementFromPoint(e.clientX, e.clientY);
     const displayIdx = getDisplayIdxFromElement(el);

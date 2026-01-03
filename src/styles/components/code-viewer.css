@@ -301,6 +301,12 @@ div.line.preview .gutter {
 	line-height: 22px;
 }
 
+/* Disable native text selection during line selection drag to prevent scroll jumps */
+.content.phase-selecting .code {
+	-webkit-user-select: none;
+	user-select: none;
+}
+
 /* Error and loading states */
 .error {
 	padding: 2rem;
