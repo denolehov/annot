@@ -31,7 +31,9 @@ export function tooltip(node: HTMLElement, options: TooltipOptions) {
 		tooltipEl = document.createElement('div');
 		tooltipEl.className = options.variant ? `chip-tooltip ${options.variant}` : 'chip-tooltip';
 		// Override hidden visibility since we're managing show/hide manually
-		tooltipEl.style.cssText = 'position: fixed; z-index: 9999; pointer-events: none; opacity: 1; visibility: visible;';
+		// Apply zoom from CSS variable to match content zoom level
+		const zoom = getComputedStyle(document.documentElement).getPropertyValue('--content-zoom') || '1';
+		tooltipEl.style.cssText = `position: fixed; z-index: 9999; pointer-events: none; opacity: 1; visibility: visible; zoom: ${zoom};`;
 
 		// Create content
 		const contentEl = document.createElement('div');

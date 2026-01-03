@@ -9,6 +9,7 @@
   import type { RefSuggestionItem } from './tiptap/extensions';
   import type { Tag, Bookmark } from './types';
   import Icon from './CommandPalette/Icon.svelte';
+  import { getAnnotContext } from './context/annot-context.svelte';
 
   interface NodeRef {
     type: 'Chip' | 'Placeholder';
@@ -114,6 +115,9 @@
   }
 
   let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], bookmarks = [], annotationEntries = {}, allowsImagePaste = false, onImagePasteBlocked, onRequestCreateTag, pendingTagInsertion, rangeKey = '', getOriginalLines }: Props = $props();
+
+  // Get zoom level from context for floating elements
+  const ctx = getAnnotContext();
 
   let container: HTMLDivElement | undefined = $state();
   let element: HTMLDivElement | undefined = $state();
@@ -484,6 +488,7 @@
     use:portal
     use:floating={{ getRect: () => ann.tagSuggestion.clientRect?.() ?? null }}
     class="tag-suggestions"
+    style:zoom={ctx.contentZoom}
   >
     {#each ann.tagSuggestion.items as tag, i}
       <button
@@ -509,6 +514,7 @@
     use:portal
     use:floating={{ getRect: () => ann.slashSuggestion.clientRect?.() ?? null }}
     class="slash-suggestions"
+    style:zoom={ctx.contentZoom}
   >
     {#each ann.slashSuggestion.items as cmd, i}
       <button
@@ -538,6 +544,7 @@
     use:portal
     use:floating={{ getRect: () => ann.refSuggestion.clientRect?.() ?? null }}
     class="ref-suggestions"
+    style:zoom={ctx.contentZoom}
   >
     {#each ann.refSuggestion.items as item, idx}
       {#if item.type === 'section'}
@@ -603,6 +610,7 @@
     use:portal
     use:floating={{ getRect: () => selectionPopover?.rect ?? null }}
     class="selection-popover"
+    style:zoom={ctx.contentZoom}
   >
     <button
       type="button"

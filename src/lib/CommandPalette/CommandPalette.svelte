@@ -21,6 +21,7 @@
     tags: Tag[];
     exitModes: ExitMode[];
     bookmarks: Bookmark[];
+    zoomLevel?: number;
     onClose: () => void;
     onSetExitMode: (modeId: string) => void;
     onTagsChange?: (tags: Tag[]) => void;
@@ -34,7 +35,7 @@
     onEvent?: (event: string, payload: unknown) => void;
   }
 
-  let { tags, exitModes, bookmarks, onClose, onSetExitMode, onTagsChange, onExitModesChange, onBookmarkDeleted, onBookmarkUpdated, showToast, onOpenSaveModal, initialState, onItemCreated, onEvent }: Props = $props();
+  let { tags, exitModes, bookmarks, zoomLevel = 1, onClose, onSetExitMode, onTagsChange, onExitModesChange, onBookmarkDeleted, onBookmarkUpdated, showToast, onOpenSaveModal, initialState, onItemCreated, onEvent }: Props = $props();
 
   // Convert domain types to Item format
   function tagToItem(tag: Tag): Item {
@@ -593,6 +594,7 @@
   bind:this={modalEl}
   onkeydown={handleKeyDown}
   tabindex="-1"
+  style:zoom={zoomLevel}
 >
   {#if machineState.type === 'NAMESPACE_FILTER'}
     <div class="filter-view">

@@ -231,6 +231,11 @@
   // Content zoom state
   let contentZoom = $state(1.0);
 
+  // Sync zoom to CSS variable for portal elements (tooltips, etc.)
+  $effect(() => {
+    document.documentElement.style.setProperty('--content-zoom', String(contentZoom));
+  });
+
   // Virtual scrolling state
   const LINE_HEIGHT = 22;
   const BUFFER_LINES = 10;
@@ -752,6 +757,7 @@
     {metadata}
     {tags}
     {allowsImagePaste}
+    {contentZoom}
     interaction={interaction}
     annotations={annotationState}
     exitModes={exitModeState}
@@ -776,16 +782,18 @@
       onCreateBookmark={handleToggleBookmark}
       zoomLevel={contentZoom}
     />
-    <SessionEditor
-      content={sessionComment}
-      isOpen={sessionEditorOpen}
-      pendingTagInsertion={pendingTagInsertion?.editorKey === 'session' ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
-      onUpdate={updateSessionComment}
-      onOpen={openSessionEditor}
-      onClose={closeSessionEditor}
-      onRequestCreateTag={(text, from, to) => handleRequestCreateTag('session', text, from, to)}
-      onImagePasteBlocked={handleImagePasteBlocked}
-    />
+    <div style:zoom={contentZoom}>
+      <SessionEditor
+        content={sessionComment}
+        isOpen={sessionEditorOpen}
+        pendingTagInsertion={pendingTagInsertion?.editorKey === 'session' ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
+        onUpdate={updateSessionComment}
+        onOpen={openSessionEditor}
+        onClose={closeSessionEditor}
+        onRequestCreateTag={(text, from, to) => handleRequestCreateTag('session', text, from, to)}
+        onImagePasteBlocked={handleImagePasteBlocked}
+      />
+    </div>
   </div>
 
     <div
@@ -871,18 +879,23 @@
     </div>
 
   <!-- Footer / Status Bar -->
-  <StatusBar />
+  <div style:zoom={contentZoom}>
+    <StatusBar />
+  </div>
   </AnnotProvider>
   {/if}
 </main>
 
-<SearchBar {search} />
+<div style:zoom={contentZoom}>
+  <SearchBar {search} />
+</div>
 
 {#if commandPaletteOpen && bookmarkState}
   <CommandPalette
     {tags}
     bookmarks={bookmarkState.all}
     exitModes={exitModeState.modes}
+    zoomLevel={contentZoom}
     onClose={handleCommandPaletteClose}
     onSetExitMode={handleSetExitModeFromPalette}
     onTagsChange={handleTagsChange}

@@ -26,6 +26,7 @@
     metadata: ContentMetadata;
     tags: Tag[];
     allowsImagePaste: boolean;
+    contentZoom: number;
 
     // Composables (created by page)
     interaction: ReturnType<typeof useInteraction>;
@@ -48,6 +49,7 @@
     metadata,
     tags,
     allowsImagePaste,
+    contentZoom,
     interaction,
     annotations,
     exitModes,
@@ -122,6 +124,7 @@
     get tags() { return tags; },
     get allowsImagePaste() { return allowsImagePaste; },
     get markdownMetadata() { return markdownMetadata; },
+    get contentZoom() { return contentZoom; },
 
     get showToast() { return showToast; },
     get isLineSelectable() { return isLineSelectable; },

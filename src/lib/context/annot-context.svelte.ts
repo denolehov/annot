@@ -36,6 +36,7 @@ export interface AnnotContext {
   readonly tags: Tag[];
   readonly allowsImagePaste: boolean;
   readonly markdownMetadata: MarkdownMetadata | null;
+  readonly contentZoom: number;
 
   // Utilities
   showToast: (message: string, duration?: number) => void;
