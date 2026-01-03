@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/denolehov/annot/compare/v0.2.1...v0.2.2) (2026-01-03)
+
+
+### Bug Fixes
+
+* build workflow now accepts tag param ([e7af1f8](https://github.com/denolehov/annot/commit/e7af1f8aa7737d2edb23dc80aa14403658501c54))
+
 ## [0.2.1](https://github.com/denolehov/annot/compare/v0.2.0...v0.2.1) (2026-01-03)
 
 
