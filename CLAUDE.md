@@ -44,12 +44,23 @@ pnpm check        # TypeScript + Svelte
 
 ### Installing from GitHub Releases
 
-For users with repo access:
+**Quick install** (requires repo access):
+
+```bash
+# First time: install GitHub CLI and authenticate
+brew install gh
+gh auth login
+
+# Install annot
+curl -fsSL https://raw.githubusercontent.com/denolehov/annot/main/scripts/install.sh | bash
+```
+
+**Manual install:**
 
 ```bash
 gh release download --repo denolehov/annot --pattern "*.tar.gz"
 tar -xzf annot-darwin-arm64.tar.gz
-mv annot.app /Applications/  # Or: mv annot.app/Contents/MacOS/annot ~/.local/bin/
+mv annot.app/Contents/MacOS/annot ~/.local/bin/
 ```
 
 ### Important: Dev vs Build modes
