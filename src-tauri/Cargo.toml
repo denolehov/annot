@@ -1,11 +1,10 @@
 [package]
 name = "annot"
-version = "0.2.2"
-description = "A Tauri App"
-authors = ["you"]
+version = "0.2.3" # x-release-please-version
+description = "Human-in-the-loop annotation tool for AI workflows"
+authors = ["Denys Oliekhov"]
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+repository = "https://github.com/denolehov/annot"
 
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
