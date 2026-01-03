@@ -670,6 +670,50 @@ describe('reducer: single-action namespace auto-execute', () => {
   });
 });
 
+describe('reducer: ESCAPE from EDIT_FORM preserves selection', () => {
+  const ctx = createMockContext(
+    [tagsNamespace],
+    { tags: regularItems } // [TODO, FIXME]
+  );
+
+  it('should return to ITEM_FILTER with same item selected', () => {
+    // Editing the second item (FIXME at index 1)
+    const state: State = {
+      type: 'EDIT_FORM',
+      namespace: tagsNamespace,
+      item: regularItems[1], // FIXME
+      values: { name: 'FIXME' },
+      focusedField: 0,
+    };
+
+    const result = reduce(state, { type: 'ESCAPE' }, ctx);
+
+    expect(result.state.type).toBe('ITEM_FILTER');
+    if (result.state.type === 'ITEM_FILTER') {
+      expect(result.state.selectedIndex).toBe(1); // Still on FIXME
+      expect(result.state.inputMode).toBe('navigating'); // Item stays highlighted
+    }
+  });
+
+  it('should fall back to index 0 if edited item no longer exists', () => {
+    // Editing an item that was deleted externally
+    const state: State = {
+      type: 'EDIT_FORM',
+      namespace: tagsNamespace,
+      item: { id: 'deleted-tag', name: 'Gone', values: { name: 'Gone' } },
+      values: { name: 'Gone' },
+      focusedField: 0,
+    };
+
+    const result = reduce(state, { type: 'ESCAPE' }, ctx);
+
+    expect(result.state.type).toBe('ITEM_FILTER');
+    if (result.state.type === 'ITEM_FILTER') {
+      expect(result.state.selectedIndex).toBe(0); // Fallback
+    }
+  });
+});
+
 describe('reducer: initial state', () => {
   const ctx = createMockContext(
     [tagsNamespace, copyNamespace],
@@ -819,5 +863,132 @@ describe('reducer: delete last item in no-create namespace', () => {
 
     // Should stay in ITEM_FILTER since there's still one item left
     expect(result.state.type).toBe('ITEM_FILTER');
+  });
+
+  it('should select previous item when deleting last item in list', () => {
+    // Context with three items
+    const ctx: QueryContext = {
+      namespaces: [bookmarksNamespace],
+      filterNamespaces(query: string): Namespace[] {
+        return [bookmarksNamespace];
+      },
+      getItems(namespace: Namespace): Item[] {
+        return [
+          { id: 'bookmark-1', name: 'Bookmark 1', values: { label: 'Bookmark 1' } },
+          { id: 'bookmark-2', name: 'Bookmark 2', values: { label: 'Bookmark 2' } },
+          { id: 'bookmark-3', name: 'Bookmark 3', values: { label: 'Bookmark 3' } },
+        ];
+      },
+      filterItems(namespace: Namespace, query: string): Item[] {
+        return [
+          { id: 'bookmark-1', name: 'Bookmark 1', values: { label: 'Bookmark 1' } },
+          { id: 'bookmark-2', name: 'Bookmark 2', values: { label: 'Bookmark 2' } },
+          { id: 'bookmark-3', name: 'Bookmark 3', values: { label: 'Bookmark 3' } },
+        ];
+      },
+    };
+
+    // Deleting item at index 2 (last item)
+    const state: State = {
+      type: 'ITEM_FILTER',
+      namespace: bookmarksNamespace,
+      query: '',
+      selectedIndex: 2,
+      pendingDelete: true,
+      inputMode: 'navigating',
+    };
+
+    const result = reduce(state, { type: 'DELETE' }, ctx);
+
+    expect(result.state.type).toBe('ITEM_FILTER');
+    if (result.state.type === 'ITEM_FILTER') {
+      // After deletion, list has 2 items (indices 0, 1)
+      // Should select index 1 (the new last item)
+      expect(result.state.selectedIndex).toBe(1);
+    }
+  });
+
+  it('should keep same index when deleting non-last item (now points to next)', () => {
+    // Context with three items
+    const ctx: QueryContext = {
+      namespaces: [bookmarksNamespace],
+      filterNamespaces(query: string): Namespace[] {
+        return [bookmarksNamespace];
+      },
+      getItems(namespace: Namespace): Item[] {
+        return [
+          { id: 'bookmark-1', name: 'Bookmark 1', values: { label: 'Bookmark 1' } },
+          { id: 'bookmark-2', name: 'Bookmark 2', values: { label: 'Bookmark 2' } },
+          { id: 'bookmark-3', name: 'Bookmark 3', values: { label: 'Bookmark 3' } },
+        ];
+      },
+      filterItems(namespace: Namespace, query: string): Item[] {
+        return [
+          { id: 'bookmark-1', name: 'Bookmark 1', values: { label: 'Bookmark 1' } },
+          { id: 'bookmark-2', name: 'Bookmark 2', values: { label: 'Bookmark 2' } },
+          { id: 'bookmark-3', name: 'Bookmark 3', values: { label: 'Bookmark 3' } },
+        ];
+      },
+    };
+
+    // Deleting item at index 0 (first item)
+    const state: State = {
+      type: 'ITEM_FILTER',
+      namespace: bookmarksNamespace,
+      query: '',
+      selectedIndex: 0,
+      pendingDelete: true,
+      inputMode: 'navigating',
+    };
+
+    const result = reduce(state, { type: 'DELETE' }, ctx);
+
+    expect(result.state.type).toBe('ITEM_FILTER');
+    if (result.state.type === 'ITEM_FILTER') {
+      // Index stays at 0, which now points to what was bookmark-2
+      expect(result.state.selectedIndex).toBe(0);
+    }
+  });
+
+  it('should keep same index when deleting middle item', () => {
+    // Context with three items
+    const ctx: QueryContext = {
+      namespaces: [bookmarksNamespace],
+      filterNamespaces(query: string): Namespace[] {
+        return [bookmarksNamespace];
+      },
+      getItems(namespace: Namespace): Item[] {
+        return [
+          { id: 'bookmark-1', name: 'Bookmark 1', values: { label: 'Bookmark 1' } },
+          { id: 'bookmark-2', name: 'Bookmark 2', values: { label: 'Bookmark 2' } },
+          { id: 'bookmark-3', name: 'Bookmark 3', values: { label: 'Bookmark 3' } },
+        ];
+      },
+      filterItems(namespace: Namespace, query: string): Item[] {
+        return [
+          { id: 'bookmark-1', name: 'Bookmark 1', values: { label: 'Bookmark 1' } },
+          { id: 'bookmark-2', name: 'Bookmark 2', values: { label: 'Bookmark 2' } },
+          { id: 'bookmark-3', name: 'Bookmark 3', values: { label: 'Bookmark 3' } },
+        ];
+      },
+    };
+
+    // Deleting item at index 1 (middle item)
+    const state: State = {
+      type: 'ITEM_FILTER',
+      namespace: bookmarksNamespace,
+      query: '',
+      selectedIndex: 1,
+      pendingDelete: true,
+      inputMode: 'navigating',
+    };
+
+    const result = reduce(state, { type: 'DELETE' }, ctx);
+
+    expect(result.state.type).toBe('ITEM_FILTER');
+    if (result.state.type === 'ITEM_FILTER') {
+      // Index stays at 1, which now points to what was bookmark-3
+      expect(result.state.selectedIndex).toBe(1);
+    }
   });
 });

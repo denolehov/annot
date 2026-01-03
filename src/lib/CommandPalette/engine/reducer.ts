@@ -366,7 +366,13 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
           };
         }
 
-        return { state: clearPending(state), commands };
+        // Adjust selectedIndex: if we deleted the last item, select previous; otherwise stay put
+        const newSelectedIndex =
+          state.selectedIndex >= matches.length - 1
+            ? Math.max(0, matches.length - 2) // Was last item, select new last
+            : state.selectedIndex; // Keep index (now points to what was next)
+
+        return { state: clearPending({ ...state, selectedIndex: newSelectedIndex }), commands };
       }
 
       // EDIT only works in navigating mode - opens edit form for selected item
@@ -577,14 +583,17 @@ export function reduce(state: State, action: Action, ctx: QueryContext): ReduceR
 
     case 'EDIT_FORM': {
       if (action.type === 'ESCAPE') {
+        // Find the index of the item we were editing to preserve focus
+        const items = ctx.getItems(state.namespace);
+        const editedIndex = items.findIndex((i) => i.id === state.item.id);
         return {
           state: {
             type: 'ITEM_FILTER',
             namespace: state.namespace,
             query: '',
-            selectedIndex: 0,
+            selectedIndex: editedIndex >= 0 ? editedIndex : 0,
             pendingDelete: false,
-            inputMode: 'filtering',
+            inputMode: 'navigating', // Stay in nav mode to keep item highlighted
           },
           commands,
         };
