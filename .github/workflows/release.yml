@@ -68,9 +68,20 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: pnpm tauri build
 
+      - name: Find build output
+        run: |
+          echo "=== Looking for .app ==="
+          find target -name "*.app" -type d 2>/dev/null || true
+          echo "=== Target directory structure ==="
+          ls -la target/ || true
+          ls -la target/release/ || true
+          ls -la target/release/bundle/ || true
+
       - name: Package artifact
         run: |
-          cd target/release/bundle/macos
+          APP_PATH=$(find target -name "annot.app" -type d | head -1)
+          echo "Found app at: $APP_PATH"
+          cd "$(dirname "$APP_PATH")"
           tar -czvf annot-darwin-arm64.tar.gz annot.app
           mv annot-darwin-arm64.tar.gz $GITHUB_WORKSPACE/
 
