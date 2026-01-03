@@ -12,6 +12,7 @@
   import CopyDropdown from "$lib/CopyDropdown.svelte";
   import { CommandPalette } from "$lib/CommandPalette";
   import SaveModal from "$lib/SaveModal.svelte";
+  import HelpOverlay from "$lib/HelpOverlay.svelte";
   import Portal from "$lib/components/embedded/Portal.svelte";
   import CodeBlock from "$lib/components/embedded/CodeBlock.svelte";
   import Table from "$lib/components/embedded/Table.svelte";
@@ -227,6 +228,9 @@
 
   // Save modal state
   let saveModalOpen = $state(false);
+
+  // Help overlay state
+  let helpOverlayOpen = $state(false);
 
   // Content zoom state
   let contentZoom = $state(1.0);
@@ -612,6 +616,7 @@
       },
       onOpenSaveModal: openSaveModal,
       onOpenSearch: () => search.open(),
+      onOpenHelp: () => helpOverlayOpen = true,
       onCreateSessionBookmark: handleToggleBookmark,
       onCreateSelectionBookmark: handleCreateSelectionBookmark,
       onEditLastBookmark: handleEditLastBookmark,
@@ -631,6 +636,7 @@
       isEditorActive: () => !!interaction.range || sessionEditorOpen,
       isCommandPaletteOpen: () => commandPaletteOpen,
       isSaveModalOpen: () => saveModalOpen,
+      isHelpOverlayOpen: () => helpOverlayOpen,
       isSearchOpen: () => search.isOpen,
       hasHoveredLine: () => interaction.hoverLine !== null,
       hasExitModes: () => exitModeState.modes.length > 0,
@@ -923,6 +929,10 @@
     onSave={handleSave}
     onCancel={closeSaveModal}
   />
+{/if}
+
+{#if helpOverlayOpen}
+  <HelpOverlay onClose={() => helpOverlayOpen = false} />
 {/if}
 
 <style>

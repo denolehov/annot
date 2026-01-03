@@ -10,6 +10,7 @@ export interface KeyboardHandlers {
   onOpenCommandPaletteWithNamespace?: (namespace: 'exit-modes') => void;
   onOpenSaveModal?: () => void;
   onOpenSearch?: () => void;
+  onOpenHelp?: () => void;
   onCreateSessionBookmark?: () => void;
   onCreateSelectionBookmark?: (context: BookmarkContext) => void;
   onEditLastBookmark?: () => void;
@@ -33,6 +34,8 @@ export interface KeyboardState {
   isCommandPaletteOpen: () => boolean;
   /** Whether save modal is open */
   isSaveModalOpen: () => boolean;
+  /** Whether help overlay is open */
+  isHelpOverlayOpen: () => boolean;
   /** Whether search bar is open */
   isSearchOpen: () => boolean;
   /** Whether a line is currently hovered */
@@ -67,6 +70,9 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
       handlers.onShiftDown?.();
       return;
     }
+
+    // Block all shortcuts when help overlay is open (it handles its own Escape)
+    if (state.isHelpOverlayOpen()) return;
 
     // Escape to cancel pending choice
     if (e.key === 'Escape') {
@@ -132,6 +138,15 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       e.preventDefault();
       handlers.onOpenCommandPalette?.();
+      return;
+    }
+
+    // '?' for help overlay
+    if (e.key === '?' && !state.isEditorActive() && !state.isCommandPaletteOpen() && !state.isHelpOverlayOpen()) {
+      if (isInEditorOrInput()) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      e.preventDefault();
+      handlers.onOpenHelp?.();
       return;
     }
 
