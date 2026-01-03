@@ -5,7 +5,7 @@
 
 /* Outer wrapper for cursor positioning - minimal styling */
 .tag-chip-wrapper {
-	display: inline;
+	display: inline-flex;
 	vertical-align: middle;
 }
 
@@ -19,7 +19,7 @@
 	padding: var(--chip-padding);
 	user-select: none;
 	font-family: var(--font-ui);
-	vertical-align: middle;
+	/* vertical-align handled by wrapper */
 	margin: 0 2px;
 	margin-left: 1px; /* Space for cursor before chip */
 	position: relative;
