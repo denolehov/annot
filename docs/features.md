@@ -197,26 +197,38 @@ Press `:` (colon) to open. Seven namespaces:
 Structured for AI consumption:
 
 ```
-LEGEND:
-  [# TAG] Instruction text for this tag
+TAGS:
+  [# SECURITY] Review for security vulnerabilities
+  [# TODO] Items needing follow-up
 
-SESSION:
-  Reviewing plan.md with embedded files: src/lib.rs, src/main.rs
-  Context: Please focus on the error handling approach
-  Exit: Apply
-    Proceed with this plan as written
+BOOKMARKS:
+  [BOOKMARK abc] auth-flow (this session)
+
+CONTEXT: plan.md [embeds: src/lib.rs, src/main.rs]
+
+GENERAL:
+  Please focus on the error handling approach
+
+NEXT: Apply — Proceed with this plan as written
 
 ---
 
 src/lib.rs:45-52:
-    44 | fn previous_line() {  // context
-    45 | fn example() {
-    46 |     // code
-    > [# SECURITY] Check for injection vulnerabilities here
-    > Consider validating the input before processing
+   44 | fn previous_line() {  // context
+>  45 | fn example() {
+>  46 |     // code
+      └──> [# SECURITY] Check for injection vulnerabilities here
+           Consider validating the input before processing
 
-SAVED: /path/to/file.md
+Saved to /path/to/file.md
 ```
+
+### Section Meanings
+- **TAGS**: Tag definitions used in annotations (only if tags are present)
+- **BOOKMARKS**: Referenced bookmarks with their snapshots
+- **CONTEXT**: What's being reviewed, with any embedded portal files
+- **GENERAL**: High-level comment about the entire review (not line-specific)
+- **NEXT**: What action the human wants (exit mode name + instruction)
 
 ---
 

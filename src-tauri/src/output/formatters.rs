@@ -29,12 +29,12 @@ pub fn format_bookmark(out: &mut OutputBuilder, bookmark: &Bookmark, created_thi
     if created_this_session {
         // Condensed: created this session, agent already has context
         out.line(&format!(
-            "[@ {}] {} (this session)",
+            "[BOOKMARK {}] {} (this session)",
             short_id, display_label
         ));
     } else {
         // Full: pre-existing bookmark, emit full context
-        out.line(&format!("[@ {}] {}", short_id, display_label));
+        out.line(&format!("[BOOKMARK {}] {}", short_id, display_label));
         out.indented(|b| {
             b.field("Source", &bookmark.snapshot.source_title());
             if let Some(ref project) = bookmark.project_path {
@@ -48,44 +48,6 @@ pub fn format_bookmark(out: &mut OutputBuilder, bookmark: &Bookmark, created_thi
             b.separator();
         });
         out.blank_line();
-    }
-}
-
-/// Format the SESSION section content.
-pub fn format_session(
-    out: &mut OutputBuilder,
-    portals_header: Option<&str>,
-    session_comment: Option<&str>,
-    exit_mode: Option<(&str, &str)>, // (name, instruction)
-    command_content: Option<(&str, &str)>, // (path, content)
-) {
-    // Portals header if present
-    if let Some(header) = portals_header {
-        out.line(header);
-    }
-
-    // Session comment (indented lines)
-    if let Some(comment) = session_comment {
-        for line in comment.lines() {
-            out.line(line);
-        }
-    }
-
-    // Exit mode
-    if let Some((name, instruction)) = exit_mode {
-        out.line(&format!("{} ({})", name, instruction));
-
-        // Command content if present
-        if let Some((path, content)) = command_content {
-            out.indented(|b| {
-                b.field("Command", path);
-                b.separator();
-                for line in content.lines() {
-                    b.line(line);
-                }
-                b.separator();
-            });
-        }
     }
 }
 

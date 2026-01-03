@@ -22,7 +22,7 @@ use crate::state::{
 pub use builder::{BuilderMode, OutputBuilder, SECTION_DIVIDER, SEPARATOR};
 pub use render::render_content;
 
-use formatters::{calculate_builder_mode, format_annotation, format_bookmark, format_legend, format_session};
+use formatters::{calculate_builder_mode, format_annotation, format_bookmark, format_legend};
 
 /// Output mode determines how content is formatted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -357,18 +357,18 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
     let builder_mode = calculate_builder_mode(content, max_line);
     let mut out = OutputBuilder::new(builder_mode);
 
-    // LEGEND block (if any tags are used)
+    // TAGS block (if any tags are used)
     let unique_tags = collect_unique_tags(review);
     if !unique_tags.is_empty() {
-        out.section("LEGEND", |b| {
+        out.section("TAGS", |b| {
             format_legend(b, &unique_tags);
         });
     }
 
-    // BOOKMARKS REFERENCED block (if any bookmarks are referenced)
+    // BOOKMARKS block (if any bookmarks are referenced)
     let unique_bookmarks = collect_unique_bookmarks(review);
     if !unique_bookmarks.is_empty() {
-        out.section("BOOKMARKS REFERENCED", |b| {
+        out.section("BOOKMARKS", |b| {
             for bookmark in &unique_bookmarks {
                 let created_this_session = review.session_created_bookmarks.contains(&bookmark.id);
                 format_bookmark(b, bookmark, created_this_session);
@@ -376,25 +376,24 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
         });
     }
 
-    // SESSION block (if exit mode selected or session comment exists)
-    if has_exit_mode || has_session_comment {
-        // Prepare session data
-        let portals_header = if !content.portals.is_empty() {
-            let root_name = &content.label;
-            let embedded_files: Vec<_> = content
-                .portals
-                .iter()
-                .map(|p| p.source_path.display().to_string())
-                .collect();
-            Some(format!(
-                "Reviewing {} with embedded files: {}",
-                root_name,
-                embedded_files.join(", ")
-            ))
-        } else {
-            None
-        };
+    // CONTEXT block (if reviewing content with portals)
+    let has_context = !content.portals.is_empty();
+    if has_context {
+        let embedded_files: Vec<_> = content
+            .portals
+            .iter()
+            .map(|p| p.source_path.display().to_string())
+            .collect();
+        out.raw_line(&format!(
+            "CONTEXT: {} [embeds: {}]",
+            content.label,
+            embedded_files.join(", ")
+        ));
+        out.blank_line();
+    }
 
+    // GENERAL block (session-level comment)
+    if has_session_comment {
         let session_comment_text = review.session_comment.as_ref().and_then(|comment| {
             if comment.is_empty() {
                 None
@@ -403,6 +402,17 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
             }
         });
 
+        if let Some(comment_text) = session_comment_text {
+            out.section("GENERAL", |b| {
+                for line in comment_text.lines() {
+                    b.line(line);
+                }
+            });
+        }
+    }
+
+    // NEXT block (exit mode with instruction)
+    if has_exit_mode {
         let exit_mode_info = review.selected_exit_mode_id.as_ref().and_then(|mode_id| {
             review
                 .config
@@ -412,30 +422,29 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
                 .map(|em| (em.name.as_str(), em.instruction.as_str(), em.command_path()))
         });
 
-        let command_content = exit_mode_info.as_ref().and_then(|(_, _, cmd_path)| {
-            cmd_path.and_then(|path| {
-                std::fs::read_to_string(path)
-                    .ok()
-                    .map(|content| (path.display().to_string(), content))
-            })
-        });
+        if let Some((name, instruction, cmd_path)) = exit_mode_info {
+            out.raw_line(&format!("NEXT: {} — {}", name, instruction));
 
-        out.section("SESSION", |b| {
-            format_session(
-                b,
-                portals_header.as_deref(),
-                session_comment_text.as_deref(),
-                exit_mode_info.map(|(name, instr, _)| (name, instr)),
-                command_content.as_ref().map(|(p, c)| (p.as_str(), c.as_str())),
-            );
-        });
-
-        // Remove the trailing blank line from section, add divider if annotations follow
-        // Actually section adds blank line, we need divider before annotations
-        if has_annotations {
-            // Section already added blank line, we need "---" separator
-            out.raw("---\n\n");
+            // Command content if present (for command-linked exit modes)
+            if let Some(path) = cmd_path {
+                if let Ok(cmd_content) = std::fs::read_to_string(path) {
+                    out.indented(|b| {
+                        b.field("Command", &path.display().to_string());
+                        b.separator();
+                        for line in cmd_content.lines() {
+                            b.line(line);
+                        }
+                        b.separator();
+                    });
+                }
+            }
+            out.blank_line();
         }
+    }
+
+    // Add divider before annotations if we had any header content
+    if has_annotations && (has_context || has_session_comment || has_exit_mode) {
+        out.raw("---\n\n");
     }
 
     // Build annotation blocks (if any)
@@ -750,12 +759,11 @@ mod tests {
 
         let output = format_output(&review, OutputMode::Cli).text;
 
-        assert!(output.contains("SESSION:"));
-        assert!(output.contains("Apply (Apply the suggested changes)"));
+        assert!(output.contains("NEXT: Apply — Apply the suggested changes"));
     }
 
     #[test]
-    fn session_block_with_annotations() {
+    fn next_block_with_annotations() {
         let source = ContentSource::Cli(CliSource::File {
             path: PathBuf::from("test.rs"),
         });
@@ -802,17 +810,17 @@ mod tests {
 
         let output = format_output(&review, OutputMode::Cli).text;
 
-        // SESSION block comes first
-        let session_pos = output.find("SESSION:").unwrap();
+        // NEXT block comes before annotations
+        let next_pos = output.find("NEXT:").unwrap();
         let annotation_pos = output.find("test.rs:5").unwrap();
-        assert!(session_pos < annotation_pos);
+        assert!(next_pos < annotation_pos);
 
-        // Separator between SESSION and annotations
+        // Separator between header content and annotations
         assert!(output.contains("---"));
     }
 
     #[test]
-    fn session_comment_in_output() {
+    fn general_comment_in_output() {
         let source = ContentSource::Cli(CliSource::File {
             path: PathBuf::from("test.rs"),
         });
@@ -830,12 +838,12 @@ mod tests {
 
         let output = format_output(&review, OutputMode::Cli).text;
 
-        assert!(output.contains("SESSION:"));
+        assert!(output.contains("GENERAL:"));
         assert!(output.contains("  This is a session comment"));
     }
 
     #[test]
-    fn session_comment_with_exit_mode() {
+    fn general_comment_with_next() {
         let source = ContentSource::Cli(CliSource::File {
             path: PathBuf::from("test.rs"),
         });
@@ -865,10 +873,10 @@ mod tests {
 
         let output = format_output(&review, OutputMode::Cli).text;
 
-        // Session comment comes before exit mode
+        // GENERAL comes before NEXT
         let comment_pos = output.find("Overall looks good!").unwrap();
-        let exit_pos = output.find("Apply (Apply changes)").unwrap();
-        assert!(comment_pos < exit_pos);
+        let next_pos = output.find("NEXT: Apply").unwrap();
+        assert!(comment_pos < next_pos);
     }
 
     #[test]
@@ -920,8 +928,8 @@ mod tests {
         let state = make_review("test.rs", lines, annotations);
         let output = format_output(&state, OutputMode::Cli).text;
 
-        // LEGEND block should appear at the top
-        assert!(output.starts_with("LEGEND:\n"));
+        // TAGS block should appear at the top
+        assert!(output.starts_with("TAGS:\n"));
         assert!(output.contains("[# SECURITY] Review for vulnerabilities"));
 
         // Tag should render in annotation content
@@ -929,7 +937,7 @@ mod tests {
     }
 
     #[test]
-    fn legend_alphabetically_sorted() {
+    fn tags_alphabetically_sorted() {
         let mut annotations = HashMap::new();
         annotations.insert(
             LineRange::new(5, 5),
@@ -1576,7 +1584,7 @@ mod tests {
 
         let output = format_output(&review, OutputMode::Cli).text;
 
-        assert!(output.contains("SESSION:"), "Should have session block");
+        assert!(output.contains("GENERAL:"), "Should have GENERAL block");
         assert!(output.contains("Overall looks good"), "Should have session comment");
         assert!(
             output.ends_with("Saved to /tmp/review.md\n"),
@@ -1694,8 +1702,8 @@ Do something useful.
 
         let output = format_output(&review, OutputMode::Cli).text;
 
-        // Should include the exit mode name and instruction
-        assert!(output.contains("/test-cmd (Test command)"), "Should have exit mode header");
+        // Should include NEXT with exit mode name and instruction
+        assert!(output.contains("NEXT: /test-cmd — Test command"), "Should have NEXT header");
         // Should include the command path
         assert!(output.contains("Command:"), "Should have Command: line");
         assert!(output.contains("test-cmd.md"), "Should include command file name");
@@ -1734,8 +1742,8 @@ Do something useful.
 
         let output = format_output(&review, OutputMode::Cli).text;
 
-        // Should have exit mode but NOT command-specific content
-        assert!(output.contains("Apply (Apply changes)"), "Should have exit mode");
+        // Should have NEXT but NOT command-specific content
+        assert!(output.contains("NEXT: Apply — Apply changes"), "Should have NEXT");
         assert!(!output.contains("Command:"), "Should NOT have Command: line for regular exit mode");
         assert!(!output.contains(SEPARATOR), "Should NOT have content separators");
     }

@@ -97,19 +97,17 @@ fn render_node(
             content.clone()
         }
         ContentNode::BookmarkRef { id, .. } => {
-            // Legacy format: output as new unified ref format for consistency
             let short_id = &id[..id.len().min(3)];
-            format!("[ref:bookmark@{}]", short_id)
+            format!("[BOOKMARK {}]", short_id)
         }
         ContentNode::Ref { snapshot, .. } => {
-            // Unified reference format: [ref:TYPE@TARGET]
             match snapshot {
                 RefSnapshot::Annotation(snap) => {
-                    format!("[ref:annotation@L{}]", snap.source_key)
+                    format!("[ANNOTATION L{}]", snap.source_key)
                 }
                 RefSnapshot::Bookmark { bookmark } => {
                     let short_id = &bookmark.id[..bookmark.id.len().min(3)];
-                    format!("[ref:bookmark@{}]", short_id)
+                    format!("[BOOKMARK {}]", short_id)
                 }
             }
         }
