@@ -9,8 +9,8 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to build (e.g., v0.2.0)'
-        required: true
+        description: 'Tag to build (leave empty for latest)'
+        required: false
 
 permissions:
   contents: write
@@ -18,12 +18,27 @@ permissions:
 jobs:
   build-macos:
     runs-on: macos-14  # Apple Silicon runner
-    env:
-      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0  # Need full history to find tags
+
+      - name: Determine tag
+        id: get-tag
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG=$(git describe --tags --abbrev=0)
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Using tag: $TAG"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.get-tag.outputs.tag }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -83,4 +98,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: annot-darwin-arm64.tar.gz
-          tag_name: ${{ env.RELEASE_TAG }}
+          tag_name: ${{ steps.get-tag.outputs.tag }}
