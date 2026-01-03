@@ -14,7 +14,7 @@ on:
 
 jobs:
   build-macos:
-    runs-on: macos-latest
+    runs-on: macos-14  # Apple Silicon runner
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,8 +35,6 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -68,11 +66,11 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: pnpm tauri build --target aarch64-apple-darwin
+        run: pnpm tauri build
 
       - name: Package artifact
         run: |
-          cd target/aarch64-apple-darwin/release/bundle/macos
+          cd target/release/bundle/macos
           tar -czvf annot-darwin-arm64.tar.gz annot.app
           mv annot-darwin-arm64.tar.gz $GITHUB_WORKSPACE/
 
@@ -80,3 +78,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: annot-darwin-arm64.tar.gz
+          tag_name: ${{ inputs.tag || github.ref_name }}
