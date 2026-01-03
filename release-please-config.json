@@ -4,9 +4,21 @@
     ".": {
       "release-type": "simple",
       "extra-files": [
-        "package.json",
-        "src-tauri/Cargo.toml",
-        "src-tauri/tauri.conf.json"
+        {
+          "type": "json",
+          "path": "package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "src-tauri/tauri.conf.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "toml",
+          "path": "src-tauri/Cargo.toml",
+          "key": "package.version"
+        }
       ]
     }
   }
