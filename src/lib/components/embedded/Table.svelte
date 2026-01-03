@@ -194,7 +194,7 @@
       <tbody>
         {#each visibleLines as { line, displayIndex, lineIndex }, rowIdx}
           {@const sourceLineNum = getLineNumber(line)}
-          {@const rangeKey = ctx.interaction.pendingChoice ? null : ctx.getRangeKeyForLine(displayIndex)}
+          {@const rangeKey = ctx.getRangeKeyForLine(displayIndex)}
           {@const cells = splitTableRow(line.content)}
           {@const isHeader = isHeaderRow(lineIndex)}
           {@const isFirst = displayIndex === firstDisplayIndex}

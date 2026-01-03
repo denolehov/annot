@@ -192,7 +192,7 @@
 <div class="codeblock-group">
   {#each lines as { line, displayIndex }}
     {@const sourceLineNum = getLineNumber(line)}
-    {@const rangeKey = ctx.interaction.pendingChoice ? null : ctx.getRangeKeyForLine(displayIndex)}
+    {@const rangeKey = ctx.getRangeKeyForLine(displayIndex)}
     {@const fence = isFence(line)}
     {@const startFence = isStartFence(line)}
     {@const endFence = isEndFence(line)}
