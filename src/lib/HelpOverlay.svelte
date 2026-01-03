@@ -163,15 +163,15 @@
   }
 
   .help-content {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
+    column-count: 2;
+    column-gap: 24px;
     overflow-y: auto;
     flex: 1;
   }
 
   .shortcut-section {
-    min-width: 0;
+    break-inside: avoid;
+    margin-bottom: 16px;
   }
 
   .section-title {
