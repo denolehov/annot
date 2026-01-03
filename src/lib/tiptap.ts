@@ -487,6 +487,39 @@ export function createSlashSuggestion(
           .run();
       },
     },
+    {
+      id: 'remove',
+      name: 'remove',
+      description: 'Propose removal (empty replacement)',
+      icon: 'edit',
+      action: (editor, range) => {
+        // Same duplicate check as /replace
+        let hasReplaceBlock = false;
+        editor.state.doc.descendants((node) => {
+          if (node.type.name === 'replacePreview') {
+            hasReplaceBlock = true;
+            return false;
+          }
+        });
+        if (!hasReplaceBlock) {
+          const json = editor.getJSON();
+          hasReplaceBlock = parseFenceFromJson(json) !== null;
+        }
+        if (hasReplaceBlock) {
+          editor.chain().focus().deleteRange(range).run();
+          return;
+        }
+
+        // Insert empty replace fence with trailing paragraph for cursor
+        const contentNodes: JSONContent[] = [
+          { type: 'paragraph', content: [{ type: 'text', text: '```replace' }] },
+          { type: 'paragraph', content: [{ type: 'text', text: '```' }] },
+          { type: 'paragraph' }, // Empty line for cursor
+        ];
+
+        editor.chain().focus().deleteRange(range).insertContent(contentNodes).run();
+      },
+    },
   ];
 
   return {
