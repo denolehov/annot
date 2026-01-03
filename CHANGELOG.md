@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/denolehov/annot/compare/v0.3.0...v0.4.0) (2026-01-03)
+
+
+### Features
+
+* add ? help overlay ([988a479](https://github.com/denolehov/annot/commit/988a479cd50cfd7b27acf7ba4231b2b7eb15794f))
+
+
+### Bug Fixes
+
+* ? help modal layout organization ([f9ba157](https://github.com/denolehov/annot/commit/f9ba157e7bccf0b07cdee43e27a8e8c14fc47b53))
+* reset selected text when selecting for annotation ([ce8c4c0](https://github.com/denolehov/annot/commit/ce8c4c073b32ef7e262115ce1f492fc188405151))
+
 ## [0.3.0](https://github.com/denolehov/annot/compare/v0.2.3...v0.3.0) (2026-01-03)
 
 
