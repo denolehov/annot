@@ -119,6 +119,7 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
       // Default: comment hovered line
       if (state.hasHoveredLine() && state.isHoveredLineSelectable()) {
         e.preventDefault();
+        window.getSelection()?.removeAllRanges();
         handlers.onCommentHoveredLine?.();
         return;
       }
