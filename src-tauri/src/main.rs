@@ -70,6 +70,10 @@ enum BookmarksCommand {
 }
 
 fn main() {
+    // Suppress macOS system logs (XPC, CoreAnalytics, etc.) in release builds
+    #[cfg(all(target_os = "macos", not(debug_assertions)))]
+    std::env::set_var("OS_ACTIVITY_MODE", "disable");
+
     let cli = Cli::parse();
 
     // Handle bookmark subcommands that don't need Tauri (list/show/delete)
