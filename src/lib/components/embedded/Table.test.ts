@@ -28,6 +28,10 @@ vi.mock('$lib/context', () => ({
       hasAnnotation: () => false,
       getAtLine: () => null,
     },
+    search: {
+      matches: [],
+      getCurrentMatch: () => null,
+    },
     selection: null,
     isDragging: false,
     lastSelectedLine: null,
