@@ -1,0 +1,15 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+test.rs:5
+    4 |     line 4 content
+>   5 |     line 5 content
+      └──> First annotation
+
+---
+
+test.rs:20
+   19 |     line 19 content
+>  20 |     line 20 content
+      └──> Second annotation

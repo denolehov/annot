@@ -1,0 +1,154 @@
+/* ===========================================
+   SearchBar
+   Floating search bar for in-file search (Cmd+F)
+   =========================================== */
+
+.search-bar {
+  position: fixed;
+  top: 52px; /* Below header */
+  right: var(--space-4, 16px);
+  z-index: 100;
+  width: 400px;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 6px 12px;
+  background: var(--bg-portal);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+
+  animation: search-bar-in 150ms ease;
+}
+
+@keyframes search-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Search icon */
+.search-bar :global(.search-icon) {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Input field */
+.search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.search-input:focus {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 2px var(--focus-glow);
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Match count */
+.match-count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  width: 45px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+/* Navigation buttons container */
+.nav-buttons {
+  display: flex;
+  gap: 2px;
+}
+
+/* Navigation and close buttons */
+.nav-btn,
+.close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.nav-btn :global(svg),
+.close-btn :global(svg) {
+  width: 16px;
+  height: 16px;
+}
+
+.nav-btn:hover:not(:disabled),
+.close-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.close-btn {
+  margin-left: 4px;
+}
+
+/* ===========================================
+   Search highlight marks (in content)
+   Yellow background for visibility
+   =========================================== */
+
+:global(mark.search-match) {
+  background: #fef08a; /* amber-200 - soft yellow */
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  box-decoration-break: clone;
+}
+
+:global(mark.search-current) {
+  background: #fbbf24; /* amber-400 - bright yellow/orange */
+  color: #1a1a1a;
+  border-radius: 2px;
+  padding: 0 1px;
+  box-decoration-break: clone;
+}
+
+/* Dark mode adjustments */
+:global([data-theme="dark"] mark.search-match) {
+  background: rgba(251, 191, 36, 0.3); /* amber with transparency */
+  color: inherit;
+}
+
+:global([data-theme="dark"] mark.search-current) {
+  background: #f59e0b; /* amber-500 */
+  color: #1a1a1a;
+}

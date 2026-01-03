@@ -1,0 +1,1569 @@
+use std::collections::{HashMap, HashSet};
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+use crate::config;
+
+/// Type alias for tag IDs (12-character alphanumeric strings).
+pub type TagId = String;
+
+// ════════════════════════════════════════════════════════════════════════════
+// TAG USAGE STATS — tracks tag usage for smart suggestions
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Aggregate tag usage statistics.
+/// Persisted to `~/.config/annot/tag-usage.json`.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct TagUsageStats {
+    /// Usage stats per tag, keyed by tag ID.
+    pub tags: HashMap<TagId, TagUsage>,
+}
+
+/// Usage statistics for a single tag.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TagUsage {
+    /// Total number of times this tag was used.
+    pub count: u32,
+    /// When this tag was last used.
+    pub last_used: DateTime<Utc>,
+    /// Usage count per language (fence name, e.g., "rust", "go").
+    pub by_language: HashMap<String, u32>,
+}
+
+impl Default for TagUsage {
+    fn default() -> Self {
+        Self {
+            count: 0,
+            last_used: Utc::now(),
+            by_language: HashMap::new(),
+        }
+    }
+}
+
+impl TagUsageStats {
+    /// Increment usage for a tag, optionally with a language.
+    pub fn increment(&mut self, tag_id: &str, language: Option<&str>) {
+        let usage = self
+            .tags
+            .entry(tag_id.to_string())
+            .or_insert_with(TagUsage::default);
+        usage.count += 1;
+        usage.last_used = Utc::now();
+        if let Some(lang) = language {
+            *usage.by_language.entry(lang.to_string()).or_insert(0) += 1;
+        }
+    }
+}
+
+use crate::diff::{self, DiffMetadata};
+use crate::error::AnnotError;
+use crate::highlight::Highlighter;
+use crate::input::ContentSource;
+use crate::markdown::{self, html_escape, MarkdownMetadata, MarkdownSemantics};
+use crate::portal::{self, LoadedPortal, MAX_PORTALS};
+
+// =============================================================================
+// Unified line model (LineOrigin + LineSemantics)
+// =============================================================================
+
+/// Where this line's content originates from.
+/// Carries path and line number for annotation routing.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum LineOrigin {
+    /// Line from a source file.
+    Source {
+        /// Path to the source file.
+        path: String,
+        /// 1-indexed line number in the source file.
+        line: u32,
+    },
+    /// Line from a diff (maps to old/new file versions).
+    Diff {
+        /// Path to the file in the diff.
+        path: String,
+        /// Line number in old file (None if added line or header).
+        old_line: Option<u32>,
+        /// Line number in new file (None if deleted line or header).
+        new_line: Option<u32>,
+    },
+    /// Synthetic line with no source (portal headers/footers, decorators).
+    Virtual,
+}
+
+/// Content classification: what kind of line is this?
+#[derive(Clone, Debug, Serialize, Default)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum LineSemantics {
+    #[default]
+    Plain,
+    Markdown(MarkdownSemantics),
+    Diff(DiffSemantics),
+    Portal(PortalSemantics),
+}
+
+// MarkdownSemantics is imported from crate::markdown
+
+/// Diff line semantics.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum DiffSemantics {
+    FileHeader,
+    HunkHeader { context: Option<String> },
+    Added,
+    Deleted,
+    Context,
+}
+
+/// Portal line semantics.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PortalSemantics {
+    Header {
+        label: String,
+        path: String,
+        range: String,
+    },
+    Content,
+    Footer,
+}
+
+/// HTML rendering for a line - either full-line or per-cell (for tables).
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "type", content = "value", rename_all = "lowercase")]
+pub enum LineHtml {
+    /// Full-line HTML (code blocks, regular markdown, etc.)
+    Full(String),
+    /// Per-cell HTML for table rows
+    Cells(Vec<String>),
+}
+
+/// A single line of content.
+#[derive(Clone, Debug, Serialize)]
+pub struct Line {
+    /// Raw text content of the line.
+    pub content: String,
+    /// Rendered HTML for display:
+    /// - Full: for code blocks (syntect-highlighted) and markdown (inline formatting)
+    /// - Cells: for table rows (per-cell inline formatting)
+    /// - None if no rendering needed
+    pub html: Option<LineHtml>,
+    /// Where this line originates from.
+    pub origin: LineOrigin,
+    /// Content classification.
+    pub semantics: LineSemantics,
+}
+
+/// Trait for types that have a stable ID.
+pub trait HasId {
+    fn id(&self) -> &str;
+}
+
+/// A tag is a composable mini-prompt that can be embedded in annotations.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Tag {
+    pub id: String,
+    pub name: String,
+    pub instruction: String,
+}
+
+impl HasId for Tag {
+    fn id(&self) -> &str {
+        &self.id
+    }
+}
+
+impl Tag {
+    /// Creates a new tag with a generated 12-character ID (jj-style alphabet).
+    pub fn new(name: String, instruction: String) -> Self {
+        Self {
+            id: crate::id::generate(),
+            name,
+            instruction,
+        }
+    }
+}
+
+/// Content node for structured annotation content.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum ContentNode {
+    Text { text: String },
+    Tag { id: String, name: String, instruction: String },
+    Media { image: String, mime_type: String },
+    Excalidraw { elements: String, image: Option<String> },
+    Replace { original: String, replacement: String },
+    /// System-generated error node (e.g., Mermaid syntax error).
+    Error { source: String, message: String },
+    /// Pasted text content collapsed into a chip (large paste).
+    Paste { content: String },
+    /// Reference to a bookmark (captured moment of attention).
+    /// Embeds full bookmark data at insertion time for "detachment" —
+    /// if the bookmark is later deleted, the reference still renders fully.
+    BookmarkRef {
+        id: String,
+        label: String,
+        /// Full bookmark data captured at insertion time.
+        /// Used for output if the bookmark no longer exists (detached).
+        bookmark: Bookmark,
+    },
+    /// Unified reference (annotation or bookmark).
+    /// New format that supports referencing other annotations within the session.
+    Ref {
+        /// Discriminator: "annotation" or "bookmark"
+        ref_type: String,
+        /// Self-contained snapshot (survives source deletion)
+        snapshot: RefSnapshot,
+    },
+    /// Reference to a project file (@ file references).
+    File {
+        /// Path relative to project root.
+        path: String,
+    },
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// UNIFIED REFERENCE SYSTEM — @ mentions for annotations and bookmarks
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Snapshot for annotation references (self-contained).
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct AnnotationRefSnapshot {
+    /// Line range key, e.g., "50-55"
+    pub source_key: String,
+    /// File path (for cross-file display, None for same-file)
+    pub source_file: Option<String>,
+    /// First ~50 chars of annotation content for preview
+    pub preview: String,
+    /// Full annotation content captured at insertion time (self-contained)
+    pub content: Vec<ContentNode>,
+}
+
+/// Unified reference snapshot — either annotation or bookmark.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum RefSnapshot {
+    Annotation(AnnotationRefSnapshot),
+    Bookmark { bookmark: Bookmark },
+}
+
+/// A normalized line range (start ≤ end).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LineRange {
+    pub start: u32,
+    pub end: u32,
+}
+
+impl LineRange {
+    /// Create a normalized range (swaps if start > end).
+    #[must_use]
+    pub fn new(a: u32, b: u32) -> Self {
+        Self {
+            start: a.min(b),
+            end: a.max(b),
+        }
+    }
+}
+
+/// An annotation attached to a line range.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Annotation {
+    pub start_line: u32,
+    pub end_line: u32,
+    pub content: Vec<ContentNode>,
+}
+
+/// Where an exit mode was defined.
+///
+/// ```text
+/// ExitModeSource (persist?)  x  ContentSource (where from?)
+///      Persisted                    Cli::File
+///      Transient                    Cli::Stdin
+///      Command                      Mcp::File
+///                                   Mcp::Content
+///                                   Mcp::Diff
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ExitModeSource {
+    /// Loaded from config file — will be saved on exit.
+    #[default]
+    Persisted,
+    /// Provided in MCP tool call params — session-only, not saved.
+    Transient,
+    /// Discovered from Claude Code slash command file.
+    #[serde(rename = "command")]
+    Command {
+        /// Path to the command .md file.
+        path: std::path::PathBuf,
+    },
+}
+
+// Backwards compatibility alias
+pub type ExitModeOrigin = ExitModeSource;
+
+/// An exit mode representing a user decision (Apply, Reject, Revise, etc.).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ExitMode {
+    pub id: String,
+    pub name: String,
+    /// CSS hex color (e.g., "#22c55e")
+    pub color: String,
+    /// LLM-facing instruction text
+    pub instruction: String,
+    pub order: u32,
+    /// Where this exit mode came from (config, MCP params, or command file).
+    #[serde(default, alias = "origin")]
+    pub source: ExitModeSource,
+}
+
+impl HasId for ExitMode {
+    fn id(&self) -> &str {
+        &self.id
+    }
+}
+
+impl ExitMode {
+    /// Creates a new exit mode with a generated 12-character ID (jj-style alphabet).
+    pub fn new(name: String, color: String, instruction: String, order: u32) -> Self {
+        Self {
+            id: crate::id::generate(),
+            name,
+            color,
+            instruction,
+            order,
+            source: ExitModeSource::Persisted,
+        }
+    }
+
+    /// Whether this exit mode is transient (from MCP params, not persisted).
+    pub fn is_transient(&self) -> bool {
+        matches!(self.source, ExitModeSource::Transient)
+    }
+
+    /// Whether this exit mode is from a command file.
+    pub fn is_command(&self) -> bool {
+        matches!(self.source, ExitModeSource::Command { .. })
+    }
+
+    /// Get the command path if this is a command exit mode.
+    pub fn command_path(&self) -> Option<&std::path::Path> {
+        match &self.source {
+            ExitModeSource::Command { path } => Some(path),
+            _ => None,
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// BOOKMARKS — capture moments of attention for later reference
+// ════════════════════════════════════════════════════════════════════════════
+
+/// A bookmark capturing a moment of attention during an annot session.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Bookmark {
+    /// Unique 12-character base32 ID (prefix-matchable).
+    pub id: String,
+    /// User-provided or auto-derived label.
+    pub label: Option<String>,
+    /// When this bookmark was created.
+    pub created_at: DateTime<Utc>,
+    /// Project context (cwd at creation time).
+    pub project_path: Option<std::path::PathBuf>,
+    /// The captured content snapshot.
+    pub snapshot: BookmarkSnapshot,
+}
+
+impl HasId for Bookmark {
+    fn id(&self) -> &str {
+        &self.id
+    }
+}
+
+/// The content snapshot captured by a bookmark.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum BookmarkSnapshot {
+    /// Entire session content.
+    Session {
+        source_type: SessionType,
+        source_title: String,
+        /// Full document snapshot.
+        context: String,
+    },
+    /// Inline selection within session.
+    Selection {
+        source_type: SessionType,
+        source_title: String,
+        /// Full document snapshot.
+        context: String,
+        /// The text the user selected.
+        selected_text: String,
+    },
+}
+
+/// Type of session where the bookmark was created.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionType {
+    File,
+    Diff,
+    Content,
+}
+
+impl BookmarkSnapshot {
+    /// Get the source title for this snapshot.
+    pub fn source_title(&self) -> &str {
+        match self {
+            BookmarkSnapshot::Session { source_title, .. }
+            | BookmarkSnapshot::Selection { source_title, .. } => source_title,
+        }
+    }
+
+    /// Get a preview of the content (first N lines).
+    pub fn preview(&self, max_lines: usize) -> String {
+        self.content()
+            .lines()
+            .take(max_lines)
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// Get the full content of this snapshot.
+    pub fn content(&self) -> &str {
+        match self {
+            BookmarkSnapshot::Session { context, .. }
+            | BookmarkSnapshot::Selection { context, .. } => context,
+        }
+    }
+}
+
+impl Bookmark {
+    /// Creates a new bookmark.
+    /// Label is user-provided only; display_label() derives from content for output.
+    pub fn new(
+        label: Option<String>,
+        project_path: Option<std::path::PathBuf>,
+        snapshot: BookmarkSnapshot,
+    ) -> Self {
+        Self {
+            id: crate::id::generate(),
+            label, // User-provided only, no auto-derivation
+            created_at: Utc::now(),
+            project_path,
+            snapshot,
+        }
+    }
+
+    /// Get display label for output: user label if set, otherwise derived from content.
+    /// - Selection bookmarks: first ~50 chars of selected_text
+    /// - Session bookmarks: first heading (for .md) or source_title
+    pub fn display_label(&self) -> String {
+        if let Some(ref label) = self.label {
+            return label.clone();
+        }
+        match &self.snapshot {
+            BookmarkSnapshot::Selection { selected_text, .. } => {
+                Self::truncate(selected_text.lines().next().unwrap_or(selected_text), 50)
+            }
+            BookmarkSnapshot::Session {
+                source_title,
+                context,
+                ..
+            } => {
+                // For markdown: extract first # heading
+                if source_title.ends_with(".md") {
+                    if let Some(heading) = Self::extract_first_heading(context) {
+                        return Self::truncate(&heading, 50);
+                    }
+                }
+                source_title.clone()
+            }
+        }
+    }
+
+    /// Extract the first markdown heading from content.
+    fn extract_first_heading(content: &str) -> Option<String> {
+        content
+            .lines()
+            .find(|line| line.starts_with('#'))
+            .map(|line| line.trim_start_matches('#').trim().to_string())
+    }
+
+    /// Truncate a string to max_len, adding ellipsis if needed.
+    fn truncate(s: &str, max_len: usize) -> String {
+        if s.len() <= max_len {
+            s.to_string()
+        } else {
+            let truncated: String = s.chars().take(max_len - 1).collect();
+            format!("{}…", truncated)
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CONTENT MODEL — immutable after construction
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Content model: the document being annotated.
+/// Immutable after construction.
+#[derive(Clone)]
+pub struct ContentModel {
+    pub label: String,
+    pub lines: Vec<Line>,
+    pub source: ContentSource,
+    pub metadata: ContentMetadata,
+    /// Loaded portals for file registration (empty for non-markdown content).
+    pub portals: Vec<LoadedPortal>,
+}
+
+/// Type-safe representation of content-specific metadata.
+/// Replaces the two Option fields that were mutually exclusive.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentMetadata {
+    Plain,
+    Diff(DiffMetadata),
+    Markdown(MarkdownMetadata),
+}
+
+/// Per-file metadata for annotation targets.
+/// Contains file-level info that's NOT content (e.g., language for syntax highlighting).
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct FileMetadata {
+    /// Language identifier for syntax highlighting (e.g., "rs", "go", "py").
+    pub language: Option<String>,
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SESSION STATE — mutates during session, not persisted
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Session state: mutable data during annotation session.
+#[derive(Default)]
+pub struct SessionState {
+    /// Annotations keyed by normalized line range.
+    pub annotations: HashMap<LineRange, Annotation>,
+    /// Session-level comment (not tied to specific lines).
+    pub comment: Option<Vec<ContentNode>>,
+    /// Currently selected exit mode ID (None if no mode selected).
+    pub selected_exit_mode_id: Option<String>,
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// USER CONFIG — encapsulates deletion tracking
+// ════════════════════════════════════════════════════════════════════════════
+
+/// User configuration for tags, exit modes, and bookmarks.
+/// Encapsulates deletion tracking for safe concurrent writes.
+pub struct UserConfig {
+    tags: Vec<Tag>,
+    exit_modes: Vec<ExitMode>,
+    bookmarks: Vec<Bookmark>,
+    deleted_tags: HashSet<String>,
+    deleted_exit_modes: HashSet<String>,
+    deleted_bookmarks: HashSet<String>,
+    /// Tag usage statistics (global + per-language).
+    usage_stats: TagUsageStats,
+}
+
+impl UserConfig {
+    /// Load configuration from disk.
+    /// Also discovers Claude Code command files as exit modes.
+    pub fn load() -> Self {
+        // Load persisted exit modes
+        let mut exit_modes = config::load_exit_modes();
+
+        // Discover and append command exit modes
+        let commands = config::discover_commands();
+        exit_modes.extend(commands);
+
+        Self {
+            tags: config::load_tags(),
+            exit_modes,
+            bookmarks: config::load_bookmarks(),
+            deleted_tags: HashSet::new(),
+            deleted_exit_modes: HashSet::new(),
+            deleted_bookmarks: HashSet::new(),
+            usage_stats: config::load_tag_usage(),
+        }
+    }
+
+    /// Reload config from disk, merging new items while preserving in-session state.
+    ///
+    /// Merge strategy:
+    /// - Items already in memory are preserved (memory wins on conflict)
+    /// - New items from disk are added
+    /// - Items deleted this session stay deleted (not resurrected)
+    pub fn reload_from_disk(&mut self) {
+        // Re-read from disk
+        let disk_tags = config::load_tags();
+        let mut disk_exit_modes = config::load_exit_modes();
+        let disk_commands = config::discover_commands();
+        disk_exit_modes.extend(disk_commands);
+        let disk_bookmarks = config::load_bookmarks();
+
+        // Merge: add new items from disk that aren't already in memory and weren't deleted
+        self.tags = Self::merge_for_reload(&self.tags, disk_tags, &self.deleted_tags);
+        self.exit_modes =
+            Self::merge_for_reload(&self.exit_modes, disk_exit_modes, &self.deleted_exit_modes);
+        self.bookmarks =
+            Self::merge_for_reload(&self.bookmarks, disk_bookmarks, &self.deleted_bookmarks);
+    }
+
+    /// Merge memory and disk collections: memory wins, new disk items added, deleted items excluded.
+    fn merge_for_reload<T: HasId + Clone>(
+        memory: &[T],
+        disk: Vec<T>,
+        deleted: &HashSet<String>,
+    ) -> Vec<T> {
+        let memory_ids: HashSet<_> = memory.iter().map(|x| x.id()).collect();
+        let mut result = memory.to_vec();
+
+        // Add disk items that:
+        // 1. Aren't already in memory (preserves local edits)
+        // 2. Weren't deleted this session
+        for item in disk {
+            let id = item.id();
+            if !memory_ids.contains(id) && !deleted.contains(id) {
+                result.push(item);
+            }
+        }
+
+        result
+    }
+
+    /// Create empty config (for testing).
+    pub fn empty() -> Self {
+        Self {
+            tags: Vec::new(),
+            exit_modes: Vec::new(),
+            bookmarks: Vec::new(),
+            deleted_tags: HashSet::new(),
+            deleted_exit_modes: HashSet::new(),
+            deleted_bookmarks: HashSet::new(),
+            usage_stats: TagUsageStats::default(),
+        }
+    }
+
+    /// Get all tags.
+    pub fn tags(&self) -> &[Tag] {
+        &self.tags
+    }
+
+    /// Get all exit modes.
+    pub fn exit_modes(&self) -> &[ExitMode] {
+        &self.exit_modes
+    }
+
+    /// Get mutable reference to exit modes (for reordering).
+    pub fn exit_modes_mut(&mut self) -> &mut Vec<ExitMode> {
+        &mut self.exit_modes
+    }
+
+    /// Insert or update a tag, then save to disk.
+    pub fn upsert_tag(&mut self, tag: Tag) {
+        if let Some(existing) = self.tags.iter_mut().find(|t| t.id == tag.id) {
+            *existing = tag;
+        } else {
+            self.tags.push(tag);
+        }
+        let _ = config::save_tags(&self.tags, &self.deleted_tags);
+    }
+
+    /// Delete a tag by ID, then save to disk.
+    pub fn delete_tag(&mut self, id: &str) {
+        self.tags.retain(|t| t.id != id);
+        self.deleted_tags.insert(id.to_string());
+        let _ = config::save_tags(&self.tags, &self.deleted_tags);
+    }
+
+    /// Insert or update an exit mode, then save to disk.
+    /// Only persists modes with Persisted source (not transient or command).
+    pub fn upsert_exit_mode(&mut self, mut mode: ExitMode) {
+        if let Some(existing) = self.exit_modes.iter_mut().find(|m| m.id == mode.id) {
+            // Preserve the original source to prevent command/transient modes
+            // from being accidentally converted to persisted (frontend doesn't
+            // understand the Command variant and sends Persisted by default).
+            mode.source = existing.source.clone();
+            *existing = mode;
+        } else {
+            self.exit_modes.push(mode);
+        }
+        // Sort by order
+        self.exit_modes.sort_by_key(|m| m.order);
+        // Only save persisted modes (not transient or command)
+        let persisted: Vec<_> = self
+            .exit_modes
+            .iter()
+            .filter(|m| matches!(m.source, ExitModeSource::Persisted))
+            .cloned()
+            .collect();
+        let _ = config::save_exit_modes(&persisted, &self.deleted_exit_modes);
+    }
+
+    /// Delete an exit mode by ID, then save to disk.
+    pub fn delete_exit_mode(&mut self, id: &str) {
+        self.exit_modes.retain(|m| m.id != id);
+        self.deleted_exit_modes.insert(id.to_string());
+        let persisted: Vec<_> = self
+            .exit_modes
+            .iter()
+            .filter(|m| matches!(m.source, ExitModeSource::Persisted))
+            .cloned()
+            .collect();
+        let _ = config::save_exit_modes(&persisted, &self.deleted_exit_modes);
+    }
+
+    /// Reorder exit modes by ID list, then save to disk.
+    pub fn reorder_exit_modes(&mut self, ids: Vec<String>) {
+        // Update order field based on position in ids
+        for (new_order, id) in ids.iter().enumerate() {
+            if let Some(mode) = self.exit_modes.iter_mut().find(|m| m.id == *id) {
+                mode.order = new_order as u32;
+            }
+        }
+        self.exit_modes.sort_by_key(|m| m.order);
+        let persisted: Vec<_> = self
+            .exit_modes
+            .iter()
+            .filter(|m| matches!(m.source, ExitModeSource::Persisted))
+            .cloned()
+            .collect();
+        let _ = config::save_exit_modes(&persisted, &self.deleted_exit_modes);
+    }
+
+    /// Prepend transient exit modes (from MCP params) at the start.
+    pub fn prepend_transient_modes(&mut self, modes: Vec<ExitMode>) {
+        // Insert at beginning, shifting existing modes
+        self.exit_modes.splice(0..0, modes);
+    }
+
+    /// Append command exit modes (from discovered command files) at the end.
+    pub fn append_command_modes(&mut self, modes: Vec<ExitMode>) {
+        self.exit_modes.extend(modes);
+    }
+
+    /// Get all bookmarks.
+    pub fn bookmarks(&self) -> &[Bookmark] {
+        &self.bookmarks
+    }
+
+    /// Get a bookmark by ID or prefix.
+    ///
+    /// Returns `Some(bookmark)` if exactly one bookmark matches the prefix,
+    /// `None` if no match or ambiguous (multiple matches).
+    pub fn get_bookmark(&self, id_prefix: &str) -> Option<&Bookmark> {
+        let matches: Vec<_> = self
+            .bookmarks
+            .iter()
+            .filter(|b| b.id.starts_with(id_prefix))
+            .collect();
+
+        match matches.len() {
+            1 => Some(matches[0]),
+            _ => None, // Ambiguous or not found
+        }
+    }
+
+    /// Insert or update a bookmark, then save to disk.
+    pub fn upsert_bookmark(&mut self, bookmark: Bookmark) {
+        if let Some(existing) = self.bookmarks.iter_mut().find(|b| b.id == bookmark.id) {
+            *existing = bookmark;
+        } else {
+            self.bookmarks.push(bookmark);
+        }
+        let _ = config::save_bookmarks(&self.bookmarks, &self.deleted_bookmarks);
+    }
+
+    /// Delete a bookmark by ID, then save to disk.
+    pub fn delete_bookmark(&mut self, id: &str) -> bool {
+        let len_before = self.bookmarks.len();
+        self.bookmarks.retain(|b| b.id != id);
+        if self.bookmarks.len() < len_before {
+            self.deleted_bookmarks.insert(id.to_string());
+            let _ = config::save_bookmarks(&self.bookmarks, &self.deleted_bookmarks);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Create config with specific tags and exit modes (for testing).
+    #[cfg(test)]
+    pub fn with_data(tags: Vec<Tag>, exit_modes: Vec<ExitMode>) -> Self {
+        Self {
+            tags,
+            exit_modes,
+            bookmarks: Vec::new(),
+            deleted_tags: HashSet::new(),
+            deleted_exit_modes: HashSet::new(),
+            deleted_bookmarks: HashSet::new(),
+            usage_stats: TagUsageStats::default(),
+        }
+    }
+
+    /// Get mutable reference to usage stats (for incrementing).
+    pub fn usage_stats_mut(&mut self) -> &mut TagUsageStats {
+        &mut self.usage_stats
+    }
+
+    /// Save tag usage stats to disk.
+    pub fn save_usage_stats(&self) {
+        let _ = config::save_tag_usage(&self.usage_stats);
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// APP STATE — composition of content, session, and config
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Application state initialized at startup, before the window opens.
+pub struct AppState {
+    pub content: ContentModel,
+    pub session: SessionState,
+    pub config: UserConfig,
+}
+
+/// Response sent to the frontend via the get_content command.
+#[derive(Serialize)]
+pub struct ContentResponse {
+    pub label: String,
+    pub lines: Vec<Line>,
+    pub tags: Vec<Tag>,
+    pub exit_modes: Vec<ExitMode>,
+    pub selected_exit_mode_id: Option<String>,
+    pub session_comment: Option<Vec<ContentNode>>,
+    /// Content-specific metadata (diff info, markdown sections, or plain).
+    pub metadata: ContentMetadata,
+    /// Whether image paste is allowed (MCP mode only).
+    pub allows_image_paste: bool,
+    /// All bookmarks for @ autocomplete.
+    pub bookmarks: Vec<Bookmark>,
+}
+
+// Render functions moved to crate::markdown (render_line, render_inline)
+
+impl ContentModel {
+    /// Parse file content into structured lines with syntax highlighting.
+    #[must_use]
+    pub fn from_file(content: &str, source: ContentSource) -> Self {
+        let label = source.label().to_string();
+        let path_hint = source.path_hint().unwrap_or("");
+        let routing_path = source.file_key().routing_path();
+
+        let highlighter = Highlighter::new();
+        let html_lines = highlighter.highlight_lines(content, path_hint);
+
+        let lines = content
+            .lines()
+            .enumerate()
+            .map(|(i, line)| {
+                let line_num = (i + 1) as u32;
+                let html = html_lines.get(i).cloned().map(LineHtml::Full);
+                Line {
+                    content: line.to_string(),
+                    html,
+                    origin: LineOrigin::Source {
+                        path: routing_path.clone(),
+                        line: line_num,
+                    },
+                    semantics: LineSemantics::Plain,
+                }
+            })
+            .collect();
+
+        Self {
+            label,
+            lines,
+            source,
+            metadata: ContentMetadata::Plain,
+            portals: Vec::new(),
+        }
+    }
+
+    /// Parse diff content into structured lines with diff metadata.
+    #[must_use]
+    pub fn from_diff(content: &str, source: ContentSource) -> Result<Self, AnnotError> {
+        let label = source.label().to_string();
+        let mut diff_metadata = diff::parse_diff(content)?;
+        let highlighter = Highlighter::new();
+
+        // Highlight function contexts in hunk headers
+        for file in &mut diff_metadata.files {
+            let fake_path = format!("file.{}", file.language);
+            for hunk in &mut file.hunks {
+                if let Some(ref ctx) = hunk.function_context {
+                    let html = highlighter.highlight_snippet(ctx, &fake_path);
+                    if !html.is_empty() {
+                        hunk.function_context_html = Some(html);
+                    }
+                }
+            }
+        }
+
+        // For diffs, we create lines from the raw content
+        // Each line gets its display number (1-indexed)
+        let lines: Vec<Line> = content
+            .lines()
+            .enumerate()
+            .map(|(i, line_content)| {
+                let line_num = (i + 1) as u32;
+
+                // Get file language for this line from diff metadata
+                let language = diff_metadata
+                    .lines
+                    .get(&line_num)
+                    .and_then(|info| diff_metadata.files.get(info.file_index))
+                    .map(|f| f.language.as_str())
+                    .unwrap_or("");
+
+                // Only highlight non-header lines with actual code
+                let html = if !language.is_empty()
+                    && !line_content.starts_with("diff ")
+                    && !line_content.starts_with("---")
+                    && !line_content.starts_with("+++")
+                    && !line_content.starts_with("@@")
+                    && !line_content.starts_with("index ")
+                {
+                    // Strip the +/- prefix for highlighting, then add it back
+                    let (prefix, code) = if line_content.starts_with('+')
+                        || line_content.starts_with('-')
+                        || line_content.starts_with(' ')
+                    {
+                        (&line_content[..1], &line_content[1..])
+                    } else {
+                        ("", line_content)
+                    };
+
+                    let fake_path = format!("file.{}", language);
+                    let highlighted = highlighter.highlight_lines(code, &fake_path);
+                    highlighted.first().map(|h| format!("{}{}", prefix, h))
+                } else {
+                    None
+                };
+
+                // Get diff line info for origin and semantics
+                let diff_info = diff_metadata.lines.get(&line_num);
+
+                let (origin, semantics) = match diff_info {
+                    Some(info) => {
+                        // Get the file path from the diff file info
+                        let file_path = diff_metadata
+                            .files
+                            .get(info.file_index)
+                            .and_then(|f| f.new_name.as_ref().or(f.old_name.as_ref()))
+                            .cloned()
+                            .unwrap_or_default();
+
+                        let origin = LineOrigin::Diff {
+                            path: file_path,
+                            old_line: info.old_line_num,
+                            new_line: info.new_line_num,
+                        };
+                        let semantics = LineSemantics::Diff(match info.kind {
+                            diff::DiffLineKind::Context => DiffSemantics::Context,
+                            diff::DiffLineKind::Added => DiffSemantics::Added,
+                            diff::DiffLineKind::Deleted => DiffSemantics::Deleted,
+                            diff::DiffLineKind::Header => DiffSemantics::FileHeader,
+                        });
+                        (origin, semantics)
+                    }
+                    None => {
+                        // Lines not in diff metadata (shouldn't happen, but fallback)
+                        (LineOrigin::Virtual, LineSemantics::Plain)
+                    }
+                };
+
+                Line {
+                    content: line_content.to_string(),
+                    html: html.map(LineHtml::Full),
+                    origin,
+                    semantics,
+                }
+            })
+            .collect();
+
+        Ok(Self {
+            label,
+            lines,
+            source,
+            metadata: ContentMetadata::Diff(diff_metadata),
+            portals: Vec::new(),
+        })
+    }
+
+    /// Parse markdown content with inline rendering and code block highlighting.
+    #[must_use]
+    pub fn from_markdown(content: &str, source: ContentSource) -> Self {
+        let label = source.label().to_string();
+        let base_dir = source.base_dir();
+        let routing_path = source.file_key().routing_path();
+
+        let md_metadata = markdown::parse_markdown(content);
+        let highlighter = Highlighter::new();
+
+        // Build map of code block info by line: (language, is_fence_start, is_fence_end)
+        #[derive(Clone)]
+        struct CodeBlockLineInfo {
+            language: Option<String>,
+            is_start: bool,
+            is_end: bool,
+        }
+        let mut code_block_lines: HashMap<u32, CodeBlockLineInfo> = HashMap::new();
+        for block in &md_metadata.code_blocks {
+            for line_num in block.start_line..=block.end_line {
+                code_block_lines.insert(
+                    line_num,
+                    CodeBlockLineInfo {
+                        language: block.language.clone(),
+                        is_start: line_num == block.start_line,
+                        is_end: line_num == block.end_line,
+                    },
+                );
+            }
+        }
+
+        // Build set of table lines and map line numbers to their HTML cells
+        let mut table_lines: HashSet<u32> = HashSet::new();
+        let mut table_replacements: HashMap<u32, String> = HashMap::new();
+        let mut table_html_cells: HashMap<u32, Vec<String>> = HashMap::new();
+        for table in &md_metadata.tables {
+            // row_html_cells only contains actual data rows (header + body),
+            // not the separator row. We need to map them correctly.
+            let mut html_row_idx = 0;
+            for (i, formatted) in table.formatted_lines.iter().enumerate() {
+                let line_num = table.start_line + i as u32;
+                table_lines.insert(line_num);
+                table_replacements.insert(line_num, formatted.clone());
+
+                // Check if this is a separator row (contains only |, -, :, and whitespace)
+                let is_separator = formatted
+                    .chars()
+                    .all(|c| c == '|' || c == '-' || c == ':' || c.is_whitespace());
+
+                if !is_separator {
+                    // Map line number to pre-rendered HTML cells for this row
+                    if let Some(html_cells) = table.row_html_cells.get(html_row_idx) {
+                        table_html_cells.insert(line_num, html_cells.clone());
+                    }
+                    html_row_idx += 1;
+                }
+            }
+        }
+
+        let mut lines: Vec<Line> = content
+            .lines()
+            .enumerate()
+            .map(|(i, line_content)| {
+                let line_num = (i + 1) as u32;
+
+                // Use table replacement if available
+                let display_content = table_replacements
+                    .get(&line_num)
+                    .cloned()
+                    .unwrap_or_else(|| line_content.to_string());
+
+                let origin = LineOrigin::Source {
+                    path: routing_path.clone(),
+                    line: line_num,
+                };
+
+                // Determine HTML rendering strategy and semantics
+                if let Some(info) = code_block_lines.get(&line_num) {
+                    // Inside a code block
+                    let semantics = LineSemantics::Markdown(if info.is_start {
+                        MarkdownSemantics::CodeBlockStart {
+                            language: info.language.clone(),
+                            color: info
+                                .language
+                                .as_ref()
+                                .and_then(|l| crate::lang::language_color(l).map(String::from)),
+                        }
+                    } else if info.is_end {
+                        MarkdownSemantics::CodeBlockEnd
+                    } else {
+                        MarkdownSemantics::CodeBlockContent
+                    });
+
+                    let html = if info.is_start || info.is_end {
+                        // Fence line: render as-is (escaped)
+                        Some(html_escape(&display_content))
+                    } else if let Some(ref language) = info.language {
+                        // Code content: highlight with syntect
+                        let ext = Highlighter::language_to_extension(language);
+                        let fake_path = format!("file.{ext}");
+                        let highlighted = highlighter.highlight_lines(line_content, &fake_path);
+                        highlighted.first().cloned()
+                    } else {
+                        // No language specified: just escape
+                        Some(html_escape(&display_content))
+                    };
+
+                    Line {
+                        content: display_content,
+                        html: html.map(LineHtml::Full),
+                        origin,
+                        semantics,
+                    }
+                } else if table_lines.contains(&line_num) {
+                    // Table row: use per-cell HTML if available
+                    let html = table_html_cells
+                        .get(&line_num)
+                        .cloned()
+                        .map(LineHtml::Cells);
+                    Line {
+                        content: display_content.clone(),
+                        html,
+                        origin,
+                        semantics: LineSemantics::Markdown(MarkdownSemantics::TableRow),
+                    }
+                } else {
+                    // Regular markdown: render with structural markers preserved
+                    let rendered = markdown::render_line(line_content);
+                    let semantics = match rendered.semantics {
+                        Some(md_sem) => LineSemantics::Markdown(md_sem),
+                        None => LineSemantics::Plain,
+                    };
+                    Line {
+                        content: display_content,
+                        html: Some(LineHtml::Full(rendered.html)),
+                        origin,
+                        semantics,
+                    }
+                }
+            })
+            .collect();
+
+        // Load portals and interleave into lines
+        let mut loaded_portals = Vec::new();
+        for (i, portal_info) in md_metadata.portals.iter().enumerate() {
+            if i >= MAX_PORTALS {
+                break;
+            }
+            match portal::load_portal(portal_info, &base_dir) {
+                Ok(loaded) => loaded_portals.push(loaded),
+                Err(e) => {
+                    // Log warning and keep original markdown line
+                    eprintln!("Portal warning: {} for {}", e, portal_info.path);
+                }
+            }
+        }
+
+        // Group portals by their insert_at line
+        use std::collections::BTreeMap;
+        let mut portals_by_line: BTreeMap<u32, Vec<&LoadedPortal>> = BTreeMap::new();
+        for portal in &loaded_portals {
+            portals_by_line.entry(portal.insert_at).or_default().push(portal);
+        }
+
+        // Interleave in reverse order (highest insert_at first) to preserve indices
+        // Keep the original line and insert portals after it
+        for (&line_num, portals) in portals_by_line.iter().rev() {
+            let idx = (line_num - 1) as usize;
+            if idx < lines.len() {
+                // Insert all portals for this line, in order, after the original line
+                let mut insert_pos = idx + 1;
+                for portal in portals {
+                    for portal_line in &portal.lines {
+                        lines.insert(insert_pos, portal_line.clone());
+                        insert_pos += 1;
+                    }
+                }
+            }
+        }
+
+        // Restore original order for storage
+        loaded_portals.sort_by_key(|p| p.insert_at);
+
+        Self {
+            label,
+            lines,
+            source,
+            metadata: ContentMetadata::Markdown(md_metadata),
+            portals: loaded_portals,
+        }
+    }
+
+    /// Find a line by its source path and line number.
+    ///
+    /// This searches the lines array by `LineOrigin` rather than by array index,
+    /// which is necessary because portal lines are interleaved at their markdown
+    /// insertion point, not at their source file line number position.
+    pub fn find_line(&self, path: &str, line_num: u32) -> Option<&Line> {
+        self.lines.iter().find(|l| match &l.origin {
+            LineOrigin::Source { path: p, line } => p == path && *line == line_num,
+            LineOrigin::Diff {
+                path: p,
+                new_line,
+                old_line,
+            } => {
+                // Match by path and line number (prefer new_line, fallback to old_line)
+                p == path && (new_line == &Some(line_num) || old_line == &Some(line_num))
+            }
+            LineOrigin::Virtual => false,
+        })
+    }
+}
+
+impl AppState {
+    /// Create a new AppState from content model and config.
+    pub fn new(content: ContentModel, config: UserConfig) -> Self {
+        Self {
+            content,
+            session: SessionState::default(),
+            config,
+        }
+    }
+
+    /// Create an empty state (used as placeholder in MCP mode before first session).
+    pub fn empty() -> Self {
+        use crate::input::CliSource;
+        Self {
+            content: ContentModel {
+                label: String::new(),
+                lines: Vec::new(),
+                source: ContentSource::Cli(CliSource::Stdin {
+                    label: String::new(),
+                }),
+                metadata: ContentMetadata::Plain,
+                portals: Vec::new(),
+            },
+            session: SessionState::default(),
+            config: UserConfig::empty(),
+        }
+    }
+
+    /// Convert to response for frontend.
+    pub fn to_response(&self) -> ContentResponse {
+        ContentResponse {
+            label: self.content.label.clone(),
+            lines: self.content.lines.clone(),
+            tags: self.config.tags().to_vec(),
+            exit_modes: self.config.exit_modes().to_vec(),
+            selected_exit_mode_id: self.session.selected_exit_mode_id.clone(),
+            session_comment: self.session.comment.clone(),
+            metadata: self.content.metadata.clone(),
+            allows_image_paste: self.content.source.allows_image_paste(),
+            bookmarks: self.config.bookmarks().to_vec(),
+        }
+    }
+
+    /// Insert or update an annotation.
+    pub fn upsert_annotation(&mut self, start_line: u32, end_line: u32, content: Vec<ContentNode>) {
+        let key = LineRange::new(start_line, end_line);
+        self.session.annotations.insert(
+            key,
+            Annotation {
+                start_line: key.start,
+                end_line: key.end,
+                content,
+            },
+        );
+    }
+
+    /// Delete an annotation by range.
+    pub fn delete_annotation(&mut self, start_line: u32, end_line: u32) {
+        self.session.annotations.remove(&LineRange::new(start_line, end_line));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input::{CliSource, DiffSource, McpSource};
+    use std::path::PathBuf;
+
+    fn test_state(content: &str, path: &str) -> AppState {
+        let source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from(path),
+        });
+        let content_model = ContentModel::from_file(content, source);
+        AppState::new(content_model, UserConfig::empty())
+    }
+
+    fn test_markdown_state(content: &str, path: &str) -> AppState {
+        let source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from(path),
+        });
+        let content_model = ContentModel::from_markdown(content, source);
+        AppState::new(content_model, UserConfig::empty())
+    }
+
+    fn test_diff_source(label: &str) -> ContentSource {
+        ContentSource::Mcp(McpSource::Diff {
+            label: Some(label.to_string()),
+            source: DiffSource::Raw,
+        })
+    }
+
+    fn test_diff_state(content: &str, source: ContentSource) -> AppState {
+        let content_model = ContentModel::from_diff(content, source).unwrap();
+        AppState::new(content_model, UserConfig::empty())
+    }
+
+    #[test]
+    fn content_response_has_1_indexed_line_numbers() {
+        let state = test_state("a\nb\nc", "test.rs");
+        let response = state.to_response();
+
+        assert!(matches!(response.lines[0].origin, LineOrigin::Source { line: 1, .. }));
+        assert!(matches!(response.lines[1].origin, LineOrigin::Source { line: 2, .. }));
+        assert!(matches!(response.lines[2].origin, LineOrigin::Source { line: 3, .. }));
+    }
+
+    #[test]
+    fn content_response_includes_label() {
+        let state = test_state("content", "my_file.rs");
+        let response = state.to_response();
+
+        assert_eq!(response.label, "my_file.rs");
+    }
+
+    #[test]
+    fn content_response_preserves_whitespace() {
+        let state = test_state("  indented\n\ttabbed", "test.rs");
+        let response = state.to_response();
+
+        assert_eq!(response.lines[0].content, "  indented");
+        assert_eq!(response.lines[1].content, "\ttabbed");
+    }
+
+    #[test]
+    fn content_response_includes_highlighted_html() {
+        let state = test_state("fn main() {}", "test.rs");
+        let response = state.to_response();
+
+        // Should have HTML highlighting for Rust
+        assert!(response.lines[0].html.is_some());
+        let html = match response.lines[0].html.as_ref().unwrap() {
+            LineHtml::Full(s) => s.as_str(),
+            LineHtml::Cells(_) => panic!("Expected Full HTML for source file"),
+        };
+        assert!(html.contains("class="), "Expected HTML with CSS classes");
+    }
+
+    #[test]
+    fn content_response_html_is_none_for_empty_lines_mismatch() {
+        // If the highlighter returns fewer lines than content (edge case),
+        // html should be None for missing lines
+        let state = test_state("line1\nline2", "test.txt");
+        let response = state.to_response();
+
+        // Plain text should still have html (just escaped text)
+        assert_eq!(response.lines.len(), 2);
+    }
+
+    #[test]
+    fn content_response_includes_tags() {
+        let source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from("test.rs"),
+        });
+        let content_model = ContentModel::from_file("code", source);
+        let config = UserConfig::with_data(
+            vec![Tag {
+                id: "test123".into(),
+                name: "TEST".into(),
+                instruction: "Test tag".into(),
+            }],
+            vec![],
+        );
+        let state = AppState::new(content_model, config);
+        let response = state.to_response();
+
+        assert_eq!(response.tags.len(), 1);
+        assert_eq!(response.tags[0].name, "TEST");
+    }
+
+    #[test]
+    fn tag_new_generates_12_char_id() {
+        let tag = Tag::new("TEST".into(), "instruction".into());
+        assert_eq!(tag.id.len(), 12);
+        assert!(tag.id.chars().all(|c| c.is_ascii_alphanumeric()));
+    }
+
+    #[test]
+    fn exit_mode_new_generates_12_char_id() {
+        let mode = ExitMode::new("Test".into(), "#ff0000".into(), "instruction".into(), 0);
+        assert_eq!(mode.id.len(), 12);
+        assert!(mode.id.chars().all(|c| c.is_ascii_alphanumeric()));
+        assert!(!mode.is_transient()); // new() creates persisted modes
+    }
+
+    // === Diff tests ===
+
+    const SIMPLE_DIFF: &str = r#"diff --git a/file.rs b/file.rs
+--- a/file.rs
++++ b/file.rs
+@@ -1,3 +1,4 @@
+ fn main() {
+-    old_code();
++    new_code();
++    more_code();
+ }
+"#;
+
+    #[test]
+    fn from_diff_creates_state_with_metadata() {
+        let state = test_diff_state(SIMPLE_DIFF, test_diff_source("changes.diff"));
+
+        match &state.content.metadata {
+            ContentMetadata::Diff(meta) => {
+                assert_eq!(meta.files.len(), 1);
+                assert_eq!(meta.files[0].new_name, Some("file.rs".to_string()));
+            }
+            _ => panic!("Expected Diff metadata"),
+        }
+    }
+
+    #[test]
+    fn from_diff_creates_lines_from_content() {
+        let state = test_diff_state(SIMPLE_DIFF, test_diff_source("changes.diff"));
+
+        // Should have lines matching the diff content
+        assert!(!state.content.lines.is_empty());
+
+        // First line should be the diff header
+        assert!(state.content.lines[0].content.starts_with("diff --git"));
+
+        // Check that +/- lines are preserved
+        let has_added = state.content.lines.iter().any(|l| l.content.starts_with('+'));
+        let has_deleted = state.content.lines.iter().any(|l| l.content.starts_with('-'));
+        assert!(has_added, "Should have added lines");
+        assert!(has_deleted, "Should have deleted lines");
+    }
+
+    #[test]
+    fn from_diff_line_numbers_are_1_indexed() {
+        let state = test_diff_state(SIMPLE_DIFF, test_diff_source("changes.diff"));
+
+        // Diff lines have LineOrigin::Diff with old_line/new_line info
+        // Just verify lines exist and have Diff origin
+        assert!(matches!(state.content.lines[0].origin, LineOrigin::Diff { .. }));
+        assert!(matches!(state.content.lines[1].origin, LineOrigin::Diff { .. }));
+    }
+
+    #[test]
+    fn from_diff_response_includes_metadata() {
+        let state = test_diff_state(SIMPLE_DIFF, test_diff_source("changes.diff"));
+        let response = state.to_response();
+
+        assert!(matches!(response.metadata, ContentMetadata::Diff(_)));
+    }
+
+    #[test]
+    fn from_diff_error_on_invalid_content() {
+        let result = ContentModel::from_diff("just regular text", test_diff_source("not-a-diff.txt"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn from_file_has_no_diff_metadata() {
+        let state = test_state("fn main() {}", "test.rs");
+        assert!(matches!(state.content.metadata, ContentMetadata::Plain));
+
+        let response = state.to_response();
+        assert!(matches!(response.metadata, ContentMetadata::Plain));
+    }
+
+    #[test]
+    fn from_diff_includes_tags_and_exit_modes() {
+        let source = test_diff_source("changes.diff");
+        let content_model = ContentModel::from_diff(SIMPLE_DIFF, source).unwrap();
+        let config = UserConfig::with_data(
+            vec![Tag::new("TEST".into(), "instruction".into())],
+            vec![ExitMode::new("Apply".into(), "#22c55e".into(), "Apply it".into(), 0)],
+        );
+        let state = AppState::new(content_model, config);
+
+        assert_eq!(state.config.tags().len(), 1);
+        assert_eq!(state.config.exit_modes().len(), 1);
+    }
+
+    /// Test that diff lines with doc comments produce single-line HTML
+    #[test]
+    fn from_diff_doc_comment_line_html_is_single_line() {
+        let diff_with_doc_comment = r#"diff --git a/lib.rs b/lib.rs
+--- a/lib.rs
++++ b/lib.rs
+@@ -1,3 +1,4 @@
+-/// Old doc comment
++/// New doc comment
+ fn main() {
+ }
+"#;
+
+        let state = test_diff_state(diff_with_doc_comment, test_diff_source("changes.diff"));
+
+        println!("\n=== DIFF DOC COMMENT LINES ===");
+        for (i, line) in state.content.lines.iter().enumerate() {
+            println!("Line {}: content={:?}", i + 1, line.content);
+            if let Some(ref html) = line.html {
+                let html_str = match html {
+                    LineHtml::Full(s) => s.as_str(),
+                    LineHtml::Cells(cells) => {
+                        println!("        cells={:?}", cells);
+                        continue;
+                    }
+                };
+                println!("        html={:?}", html_str);
+                // Check for newlines
+                if html_str.contains('\n') {
+                    println!("        WARNING: HTML contains newline!");
+                }
+            }
+        }
+        println!("=== END ===\n");
+
+        // Find the deleted doc comment line
+        let deleted_line = state.content.lines.iter().find(|l| l.content.starts_with("-///")).unwrap();
+        assert!(deleted_line.html.is_some(), "Deleted doc comment should have HTML");
+        let html = match deleted_line.html.as_ref().unwrap() {
+            LineHtml::Full(s) => s.as_str(),
+            LineHtml::Cells(_) => panic!("Expected Full HTML, got Cells"),
+        };
+
+        // HTML should not contain newlines
+        assert!(!html.contains('\n'), "HTML should not contain newline. Got: {:?}", html);
+
+        // HTML should start with the prefix
+        assert!(html.starts_with('-'), "HTML should start with '-' prefix. Got: {:?}", html);
+    }
+
+    #[test]
+    fn markdown_table_cells_render_highlights() {
+        let markdown_with_table = r#"| Column A | Column B |
+|----------|----------|
+| Normal   | ==highlighted== |
+"#;
+
+        let state = test_markdown_state(markdown_with_table, "test.md");
+        let response = state.to_response();
+
+        // Find the data row (row with "highlighted")
+        let data_row = response
+            .lines
+            .iter()
+            .find(|l| l.content.contains("highlighted"))
+            .expect("Should have a row with 'highlighted'");
+
+        let html = data_row.html.as_ref().expect("Table row should have HTML");
+
+        // Now HTML is LineHtml::Cells for table rows
+        match html {
+            LineHtml::Cells(cells) => {
+                // Find the cell that contains the highlight
+                let has_highlight = cells.iter().any(|c| c.contains(r#"<mark class="hl">"#));
+                assert!(
+                    has_highlight,
+                    "Table cells should render ==highlights== as <mark> tags. Got cells: {:?}",
+                    cells
+                );
+            }
+            LineHtml::Full(s) => {
+                panic!("Expected Cells HTML for table row, got Full: {:?}", s);
+            }
+        }
+    }
+}

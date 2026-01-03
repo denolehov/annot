@@ -1,0 +1,236 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+**annot** is a Rust/Tauri/Svelte rewrite of [hl](https://github.com/denolehov/hl) — an ephemeral, human-in-the-loop annotation tool for AI workflows. It opens files, diffs, or piped content in a native window, allows users to annotate specific line ranges with structured feedback, and outputs annotations to stdout (or MCP responses) when the window closes.
+
+### Core Concept
+
+> **annot: ephemeral space for human-AI thinking**
+
+annot is a structured dialogue substrate — a medium in which human and AI take turns adding, questioning, and refining until something crystallizes. See `docs/manifesto.md` for the full philosophy.
+
+**Before planning or developing new features**, consult the manifesto to ensure alignment with:
+- The directional model (AI→Human vs Human→AI features)
+- The ephemeral identity (no persistence, zero exit cost)
+- The generative principle (humans add information, not just select)
+
+annot is designed to be:
+- **Ephemeral**: Opens, collects feedback, exits
+- **Keyboard-first**: /, g, Tab, Ctrl+K shortcuts
+- **LLM-aware**: Output format designed for Claude consumption
+
+## Build Commands
+
+```bash
+# Development (runs both Vite dev server and Tauri)
+pnpm demo         # Opens lib.rs as demo file
+pnpm tauri dev -- -- <file>  # Open specific file
+
+# Build for production
+pnpm tauri build           # Release build
+pnpm tauri build --debug   # Debug build with embedded frontend
+
+# Testing
+pnpm test         # Frontend tests (Vitest)
+pnpm test:watch   # Watch mode
+cargo test        # Rust tests (from src-tauri/)
+
+# Type checking
+pnpm check        # TypeScript + Svelte
+```
+
+### Installing from GitHub Releases
+
+For users with repo access:
+
+```bash
+gh release download --repo denolehov/annot --pattern "*.tar.gz"
+tar -xzf annot-darwin-arm64.tar.gz
+mv annot.app /Applications/  # Or: mv annot.app/Contents/MacOS/annot ~/.local/bin/
+```
+
+### Important: Dev vs Build modes
+
+- `pnpm tauri dev` / `cargo build` → Uses Vite dev server at localhost:1420
+- `pnpm tauri build` → Embeds frontend assets into binary
+
+**Gotcha**: Running `./target/debug/annot` directly after `cargo build` shows white screen because it tries to load from localhost:1420. Must use `pnpm tauri build --debug` for standalone binary.
+
+## Architecture
+
+### Three Review Modes
+
+1. **review_file** — Opens a file at a path for annotation
+2. **review_diff** — Opens a unified diff (git or raw) with dual-column view
+3. **review_content** — Opens ephemeral agent-generated content (plans, drafts)
+
+All modes block until the window closes, then return structured output.
+
+### Data Model
+
+```
+Annotation
+├── start_line: u32 (1-indexed)
+├── end_line: u32
+└── content: Vec<ContentNode>
+    ├── Text { text: String }
+    ├── Tag { id, name, instruction }  // Composable mini-prompts like [# SECURITY]
+    ├── Excalidraw { elements, png }   // Embedded diagrams
+    └── Media { data_url }             // Pasted images
+
+ExitMode
+├── id: String
+├── name: String           // "Apply", "Reject", etc.
+├── color: String          // CSS color
+├── instruction: String    // LLM-facing guidance
+└── is_ephemeral: bool     // true if from MCP, false if persistent
+
+Tag
+├── id: String             // 12-char stable ID
+├── name: String           // User-created name
+└── instruction: String    // LLM prompt text
+```
+
+### Output Format
+
+Structured text for LLM consumption:
+
+```
+TAGS:
+  [# SECURITY] Review for vulnerabilities
+  [# TODO] Items needing follow-up
+
+BOOKMARKS:
+  [BOOKMARK abc] auth-flow (this session)
+
+CONTEXT: plan.md [embeds: src/lib.rs, src/main.rs]
+
+GENERAL:
+  Please focus on error handling
+
+NEXT: Apply — Proceed with this plan
+
+---
+
+file.rs:45-52:
+   44 | fn previous() {   // context line
+>  45 | fn example() {
+>  46 |     // code
+      └──> [# SECURITY] Review this for injection vulnerabilities
+           Additional comment text
+```
+
+Section meanings:
+- **TAGS**: Tag definitions used in annotations
+- **BOOKMARKS**: Referenced bookmarks with snapshots
+- **CONTEXT**: What's being reviewed (with embedded portal files)
+- **GENERAL**: High-level comment about the entire review
+- **NEXT**: What action the human wants (exit mode + instruction)
+
+### Persistence
+
+User config stored in platform-specific config directory:
+- `tags.json` — Global tag definitions
+- `exit-modes.{ext}.json` — Exit modes per file type (.rs, .go, .py)
+- `tag-usage.json` — Usage stats for smart suggestions
+
+### Frontend ↔ Backend Communication
+
+Tauri IPC commands replace the HTTP API from the Go version:
+- `get_content` — Load file/diff/ephemeral content
+- `upsert_annotation` — Create/update annotation
+- `delete_annotation` — Remove annotation
+- `set_exit_mode` — Select exit mode
+- `get_tags` / `upsert_tag` — Tag CRUD
+- `finish_session` — Close window, return output
+
+### Key UX Patterns to Preserve
+
+- **Line selection**: Click line numbers to select range
+- **Tag menu**: Type `/` in editor to trigger tag autocomplete
+- **Exit mode cycling**: Tab/Shift+Tab cycles through modes
+- **Poly-editor**: Ctrl+K opens tag/exit-mode manager
+- **Session context**: `g` opens file-level comment editor
+- **Visual feedback**: Selected exit mode colors the window border
+
+## Reference Materials
+
+- `docs/features.md` — **Canonical product features list (keep up-to-date when adding features)**
+- `docs/manifesto.md` — annot's philosophy, identity, and directional feature model
+- `HL_REFERENCE.md` — Original hl feature set, data models, output format
+- `COMPONENTS.md` — UI component inventory with files, styles, states
+- `src/styles/README.md` — Style system guide and token reference
+- `fixtures/README.md` — Sample files for testing
+
+**Original Go implementation** (for edge cases only): `/Users/denolehov/_p/golang/hl`
+
+**Tauri documentation**: `/Users/denolehov/_p/docs/tauri-docs`
+
+## Tech Stack
+
+- **Backend**: Rust + Tauri v2 + clap (CLI parsing)
+- **Frontend**: Svelte 5 + SvelteKit + TypeScript
+- **Testing**: Vitest + @testing-library/svelte (frontend), cargo test (Rust)
+- **Syntax highlighting**: TBD (tree-sitter or syntect)
+- **Diff parsing**: TBD (similar-diff or custom)
+- **Rich editor**: TipTap
+
+## Style System
+
+Styles live in `src/styles/` with tokens in `tokens.css`. See `src/styles/README.md` for the full guide.
+
+- **Tokens**: All colors, spacing, radii, shadows in `tokens.css` (dark mode ready)
+- **Components**: One CSS file per component in `components/`
+- **Rule**: Never hardcode colors — use `var(--token-name)`
+
+## Fixtures
+
+Sample files for testing UI states in `fixtures/`:
+```bash
+pnpm tauri dev -- -- fixtures/files/simple.rs      # File mode
+pnpm tauri dev -- -- --diff fixtures/diffs/mixed-changes.diff  # Diff mode
+```
+
+## Tauri Configuration Notes
+
+### Window (tauri.conf.json)
+- `titleBarStyle: "Overlay"` — Traffic lights overlay content
+- `hiddenTitle: true` — No title text
+- `trafficLightPosition: { x: 12, y: 22 }` — Vertically centered in header
+
+### Permissions (capabilities/default.json)
+- `core:window:allow-start-dragging` — Required for `data-tauri-drag-region` to work
+
+## Testing Patterns
+- **Rust**: Behavior-focused tests on public API (ContentResponse format)
+- **Frontend**: Mock IPC with `vi.mock("@tauri-apps/api/core")`, test rendered output
+
+### Snapshot Testing with insta
+
+Output format tests use [insta](https://insta.rs/) for snapshot testing:
+
+```bash
+# Run tests (creates .snap.new for new/changed snapshots)
+cargo test
+
+# Interactively review pending snapshots
+cargo insta review
+
+# Accept all pending snapshots
+cargo insta accept
+
+# Reject all pending snapshots
+cargo insta reject
+```
+
+Snapshot files live in `src/{module}/snapshots/`. When output format changes:
+1. Run tests — they'll fail with diffs shown
+2. Review changes with `cargo insta review`
+3. Accept if intentional, reject if bug
+
+## Code Style Preferences
+
+- **Prefer declarative over imperative**: Use functional composition (`map`/`collect`/`join`), builder patterns with closures, and data-driven approaches over manual loops with mutable state

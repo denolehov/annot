@@ -1,0 +1,738 @@
+/* ===========================================
+   CODE VIEWER - Main layout and code display
+   =========================================== */
+
+.viewer {
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+	position: relative;
+}
+
+/* Header with frosted glass effect
+   Use header.header to avoid matching syntect's span.header class
+   (e.g., span.meta.table.header.markdown for markdown tables in code blocks) */
+header.header {
+	position: relative;
+	z-index: 10; /* Above session-slot so dropdown renders on top */
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 40px;
+	/* Left padding for traffic lights, slight top padding to align text */
+	padding: 2.4px 12px 0 90px;
+	flex-shrink: 0;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+	background: color-mix(in srgb, var(--bg-panel) 85%, transparent);
+	backdrop-filter: blur(20px) saturate(180%);
+	-webkit-backdrop-filter: blur(20px) saturate(180%);
+	-webkit-app-region: drag;
+	/* Soft shadow for depth */
+	box-shadow:
+		0 1px 3px rgba(0, 0, 0, 0.04),
+		0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.header-left {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.header-right {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+	-webkit-app-region: no-drag;
+}
+
+.zoom-indicator {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	color: var(--fg-muted);
+	padding: 0 4px;
+}
+
+/* Sticky header container */
+.sticky-header {
+	position: sticky;
+	top: 0;
+	z-index: 100;
+	background: var(--bg-main);
+}
+
+/* Session slot for global comment editor */
+.session-slot {
+	padding: 0 12px 12px 12px;
+	background: color-mix(in srgb, var(--bg-panel) 85%, transparent);
+	backdrop-filter: blur(20px) saturate(180%);
+	-webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+/* Override annotation-editor styles when in session slot */
+.session-slot .annotation-editor {
+	margin: 8px 8px 0 8px;
+	max-width: none;
+}
+
+/* Hide arrow for session editor */
+.session-slot .annotation-editor::after {
+	display: none;
+}
+
+/* Clickable filename */
+.file-name {
+	color: var(--text-primary);
+	font-weight: 600;
+	font-size: 13px;
+	letter-spacing: -0.01em;
+	cursor: pointer;
+	-webkit-app-region: no-drag;
+	transition: color 150ms ease;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	min-width: 0;
+}
+
+.file-name:hover {
+	color: var(--text-secondary);
+}
+
+.file-name.has-comment {
+	text-decoration: underline;
+	text-decoration-style: dotted;
+	text-underline-offset: 3px;
+}
+
+/* Main content area */
+.content {
+	flex: 1;
+	overflow: auto;
+	padding-bottom: 1rem;
+}
+
+/* Inner wrapper for zoom scaling - uses CSS zoom for crisp rendering */
+.content-inner {
+	transform-origin: top left;
+}
+
+/* Code lines - use div.line to avoid matching syntect's .line class on spans */
+div.line {
+	position: relative;
+	display: flex;
+	white-space: pre-wrap;
+	tab-size: 4;
+}
+
+/* Preview highlight (hover state - lighter than selection) */
+div.line.preview {
+	background-color: var(--selection-bg-preview);
+}
+
+div.line.preview::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 3px;
+	background: var(--selection-border);
+	opacity: 0.5;
+}
+
+/* Selection (amber family - matches hl) */
+div.line.selected {
+	background-color: var(--selection-bg);
+}
+
+.gutter.selected {
+	background-color: var(--selection-bg);
+	color: var(--text-secondary);
+	border-right-color: var(--selection-border);
+}
+
+/* Left accent bar on selected lines */
+div.line.selected::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 3px;
+	background: var(--selection-border);
+}
+
+/* Annotated lines (subtle highlight) */
+div.line.annotated {
+	background-color: var(--selection-bg);
+}
+
+div.line.annotated::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 3px;
+	background: var(--selection-border);
+}
+
+div.line.annotated .gutter {
+	background-color: var(--selection-bg);
+	color: var(--text-secondary);
+}
+
+/* Bookmarked lines - left border dominates annotated/selected ::before */
+div.line.bookmarked::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 3px;
+	background: var(--bookmark-color, #ef4444);
+	z-index: 1;
+}
+
+/* Bookmark indicator - inline, always rightmost */
+.bookmark-indicator {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	margin-left: 2px;
+	margin-right: 4px;
+	padding: 2px;
+	background: transparent;
+	border: none;
+	border-radius: 4px;
+	color: var(--bookmark-color, #ef4444);
+	cursor: pointer;
+	font-size: 16px;
+	transition: color 0.15s ease, background 0.15s ease;
+}
+
+.bookmark-indicator:hover {
+	background: var(--bg-hover);
+}
+
+.bookmark-indicator:focus-visible {
+	outline: 1px solid var(--focus-ring);
+	outline-offset: 2px;
+}
+
+/* Shift+drag cursor */
+.content.shift-held .code {
+	cursor: pointer;
+}
+
+/* Floating add button */
+.add-btn {
+	position: absolute;
+	top: 50%;
+	left: calc(var(--gutter-width) - 9px);
+	transform: translateY(-50%);
+	width: 18px;
+	height: 18px;
+	background: var(--selection-border);
+	color: white;
+	border: none;
+	border-radius: 4px;
+	font-size: 16px;
+	font-weight: 400;
+	cursor: pointer;
+	display: none;
+	align-items: center;
+	justify-content: center;
+	box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+	padding: 0;
+	padding-bottom: 2px;
+	line-height: 0;
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+.add-btn:hover {
+	transform: translateY(-50%) scale(1.1);
+	box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+}
+
+/* Show add button on preview lines (hover state) */
+div.line.preview .add-btn {
+	display: flex;
+}
+
+/* Gutter (line numbers) */
+.gutter {
+	width: var(--gutter-width);
+	flex-shrink: 0;
+	padding-right: 12px;
+	text-align: right;
+	color: var(--text-muted);
+	-webkit-user-select: none;
+	user-select: none;
+	cursor: pointer;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 22px;
+	font-variant-numeric: tabular-nums;
+	border-right: 1px solid var(--border-subtle);
+	/* Prevent gutter from being included in text selection */
+	pointer-events: auto;
+}
+
+/* Gutter styling in preview state */
+div.line.preview .gutter {
+	color: var(--text-secondary);
+}
+
+/* Code content */
+.code {
+	flex: 1;
+	padding-left: 8px;
+	-webkit-user-select: text;
+	user-select: text;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 22px;
+}
+
+/* Disable native text selection during line selection drag to prevent scroll jumps */
+.content.phase-selecting .code {
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+/* Error and loading states */
+.error {
+	padding: 2rem;
+	color: var(--error-border);
+}
+
+.loading {
+	padding: 2rem;
+	color: var(--text-muted);
+}
+
+/* ===========================================
+   DIFF VIEW - Unified diff display
+   =========================================== */
+
+/* Wider gutter for diff mode */
+.content.diff-mode .gutter {
+	width: 90px;
+	display: flex;
+	justify-content: flex-end;
+	gap: 0;
+}
+
+/* Adjust add button position for diff mode */
+.content.diff-mode .add-btn {
+	left: 81px;
+}
+
+/* Adjust annotation editor position for diff mode's wider gutter */
+.content.diff-mode .annotation-editor {
+	margin-left: 100px;
+}
+
+/* Diff gutter shows old | new line numbers */
+.diff-gutter-old,
+.diff-gutter-new {
+	display: inline-block;
+	width: 3.5ch;
+	text-align: right;
+}
+
+.diff-gutter-old {
+	color: var(--text-muted);
+}
+
+.diff-gutter-new {
+	margin-left: 8px;
+	color: var(--text-muted);
+}
+
+/* Added lines (green) */
+div.line.diff-added {
+	background-color: rgba(34, 197, 94, 0.1);
+}
+
+div.line.diff-added .diff-gutter-new {
+	color: rgb(34, 197, 94);
+}
+
+/* Deleted lines (red) */
+div.line.diff-deleted {
+	background-color: rgba(239, 68, 68, 0.1);
+}
+
+div.line.diff-deleted .diff-gutter-old {
+	color: rgb(239, 68, 68);
+}
+
+/* Header lines (dimmed, non-selectable) */
+div.line.diff-header {
+	background-color: var(--bg-panel);
+	color: var(--text-muted);
+}
+
+div.line.diff-header:hover {
+	/* No hover highlight for non-selectable lines */
+	background-image: none;
+}
+
+div.line.diff-header .gutter {
+	color: var(--text-muted);
+	cursor: default;
+	pointer-events: none;
+}
+
+div.line.diff-header .code {
+	font-weight: 500;
+}
+
+/* Hide add button for non-selectable lines */
+div.line.diff-header .add-btn,
+div.line.portal-header .add-btn,
+div.line.portal-footer .add-btn {
+	display: none !important;
+}
+
+/* Context lines - no special styling, inherit defaults */
+div.line.diff-context {
+	/* Default styling */
+}
+
+/* Selection on diff lines - amber takes priority (header lines are non-selectable) */
+div.line.diff-added.selected,
+div.line.diff-deleted.selected,
+div.line.diff-context.selected {
+	background-color: var(--selection-bg);
+}
+
+/* Annotated diff lines (header lines cannot be annotated) */
+div.line.diff-added.annotated,
+div.line.diff-deleted.annotated,
+div.line.diff-context.annotated {
+	background-color: var(--selection-bg);
+}
+
+/* ===========================================
+   DIFF HEADER - Hunk metadata in window header
+   =========================================== */
+
+.diff-header-info {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	-webkit-app-region: no-drag;
+}
+
+.diff-header-file {
+	color: var(--text-primary);
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.diff-header-file.has-comment {
+	text-decoration: underline;
+	text-decoration-style: dotted;
+	text-underline-offset: 3px;
+}
+
+.diff-header-counter {
+	color: var(--text-muted);
+	font-weight: 400;
+}
+
+.diff-header-sep {
+	color: var(--text-muted);
+}
+
+.diff-header-range {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.diff-header-old {
+	color: rgb(239, 68, 68);
+}
+
+.diff-header-new {
+	color: rgb(34, 197, 94);
+}
+
+.diff-header-fn {
+	font-weight: 500;
+	max-width: 250px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* ===========================================
+   MARKDOWN HEADER - Section breadcrumb
+   =========================================== */
+
+.md-header-info {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	-webkit-app-region: no-drag;
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.md-header-file {
+	display: flex;
+	align-items: center;
+	color: var(--text-primary);
+	font-weight: 600;
+	cursor: pointer;
+	flex-shrink: 0.3; /* Very reluctant to shrink */
+	min-width: 0; /* But can if needed */
+}
+
+.md-header-file.has-comment {
+	text-decoration: underline;
+	text-decoration-style: dotted;
+	text-underline-offset: 3px;
+}
+
+.md-header-sep {
+	color: var(--text-muted);
+	flex-shrink: 0;
+}
+
+.md-header-section {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	min-width: 0;
+	color: var(--text-secondary);
+	flex-shrink: 1;
+}
+
+.md-header-section.md-header-root {
+	flex-shrink: 2; /* Shrinks more readily */
+}
+
+.md-header-section.md-header-current {
+	color: var(--text-primary);
+	font-weight: 500;
+	flex-shrink: 1; /* Shrinks less than root */
+}
+
+.md-header-level {
+	color: var(--accent);
+	font-weight: 600;
+	flex-shrink: 0;
+}
+
+.md-header-title {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	min-width: 0;
+}
+
+.md-header-sub-sep {
+	color: var(--text-muted);
+	margin: 0 0.25rem;
+	flex-shrink: 0;
+}
+
+.md-header-sub {
+	color: var(--text-primary);
+	font-weight: 500;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	min-width: 0;
+}
+
+/* ===========================================
+   MARKDOWN CONTENT - Namespaced under .md
+   All markdown-rendered content is wrapped in <span class="md">
+   =========================================== */
+
+/* Reset block elements that comrak may emit */
+.md ol, .md ul, .md li, .md p, .md blockquote,
+.md h1, .md h2, .md h3, .md h4, .md h5, .md h6 {
+	all: unset;
+	display: inline;
+}
+
+/* Headers - mono-height with weight/color distinction */
+.md.md-h1, .md.md-h2, .md.md-h3, .md.md-h4, .md.md-h5, .md.md-h6 {
+	font-weight: 600;
+}
+
+.md.md-h1, .md.md-h2 {
+	color: var(--text-primary);
+}
+
+.md.md-h3, .md.md-h4, .md.md-h5, .md.md-h6 {
+	color: var(--text-secondary);
+}
+
+/* List items */
+.md.md-list {
+	color: var(--text-primary);
+}
+
+/* Blockquotes */
+.md.md-blockquote {
+	color: var(--text-secondary);
+	font-style: italic;
+}
+
+/* Horizontal rules / separators */
+div.line.separator-line {
+	pointer-events: none;
+}
+
+div.line.separator-line:hover {
+	background-image: none;
+}
+
+.separator {
+	border: none;
+	height: 1px;
+	margin: 0;
+}
+
+/* Inline code - dithered background matching code blocks */
+.md code {
+	background:
+		var(--codeblock-pattern-bg),
+		var(--bg-code-block);
+	background-size: var(--codeblock-pattern-size), auto;
+	border: 1px solid var(--border-code);
+	padding: 1px 5px;
+	border-radius: 4px;
+	font-family: var(--font-mono);
+}
+
+/* Portal references - bracket notation with code styling */
+.portal-ref {
+	font-family: var(--font-mono);
+	font-size: 0.9em;
+	color: var(--text-muted);
+	background: color-mix(in srgb, var(--border-portal) 15%, transparent);
+	padding: 1px 4px;
+	border-radius: 3px;
+}
+
+.portal-ref::before {
+	content: "[";
+}
+
+.portal-ref-icon {
+	vertical-align: -2px;
+	margin-right: 3px;
+	margin-left: 1px;
+	color: var(--border-portal);
+}
+
+.portal-ref::after {
+	content: "]";
+}
+
+/* Links */
+.md a {
+	color: var(--accent);
+	text-decoration: underline;
+}
+
+/* Bold/strong */
+.md strong {
+	font-weight: 600;
+	color: var(--text-primary);
+}
+
+/* Italic/em */
+.md em {
+	font-style: italic;
+}
+
+/* Strikethrough */
+.md del {
+	text-decoration: line-through;
+	color: var(--text-muted);
+}
+
+/* Inline highlights - highlighter pen effect */
+.hl,
+.md mark {
+	margin: 0 -0.4em;
+	padding: 0.1em 0.4em;
+	border-radius: 0.4em 0.2em;
+	background: transparent;
+	color: var(--hl-text);
+	-webkit-box-decoration-break: clone;
+	box-decoration-break: clone;
+	background-image: linear-gradient(
+		to right,
+		var(--hl-edge),
+		var(--hl-peak) 4%,
+		var(--hl-mid)
+	);
+}
+
+/* ===========================================
+   CHOICE BUTTONS - Annotate/Bookmark choice after shift-drag
+   =========================================== */
+
+.choice-buttons {
+	display: flex;
+	gap: 8px;
+	padding: 6px 0 6px calc(var(--gutter-width) + 8px);
+	animation: choice-fade-in 0.15s ease;
+}
+
+.choice-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 8px;
+	background: var(--bg-window);
+	border: 1px solid var(--border-strong);
+	border-radius: 4px;
+	font-size: 12px;
+	font-family: var(--font-ui);
+	color: var(--text-primary);
+	cursor: pointer;
+	transition: border-color 0.1s ease, background 0.1s ease;
+}
+
+.choice-button:hover,
+.choice-button:focus {
+	background: var(--bg-main);
+	border-color: var(--selection-border);
+}
+
+.choice-button:focus {
+	outline: none;
+}
+
+@keyframes choice-fade-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}

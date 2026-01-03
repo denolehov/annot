@@ -1,0 +1,598 @@
+/* ===========================================
+   COMPONENT: TAG CHIPS
+   Dithered background matching inline code blocks
+   =========================================== */
+
+/* Outer wrapper for cursor positioning - minimal styling */
+.tag-chip-wrapper {
+	display: inline-flex;
+	vertical-align: middle;
+}
+
+/* Visual chip styling */
+.tag-chip {
+	display: inline-flex;
+	align-items: center;
+	height: var(--chip-height);
+	border-radius: 4px;
+	font-size: var(--chip-font);
+	padding: var(--chip-padding);
+	user-select: none;
+	font-family: var(--font-ui);
+	/* vertical-align handled by wrapper */
+	margin: 0 2px;
+	margin-left: 1px; /* Space for cursor before chip */
+	position: relative;
+	cursor: default;
+	/* Dot pattern base - tactile, warm */
+	background:
+		var(--chip-pattern-bg),
+		var(--bg-code-block);
+	background-size: var(--chip-pattern-size), auto;
+	border: 1px solid var(--border-code);
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+
+/* Hover target wrapper for Svelte component chips (tooltip action host) */
+.chip-hover-target {
+	display: inline-flex;
+	align-items: center;
+}
+
+.tag-icon {
+	font-weight: 700;
+	font-size: var(--chip-font);
+	opacity: 0.9;
+}
+
+.tag-label {
+	font-weight: 600;
+	font-size: 9px;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+	opacity: 0.85;
+	margin-left: 4px;
+}
+
+.tag-divider {
+	width: 1px;
+	height: var(--chip-divider-height);
+	background-color: currentColor;
+	opacity: 0.2;
+	margin: 0 6px;
+}
+
+.tag-content {
+	font-weight: 500;
+	white-space: nowrap;
+	max-width: 150px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	margin-left: 4px;
+}
+
+/* Color variant for tags - subtle amber tint */
+.tag-tag {
+	background:
+		var(--chip-pattern-bg),
+		color-mix(in srgb, var(--bg-code-block) 92%, var(--selection-border) 8%);
+	background-size: var(--chip-pattern-size), auto;
+	color: var(--tag-text);
+}
+
+.tag-tag:hover {
+	border-color: var(--selection-border);
+}
+
+/* Color variant for media (pasted images) - subtle blue tint */
+.media-chip {
+	background:
+		var(--chip-pattern-bg),
+		color-mix(in srgb, var(--bg-code-block) 95%, #3b82f6 5%);
+	background-size: var(--chip-pattern-size), auto;
+	color: var(--text-secondary);
+}
+
+.media-chip:hover {
+	border-color: #3b82f6;
+}
+
+/* Color variant for pasted text content - subtle cyan tint */
+.paste-chip {
+	background:
+		var(--chip-pattern-bg),
+		color-mix(in srgb, var(--bg-code-block) 95%, #06b6d4 5%);
+	background-size: var(--chip-pattern-size), auto;
+	color: var(--text-secondary);
+	cursor: default;
+}
+
+.paste-chip:hover {
+	border-color: #06b6d4;
+}
+
+/* Color variant for bookmark references - subtle purple tint */
+.bookmark-chip {
+	background:
+		var(--chip-pattern-bg),
+		color-mix(in srgb, var(--bg-code-block) 95%, #8b5cf6 5%);
+	background-size: var(--chip-pattern-size), auto;
+	color: var(--text-secondary);
+	cursor: default;
+}
+
+.bookmark-chip:hover {
+	border-color: #8b5cf6;
+}
+
+.bookmark-chip .bookmark-icon {
+	display: inline-flex;
+	align-items: center;
+	color: #ef4444;
+}
+
+.bookmark-chip .bookmark-icon svg {
+	width: 12px;
+	height: 12px;
+}
+
+.bookmark-chip .bookmark-id {
+	font-family: var(--font-mono);
+	font-size: 10px;
+	font-weight: 600;
+	opacity: 0.7;
+	margin-left: 4px;
+}
+
+.bookmark-chip .bookmark-divider {
+	margin: 0 4px;
+	opacity: 0.4;
+}
+
+.bookmark-chip .bookmark-label {
+	font-weight: 500;
+	white-space: nowrap;
+	max-width: 120px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Color variant for unified references (@ mentions) */
+.ref-chip {
+	background:
+		var(--chip-pattern-bg),
+		color-mix(in srgb, var(--bg-code-block) 95%, #10b981 5%);
+	background-size: var(--chip-pattern-size), auto;
+	color: var(--text-secondary);
+	cursor: default;
+}
+
+.ref-chip:hover {
+	border-color: #10b981;
+}
+
+/* Annotation ref variant - green tint */
+.ref-chip.ref-annotation {
+	background:
+		var(--chip-pattern-bg),
+		color-mix(in srgb, var(--bg-code-block) 95%, #10b981 5%);
+	background-size: var(--chip-pattern-size), auto;
+}
+
+.ref-chip.ref-annotation:hover {
+	border-color: #10b981;
+}
+
+/* Bookmark ref variant - purple tint (matches legacy bookmark-chip) */
+.ref-chip.ref-bookmark {
+	background:
+		var(--chip-pattern-bg),
+		color-mix(in srgb, var(--bg-code-block) 95%, #8b5cf6 5%);
+	background-size: var(--chip-pattern-size), auto;
+}
+
+.ref-chip.ref-bookmark:hover {
+	border-color: #8b5cf6;
+}
+
+.ref-chip .ref-icon {
+	display: inline-flex;
+	align-items: center;
+}
+
+.ref-chip .ref-icon.annotation-icon {
+	color: #10b981;
+}
+
+.ref-chip .ref-icon.bookmark-icon {
+	color: #ef4444;
+}
+
+.ref-chip .ref-icon svg {
+	width: 12px;
+	height: 12px;
+}
+
+.ref-chip .ref-key {
+	font-family: var(--font-mono);
+	font-size: 10px;
+	font-weight: 600;
+	opacity: 0.8;
+	margin-left: 4px;
+}
+
+.ref-chip .ref-divider {
+	margin: 0 4px;
+	opacity: 0.4;
+}
+
+.ref-chip .ref-preview,
+.ref-chip .ref-label {
+	font-weight: 500;
+	white-space: nowrap;
+	max-width: 120px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Paste tooltip has wider max-width for code preview */
+.paste-tooltip .chip-tooltip-content {
+	max-width: 500px;
+	padding: 0;
+	overflow: hidden;
+}
+
+.paste-tooltip .paste-preview-content {
+	margin: 0;
+	padding: 8px 12px;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	line-height: 1.5;
+	white-space: pre;
+	overflow: hidden;
+	max-height: 300px;
+}
+
+.paste-tooltip .paste-preview-more {
+	padding: 4px 12px;
+	font-size: 10px;
+	color: var(--text-muted);
+	background: color-mix(in srgb, var(--tooltip-bg) 90%, #000 10%);
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Color variant for Excalidraw diagrams - subtle green tint */
+.excalidraw-chip {
+	background:
+		var(--chip-pattern-bg),
+		color-mix(in srgb, var(--bg-code-block) 95%, #22c55e 5%);
+	background-size: var(--chip-pattern-size), auto;
+	color: var(--text-primary);
+	cursor: pointer;
+}
+
+.excalidraw-chip:hover {
+	border-color: #22c55e;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Placeholder style (transient, dashed border) */
+.excalidraw-placeholder {
+	background:
+		var(--chip-pattern-bg),
+		color-mix(in srgb, var(--bg-code-block) 95%, #22c55e 5%);
+	background-size: var(--chip-pattern-size), auto;
+	border: 1px dashed var(--border-active);
+	color: var(--text-muted);
+	opacity: 0.85;
+}
+
+/* Color variant for errors (system-generated) - orange tint */
+.error-chip {
+	background:
+		var(--chip-pattern-bg),
+		color-mix(in srgb, var(--bg-code-block) 90%, #f97316 10%);
+	background-size: var(--chip-pattern-size), auto;
+	color: var(--warning, #f97316);
+	border-color: color-mix(in srgb, var(--border-code) 70%, #f97316 30%);
+}
+
+.error-chip:hover {
+	border-color: #f97316;
+}
+
+.error-chip .tag-content {
+	color: var(--text-secondary);
+}
+
+/* Error tooltip has wider max-width for full error messages */
+.error-tooltip .chip-tooltip-content {
+	max-width: 350px;
+	font-family: var(--font-mono);
+	font-size: 10px;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+/* Selected chip (via backspace or click) */
+.tag-chip.ProseMirror-selectednode,
+.tag-chip-wrapper.ProseMirror-selectednode .tag-chip,
+.tag-chip.selected {
+	outline: none;
+	border-color: var(--selection-border);
+	box-shadow: 0 0 0 2px var(--selection-bg);
+}
+
+/* Chip within a text selection (Cmd+A) */
+.tag-chip.in-selection,
+.tag-assembly.in-selection {
+	border-color: var(--selection-border);
+	box-shadow: 0 0 0 2px var(--selection-bg);
+}
+
+/* Tag chips and assemblies - focus ring */
+.tag-chip:focus-visible,
+.tag-assembly:focus-visible {
+	outline: none;
+	border-color: var(--focus-ring);
+	box-shadow: 0 0 0 2px var(--focus-glow);
+}
+
+/* ===========================================
+   CHIP TOOLTIP (hover to reveal instruction)
+   Positioned by Floating UI
+   =========================================== */
+.tag-chip .chip-tooltip {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: max-content;
+	max-width: 450px;
+	opacity: 0;
+	visibility: hidden;
+	transition: opacity 0.1s ease, visibility 0.1s ease;
+	z-index: 9999;
+	pointer-events: none;
+}
+
+.tag-chip .chip-tooltip-content {
+	background: var(--tooltip-bg);
+	border-radius: 4px;
+	padding: 6px 10px;
+	font-size: 11px;
+	line-height: 1.4;
+	color: var(--tooltip-text);
+	word-wrap: break-word;
+	white-space: normal;
+	box-shadow: var(--shadow-md);
+}
+
+.tag-chip .chip-tooltip-arrow {
+	position: absolute;
+	width: 8px;
+	height: 8px;
+	background: var(--tooltip-bg);
+	transform: rotate(45deg);
+}
+
+.tag-chip:hover .chip-tooltip,
+.tag-chip:focus .chip-tooltip {
+	opacity: 1;
+	visibility: visible;
+}
+
+/* Portal tooltips (rendered to document.body via Svelte action) */
+body > .chip-tooltip {
+	width: max-content;
+	max-width: 450px;
+}
+
+body > .chip-tooltip .chip-tooltip-content {
+	background: var(--tooltip-bg);
+	border-radius: 4px;
+	padding: 6px 10px;
+	font-size: 11px;
+	line-height: 1.4;
+	color: var(--tooltip-text);
+	word-wrap: break-word;
+	white-space: normal;
+	box-shadow: var(--shadow-md);
+}
+
+body > .chip-tooltip .chip-tooltip-arrow {
+	position: absolute;
+	width: 8px;
+	height: 8px;
+	background: var(--tooltip-bg);
+	transform: rotate(45deg);
+}
+
+/* Error tooltip variant (portal) */
+body > .chip-tooltip.error-tooltip .chip-tooltip-content {
+	max-width: 350px;
+	font-family: var(--font-mono);
+	font-size: 10px;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+/* ===========================================
+   KIND BADGE (in creation flow)
+   =========================================== */
+.kind-badge {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 6px;
+	border-radius: 4px;
+	font-size: 11px;
+	font-weight: 600;
+	font-family: var(--font-ui);
+	text-transform: lowercase;
+	user-select: none;
+}
+
+.kind-badge.tag {
+	background: var(--tag-bg);
+	color: var(--tag-text);
+}
+
+/* ===========================================
+   VALIDATION STYLES
+   =========================================== */
+
+/* Error state for segments */
+.assembly-segment.has-error {
+	background: var(--error-bg);
+	box-shadow: inset 0 0 0 1px var(--error-border);
+	border-radius: 3px;
+}
+
+.assembly-segment.has-error .assembly-input {
+	color: var(--error-text);
+}
+
+/* Springy shake animation for rejected input */
+@keyframes shake {
+	0% { transform: translateX(0); }
+	15% { transform: translateX(-6px); }
+	30% { transform: translateX(5px); }
+	45% { transform: translateX(-4px); }
+	60% { transform: translateX(3px); }
+	75% { transform: translateX(-2px); }
+	90% { transform: translateX(1px); }
+	100% { transform: translateX(0); }
+}
+
+.shake {
+	animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+/* Validation Error Tooltip */
+.validation-tooltip {
+	position: absolute;
+	bottom: 100%;
+	left: 0;
+	margin-bottom: 6px;
+	background: var(--error-border);
+	color: white;
+	padding: 3px 6px;
+	border-radius: 3px;
+	font-size: 10px;
+	font-weight: 600;
+	white-space: nowrap;
+	pointer-events: none;
+	z-index: 10;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	animation: tooltipFadeIn 0.1s ease;
+}
+
+/* Little arrow for the tooltip */
+.validation-tooltip::after {
+	content: "";
+	position: absolute;
+	top: 100%;
+	left: 10px;
+	border: 4px solid transparent;
+	border-top-color: var(--error-border);
+}
+
+@keyframes tooltipFadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(2px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* ===========================================
+   COMPONENT: REPLACE ERROR STATE
+   Editor-level error when replace block is unchanged
+   =========================================== */
+.ProseMirror.has-replace-error {
+	background: var(--error-bg);
+	border-color: var(--error-border) !important;
+}
+
+/* ===========================================
+   COMPONENT: REPLACE PREVIEW (sealed)
+   Code-block style diff preview (like GitHub/docs)
+   =========================================== */
+.replace-preview {
+	display: block;
+	margin: 4px 0;
+	background: var(--bg-secondary);
+	border: 1px solid var(--border-subtle);
+	border-radius: 6px;
+	overflow: hidden;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+/* When replace-preview is the only content - full width, no box styling */
+.annotation-editor.replace-only .replace-preview {
+	margin: 0;
+	margin-left: calc(-1 * var(--annotation-padding-x, 14px));
+	margin-right: calc(-1 * var(--annotation-padding-x, 14px));
+	background: none;
+	border: none;
+	border-radius: 0;
+}
+
+/* Header label for replace preview */
+.replace-preview-header {
+	padding: 4px 14px;
+	font-family: var(--font-ui);
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.replace-preview-line {
+	display: flex;
+	padding: 0 14px;
+}
+
+.replace-preview-line.context {
+	color: var(--text-secondary);
+}
+
+.replace-preview-line.removed {
+	background: var(--diff-remove-bg);
+}
+
+.replace-preview-line.added {
+	background: var(--diff-add-bg);
+}
+
+.replace-preview-gutter {
+	width: 20px;
+	flex-shrink: 0;
+	text-align: center;
+	color: var(--diff-gutter);
+	user-select: none;
+}
+
+.replace-preview-content {
+	flex: 1;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+/* Word-level emphasis within changed lines */
+.replace-preview-line.removed .emphasized {
+	background: var(--diff-remove-word-bg);
+	border-radius: 2px;
+}
+
+.replace-preview-line.added .emphasized {
+	background: var(--diff-add-word-bg);
+	border-radius: 2px;
+}
+

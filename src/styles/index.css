@@ -1,0 +1,26 @@
+/* ===========================================
+   annot - Design System
+
+   Import order matters:
+   1. Fonts - load typefaces first
+   2. Tokens - define design variables
+   3. Base - global resets and utilities
+   4. Syntax - code highlighting (separate concern)
+   5. Components - one file per component
+   =========================================== */
+
+/* Foundation */
+@import './fonts.css';
+@import './tokens.css';
+@import './base.css';
+
+/* Syntax highlighting */
+@import './syntax.css';
+
+/* Components */
+@import './components/kbd.css';
+@import './components/code-viewer.css';
+@import './components/status-bar.css';
+@import './components/chips.css';
+@import './components/annotation-editor.css';
+@import './components/command-palette.css';

@@ -1,0 +1,13 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+TAGS:
+  [# BUG] Known bug to fix
+  [# SECURITY] Security concern
+  [# TODO] Mark items for follow-up
+
+code.rs:5
+   4 |     line 4 content
+>  5 |     line 5 content
+     └──> [# TODO][# BUG][# SECURITY]

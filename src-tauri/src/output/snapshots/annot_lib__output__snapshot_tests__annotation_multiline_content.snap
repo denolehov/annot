@@ -1,0 +1,10 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+file.rs:5
+   4 |     line 4 content
+>  5 |     line 5 content
+     └──> First line of feedback
+          Second line continues
+          Third line concludes

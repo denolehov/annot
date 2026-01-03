@@ -1,0 +1,80 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+TAGS:
+  [# PERF] Performance consideration
+  [# REFACTOR] Code improvement suggestion
+  [# SECURITY] Review for security vulnerabilities
+  [# TODO] Action item for follow-up
+
+BOOKMARKS:
+  [BOOKMARK new] error-handler (this session)
+  [BOOKMARK old] auth-validation
+    Source: src/auth.rs
+    Project: /projects/myapp
+    Created: 2026-01-03
+────────────────────────────────────
+    fn validate_token(token: &str) -> Result<User, AuthError> {
+        // validation logic
+    }
+────────────────────────────────────
+
+
+GENERAL:
+  Overall code review feedback.
+  
+  [# PERF] Watch for N+1 queries in the data layer.
+  
+  See also: [BOOKMARK new] for error handling patterns.
+
+NEXT: Apply with Changes — Apply the code but incorporate the suggested modifications
+
+---
+
+src/main.rs:10-12
+    9 |     line 9 content
+>  10 |     line 10 content
+>  11 |     line 11 content
+>  12 |     line 12 content
+      └──> [# SECURITY] This authentication logic needs review. See [BOOKMARK old] for context.
+
+---
+
+src/main.rs:25
+   24 |     line 24 content
+>  25 |     line 25 content
+      └──> [# REFACTOR] [REPLACE]
+           ```diff
+           - let result = unsafe_operation(input);
+           + let result = safe_operation(sanitize(input))?;
+           ```
+
+---
+
+src/main.rs:40-42
+   39 |     line 39 content
+>  40 |     line 40 content
+>  41 |     line 41 content
+>  42 |     line 42 content
+      └──> [# TODO] Cross-reference: see [ANNOTATION L10-12] and @ref:file:src/handlers/api.rs. Also related to [BOOKMARK new]
+
+---
+
+src/main.rs:55
+   54 |     line 54 content
+>  55 |     line 55 content
+      └──> [ERROR:mermaid] Failed to parse diagram syntax Intended diagram:
+           graph LR
+               A --> B --> C
+
+---
+
+src/main.rs:70
+   69 |     line 69 content
+>  70 |     line 70 content
+      └──> Architecture diagram: [EXCALIDRAW Figure 1]
+           [{"type":"rectangle","x":0,"y":0}]
+           Screenshot of expected UI: [Figure 2]
+
+Saved to /home/user/reviews/main-rs-review.md

@@ -1,0 +1,20 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 1234567..abcdefg 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -10,6 +10,15 @@ pub struct Config {
+     pub timeout: Duration,
+ }
+
++impl Config {
++    /// Creates a new config with default values.
++    pub fn new() -> Self {
++        Self {
++            timeout: Duration::from_secs(30),
++        }
++    }
++}
++
+ impl Default for Config {
+     fn default() -> Self {
+         Self {

@@ -1,0 +1,8 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+file.rs (old:2):
+  1:1 |  fn main() {
+> 2:  | -    removed_line();
+      └──> Why was this removed?

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "annot-dev": {
+      "type": "stdio",
+      "command": "annot",
+      "args": ["mcp"],
+      "env": {}
+    }
+  }
+}

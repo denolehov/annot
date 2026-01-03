@@ -1,0 +1,46 @@
+diff --git a/src/handlers/auth.rs b/src/handlers/auth.rs
+index 1234567..abcdefg 100644
+--- a/src/handlers/auth.rs
++++ b/src/handlers/auth.rs
+@@ -1,5 +1,6 @@
+ use axum::{extract::State, Json};
+ use serde::{Deserialize, Serialize};
++use tracing::{info, warn};
+
+ use crate::{error::AppError, state::AppState};
+
+@@ -15,17 +16,25 @@ pub struct LoginResponse {
+     token: String,
+ }
+
+-/// Handles user login requests.
++/// Handles user login requests with rate limiting.
++///
++/// # Errors
++/// Returns `AppError::Unauthorized` if credentials are invalid.
++/// Returns `AppError::RateLimited` if too many attempts.
+ pub async fn login(
+     State(state): State<AppState>,
+     Json(req): Json<LoginRequest>,
+ ) -> Result<Json<LoginResponse>, AppError> {
+-    let user = state
++    info!(username = %req.username, "Login attempt");
++
++    let user = match state
+         .db
+         .find_user_by_username(&req.username)
+-        .await?
+-        .ok_or(AppError::Unauthorized)?;
++        .await?
++    {
++        Some(u) => u,
++        None => {
++            warn!(username = %req.username, "User not found");
++            return Err(AppError::Unauthorized);
++        }
++    };
+
+     if !verify_password(&req.password, &user.password_hash)? {
++        warn!(username = %req.username, "Invalid password");
+         return Err(AppError::Unauthorized);
+     }

@@ -1,0 +1,41 @@
+/* ===========================================
+   KEYBOARD HINTS
+   =========================================== */
+
+kbd {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--bg-window);
+	border: 1px solid var(--border-strong);
+	border-radius: 3px;
+	padding: 1px 5px;
+	font-weight: 500;
+	font-size: 10px;
+	color: var(--text-primary);
+	box-shadow:
+		0 1px 0 rgba(0, 0, 0, 0.1),
+		0 2px 4px rgba(0, 0, 0, 0.05),
+		inset 0 1px 0 rgba(255, 255, 255, 0.1);
+	font-family: var(--font-ui);
+	min-height: 16px;
+	line-height: 1;
+}
+
+/* Hint wrapper for kbd + label combinations */
+.kbd-hint {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-variant: small-caps;
+	font-size: 11px;
+	color: var(--text-muted);
+	font-family: var(--font-ui);
+	line-height: 1;
+}
+
+/* Status bar variant - subtler kbd background */
+.status-bar kbd {
+	background: var(--bg-main);
+	border-color: var(--border-subtle);
+}

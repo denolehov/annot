@@ -1,0 +1,13 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+large_file.rs:1000-1005
+    999 |     content at line 999
+>  1000 |     content at line 1000
+>  1001 |     content at line 1001
+>  1002 |     content at line 1002
+>  1003 |     content at line 1003
+>  1004 |     content at line 1004
+>  1005 |     content at line 1005
+        └──> Wide line numbers should align properly

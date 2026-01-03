@@ -1,0 +1,942 @@
+diff --git a/package.json b/package.json
+index af3e959..3dd71cb 100644
+--- a/package.json
++++ b/package.json
+@@ -11,6 +11,7 @@
+     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+     "tauri": "tauri",
+     "demo": "tauri dev -- -- $PWD/src-tauri/src/lib.rs",
++    "demo:diff": "tauri dev -- -- $PWD/test-fixtures/sample.diff",
+     "test": "vitest run",
+     "test:watch": "vitest"
+   },
+diff --git a/src-tauri/Cargo.lock b/src-tauri/Cargo.lock
+index ed244fe..411da74 100644
+--- a/src-tauri/Cargo.lock
++++ b/src-tauri/Cargo.lock
+@@ -59,6 +59,7 @@ dependencies = [
+  "tauri-plugin-opener",
+  "tempfile",
+  "tokio",
++ "unidiff",
+ ]
+ 
+ [[package]]
+@@ -979,6 +980,15 @@ version = "1.2.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "4ef6b89e5b37196644d8796de5268852ff179b44e96276cf4290264843743bb7"
+ 
++[[package]]
++name = "encoding_rs"
++version = "0.8.35"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3"
++dependencies = [
++ "cfg-if",
++]
++
+ [[package]]
+ name = "endi"
+ version = "1.1.1"
+@@ -4509,6 +4519,16 @@ version = "1.12.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f6ccf251212114b54433ec949fd6a7841275f9ada20dddd2f29e9ceea4501493"
+ 
++[[package]]
++name = "unidiff"
++version = "0.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e3ae26d2e6582eb32eff85cffebf74d20b6510e8b558bbac3a23b48965cf952f"
++dependencies = [
++ "encoding_rs",
++ "regex",
++]
++
+ [[package]]
+ name = "url"
+ version = "2.5.7"
+diff --git a/src-tauri/Cargo.toml b/src-tauri/Cargo.toml
+index 2c5fd53..0d9471c 100644
+--- a/src-tauri/Cargo.toml
++++ b/src-tauri/Cargo.toml
+@@ -30,6 +30,7 @@ rand = "0.8"
+ rmcp = { version = "0.12.0", features = ["server", "transport-io"] }
+ tokio = { version = "1.48.0", features = ["full"] }
+ schemars = { version = "1.1.0", features = ["derive"] }
++unidiff = "0.4"
+ 
+ [dev-dependencies]
+ tempfile = "3.23.0"
+diff --git a/src-tauri/src/input.rs b/src-tauri/src/input.rs
+index ff10e22..f5bc3ff 100644
+--- a/src-tauri/src/input.rs
++++ b/src-tauri/src/input.rs
+@@ -5,6 +5,8 @@
+ use std::io::{self, IsTerminal, Read};
+ use std::path::PathBuf;
+ 
++use crate::diff;
++
+ /// The source of input content.
+ pub enum InputMode {
+     /// Read content from a file path.
+@@ -23,6 +25,8 @@ pub struct ResolvedInput {
+     pub content: String,
+     /// Path hint for language detection (uses extension).
+     pub path_hint: String,
++    /// Whether the content is a unified diff (auto-detected).
++    pub is_diff: bool,
+ }
+ 
+ impl InputMode {
+@@ -42,11 +46,13 @@ impl InputMode {
+                     .unwrap_or_else(|| path.display().to_string());
+ 
+                 let path_hint = path.to_string_lossy().to_string();
++                let is_diff = diff::is_diff(&content);
+ 
+                 Ok(ResolvedInput {
+                     label,
+                     content,
+                     path_hint,
++                    is_diff,
+                 })
+             }
+             InputMode::Stdin { label } => {
+@@ -61,11 +67,13 @@ impl InputMode {
+ 
+                 // Use label for both display and language detection
+                 let path_hint = label.clone();
++                let is_diff = diff::is_diff(&content);
+ 
+                 Ok(ResolvedInput {
+                     label,
+                     content,
+                     path_hint,
++                    is_diff,
+                 })
+             }
+         }
+@@ -137,4 +145,40 @@ mod tests {
+ 
+     // Note: Stdin mode tests require subprocess spawning or mock injection,
+     // which is complex. Manual testing covers stdin scenarios.
++
++    #[test]
++    fn file_mode_detects_non_diff_content() {
++        let dir = tempfile::tempdir().unwrap();
++        let file_path = dir.path().join("test.rs");
++        std::fs::write(&file_path, "fn main() {}").unwrap();
++
++        let mode = InputMode::File { path: file_path };
++        let resolved = mode.resolve().unwrap();
++
++        assert!(!resolved.is_diff);
++    }
++
++    #[test]
++    fn file_mode_detects_diff_content() {
++        let dir = tempfile::tempdir().unwrap();
++        let file_path = dir.path().join("changes.diff");
++        std::fs::write(
++            &file_path,
++            r#"diff --git a/file.rs b/file.rs
++--- a/file.rs
+++++ b/file.rs
++@@ -1,3 +1,3 @@
++ fn main() {
++-    old();
+++    new();
++ }
++"#,
++        )
++        .unwrap();
++
++        let mode = InputMode::File { path: file_path };
++        let resolved = mode.resolve().unwrap();
++
++        assert!(resolved.is_diff);
++    }
+ }
+diff --git a/src-tauri/src/lib.rs b/src-tauri/src/lib.rs
+index 710d5fa..0ffca3a 100644
+--- a/src-tauri/src/lib.rs
++++ b/src-tauri/src/lib.rs
+@@ -6,6 +6,7 @@ use tauri::WebviewWindowBuilder;
+ 
+ pub mod commands;
+ pub mod config;
++pub mod diff;
+ pub mod highlight;
+ pub mod input;
+ pub mod mcp;
+@@ -27,7 +28,7 @@ pub type ResultSender = Mutex<Option<Sender<String>>>;
+ 
+ /// Run in CLI mode (file/stdin input, prints result, exits).
+ #[cfg_attr(mobile, tauri::mobile_entry_point)]
+-pub fn run(state: AppState) {
++pub fn run(state: AppState, context: tauri::Context) {
+     tauri::Builder::default()
+         .plugin(tauri_plugin_opener::init())
+         .manage(Mutex::new(state))
+@@ -74,12 +75,12 @@ pub fn run(state: AppState) {
+ 
+             Ok(())
+         })
+-        .run(tauri::generate_context!())
++        .run(context)
+         .expect("error while running tauri application");
+ }
+ 
+ /// Run in MCP server mode (no initial window, handles tool calls).
+-pub fn run_mcp() {
++pub fn run_mcp(context: tauri::Context) {
+     // Create empty initial state (will be replaced per-session)
+     let initial_state = AppState::empty();
+     let should_exit = Arc::new(AtomicBool::new(false));
+@@ -120,7 +121,7 @@ pub fn run_mcp() {
+ 
+             Ok(())
+         })
+-        .build(tauri::generate_context!())
++        .build(context)
+         .expect("error while building tauri application")
+         .run(move |_app, event| {
+             if let tauri::RunEvent::ExitRequested { api, .. } = event {
+diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs
+index 1b657a5..652ab5e 100644
+--- a/src-tauri/src/main.rs
++++ b/src-tauri/src/main.rs
+@@ -39,9 +39,12 @@ enum Command {
+ fn main() {
+     let cli = Cli::parse();
+ 
++    // Generate context once (avoids duplicate symbol errors)
++    let context = tauri::generate_context!();
++
+     // Handle MCP subcommand
+     if let Some(Command::Mcp) = cli.command {
+-        annot_lib::run_mcp();
++        annot_lib::run_mcp(context);
+         return;
+     }
+ 
+@@ -72,13 +75,29 @@ fn main() {
+     let tags = annot_lib::config::load_tags();
+     let exit_modes = annot_lib::config::load_exit_modes();
+ 
+-    // Create state and run Tauri
+-    let state = annot_lib::state::AppState::from_file(
+-        input.label,
+-        &input.content,
+-        &input.path_hint,
+-        tags,
+-        exit_modes,
+-    );
+-    annot_lib::run(state);
++    // Create state based on content type
++    let state = if input.is_diff {
++        match annot_lib::state::AppState::from_diff(
++            input.label,
++            &input.content,
++            tags,
++            exit_modes,
++        ) {
++            Ok(state) => state,
++            Err(e) => {
++                eprintln!("Error parsing diff: {}", e);
++                process::exit(1);
++            }
++        }
++    } else {
++        annot_lib::state::AppState::from_file(
++            input.label,
++            &input.content,
++            &input.path_hint,
++            tags,
++            exit_modes,
++        )
++    };
++
++    annot_lib::run(state, context);
+ }
+diff --git a/src-tauri/src/output.rs b/src-tauri/src/output.rs
+index e6fa5bc..cef1211 100644
+--- a/src-tauri/src/output.rs
++++ b/src-tauri/src/output.rs
+@@ -119,8 +119,13 @@ fn format_annotation_block(
+     ann: &Annotation,
+     line_num_width: usize,
+ ) {
++    let is_diff = state.diff_metadata.is_some();
++
+     // File header: "file.rs:10-15" or "file.rs:10"
+-    if ann.start_line == ann.end_line {
++    // For diffs, include old/new line numbers if available
++    if is_diff {
++        format_diff_header(out, state, ann);
++    } else if ann.start_line == ann.end_line {
+         out.push_str(&format!("{}:{}\n", state.label, ann.start_line));
+     } else {
+         out.push_str(&format!(
+@@ -135,12 +140,16 @@ fn format_annotation_block(
+         if let Some(line) = state.lines.get((context_line_num - 1) as usize) {
+             if !line.content.trim().is_empty() {
+                 // Format: "    N | content" (3 extra spaces for ">" prefix alignment)
+-                out.push_str(&format!(
+-                    "{:>width$} | {}\n",
+-                    context_line_num,
+-                    line.content,
+-                    width = line_num_width + 3
+-                ));
++                if is_diff {
++                    format_diff_line(out, state, context_line_num, &line.content, false, line_num_width);
++                } else {
++                    out.push_str(&format!(
++                        "{:>width$} | {}\n",
++                        context_line_num,
++                        line.content,
++                        width = line_num_width + 3
++                    ));
++                }
+             }
+         }
+     }
+@@ -148,18 +157,26 @@ fn format_annotation_block(
+     // Selected lines with ">" prefix
+     for line_num in ann.start_line..=ann.end_line {
+         if let Some(line) = state.lines.get((line_num - 1) as usize) {
+-            // Format: ">  N | content"
+-            out.push_str(&format!(
+-                "> {:>width$} | {}\n",
+-                line_num,
+-                line.content,
+-                width = line_num_width + 1
+-            ));
++            if is_diff {
++                format_diff_line(out, state, line_num, &line.content, true, line_num_width);
++            } else {
++                // Format: ">  N | content"
++                out.push_str(&format!(
++                    "> {:>width$} | {}\n",
++                    line_num,
++                    line.content,
++                    width = line_num_width + 1
++                ));
++            }
+         }
+     }
+ 
+     // Annotation content with arrow
+-    let arrow_indent = " ".repeat(line_num_width + 4); // +4 for "> " and " | "
++    let arrow_indent = if is_diff {
++        " ".repeat(line_num_width + 12) // Extra space for old:new format
++    } else {
++        " ".repeat(line_num_width + 4) // +4 for "> " and " | "
++    };
+     let content_text = render_content(&ann.content);
+ 
+     for (i, content_line) in content_text.lines().enumerate() {
+@@ -173,6 +190,100 @@ fn format_annotation_block(
+     }
+ }
+ 
++/// Format diff header with file info from annotation range.
++fn format_diff_header(out: &mut String, state: &AppState, ann: &Annotation) {
++    let diff_meta = state.diff_metadata.as_ref().unwrap();
++
++    // Get the file name from the diff metadata for the annotated range
++    let file_name = diff_meta
++        .lines
++        .get(&ann.start_line)
++        .and_then(|info| diff_meta.files.get(info.file_index))
++        .and_then(|f| f.new_name.as_ref().or(f.old_name.as_ref()))
++        .map(|s| s.as_str())
++        .unwrap_or(&state.label);
++
++    // Collect old/new line ranges from the annotated lines
++    let mut old_lines: Vec<u32> = Vec::new();
++    let mut new_lines: Vec<u32> = Vec::new();
++
++    for line_num in ann.start_line..=ann.end_line {
++        if let Some(info) = diff_meta.lines.get(&line_num) {
++            if let Some(old) = info.old_line_num {
++                old_lines.push(old);
++            }
++            if let Some(new) = info.new_line_num {
++                new_lines.push(new);
++            }
++        }
++    }
++
++    // Format header with available line info
++    let old_range = format_line_range(&old_lines);
++    let new_range = format_line_range(&new_lines);
++
++    match (old_range.as_str(), new_range.as_str()) {
++        ("", "") => out.push_str(&format!("{}:\n", file_name)),
++        (old, "") => out.push_str(&format!("{} (old:{}):\n", file_name, old)),
++        ("", new) => out.push_str(&format!("{} (new:{}):\n", file_name, new)),
++        (old, new) => out.push_str(&format!("{} (old:{} new:{}):\n", file_name, old, new)),
++    }
++}
++
++/// Format a line range like "10" or "10-15".
++fn format_line_range(lines: &[u32]) -> String {
++    if lines.is_empty() {
++        return String::new();
++    }
++    let min = *lines.iter().min().unwrap();
++    let max = *lines.iter().max().unwrap();
++    if min == max {
++        min.to_string()
++    } else {
++        format!("{}-{}", min, max)
++    }
++}
++
++/// Format a single diff line with old:new line numbers.
++fn format_diff_line(
++    out: &mut String,
++    state: &AppState,
++    line_num: u32,
++    content: &str,
++    is_selected: bool,
++    line_num_width: usize,
++) {
++    let diff_meta = state.diff_metadata.as_ref().unwrap();
++    let info = diff_meta.lines.get(&line_num);
++
++    let prefix = if is_selected { "> " } else { "  " };
++
++    let (old_str, new_str) = match info {
++        Some(i) => {
++            let old = i
++                .old_line_num
++                .map(|n| n.to_string())
++                .unwrap_or_default();
++            let new = i
++                .new_line_num
++                .map(|n| n.to_string())
++                .unwrap_or_default();
++            (old, new)
++        }
++        None => (String::new(), String::new()),
++    };
++
++    // Format: "> old:new | content" or "  old:new | content"
++    out.push_str(&format!(
++        "{}{:>w$}:{:<w$} | {}\n",
++        prefix,
++        old_str,
++        new_str,
++        content,
++        w = line_num_width
++    ));
++}
++
+ /// Render content nodes to plain text.
+ fn render_content(nodes: &[ContentNode]) -> String {
+     nodes
+@@ -210,6 +321,7 @@ mod tests {
+             deleted_exit_mode_ids: HashSet::new(),
+             selected_exit_mode_id: None,
+             session_comment: None,
++            diff_metadata: None,
+         }
+     }
+ 
+@@ -394,6 +506,7 @@ mod tests {
+             deleted_exit_mode_ids: HashSet::new(),
+             selected_exit_mode_id: Some("apply".to_string()),
+             session_comment: None,
++            diff_metadata: None,
+         };
+ 
+         let output = format_output(&state);
+@@ -441,6 +554,7 @@ mod tests {
+             deleted_exit_mode_ids: HashSet::new(),
+             selected_exit_mode_id: Some("reject".to_string()),
+             session_comment: None,
++            diff_metadata: None,
+         };
+ 
+         let output = format_output(&state);
+@@ -468,6 +582,7 @@ mod tests {
+             session_comment: Some(vec![ContentNode::Text {
+                 text: "This is a session comment".to_string(),
+             }]),
++            diff_metadata: None,
+         };
+ 
+         let output = format_output(&state);
+@@ -501,6 +616,7 @@ mod tests {
+             session_comment: Some(vec![ContentNode::Text {
+                 text: "Overall looks good!".to_string(),
+             }]),
++            diff_metadata: None,
+         };
+ 
+         let output = format_output(&state);
+@@ -523,6 +639,7 @@ mod tests {
+             deleted_exit_mode_ids: HashSet::new(),
+             selected_exit_mode_id: None,
+             session_comment: Some(vec![]),
++            diff_metadata: None,
+         };
+ 
+         let output = format_output(&state);
+diff --git a/src-tauri/src/state.rs b/src-tauri/src/state.rs
+index 9a6751d..702f16a 100644
+--- a/src-tauri/src/state.rs
++++ b/src-tauri/src/state.rs
+@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
+ 
+ use serde::{Deserialize, Serialize};
+ 
++use crate::diff::{self, DiffMetadata};
+ use crate::highlight::Highlighter;
+ 
+ /// A single line of content with its line number.
+@@ -107,6 +108,8 @@ pub struct AppState {
+     pub selected_exit_mode_id: Option<String>,
+     /// Session-level comment (not tied to specific lines).
+     pub session_comment: Option<Vec<ContentNode>>,
++    /// Diff metadata (Some if content is a unified diff).
++    pub diff_metadata: Option<DiffMetadata>,
+ }
+ 
+ /// Response sent to the frontend via the get_content command.
+@@ -118,6 +121,8 @@ pub struct ContentResponse {
+     pub exit_modes: Vec<ExitMode>,
+     pub selected_exit_mode_id: Option<String>,
+     pub session_comment: Option<Vec<ContentNode>>,
++    /// Diff metadata (Some if content is a unified diff).
++    pub diff_metadata: Option<DiffMetadata>,
+ }
+ 
+ impl AppState {
+@@ -133,6 +138,7 @@ impl AppState {
+             deleted_exit_mode_ids: HashSet::new(),
+             selected_exit_mode_id: None,
+             session_comment: None,
++            diff_metadata: None,
+         }
+     }
+ 
+@@ -177,9 +183,88 @@ impl AppState {
+             deleted_exit_mode_ids: HashSet::new(),
+             selected_exit_mode_id: None,
+             session_comment: None,
++            diff_metadata: None,
+         }
+     }
+ 
++    /// Parse diff content into structured lines with diff metadata.
++    ///
++    /// # Arguments
++    /// * `label` - Display name
++    /// * `content` - Raw diff content
++    /// * `tags` - Available tags (loaded from config)
++    /// * `exit_modes` - Available exit modes (loaded from config)
++    pub fn from_diff(
++        label: String,
++        content: &str,
++        tags: Vec<Tag>,
++        exit_modes: Vec<ExitMode>,
++    ) -> Result<Self, String> {
++        let diff_metadata = diff::parse_diff(content)?;
++        let highlighter = Highlighter::new();
++
++        // For diffs, we create lines from the raw content
++        // Each line gets its display number (1-indexed)
++        let lines: Vec<Line> = content
++            .lines()
++            .enumerate()
++            .map(|(i, line_content)| {
++                let line_num = (i + 1) as u32;
++
++                // Get file language for this line from diff metadata
++                let language = diff_metadata
++                    .lines
++                    .get(&line_num)
++                    .and_then(|info| diff_metadata.files.get(info.file_index))
++                    .map(|f| f.language.as_str())
++                    .unwrap_or("");
++
++                // Only highlight non-header lines with actual code
++                let html = if !language.is_empty() && !line_content.starts_with("diff ")
++                    && !line_content.starts_with("---")
++                    && !line_content.starts_with("+++")
++                    && !line_content.starts_with("@@")
++                    && !line_content.starts_with("index ")
++                {
++                    // Strip the +/- prefix for highlighting, then add it back
++                    let (prefix, code) = if line_content.starts_with('+')
++                        || line_content.starts_with('-')
++                        || line_content.starts_with(' ')
++                    {
++                        (&line_content[..1], &line_content[1..])
++                    } else {
++                        ("", line_content)
++                    };
++
++                    let fake_path = format!("file.{}", language);
++                    let highlighted = highlighter.highlight_lines(code, &fake_path);
++                    highlighted.first().map(|h| format!("{}{}", prefix, h))
++                } else {
++                    None
++                };
++
++                Line {
++                    number: line_num,
++                    content: line_content.to_string(),
++                    html,
++                }
++            })
++            .collect();
++
++        Ok(Self {
++            label,
++            lines,
++            annotations: HashMap::new(),
++            tags,
++            deleted_tag_ids: HashSet::new(),
++            exit_modes,
++            deleted_exit_mode_ids: HashSet::new(),
++            selected_exit_mode_id: None,
++            session_comment: None,
++            diff_metadata: Some(diff_metadata),
++        })
++    }
++
+     /// Convert to response for frontend.
+     pub fn to_response(&self) -> ContentResponse {
+         ContentResponse {
+@@ -189,6 +274,7 @@ impl AppState {
+             exit_modes: self.exit_modes.clone(),
+             selected_exit_mode_id: self.selected_exit_mode_id.clone(),
+             session_comment: self.session_comment.clone(),
++            diff_metadata: self.diff_metadata.clone(),
+         }
+     }
+ 
+@@ -312,4 +398,122 @@ mod tests {
+         assert!(mode.id.chars().all(|c| c.is_ascii_alphanumeric()));
+         assert!(!mode.is_ephemeral);
+     }
++
++    // === Diff tests ===
++
++    const SIMPLE_DIFF: &str = r#"diff --git a/file.rs b/file.rs
++--- a/file.rs
+++++ b/file.rs
++@@ -1,3 +1,4 @@
++ fn main() {
++-    old_code();
+++    new_code();
+++    more_code();
++ }
++"#;
++
++    #[test]
++    fn from_diff_creates_state_with_metadata() {
++        let state = AppState::from_diff(
++            "changes.diff".into(),
++            SIMPLE_DIFF,
++            vec![],
++            vec![],
++        )
++        .unwrap();
++
++        assert!(state.diff_metadata.is_some());
++        let meta = state.diff_metadata.as_ref().unwrap();
++        assert_eq!(meta.files.len(), 1);
++        assert_eq!(meta.files[0].new_name, Some("file.rs".to_string()));
++    }
++
++    #[test]
++    fn from_diff_creates_lines_from_content() {
++        let state = AppState::from_diff(
++            "changes.diff".into(),
++            SIMPLE_DIFF,
++            vec![],
++            vec![],
++        )
++        .unwrap();
++
++        // Should have lines matching the diff content
++        assert!(!state.lines.is_empty());
++
++        // First line should be the diff header
++        assert!(state.lines[0].content.starts_with("diff --git"));
++
++        // Check that +/- lines are preserved
++        let has_added = state.lines.iter().any(|l| l.content.starts_with('+'));
++        let has_deleted = state.lines.iter().any(|l| l.content.starts_with('-'));
++        assert!(has_added, "Should have added lines");
++        assert!(has_deleted, "Should have deleted lines");
++    }
++
++    #[test]
++    fn from_diff_line_numbers_are_1_indexed() {
++        let state = AppState::from_diff(
++            "changes.diff".into(),
++            SIMPLE_DIFF,
++            vec![],
++            vec![],
++        )
++        .unwrap();
++
++        assert_eq!(state.lines[0].number, 1);
++        assert_eq!(state.lines[1].number, 2);
++    }
++
++    #[test]
++    fn from_diff_response_includes_metadata() {
++        let state = AppState::from_diff(
++            "changes.diff".into(),
++            SIMPLE_DIFF,
++            vec![],
++            vec![],
++        )
++        .unwrap();
++
++        let response = state.to_response();
++        assert!(response.diff_metadata.is_some());
++    }
++
++    #[test]
++    fn from_diff_error_on_invalid_content() {
++        let result = AppState::from_diff(
++            "not-a-diff.txt".into(),
++            "just regular text",
++            vec![],
++            vec![],
++        );
++
++        assert!(result.is_err());
++    }
++
++    #[test]
++    fn from_file_has_no_diff_metadata() {
++        let state = test_state("test.rs", "fn main() {}", "test.rs");
++        assert!(state.diff_metadata.is_none());
++
++        let response = state.to_response();
++        assert!(response.diff_metadata.is_none());
++    }
++
++    #[test]
++    fn from_diff_includes_tags_and_exit_modes() {
++        let tags = vec![Tag::new("TEST".into(), "instruction".into())];
++        let modes = vec![ExitMode::new("Apply".into(), "#22c55e".into(), "Apply it".into(), 0)];
++
++        let state = AppState::from_diff(
++            "changes.diff".into(),
++            SIMPLE_DIFF,
++            tags,
++            modes,
++        )
++        .unwrap();
++
++        assert_eq!(state.tags.len(), 1);
++        assert_eq!(state.exit_modes.len(), 1);
++    }
+ }
+diff --git a/src/lib/types.ts b/src/lib/types.ts
+index 8831a12..5275255 100644
+--- a/src/lib/types.ts
++++ b/src/lib/types.ts
+@@ -21,8 +21,32 @@ export interface ContentResponse {
+   exit_modes: ExitMode[];
+   selected_exit_mode_id: string | null;
+   session_comment: ContentNode[] | null;
++  diff_metadata: DiffMetadata | null;
+ }
+ 
++// Diff types
++export interface DiffMetadata {
++  files: DiffFileInfo[];
++  lines: Record<number, DiffLineInfo>;
++}
++
++export interface DiffFileInfo {
++  old_name: string | null;
++  new_name: string | null;
++  language: string;
++  start_line: number;
++  end_line: number;
++}
++
++export interface DiffLineInfo {
++  kind: DiffLineKind;
++  old_line_num: number | null;
++  new_line_num: number | null;
++  file_index: number;
++}
++
++export type DiffLineKind = 'context' | 'added' | 'deleted' | 'header';
++
+ // Tag definition (composable mini-prompts)
+ export interface Tag {
+   id: string;
+diff --git a/src/routes/+page.svelte b/src/routes/+page.svelte
+index ee1f419..0773a5b 100644
+--- a/src/routes/+page.svelte
++++ b/src/routes/+page.svelte
+@@ -2,7 +2,7 @@
+   import { invoke } from "@tauri-apps/api/core";
+   import { getCurrentWindow } from "@tauri-apps/api/window";
+   import { onMount } from "svelte";
+-  import type { ContentResponse, ContentNode, Line, JSONContent, ExitMode, Tag } from "$lib/types";
++  import type { ContentResponse, ContentNode, Line, JSONContent, ExitMode, Tag, DiffMetadata, DiffLineInfo } from "$lib/types";
+   import { rangeToKey, keyToRange, isLineInRange, type Range } from "$lib/range";
+   import { extractContentNodes, isContentEmpty, contentNodesToTipTap } from "$lib/tiptap";
+   import AnnotationEditor from "$lib/AnnotationEditor.svelte";
+@@ -11,6 +11,13 @@
+   let lines: Line[] = $state([]);
+   let label = $state("");
+   let error = $state("");
++  let diffMetadata: DiffMetadata | null = $state(null);
++
++  // Helper to get diff line info
++  function getDiffLineInfo(lineNum: number): DiffLineInfo | null {
++    if (!diffMetadata) return null;
++    return diffMetadata.lines[lineNum] ?? null;
++  }
+ 
+   // Selection state
+   let selection: { start: number; end: number } | null = $state(null);
+@@ -324,6 +331,7 @@
+       lines = res.lines;
+       tags = res.tags;
+       exitModes = res.exit_modes;
++      diffMetadata = res.diff_metadata;
+ 
+       // Find index of initially selected mode (if any)
+       if (res.selected_exit_mode_id) {
+@@ -388,16 +396,22 @@
+     <div
+       class="content"
+       class:shift-held={isShiftHeld}
++      class:diff-mode={diffMetadata !== null}
+       onmousedown={handleContentMouseDown}
+       onmousemove={handleMouseMove}
+       onmouseup={handleMouseUp}
+       role="presentation"
+     >
+       {#each lines as line}
++        {@const diffLine = getDiffLineInfo(line.number)}
+         <div
+           class="line"
+           class:selected={isSelected(line.number)}
+           class:annotated={hasAnnotation(line.number)}
++          class:diff-added={diffLine?.kind === 'added'}
++          class:diff-deleted={diffLine?.kind === 'deleted'}
++          class:diff-context={diffLine?.kind === 'context'}
++          class:diff-header={diffLine?.kind === 'header'}
+           data-line={line.number}
+           onmouseenter={() => hoveredLine = line.number}
+           onmouseleave={() => hoveredLine = null}
+@@ -417,7 +431,12 @@
+             role="button"
+             tabindex="-1"
+           >
+-            {line.number}
++            {#if diffMetadata}
++              <span class="diff-gutter-old">{diffLine?.old_line_num ?? ''}</span>
++              <span class="diff-gutter-new">{diffLine?.new_line_num ?? ''}</span>
++            {:else}
++              {line.number}
++            {/if}
+           </span>
+           <span class="code">
+             {#if line.html}
+diff --git a/src/styles/code-viewer.css b/src/styles/code-viewer.css
+index 19f9a03..943d9d7 100644
+--- a/src/styles/code-viewer.css
++++ b/src/styles/code-viewer.css
+@@ -232,3 +232,82 @@
+ 	padding: 2rem;
+ 	color: var(--text-muted);
+ }
++
++/* ===========================================
++   DIFF VIEW - Unified diff display
++   =========================================== */
++
++/* Wider gutter for diff mode */
++.content.diff-mode .gutter {
++	width: 90px;
++	display: flex;
++	justify-content: flex-end;
++	gap: 0;
++}
++
++/* Adjust add button position for diff mode */
++.content.diff-mode .add-btn {
++	left: 81px;
++}
++
++/* Diff gutter shows old | new line numbers */
++.diff-gutter-old,
++.diff-gutter-new {
++	display: inline-block;
++	width: 3.5ch;
++	text-align: right;
++}
++
++.diff-gutter-old {
++	color: var(--text-muted);
++}
++
++.diff-gutter-new {
++	margin-left: 8px;
++	color: var(--text-muted);
++}
++
++/* Added lines (green) */
++.line.diff-added {
++	background-color: rgba(34, 197, 94, 0.1);
++}
++
++.line.diff-added:hover {
++	background-color: rgba(34, 197, 94, 0.15);
++}
++
++.line.diff-added .diff-gutter-new {
++	color: rgb(34, 197, 94);
++}
++
++/* Deleted lines (red) */
++.line.diff-deleted {
++	background-color: rgba(239, 68, 68, 0.1);
++}
++
++.line.diff-deleted:hover {
++	background-color: rgba(239, 68, 68, 0.15);
++}
++
++.line.diff-deleted .diff-gutter-old {
++	color: rgb(239, 68, 68);
++}
++
++/* Header lines (dimmed) */
++.line.diff-header {
++	background-color: var(--bg-panel);
++	color: var(--text-muted);
++}
++
++.line.diff-header .gutter {
++	color: var(--text-muted);
++}
++
++.line.diff-header .code {
++	font-weight: 500;
++}
++
++/* Context lines - no special styling, inherit defaults */
++.line.diff-context {
++	/* Default styling */
++}

@@ -1,0 +1,217 @@
+%YAML 1.2
+---
+# Minimal Mermaid syntax highlighting for syntect
+# Covers common patterns across diagram types without full Mermaid spec compliance
+name: Mermaid
+scope: source.mermaid
+file_extensions:
+  - mermaid
+  - mmd
+
+contexts:
+  main:
+    - include: comments
+    - include: diagram-declaration
+    - include: direction
+    - include: arrows
+    - include: strings
+    - include: keywords
+    - include: labels
+
+  # %% line comments
+  comments:
+    - match: '%%.*$'
+      scope: comment.line.percentage.mermaid
+
+  # Diagram type declarations
+  diagram-declaration:
+    - match: '^\s*(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|gantt|pie|gitGraph|mindmap|timeline|journey|quadrantChart|requirementDiagram|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment|sankey-beta|xychart-beta|block-beta)\b'
+      scope: keyword.declaration.diagram.mermaid
+
+  # Direction constants (TD, LR, etc.)
+  direction:
+    - match: '\b(TD|TB|BT|LR|RL)\b'
+      scope: constant.language.direction.mermaid
+
+  # Arrow operators - order matters (longer matches first)
+  arrows:
+    # Sequence diagram arrows
+    - match: '--?>?>|--?[xX)]|-\.->|==>'
+      scope: keyword.operator.arrow.mermaid
+    # Flowchart dotted arrows with text
+    - match: '-\.-'
+      scope: keyword.operator.arrow.mermaid
+    # Class diagram relationships
+    - match: '<\|--|--\|>|\*--|--\*|o--|--o|<\.\.|\.\\.>|<--|\.\.\>'
+      scope: keyword.operator.arrow.mermaid
+    # ER diagram cardinality
+    - match: '\|\|--|--\|\||\|o--|--o\||o\|--|--\|o|o\{--|--\}o|\}\|--|--\|\{'
+      scope: keyword.operator.arrow.mermaid
+    # Simple arrows (must be last)
+    - match: '-->|---|-\.->'
+      scope: keyword.operator.arrow.mermaid
+
+  # Quoted strings
+  strings:
+    - match: '"'
+      scope: punctuation.definition.string.begin.mermaid
+      push: inside-string
+
+  inside-string:
+    - meta_scope: string.quoted.double.mermaid
+    - match: '"'
+      scope: punctuation.definition.string.end.mermaid
+      pop: true
+    - match: '\\.'
+      scope: constant.character.escape.mermaid
+
+  # Keywords per diagram type
+  keywords:
+    # Sequence diagram
+    - match: '\b(participant|actor|activate|deactivate|destroy|box|end|loop|alt|else|opt|par|and|critical|break|rect|autonumber|link|links)\b'
+      scope: keyword.control.mermaid
+    - match: '\b(Note|note)\b'
+      scope: keyword.other.mermaid
+    - match: '\b(left of|right of|over)\b'
+      scope: keyword.other.mermaid
+    # Class diagram
+    - match: '\b(class|namespace|callback|link|click)\b'
+      scope: storage.type.mermaid
+    - match: '\b(<<interface>>|<<abstract>>|<<service>>|<<enumeration>>)\b'
+      scope: storage.modifier.mermaid
+    # State diagram
+    - match: '\b(state|note)\b'
+      scope: storage.type.mermaid
+    - match: '\[\*\]'
+      scope: constant.language.state.mermaid
+    # Gantt
+    - match: '\b(title|dateFormat|axisFormat|tickInterval|excludes|inclusiveEndDates|todayMarker|section|done|active|crit|milestone|after)\b'
+      scope: keyword.other.mermaid
+    # ER diagram
+    - match: '\b(entity|relationship)\b'
+      scope: storage.type.mermaid
+    # Flowchart
+    - match: '\b(subgraph|end|direction|click|style|linkStyle|classDef)\b'
+      scope: keyword.control.mermaid
+    # Git graph
+    - match: '\b(commit|branch|checkout|merge|cherry-pick|order)\b'
+      scope: keyword.control.mermaid
+    # Mindmap
+    - match: '\b(mindmap|root)\b'
+      scope: keyword.control.mermaid
+    # Pie chart
+    - match: '\b(pie|showData)\b'
+      scope: keyword.control.mermaid
+    # Timeline
+    - match: '\b(timeline|title|section)\b'
+      scope: keyword.control.mermaid
+    # Journey
+    - match: '\b(journey|title|section)\b'
+      scope: keyword.control.mermaid
+    # Cardinality markers for ER
+    - match: '\b(PK|FK|UK)\b'
+      scope: storage.modifier.mermaid
+
+  # Node shape labels: [text], (text), {text}, ((text)), [[text]], etc.
+  labels:
+    # Stadium shape ([...])
+    - match: '\(\['
+      scope: punctuation.definition.label.begin.mermaid
+      push: inside-label-stadium
+    - match: '\]\)'
+      scope: punctuation.definition.label.end.mermaid
+    # Subroutine [[...]]
+    - match: '\[\['
+      scope: punctuation.definition.label.begin.mermaid
+      push: inside-label-subroutine
+    - match: '\]\]'
+      scope: punctuation.definition.label.end.mermaid
+    # Circle (((...)))
+    - match: '\(\(\('
+      scope: punctuation.definition.label.begin.mermaid
+      push: inside-label-circle
+    - match: '\)\)\)'
+      scope: punctuation.definition.label.end.mermaid
+    # Double circle ((...))
+    - match: '\(\('
+      scope: punctuation.definition.label.begin.mermaid
+      push: inside-label-double-circle
+    - match: '\)\)'
+      scope: punctuation.definition.label.end.mermaid
+    # Hexagon {{...}}
+    - match: '\{\{'
+      scope: punctuation.definition.label.begin.mermaid
+      push: inside-label-hexagon
+    - match: '\}\}'
+      scope: punctuation.definition.label.end.mermaid
+    # Trapezoid [/...\] and [\.../ ]
+    - match: '\[/'
+      scope: punctuation.definition.label.begin.mermaid
+      push: inside-label-trapezoid
+    - match: '/\]|\\]'
+      scope: punctuation.definition.label.end.mermaid
+    # Database [(...)], Cylindrical
+    - match: '\[\('
+      scope: punctuation.definition.label.begin.mermaid
+      push: inside-label-database
+    - match: '\)\]'
+      scope: punctuation.definition.label.end.mermaid
+    # Simple shapes (must be last)
+    - match: '\['
+      scope: punctuation.definition.label.begin.mermaid
+    - match: '\]'
+      scope: punctuation.definition.label.end.mermaid
+    - match: '\('
+      scope: punctuation.definition.label.begin.mermaid
+    - match: '\)'
+      scope: punctuation.definition.label.end.mermaid
+    - match: '\{'
+      scope: punctuation.definition.label.begin.mermaid
+    - match: '\}'
+      scope: punctuation.definition.label.end.mermaid
+    # Rhombus/Diamond special markers
+    - match: '>'
+      scope: punctuation.definition.label.begin.mermaid
+
+  # Label content contexts (for proper nesting)
+  inside-label-stadium:
+    - meta_scope: string.unquoted.label.mermaid
+    - match: '(?=\]\))'
+      pop: true
+    - include: strings
+
+  inside-label-subroutine:
+    - meta_scope: string.unquoted.label.mermaid
+    - match: '(?=\]\])'
+      pop: true
+    - include: strings
+
+  inside-label-circle:
+    - meta_scope: string.unquoted.label.mermaid
+    - match: '(?=\)\)\))'
+      pop: true
+    - include: strings
+
+  inside-label-double-circle:
+    - meta_scope: string.unquoted.label.mermaid
+    - match: '(?=\)\))'
+      pop: true
+    - include: strings
+
+  inside-label-hexagon:
+    - meta_scope: string.unquoted.label.mermaid
+    - match: '(?=\}\})'
+      pop: true
+    - include: strings
+
+  inside-label-trapezoid:
+    - meta_scope: string.unquoted.label.mermaid
+    - match: '(?=/\]|\\])'
+      pop: true
+    - include: strings
+
+  inside-label-database:
+    - meta_scope: string.unquoted.label.mermaid
+    - match: '(?=\)\])'
+      pop: true
+    - include: strings

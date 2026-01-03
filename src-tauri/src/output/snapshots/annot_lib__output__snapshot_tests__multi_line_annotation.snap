@@ -1,0 +1,13 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+src/main.rs:10-15
+    9 |     line 9 content
+>  10 |     line 10 content
+>  11 |     line 11 content
+>  12 |     line 12 content
+>  13 |     line 13 content
+>  14 |     line 14 content
+>  15 |     line 15 content
+      └──> This entire block needs refactoring

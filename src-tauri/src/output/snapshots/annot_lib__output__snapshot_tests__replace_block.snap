@@ -1,0 +1,12 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+security.rs:5
+   4 |     line 4 content
+>  5 |     line 5 content
+     └──> [REPLACE]
+          ```diff
+          - let x = dangerous_call(input);
+          + let x = safe_call(sanitize(input));
+          ```

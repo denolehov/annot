@@ -1,0 +1,5 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+Saved to /tmp/review-output.md

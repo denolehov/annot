@@ -1,0 +1,14 @@
+<script lang="ts">
+	import { NodeViewWrapper } from 'svelte-tiptap';
+	import type { NodeViewProps } from '@tiptap/core';
+	import { tooltip } from '$lib/actions/tooltip';
+	import { WarningIcon } from '$lib/icons';
+
+	let { node, selected }: NodeViewProps = $props();
+</script>
+
+<NodeViewWrapper
+	as="span"
+	class="tag-chip-wrapper"
+	data-error-chip
+><span class="tag-chip error-chip {selected ? 'selected' : ''}"><span class="chip-hover-target" use:tooltip={{ content: node.attrs.message, variant: 'error-tooltip' }}><span class="tag-icon"><WarningIcon /></span><span class="tag-content">{node.attrs.source} syntax error</span></span></span></NodeViewWrapper>

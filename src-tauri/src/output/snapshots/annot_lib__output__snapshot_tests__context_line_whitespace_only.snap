@@ -1,0 +1,7 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+whitespace.rs:3
+>  3 |     line 3 content
+     └──> Context line 2 should be skipped

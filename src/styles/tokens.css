@@ -1,0 +1,396 @@
+/* ===========================================
+   DESIGN TOKENS (V5)
+
+   The Spirit: annot is ephemeral, physical, keyboard-first.
+   Human thought tears open machine code. Sans-serif warmth
+   invades monospace precision. The portal is another dimension.
+
+   Color palette: Warm zinc grays with amber accents.
+
+   Structure:
+   - Primitives: Raw color values (--light-*, --dark-*)
+   - Semantic tokens: Theme-aware aliases (--bg-*, --text-*, etc.)
+
+   Dark mode: Add [data-theme="dark"] override when ready.
+   =========================================== */
+
+:root {
+	/* ===========================================
+	   PRIMITIVE VALUES (Light Palette)
+	   Don't use directly in components - use semantic tokens below
+	   =========================================== */
+
+	/* Zinc family - warm grays */
+	--light-zinc-50: #fafaf9;
+	--light-zinc-100: #f4f4f5;
+	--light-zinc-200: #e4e4e7;
+	--light-zinc-300: #d4d4d8;
+	--light-zinc-400: #a1a1aa;
+	--light-zinc-500: #71717a;
+	--light-zinc-600: #52525b;
+	--light-zinc-700: #3f3f46;
+	--light-zinc-800: #27272a;
+	--light-zinc-900: #18181b;
+
+	/* Warm whites (portal dimension) */
+	--light-warm-white: #fefefe;
+	--light-warm-cream: #fdfcfa;
+	--light-warm-cream-alpha: rgba(253, 252, 250, 0.8);
+
+	/* Amber family - selection & accents */
+	--light-amber-50: #fefce8;
+	--light-amber-100: #fef9c3;
+	--light-amber-200: #fef08a;
+	--light-amber-300: #fcd34d;
+	--light-amber-400: #fbbf24;
+	--light-amber-700: #b45309;
+	--light-amber-900: #78350f;
+
+	/* Blue family - primary actions */
+	--light-blue-500: #3b82f6;
+	--light-blue-600: #2563eb;
+
+	/* Red family - errors & danger */
+	--light-red-50: #fef2f2;
+	--light-red-500: #ef4444;
+	--light-red-700: #b91c1c;
+
+	/* Green family - success */
+	--light-green-600: #22863a;
+
+	/* Code syntax (GitHub Light) */
+	--light-code-keyword: #d73a49;
+	--light-code-func: #6f42c1;
+	--light-code-string: #032f62;
+	--light-code-comment: #6a737d;
+	--light-code-variable: #e36209;
+	--light-code-constant: #005cc5;
+	--light-code-tag: #22863a;
+
+	/* ===========================================
+	   PRIMITIVE VALUES (Dark Palette)
+	   Ready for dark mode - not active yet
+	   =========================================== */
+	/* Deep Zincs (Warm Dark Base) - "Midnight Study" */
+	--dark-zinc-950: #09090b; /* Page BG - deepest */
+	--dark-zinc-900: #18181b; /* Window BG */
+	--dark-zinc-800: #27272a; /* Panels */
+	--dark-zinc-700: #3f3f46; /* Borders */
+	--dark-zinc-600: #52525b; /* Strong Borders */
+	--dark-zinc-500: #71717a; /* Muted Text */
+	--dark-zinc-400: #a1a1aa; /* Secondary Text */
+	--dark-zinc-100: #f4f4f5; /* Primary Text */
+
+	/* Dark warm surfaces */
+	--dark-warm-white: #1a1a1d;
+	--dark-warm-cream: #1f1f23;
+	--dark-warm-cream-alpha: rgba(31, 31, 35, 0.8);
+
+	/* Dark Accents - "Bioluminescence" amber */
+	--dark-amber-900: #451a03; /* Selection bg base */
+	--dark-amber-500: #f59e0b; /* Focus rings */
+	--dark-amber-400: #fbbf24; /* Text accents */
+
+	/* Dark functional colors */
+	--dark-red-900: #7f1d1d;   /* Error bg base */
+	--dark-red-400: #f87171;   /* Error text */
+	--dark-blue-500: #60a5fa;  /* Action blue */
+
+	/* Dark code syntax (GitHub Dark Dimmed style) */
+	--dark-code-keyword: #ff7b72;  /* Soft Red */
+	--dark-code-func: #d2a8ff;     /* Soft Purple */
+	--dark-code-string: #a5d6ff;   /* Pale Blue */
+	--dark-code-comment: #8b949e;  /* Zinc Gray */
+	--dark-code-variable: #ffa657; /* Soft Orange */
+	--dark-code-constant: #79c0ff; /* Cyan/Blue */
+	--dark-code-tag: #7ee787;      /* Soft Green */
+
+	/* ===========================================
+	   SEMANTIC TOKENS
+	   Use these in components - they adapt to theme
+	   =========================================== */
+
+	/* Backgrounds */
+	--bg-main: var(--light-zinc-50);
+	--bg-window: var(--light-warm-white);
+	--bg-panel: var(--light-zinc-50);
+	--bg-hover: var(--light-zinc-100);
+	--bg-selected: #d4d8e0;  /* Slightly blue-gray for selection */
+	--bg-input: var(--light-warm-white);
+
+	/* Portal: A different material */
+	--bg-portal: var(--light-warm-cream);
+	--bg-portal-glow: rgba(212, 200, 184, 0.25);
+	--border-portal: #d4c8b8;
+	--portal-checker-bg: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='2' height='2' fill='rgba(212,200,184,0.3)'/%3E%3Crect x='2' y='2' width='2' height='2' fill='rgba(212,200,184,0.3)'/%3E%3C/svg%3E");
+	--portal-checker-size: 4px 4px;
+
+	/* Code blocks: muted warm (desaturated amber) */
+	--bg-code-block: #fdfcfa;
+	--border-code: #ddd8d0;
+	--codeblock-header-bg: #f8f6f2;
+	--codeblock-pattern-bg: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='2' height='2' fill='rgba(160,140,100,0.15)'/%3E%3Crect x='2' y='2' width='2' height='2' fill='rgba(160,140,100,0.15)'/%3E%3C/svg%3E");
+	--codeblock-pattern-size: 4px 4px;
+
+	/* Chips: dot pattern (warmer, more tactile) */
+	--chip-pattern-bg: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1' cy='1' r='0.75' fill='rgba(160,140,100,0.18)'/%3E%3Ccircle cx='3' cy='3' r='0.75' fill='rgba(160,140,100,0.18)'/%3E%3C/svg%3E");
+	--chip-pattern-size: 4px 4px;
+
+	/* Borders */
+	--border-subtle: var(--light-zinc-200);
+	--border-strong: var(--light-zinc-300);
+	--border-hover: var(--light-zinc-400);
+	--border-active: var(--light-zinc-500);
+
+	/* Text */
+	--text-primary: var(--light-zinc-900);
+	--text-secondary: var(--light-zinc-600);
+	--text-muted: var(--light-zinc-500);  /* 4.51:1 contrast ratio for WCAG AA */
+
+	/* Code Syntax */
+	--code-keyword: var(--light-code-keyword);
+	--code-func: var(--light-code-func);
+	--code-string: var(--light-code-string);
+	--code-comment: var(--light-code-comment);
+	--code-variable: var(--light-code-variable);
+	--code-constant: var(--light-code-constant);
+	--code-tag: var(--light-code-tag);
+	--code-op: var(--light-code-keyword);
+	--code-support: var(--light-code-func);
+
+	/* Selection (amber family - warm gold, whisper not scream) */
+	--selection-bg: var(--light-amber-50);
+	--selection-bg-preview: rgb(251 191 36 / 0.12);  /* Lighter preview for hover */
+	--selection-border: var(--light-amber-300);
+	--selection-hover: rgb(251 191 36 / 0.15);
+	--selection-active: rgb(251 191 36 / 0.3);
+	--selection-gutter-text: var(--light-amber-900);
+
+	/* Inline highlights (==text==) - gradient stops for pen effect */
+	--hl: rgba(180, 83, 9, 0.08);
+	--hl-edge: rgba(180, 83, 9, 0.06);
+	--hl-peak: rgba(180, 83, 9, 0.20);
+	--hl-mid: rgba(180, 83, 9, 0.10);
+	--hl-text: inherit;
+
+	/* Tags */
+	--tag-bg: var(--light-zinc-50);
+	--tag-border: var(--light-zinc-300);
+	--tag-text: var(--light-zinc-600);
+
+	/* Errors & Danger */
+	--error-bg: var(--light-red-50);
+	--error-border: var(--light-red-500);
+	--error-text: var(--light-red-700);
+	--danger: var(--light-red-500);
+	--danger-hover: var(--light-red-700);
+
+	/* Diff colors (for /replace) */
+	--diff-remove-bg: rgba(220, 38, 38, 0.18);
+	--diff-add-bg: rgba(22, 163, 74, 0.18);
+	--diff-remove-word-bg: rgba(220, 38, 38, 0.35);
+	--diff-add-word-bg: rgba(22, 163, 74, 0.35);
+	--diff-gutter: var(--text-muted);
+
+	/* Focus */
+	--focus-ring: var(--border-active);
+	--focus-glow: rgba(113, 113, 122, 0.15);
+
+	/* Accent - amber family for interactive highlights */
+	--accent: var(--light-amber-700);
+	--accent-bg: var(--light-amber-100);
+	--accent-bg-hover: var(--light-amber-200);
+	--accent-border: var(--light-amber-300);
+	--accent-text: var(--light-amber-900);
+
+	/* Primary action - blue */
+	--accent-blue: var(--light-blue-500);
+	--accent-blue-hover: var(--light-blue-600);
+	/* Alias for components using --accent-primary */
+	--accent-primary: var(--accent-blue);
+
+	/* Editor hover border */
+	--border-editor-hover: var(--accent-primary);
+
+	/* Overlays */
+	--backdrop-light: rgba(250, 250, 249, 0.4);
+	--backdrop-dark: rgba(0, 0, 0, 0.6);
+
+	/* Tooltips (always dark background for contrast) */
+	--tooltip-bg: var(--light-zinc-800);
+	--tooltip-text: var(--light-zinc-100);
+
+	/* ===========================================
+	   LAYOUT & SIZING
+	   Not theme-dependent
+	   =========================================== */
+
+	/* Gutter */
+	--gutter-width: 50px;
+
+	/* Fonts */
+	--font-mono: "JetBrains Mono", monospace;
+	--font-ui: "Inter", sans-serif;
+
+	/* Editor Typography */
+	--editor-line-height: 22px;
+
+	/* Chip/Tag Sizing */
+	--chip-height: 20px;
+	--chip-radius: 4px;
+	--chip-font: 10px;
+	--chip-padding: 0 6px;
+	--chip-padding-tight: 0 2px;
+	--chip-gap: 3px;
+	--chip-divider-height: 10px;
+
+	/* Border Radii */
+	--radius-sm: 4px;
+	--radius-md: 6px;
+	--radius-lg: 8px;
+	--radius-xl: 12px;
+
+	/* Shadows */
+	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 4px rgba(0, 0, 0, 0.02);
+	--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+	--shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.15);
+
+	/* Transitions */
+	--transition-fast: 80ms ease;
+	--transition-normal: 150ms ease;
+}
+
+/* ===========================================
+   ICON UTILITIES
+   =========================================== */
+
+.cp-icon {
+	width: 1em;
+	height: 1em;
+	display: inline-block;
+	vertical-align: -0.125em;
+	flex-shrink: 0;
+}
+
+/* ===========================================
+   DARK MODE - "Midnight Study"
+
+   Warm, not cold. Deep zinc backgrounds let content float.
+   Amber shifts from honey to bioluminescence.
+   =========================================== */
+
+[data-theme="dark"] {
+	/* --- BACKGROUNDS --- */
+	/* Warm dark grays - slight brown undertone like light theme's zinc */
+	--bg-main: #1d1b16;
+	--bg-window: #1a1916;
+	--bg-panel: #21201c;
+	--bg-hover: #292824;
+	--bg-selected: #3d3a32;
+	--bg-input: #1a1916;
+
+	/* Portal dimension: warm dark cream */
+	--bg-portal: #1c1b18;
+	--bg-portal-glow: rgba(90, 82, 72, 0.15);
+	--border-portal: #5a5248;
+	--portal-checker-bg: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='2' height='2' fill='rgba(90,82,72,0.3)'/%3E%3Crect x='2' y='2' width='2' height='2' fill='rgba(90,82,72,0.3)'/%3E%3C/svg%3E");
+
+	/* Code blocks: warm */
+	--bg-code-block: #1a1916;
+	--border-code: #3d3930;
+	--codeblock-header-bg: #21201c;
+	--codeblock-pattern-bg: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='2' height='2' fill='rgba(200,180,140,0.04)'/%3E%3Crect x='2' y='2' width='2' height='2' fill='rgba(200,180,140,0.04)'/%3E%3C/svg%3E");
+
+	/* Chips: warm cream dots */
+	--chip-pattern-bg: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1' cy='1' r='0.75' fill='rgba(200,180,140,0.06)'/%3E%3Ccircle cx='3' cy='3' r='0.75' fill='rgba(200,180,140,0.06)'/%3E%3C/svg%3E");
+
+	/* --- TEXT --- */
+	/* Warm off-white - cream tint like light theme */
+	--text-primary: #e8e4dc;
+	--text-secondary: #a8a49c;
+	--text-muted: #78746c;      /* WCAG AA compliant */
+
+	/* --- BORDERS --- */
+	--border-subtle: #2a2924;
+	--border-strong: #3d3a32;
+	--border-hover: #524e44;
+	--border-active: #6b665c;
+
+	/* --- CODE SYNTAX (GitHub Dark Dimmed) --- */
+	--code-keyword: var(--dark-code-keyword);
+	--code-func: var(--dark-code-func);
+	--code-string: var(--dark-code-string);
+	--code-comment: var(--dark-code-comment);
+	--code-variable: var(--dark-code-variable);
+	--code-constant: var(--dark-code-constant);
+	--code-tag: var(--dark-code-tag);
+	--code-op: var(--dark-code-keyword);
+	--code-support: var(--dark-code-func);
+
+	/* --- SELECTION & FOCUS --- */
+	/* Subtle amber glow */
+	--selection-bg: rgba(245, 158, 11, 0.15);
+	--selection-bg-preview: rgba(245, 158, 11, 0.08);  /* Lighter preview for hover */
+	--selection-border: var(--dark-amber-500);
+	--selection-hover: rgba(245, 158, 11, 0.1);
+	--selection-active: rgba(245, 158, 11, 0.25);
+	--selection-gutter-text: var(--dark-amber-400);
+
+	/* Inline highlights - brighter gradient for dark bg */
+	--hl: rgba(251, 191, 36, 0.30);
+	--hl-edge: rgba(251, 191, 36, 0.15);
+	--hl-peak: rgba(251, 191, 36, 0.50);
+	--hl-mid: rgba(251, 191, 36, 0.30);
+	--hl-text: var(--text-primary);
+
+	/* Focus */
+	--focus-ring: var(--dark-amber-500);
+	--focus-glow: rgba(245, 158, 11, 0.15);
+
+	/* --- TAGS --- */
+	--tag-bg: #21201c;
+	--tag-border: #524e44;
+	--tag-text: var(--text-primary);
+
+	/* --- ERRORS & DANGER --- */
+	--error-bg: rgba(127, 29, 29, 0.4);
+	--error-border: var(--dark-red-400);
+	--error-text: var(--dark-red-400);
+	--danger: var(--dark-red-400);
+	--danger-hover: #fca5a5; /* red-300 */
+
+	/* --- DIFF COLORS --- */
+	--diff-remove-bg: rgba(239, 68, 68, 0.22);
+	--diff-add-bg: rgba(34, 197, 94, 0.22);
+	--diff-remove-word-bg: rgba(239, 68, 68, 0.4);
+	--diff-add-word-bg: rgba(34, 197, 94, 0.4);
+	--diff-gutter: var(--text-muted);
+
+	/* --- ACCENTS --- */
+	--accent: var(--dark-amber-400);
+	--accent-bg: rgba(69, 26, 3, 0.5);
+	--accent-bg-hover: rgba(69, 26, 3, 0.7);
+	--accent-border: var(--dark-amber-500);
+	--accent-text: var(--dark-amber-400);
+
+	/* Primary action - blue */
+	--accent-blue: var(--dark-blue-500);
+	--accent-blue-hover: #93c5fd; /* blue-300 */
+	--accent-primary: var(--accent-blue);
+
+	/* Editor hover border - light in dark mode for visibility */
+	--border-editor-hover: var(--text-primary);
+
+	/* --- OVERLAYS --- */
+	--backdrop-light: rgba(19, 18, 15, 0.4);
+	--backdrop-dark: rgba(10, 9, 7, 0.85);
+
+	/* Tooltips (slightly lighter in dark mode for visibility) */
+	--tooltip-bg: #3d3a32;
+	--tooltip-text: var(--text-primary);
+
+	/* --- SHADOWS (softer in dark mode) --- */
+	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.1);
+	--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+	--shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
