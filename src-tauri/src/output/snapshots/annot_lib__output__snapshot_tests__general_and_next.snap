@@ -1,0 +1,8 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+GENERAL:
+  Looks good with minor suggestions below
+
+NEXT: Apply — Apply changes

@@ -8,6 +8,9 @@ mod builder;
 mod formatters;
 mod render;
 
+#[cfg(test)]
+mod snapshot_tests;
+
 use std::collections::{BTreeMap, HashMap};
 
 use crate::lang;

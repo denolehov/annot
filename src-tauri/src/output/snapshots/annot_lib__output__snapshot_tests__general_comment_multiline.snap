@@ -1,0 +1,10 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+GENERAL:
+  First paragraph of feedback.
+  
+  Second paragraph with more details.
+  
+  Conclusion.

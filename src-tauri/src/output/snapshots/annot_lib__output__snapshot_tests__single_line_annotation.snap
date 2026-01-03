@@ -1,0 +1,8 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+src/lib.rs:5
+   4 |     line 4 content
+>  5 |     line 5 content
+     └──> Fix this bug

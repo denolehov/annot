@@ -1,0 +1,8 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+file.rs (old:3 new:4):
+   :3 | +    more_code();
+> 3:4 |  }
+      └──> Review this new addition

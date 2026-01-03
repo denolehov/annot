@@ -1,0 +1,10 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+code.rs:5
+   4 |     line 4 content
+>  5 |     line 5 content
+     └──> Note here
+
+Saved to /home/user/reviews/code-review.md

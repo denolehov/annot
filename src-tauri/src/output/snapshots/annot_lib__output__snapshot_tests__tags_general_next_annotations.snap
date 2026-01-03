@@ -1,0 +1,28 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+TAGS:
+  [# PERF] Performance optimization
+  [# SECURITY] Security review needed
+
+GENERAL:
+  Good progress, but security and performance need attention
+
+NEXT: Revise — Address the feedback and resubmit
+
+---
+
+handler.rs:5
+    4 |     line 4 content
+>   5 |     line 5 content
+      └──> [# SECURITY] Sanitize this input
+
+---
+
+handler.rs:12-14
+   11 |     line 11 content
+>  12 |     line 12 content
+>  13 |     line 13 content
+>  14 |     line 14 content
+      └──> [# PERF] Consider caching this

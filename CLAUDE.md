@@ -89,22 +89,36 @@ Tag
 Structured text for LLM consumption:
 
 ```
-LEGEND:
-  [# TAG_NAME] Tag instruction text
+TAGS:
+  [# SECURITY] Review for vulnerabilities
+  [# TODO] Items needing follow-up
 
-SESSION:
-  Context: [user's high-level comment]
-  Exit: Apply
-    Apply instruction text
+BOOKMARKS:
+  [BOOKMARK abc] auth-flow (this session)
+
+CONTEXT: plan.md [embeds: src/lib.rs, src/main.rs]
+
+GENERAL:
+  Please focus on error handling
+
+NEXT: Apply — Proceed with this plan
 
 ---
 
 file.rs:45-52:
-    45 | fn example() {
-    46 |     // code
-    > [# SECURITY] Review this for injection vulnerabilities
-    > Additional comment text
+   44 | fn previous() {   // context line
+>  45 | fn example() {
+>  46 |     // code
+      └──> [# SECURITY] Review this for injection vulnerabilities
+           Additional comment text
 ```
+
+Section meanings:
+- **TAGS**: Tag definitions used in annotations
+- **BOOKMARKS**: Referenced bookmarks with snapshots
+- **CONTEXT**: What's being reviewed (with embedded portal files)
+- **GENERAL**: High-level comment about the entire review
+- **NEXT**: What action the human wants (exit mode + instruction)
 
 ### Persistence
 
@@ -183,6 +197,29 @@ pnpm tauri dev -- -- --diff fixtures/diffs/mixed-changes.diff  # Diff mode
 ## Testing Patterns
 - **Rust**: Behavior-focused tests on public API (ContentResponse format)
 - **Frontend**: Mock IPC with `vi.mock("@tauri-apps/api/core")`, test rendered output
+
+### Snapshot Testing with insta
+
+Output format tests use [insta](https://insta.rs/) for snapshot testing:
+
+```bash
+# Run tests (creates .snap.new for new/changed snapshots)
+cargo test
+
+# Interactively review pending snapshots
+cargo insta review
+
+# Accept all pending snapshots
+cargo insta accept
+
+# Reject all pending snapshots
+cargo insta reject
+```
+
+Snapshot files live in `src/{module}/snapshots/`. When output format changes:
+1. Run tests — they'll fail with diffs shown
+2. Review changes with `cargo insta review`
+3. Accept if intentional, reject if bug
 
 ## Code Style Preferences
 

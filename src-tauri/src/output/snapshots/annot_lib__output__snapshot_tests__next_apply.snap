@@ -1,0 +1,5 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+NEXT: Apply — Proceed with implementation as planned

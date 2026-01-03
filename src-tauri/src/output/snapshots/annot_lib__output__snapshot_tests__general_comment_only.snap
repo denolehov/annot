@@ -1,0 +1,6 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+GENERAL:
+  Overall the code looks good, just a few minor issues
