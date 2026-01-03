@@ -54,6 +54,10 @@ enum BookmarksCommand {
         /// Output as JSON
         #[arg(long)]
         json: bool,
+
+        /// Sort order by creation date: "asc" (oldest first) or "desc" (newest first, default)
+        #[arg(long, default_value = "desc")]
+        sort: String,
     },
     /// Show a bookmark's full snapshot
     Show {
@@ -168,7 +172,7 @@ fn handle_bookmarks_command(cmd: &BookmarksCommand) {
     let mut config = UserConfig::load();
 
     match cmd {
-        BookmarksCommand::List { json } => {
+        BookmarksCommand::List { json, sort } => {
             let bookmarks = config.bookmarks();
 
             if bookmarks.is_empty() {
@@ -180,14 +184,27 @@ fn handle_bookmarks_command(cmd: &BookmarksCommand) {
                 return;
             }
 
+            // Sort bookmarks by creation date
+            let mut sorted: Vec<_> = bookmarks.iter().collect();
+            let descending = sort == "desc";
+            sorted.sort_by(|a, b| {
+                if descending {
+                    b.created_at.cmp(&a.created_at)
+                } else {
+                    a.created_at.cmp(&b.created_at)
+                }
+            });
+
             if *json {
-                println!("{}", serde_json::to_string_pretty(bookmarks).unwrap());
+                // Collect sorted refs into owned values for JSON serialization
+                let sorted_owned: Vec<_> = sorted.into_iter().cloned().collect();
+                println!("{}", serde_json::to_string_pretty(&sorted_owned).unwrap());
             } else {
                 // Markdown table
                 println!("| ID | Label | Source | Project |");
                 println!("|-----|-------|--------|---------|");
 
-                for bookmark in bookmarks {
+                for bookmark in sorted {
                     let label = bookmark.display_label().replace('|', "\\|");
                     let label_display = if label.len() > 38 {
                         format!("{}…", &label[..37])
