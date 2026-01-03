@@ -49,6 +49,7 @@
 	}
 
 	.file-name {
+		font-size: 12px;
 		font-weight: 500;
 	}
 
