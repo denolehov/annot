@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/denolehov/annot/compare/v0.2.0...v0.2.1) (2026-01-03)
+
+
+### Bug Fixes
+
+* trigger build workflow on release publish event ([db6e54a](https://github.com/denolehov/annot/commit/db6e54a81ee89c5d3012df7735f2e419f0f638f9))
+
 ## [0.2.0](https://github.com/denolehov/annot/compare/v0.1.0...v0.2.0) (2026-01-03)
 
 
