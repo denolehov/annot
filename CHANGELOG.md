@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.3](https://github.com/denolehov/annot/compare/v0.2.2...v0.2.3) (2026-01-03)
+
+
+### Bug Fixes
+
+* sealed annotation editors no longer disappear when selecting new ([d8b0c37](https://github.com/denolehov/annot/commit/d8b0c37e1aa23c192af43c6009161ab4e3828c69))
+* use rangeKey instead of interaction.range in updateAnnotation ([efbf573](https://github.com/denolehov/annot/commit/efbf573778264e69ce250c76019da2709ce1634a))
+
 ## [0.2.2](https://github.com/denolehov/annot/compare/v0.2.1...v0.2.2) (2026-01-03)
 
 
