@@ -35,13 +35,19 @@ path = "src/bin/launcher.rs"
 
 ### 2. The Launcher
 
+Use `exec()` instead of `spawn()` — replaces the launcher process with the worker, keeping the same PID. This is the proper macOS pattern: Launch Services "owns" the process running `CFBundleExecutable`, so replacing it in-place keeps Dock/Spotlight/activation working correctly.
+
 ```rust
 // src-tauri/src/bin/launcher.rs
 use std::{env, process::Command};
 
+#[cfg(target_os = "macos")]
+use std::os::unix::process::CommandExt;
+
 fn main() {
     if let Err(e) = run() {
         eprintln!("annot launcher error: {e}");
+        std::process::exit(1);
     }
 }
 
@@ -50,11 +56,81 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let macos_dir = exe.parent().ok_or("no parent")?;
     let worker = macos_dir.join("annot");
 
-    Command::new(&worker)
-        .arg("--clipboard")
-        .spawn()?;
+    // Filter out -psn_* args that Finder/Spotlight add (breaks clap)
+    let mut forwarded: Vec<String> = env::args()
+        .skip(1)
+        .filter(|a| !a.starts_with("-psn_"))
+        .collect();
 
+    // Force clipboard mode unless already specified
+    if !forwarded.iter().any(|a| a == "--clipboard") {
+        forwarded.push("--clipboard".to_string());
+    }
+
+    let mut cmd = Command::new(&worker);
+    cmd.args(&forwarded)
+        .env("ANNOT_LAUNCHED_BY_LAUNCHER", "1");
+
+    // Replace this process with the worker (same PID, Launch Services stays happy)
+    #[cfg(target_os = "macos")]
+    {
+        let err = cmd.exec(); // only returns on failure
+
+        // Show native alert since eprintln goes nowhere in GUI launch
+        // Requires: msgbox = "0.7" in Cargo.toml
+        let _ = msgbox::create(
+            "annot Launcher Error",
+            &format!("Failed to launch annot: {}", err),
+            msgbox::IconType::Error,
+        );
+
+        return Err(Box::new(err));
+    }
+
+    #[allow(unreachable_code)]
     Ok(())
+}
+```
+
+**Why exec() matters:**
+- Same PID = Launch Services still sees "the app" as running
+- No orphan child process = no focus/Dock/activation weirdness
+- `activateIgnoringOtherApps` becomes unnecessary (may keep as belt-and-suspenders)
+
+### 2b. Single-Instance Protection
+
+Clipboard mode is prone to accidental double-launch (Spotlight + Enter spam). Use Tauri's single-instance plugin or a file lock:
+
+```rust
+// Option A: Tauri single-instance plugin (recommended)
+// In Cargo.toml: tauri-plugin-single-instance = "2"
+
+// In main.rs setup:
+.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    // Focus existing window instead of opening second instance
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_focus();
+    }
+}))
+```
+
+```rust
+// Option B: Manual flock (if not using Tauri plugin)
+use std::fs::File;
+use std::os::unix::io::AsRawFd;
+
+fn acquire_single_instance_lock() -> Option<File> {
+    let lock_path = dirs::cache_dir()?.join("annot").join("instance.lock");
+    std::fs::create_dir_all(lock_path.parent()?).ok()?;
+    let file = File::create(&lock_path).ok()?;
+
+    // Non-blocking exclusive lock
+    let fd = file.as_raw_fd();
+    if unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+        Some(file) // Hold until process exits
+    } else {
+        None // Another instance running
+    }
 }
 ```
 
@@ -172,10 +248,12 @@ if review.is_clipboard() {
 }
 ```
 
-### 8. Window Focus (macOS)
+### 8. Window Focus (macOS) — Optional
+
+With `exec()` handoff, window focus should work automatically (same PID as Launch Services expects). This code is optional belt-and-suspenders:
 
 ```rust
-// main.rs - call after window creation when in clipboard mode
+// main.rs - only if focus issues persist
 #[cfg(target_os = "macos")]
 fn activate_app() {
     use cocoa::appkit::NSApp;
@@ -276,17 +354,17 @@ ln -sf "$APP_DIR/annot.app/Contents/MacOS/annot" "$BIN_DIR/annot"
 
 ## Implementation Checklist
 
-1. [ ] `src-tauri/Cargo.toml` — Add launcher binary target
-2. [ ] `src-tauri/src/bin/launcher.rs` — Implement launcher
-3. [ ] `src-tauri/src/main.rs` — Add `--clipboard` flag, add `activate_app()`
+1. [ ] `src-tauri/Cargo.toml` — Add launcher binary target + `tauri-plugin-single-instance`
+2. [ ] `src-tauri/src/bin/launcher.rs` — Implement launcher with `exec()` handoff
+3. [ ] `src-tauri/src/main.rs` — Add `--clipboard` flag, single-instance plugin
 4. [ ] `src-tauri/src/input.rs` — Add `InputMode::Clipboard { label, content }`, `CliSource::Clipboard`
 5. [ ] `src-tauri/src/review.rs` — Add `ClipboardState` for original clipboard preservation
 6. [ ] `src-tauri/src/commands.rs` — Route output to clipboard, restore on cancel
 7. [ ] Frontend — "Copied to clipboard" toast on successful finish
 8. [ ] `.github/workflows/release.yml` — Split build + assemble + re-sign + re-notarize
 9. [ ] `scripts/install.sh` — Change to ~/Applications, add mkdir -p
-10. [ ] **Test**: Window focus when spawned from dying launcher
-11. [ ] **Test**: Cancel preserves original clipboard
+10. [ ] **Test**: Cancel preserves original clipboard
+11. [ ] **Test**: Double-launch focuses existing window (single-instance)
 
 ## Scope
 
