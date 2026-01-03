@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/denolehov/annot/compare/v0.2.3...v0.3.0) (2026-01-03)
+
+
+### Features
+
+* add /remove command that is like /replace but with empty content ([414c8d9](https://github.com/denolehov/annot/commit/414c8d9c76285f459ca3c3b3851951346554a9d8))
+
+
+### Bug Fixes
+
+* chip font size is now consistent with the annotation editor size ([44e314b](https://github.com/denolehov/annot/commit/44e314b77840bc96b2ebfb82fa9e127f824f96bc))
+
 ## [0.2.3](https://github.com/denolehov/annot/compare/v0.2.2...v0.2.3) (2026-01-03)
 
 
