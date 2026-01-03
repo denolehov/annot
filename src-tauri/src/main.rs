@@ -20,6 +20,7 @@ Examples:
 
 #[derive(Parser)]
 #[command(name = "annot")]
+#[command(version)]
 #[command(about = "Ephemeral annotation tool for AI workflows")]
 #[command(long_about = EXAMPLES)]
 struct Cli {
@@ -42,6 +43,8 @@ enum Command {
     /// Manage bookmarks
     #[command(subcommand)]
     Bookmarks(BookmarksCommand),
+    /// Print version information
+    Version,
 }
 
 #[derive(clap::Subcommand)]
@@ -82,6 +85,12 @@ fn main() {
             handle_bookmarks_command(cmd);
             return;
         }
+    }
+
+    // Handle version subcommand (doesn't need Tauri)
+    if let Some(Command::Version) = cli.command {
+        println!("annot {}", env!("CARGO_PKG_VERSION"));
+        return;
     }
 
     // Generate context once (avoids duplicate symbol errors)
