@@ -42,6 +42,16 @@ cargo test        # Rust tests (from src-tauri/)
 pnpm check        # TypeScript + Svelte
 ```
 
+### Installing from GitHub Releases
+
+For users with repo access:
+
+```bash
+gh release download --repo denolehov/annot --pattern "*.tar.gz"
+tar -xzf annot-darwin-arm64.tar.gz
+mv annot.app /Applications/  # Or: mv annot.app/Contents/MacOS/annot ~/.local/bin/
+```
+
 ### Important: Dev vs Build modes
 
 - `pnpm tauri dev` / `cargo build` → Uses Vite dev server at localhost:1420

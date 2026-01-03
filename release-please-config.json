@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "extra-files": [
+        "package.json",
+        "src-tauri/Cargo.toml",
+        "src-tauri/tauri.conf.json"
+      ]
+    }
+  }
+}
