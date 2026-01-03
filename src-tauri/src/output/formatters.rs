@@ -9,6 +9,7 @@ use crate::mcp::tools::SessionImage;
 use crate::state::{
     Annotation, Bookmark, ContentMetadata, ContentModel, LineOrigin,
 };
+use crate::terraform::TerraformRegion;
 
 use super::builder::{BuilderMode, OutputBuilder};
 use super::render::render_content;
@@ -221,4 +222,100 @@ pub fn calculate_builder_mode(
     } else {
         BuilderMode::File { line_num_width }
     }
+}
+
+/// Format a single terraform region block with context lines and prose.
+pub fn format_terraform_region(
+    out: &mut OutputBuilder,
+    content_model: &ContentModel,
+    region: &TerraformRegion,
+    file_path: &str,
+) {
+    let is_diff = matches!(content_model.metadata, ContentMetadata::Diff(_));
+
+    // File header
+    if is_diff {
+        format_diff_header_for_terraform(out, content_model, region, file_path);
+    } else if region.start_line == region.end_line {
+        out.raw_line(&format!("{}:{}", file_path, region.start_line));
+    } else {
+        out.raw_line(&format!(
+            "{}:{}-{}",
+            file_path, region.start_line, region.end_line
+        ));
+    }
+
+    // Context line (1 line before, if exists and non-empty)
+    if region.start_line > 1 {
+        let context_line_num = region.start_line - 1;
+        if let Some(line) = content_model.find_line(file_path, context_line_num) {
+            if !line.content.trim().is_empty() {
+                if is_diff {
+                    format_diff_context_line(out, content_model, file_path, context_line_num, &line.content);
+                } else {
+                    out.code_line(context_line_num, &line.content);
+                }
+            }
+        }
+    }
+
+    // Selected lines
+    for line_num in region.start_line..=region.end_line {
+        if let Some(line) = content_model.find_line(file_path, line_num) {
+            if is_diff {
+                format_diff_selected_line(out, content_model, file_path, line_num, &line.content);
+            } else {
+                out.selected_code_line(line_num, &line.content);
+            }
+        }
+    }
+
+    // Terraform prose with arrow
+    let prose = region.to_prose();
+    if !prose.is_empty() {
+        let mut lines = prose.lines();
+        if let Some(first) = lines.next() {
+            out.arrow(first);
+            for continuation in lines {
+                out.arrow_continuation(continuation);
+            }
+        }
+    }
+}
+
+/// Format diff header for terraform region (mirrors annotation format).
+fn format_diff_header_for_terraform(
+    out: &mut OutputBuilder,
+    content: &ContentModel,
+    region: &TerraformRegion,
+    file_path: &str,
+) {
+    // Collect old/new line ranges from the terraform lines
+    let mut old_lines: Vec<u32> = Vec::new();
+    let mut new_lines: Vec<u32> = Vec::new();
+
+    for line_num in region.start_line..=region.end_line {
+        if let Some(line) = content.find_line(file_path, line_num) {
+            if let LineOrigin::Diff { old_line, new_line, .. } = &line.origin {
+                if let Some(old) = old_line {
+                    old_lines.push(*old);
+                }
+                if let Some(new) = new_line {
+                    new_lines.push(*new);
+                }
+            }
+        }
+    }
+
+    // Format header with available line info
+    let old_range = format_line_range(&old_lines);
+    let new_range = format_line_range(&new_lines);
+
+    let header = match (old_range.as_str(), new_range.as_str()) {
+        ("", "") => format!("{}:", file_path),
+        (old, "") => format!("{} (old:{}):", file_path, old),
+        ("", new) => format!("{} (new:{}):", file_path, new),
+        (old, new) => format!("{} (old:{} new:{}):", file_path, old, new),
+    };
+    out.raw_line(&header);
 }

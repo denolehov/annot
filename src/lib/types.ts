@@ -293,3 +293,52 @@ export interface Bookmark {
   /** The captured content snapshot. */
   snapshot: BookmarkSnapshot;
 }
+
+// =============================================================================
+// Terraform — structured controls for guiding AI content transformation
+// =============================================================================
+
+/** Target format for restructuring. */
+export type FormType = 'table' | 'list' | 'prose' | 'diagram' | 'code';
+
+/** Intensity level for graduated controls. */
+export type Intensity = 'slightly' | 'moderately' | 'significantly';
+
+/** All intensity levels in order (for slider). */
+export const INTENSITY_LEVELS: Intensity[] = ['slightly', 'moderately', 'significantly'];
+
+/** All form types in order (for buttons). */
+export const FORM_TYPES: FormType[] = ['table', 'list', 'prose', 'diagram', 'code'];
+
+/** Quantity directive: expand, condense, or remove. */
+export type MassDirective =
+  | { type: 'expand'; intensity: Intensity }
+  | { type: 'condense'; intensity: Intensity }
+  | { type: 'remove' };
+
+/** Importance directive: pin, focus, blur, or dissolve. */
+export type GravityDirective =
+  | { type: 'pin' }
+  | { type: 'focus'; intensity: Intensity }
+  | { type: 'blur'; intensity: Intensity }
+  | { type: 'dissolve' };
+
+/** Correctness signal: lean-in, move-away, or reframe. */
+export type DirectionDirective =
+  | { type: 'leanin'; intensity: Intensity }
+  | { type: 'moveaway'; intensity: Intensity }
+  | { type: 'reframe' };
+
+/** A terraform region attached to a line range. */
+export interface TerraformRegion {
+  start_line: number;
+  end_line: number;
+  /** Target formats (multi-select). */
+  form: FormType[];
+  /** Quantity control. */
+  mass: MassDirective | null;
+  /** Importance control. */
+  gravity: GravityDirective | null;
+  /** Correctness signal. */
+  direction: DirectionDirective | null;
+}

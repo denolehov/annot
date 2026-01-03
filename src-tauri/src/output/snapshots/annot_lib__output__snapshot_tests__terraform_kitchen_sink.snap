@@ -1,0 +1,101 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+TAGS:
+  [# CLARITY] Needs clearer explanation
+
+GENERAL:
+  Overall feedback on the design document.
+  
+  The structure needs work - use terraform directives to reshape.
+
+NEXT: Iterate — Apply terraform directives and regenerate content
+
+---
+
+TERRAFORM:
+
+design-doc.md:5-8
+    4 |     line 4 content
+>   5 |     line 5 content
+>   6 |     line 6 content
+>   7 |     line 7 content
+>   8 |     line 8 content
+      └──> Restructure this into a table. Expand slightly with more depth and examples. Make this moderately more central/prominent. You're significantly on the right track. Amplify this thinking.
+
+---
+
+design-doc.md:15-18
+   14 |     line 14 content
+>  15 |     line 15 content
+>  16 |     line 16 content
+>  17 |     line 17 content
+>  18 |     line 18 content
+      └──> Restructure this into a list. Also provide a diagram version. Condense significantly to essentials.
+
+---
+
+design-doc.md:25-28
+   24 |     line 24 content
+>  25 |     line 25 content
+>  26 |     line 26 content
+>  27 |     line 27 content
+>  28 |     line 28 content
+      └──> Restructure this into multiple formats: prose, code, table. Reduce prominence moderately; treat as supporting context. This is moderately off-target. Pivot the perspective.
+
+---
+
+design-doc.md:35-36
+   34 |     line 34 content
+>  35 |     line 35 content
+>  36 |     line 36 content
+      └──> Preserve this exactly as written.
+
+---
+
+design-doc.md:42-45
+   41 |     line 41 content
+>  42 |     line 42 content
+>  43 |     line 43 content
+>  44 |     line 44 content
+>  45 |     line 45 content
+      └──> Remove as a unit; integrate essence into surroundings.
+
+---
+
+design-doc.md:52-55
+   51 |     line 51 content
+>  52 |     line 52 content
+>  53 |     line 53 content
+>  54 |     line 54 content
+>  55 |     line 55 content
+      └──> Remove this entirely.
+
+---
+
+design-doc.md:62-65
+   61 |     line 61 content
+>  62 |     line 62 content
+>  63 |     line 63 content
+>  64 |     line 64 content
+>  65 |     line 65 content
+      └──> Restructure this into a prose. Same content, different framing/angle.
+
+---
+
+design-doc.md:10-12
+    9 |     line 9 content
+>  10 |     line 10 content
+>  11 |     line 11 content
+>  12 |     line 12 content
+      └──> [# CLARITY] This section is confusing
+
+---
+
+design-doc.md:70-72
+   69 |     line 69 content
+>  70 |     line 70 content
+>  71 |     line 71 content
+>  72 |     line 72 content
+      └──> Good example, keep this

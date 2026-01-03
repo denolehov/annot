@@ -7,6 +7,7 @@ import type { useExitModes } from '$lib/composables/useExitModes.svelte';
 import type { useSearch } from '$lib/composables/useSearch.svelte';
 import type { useMermaid } from '$lib/composables/useMermaid.svelte';
 import type { useBookmarks } from '$lib/composables/useBookmarks.svelte';
+import type { useTerraformRegions } from '$lib/composables/useTerraformRegions.svelte';
 
 /**
  * AnnotContext - Shared state and utilities for annot components.
@@ -22,6 +23,7 @@ export interface AnnotContext {
   search: ReturnType<typeof useSearch>;
   mermaid: ReturnType<typeof useMermaid>;
   bookmarks: ReturnType<typeof useBookmarks>;
+  terraform: ReturnType<typeof useTerraformRegions>;
 
   // Derived values (computed once in provider)
   readonly selection: Range | null;

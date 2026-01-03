@@ -18,11 +18,12 @@ export interface KeyboardHandlers {
   onZoomOut?: () => void;
   onZoomReset?: () => void;
   onCommentHoveredLine?: () => void;
+  onTerraformHoveredLine?: () => void;
   onSelectAllContent?: () => void;
   /** Called when 'c' or 'b' is pressed during 'selecting' phase (drag in progress) */
   onDragModifierPress?: (key: 'c' | 'b') => void;
-  /** Called when 'c' or 'b' is pressed to confirm pending choice (after shift-drag-release) */
-  onConfirmChoice?: (action: 'annotate' | 'bookmark') => void;
+  /** Called when 'c', 'b', or 't' is pressed to confirm pending choice (after shift-drag-release) */
+  onConfirmChoice?: (action: 'annotate' | 'bookmark' | 'terraform') => void;
   /** Called when Escape is pressed to cancel pending choice */
   onCancelChoice?: () => void;
 }
@@ -199,6 +200,29 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
       e.preventDefault();
       handlers.onCreateSelectionBookmark?.(context);
       return;
+    }
+
+    // 't' for terraform
+    if (e.key === 't' && !e.metaKey && !e.ctrlKey) {
+      if (isInEditorOrInput()) return;
+
+      // Pending choice: confirm terraform
+      if (state.isPendingChoice()) {
+        e.preventDefault();
+        handlers.onConfirmChoice?.('terraform');
+        return;
+      }
+
+      // Block if editor is active
+      if (state.isEditorActive()) return;
+
+      // Default: terraform hovered line
+      if (state.hasHoveredLine() && state.isHoveredLineSelectable()) {
+        e.preventDefault();
+        window.getSelection()?.removeAllRanges();
+        handlers.onTerraformHoveredLine?.();
+        return;
+      }
     }
 
     // 'e' to edit last created bookmark

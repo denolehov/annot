@@ -82,6 +82,55 @@ pub fn delete_annotation(
     })
 }
 
+// ========== Terraform Commands ==========
+
+use crate::terraform::TerraformRegion;
+
+#[tauri::command]
+pub fn upsert_terraform(
+    review_state: State<ActiveReview>,
+    path: String,
+    region: TerraformRegion,
+) -> Result<(), String> {
+    with_review!(review_state, |review| {
+        let target = review.resolve_target_mut(&path)?;
+        target.upsert_terraform(region);
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn delete_terraform(
+    review_state: State<ActiveReview>,
+    path: String,
+    start_line: u32,
+    end_line: u32,
+) -> Result<(), String> {
+    with_review!(review_state, |review| {
+        let target = review.resolve_target_mut(&path)?;
+        target.delete_terraform(start_line, end_line);
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn get_terraform_regions(
+    review_state: State<ActiveReview>,
+    path: String,
+) -> Result<Vec<TerraformRegion>, String> {
+    with_review!(review_state, |review| {
+        let target = review.resolve_target_mut(&path)?;
+        Ok(target.terraform_regions().to_vec())
+    })
+}
+
+/// Get the natural language phrase for a terraform region.
+/// Used for live preview in the terraform palette.
+#[tauri::command]
+pub fn get_terraform_phrase(region: TerraformRegion) -> String {
+    region.to_prose()
+}
+
 /// Unified finish command - handles both CLI and MCP modes.
 #[tauri::command]
 pub fn finish_review(

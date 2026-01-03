@@ -133,7 +133,7 @@
     {#snippet trailing()}
       {#if mermaidBlock}
         <button
-          class="mermaid-view-btn"
+          class="line-action mermaid-view-btn"
           onclick={() => ctx.mermaid.openMermaidWindow(mermaidBlock)}
           title="View diagram"
         >
@@ -147,7 +147,7 @@
           onCopy={() => copySection(sectionInfo)}
           title="Copy section"
           hoverOnly
-          class="copy-section-btn"
+          class="line-action copy-section-btn"
         />
       {/if}
     {/snippet}
@@ -157,18 +157,12 @@
 {/each}
 
 <style>
+  /* Mermaid button - extends .line-action */
   .mermaid-view-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin-left: 8px;
     padding: 2px 4px;
     background: var(--bg-window);
     border: 1px solid var(--border-subtle);
-    border-radius: 4px;
     color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.15s ease;
   }
 
   .mermaid-view-btn:hover {
@@ -184,10 +178,6 @@
 
   .mermaid-view-btn svg {
     display: block;
-  }
-
-  :global(.copy-section-btn) {
-    margin-left: 8px;
   }
 
   :global(.line:hover .copy-section-btn) {
