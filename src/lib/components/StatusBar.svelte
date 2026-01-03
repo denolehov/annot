@@ -30,6 +30,7 @@
     <span class="kbd-hint"><kbd>:</kbd> command palette</span>
     <span class="kbd-hint"><kbd>c</kbd> <kbd>⇧c</kbd> annotate</span>
     <span class="kbd-hint"><kbd>b</kbd> <kbd>⇧b</kbd> bookmark</span>
+    <span class="kbd-hint"><kbd>?</kbd> help</span>
     <span class="kbd-hint"><kbd>⌘w</kbd> save and close</span>
   </div>
 </footer>

@@ -11,6 +11,7 @@ describe('useKeyboard', () => {
     isEditorActive: () => false,
     isCommandPaletteOpen: () => false,
     isSaveModalOpen: () => false,
+    isHelpOverlayOpen: () => false,
     isSearchOpen: () => false,
     hasHoveredLine: () => false,
     hasExitModes: () => true,
