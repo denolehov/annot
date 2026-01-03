@@ -85,6 +85,7 @@ export function useInteraction(options: UseInteractionOptions) {
     if (!options.isLineSelectable(displayIdx)) return;
 
     e.preventDefault();
+    clearNativeSelection();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
     state = {
@@ -174,6 +175,7 @@ export function useInteraction(options: UseInteractionOptions) {
     if (!options.isLineSelectable(displayIdx)) return;
 
     e.preventDefault();
+    clearNativeSelection();
 
     state = {
       phase: 'selecting',
@@ -228,6 +230,8 @@ export function useInteraction(options: UseInteractionOptions) {
     if (state.phase === 'committed') return;
 
     if (!options.isLineSelectable(displayIdx)) return;
+
+    clearNativeSelection();
 
     // Toggle: if clicking same single-line selection, clear it
     if (state.range?.start === displayIdx && state.range?.end === displayIdx) {
@@ -386,7 +390,12 @@ export function useInteraction(options: UseInteractionOptions) {
   };
 }
 
-// --- Helper ---
+// --- Helpers ---
+
+/** Clear native browser text selection (e.g., from drag-to-copy) */
+function clearNativeSelection(): void {
+  window.getSelection()?.removeAllRanges();
+}
 
 function getDisplayIdxFromElement(el: Element | null): number | null {
   if (!el) return null;
