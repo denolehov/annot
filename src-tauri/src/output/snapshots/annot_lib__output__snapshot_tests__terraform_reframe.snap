@@ -1,0 +1,13 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+TERRAFORM:
+
+reframe.md:5-8
+   4 |     line 4 content
+>  5 |     line 5 content
+>  6 |     line 6 content
+>  7 |     line 7 content
+>  8 |     line 8 content
+     └──> Same content, different framing/angle.

@@ -109,12 +109,16 @@ pub struct Review {
     pub saved_to: Option<PathBuf>,
 }
 
+use crate::terraform::TerraformRegion;
+
 /// Annotation target — a file that can receive annotations.
 /// Contains annotations and file-specific metadata, but NOT content.
 /// Content lives in `View` (the root_view field on Review).
 pub struct AnnotationTarget {
     /// Annotations keyed by normalized line range.
     pub annotations: HashMap<LineRange, Annotation>,
+    /// Terraform regions for structured transformation directives.
+    pub terraform_regions: Vec<TerraformRegion>,
     /// File-specific metadata (language, etc.).
     pub metadata: FileMetadata,
 }
@@ -124,6 +128,7 @@ impl AnnotationTarget {
     pub fn new() -> Self {
         Self {
             annotations: HashMap::new(),
+            terraform_regions: Vec::new(),
             metadata: FileMetadata::default(),
         }
     }
@@ -508,6 +513,30 @@ impl AnnotationTarget {
     /// Delete an annotation by range.
     pub fn delete_annotation(&mut self, start_line: u32, end_line: u32) {
         self.annotations.remove(&LineRange::new(start_line, end_line));
+    }
+
+    /// Insert or update a terraform region.
+    /// Replaces any overlapping regions with the new one.
+    pub fn upsert_terraform(&mut self, region: TerraformRegion) {
+        // Remove any regions that overlap with the new one
+        self.terraform_regions.retain(|r| {
+            !(r.start_line <= region.end_line && r.end_line >= region.start_line)
+        });
+        // Add the new region
+        self.terraform_regions.push(region);
+        // Keep sorted by start_line
+        self.terraform_regions.sort_by_key(|r| r.start_line);
+    }
+
+    /// Delete a terraform region by exact range match.
+    pub fn delete_terraform(&mut self, start_line: u32, end_line: u32) {
+        self.terraform_regions
+            .retain(|r| r.start_line != start_line || r.end_line != end_line);
+    }
+
+    /// Get all terraform regions.
+    pub fn terraform_regions(&self) -> &[TerraformRegion] {
+        &self.terraform_regions
     }
 }
 

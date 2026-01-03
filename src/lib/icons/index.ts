@@ -20,3 +20,5 @@ export { default as ChevronDownIcon } from './ChevronDownIcon.svelte';
 export { default as XMarkIcon } from './XMarkIcon.svelte';
 export { default as ImageIcon } from './ImageIcon.svelte';
 export { default as ClipboardIcon } from './ClipboardIcon.svelte';
+export { default as GlobeIcon } from './GlobeIcon.svelte';
+export { default as TerraformIcon } from './TerraformIcon.svelte';

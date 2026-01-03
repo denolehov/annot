@@ -178,6 +178,12 @@ Tauri IPC commands replace the HTTP API from the Go version:
 
 **Original Go implementation** (for edge cases only): `/Users/denolehov/_p/golang/hl`
 
+### When Adding New Features
+
+Checklist to keep docs in sync:
+- [ ] Update `docs/features.md` with the new feature
+- [ ] Update `src/lib/HelpOverlay.svelte` if adding keyboard shortcuts
+
 **Tauri documentation**: `/Users/denolehov/_p/docs/tauri-docs`
 
 ## Tech Stack
@@ -245,3 +251,60 @@ Snapshot files live in `src/{module}/snapshots/`. When output format changes:
 ## Code Style Preferences
 
 - **Prefer declarative over imperative**: Use functional composition (`map`/`collect`/`join`), builder patterns with closures, and data-driven approaches over manual loops with mutable state
+
+## UI Patterns
+
+### Line Actions (right-side icons)
+
+When adding icons/buttons to the right side of lines (like copy, bookmark, terraform):
+
+1. Add your button inside the `{#if trailing || showBookmarkIcon || terraformRegionStart}` block in `LineRow.svelte`
+2. Use the `.line-action` class for base button styles
+3. The `.line-actions` container handles spacing via `gap: 2px` — no manual margins needed
+
+```svelte
+<button class="line-action my-new-action" onclick={handler}>
+  <MyIcon />
+</button>
+```
+
+CSS in `code-viewer.css`:
+```css
+.my-new-action {
+  color: var(--my-color);  /* Only add color/size overrides */
+}
+```
+
+### Left Border Indicators
+
+For line-range indicators (like bookmarks, terraform regions), use `::before` pseudo-elements:
+
+```css
+div.line.my-indicator::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--my-color);
+  z-index: 1;
+}
+```
+
+For overlapping indicators (e.g., bookmark + terraform), use `repeating-linear-gradient` with `background-attachment: fixed` for continuous diagonal stripes across lines.
+
+### Display Index vs Source Line Numbers
+
+- `displayIndex`: 1-indexed position in rendered lines array (used for selection, UI)
+- Source line numbers (`line.origin.line` for source, `line.origin.new_line`/`old_line` for diff): actual file line numbers
+
+These differ when portals/embeds are present. Use `getLineNumber(line)` and `getFilePath(line)` helpers from `line-utils.ts` to extract source coordinates.
+
+### Terraform Regions
+
+Terraform regions persist to backend with source line numbers. The `useTerraformRegions` composable provides:
+- `loadAll(path)` — load all regions on mount for visual indicators
+- `isRegionStart(lineNum)` — returns region if line starts one (for icon)
+- `isInRegion(lineNum)` — returns boolean (for border on all lines in range)
+- `getDisplayRange(region)` — converts source lines back to display indices (for re-selecting)

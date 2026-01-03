@@ -1,0 +1,250 @@
+/* =============================================================================
+   TERRAFORM PALETTE
+   Electric purple accent, keyboard-first controls
+   ============================================================================= */
+
+.terraform-palette {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 450px;
+  padding: 8px 12px;
+  margin-left: calc(var(--gutter-width) + 8px);
+  background: var(--bg-window);
+  border: 1px solid var(--terraform-border);
+  border-radius: var(--radius-md);
+  animation: terraform-fade-in 0.15s ease;
+  outline: none;
+}
+
+@keyframes terraform-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Header */
+.terraform-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--terraform-icon);
+}
+
+/* Inline row: label + controls */
+.terraform-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.terraform-row-label {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  width: 54px;
+  flex-shrink: 0;
+}
+
+/* Toggle button (compact) */
+.terraform-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  background: var(--bg-window);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.terraform-toggle:hover {
+  background: var(--bg-hover);
+  border-color: var(--terraform-border);
+}
+
+.terraform-toggle.active {
+  background: var(--terraform-bg);
+  border-color: var(--terraform-border);
+  color: var(--terraform-icon);
+}
+
+.terraform-toggle kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+.terraform-toggle.active kbd {
+  background: var(--terraform-bg);
+  border-color: var(--terraform-border);
+  color: var(--terraform-icon);
+}
+
+/* Phrase preview (only shows when content exists) */
+.terraform-phrase {
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* Keyboard hints */
+.terraform-hints {
+  display: flex;
+  gap: 8px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.terraform-hint kbd {
+  display: inline;
+  padding: 1px 3px;
+  margin-right: 2px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+/* Discrete slider */
+.terraform-slider {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.terraform-slider.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.terraform-slider-track {
+  display: flex;
+  gap: 2px;
+}
+
+.terraform-slider-step {
+  height: 6px;
+  background: var(--border-subtle);
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  padding: 0;
+  transition: background var(--transition-fast);
+}
+
+/* Varying widths: edge > middle > adjacent > center */
+.terraform-slider-step.size-edge {
+  width: 20px;
+}
+
+.terraform-slider-step.size-middle {
+  width: 16px;
+}
+
+.terraform-slider-step.size-adjacent {
+  width: 12px;
+}
+
+.terraform-slider-step.size-center {
+  width: 8px;
+}
+
+.terraform-slider-step:hover {
+  background: var(--border-hover);
+}
+
+.terraform-slider-step.active {
+  background: var(--terraform-border);
+}
+
+/* Neutral center uses desaturated purple */
+.terraform-slider-step.size-center.active {
+  background: color-mix(in srgb, var(--terraform-border) 50%, var(--border-subtle));
+}
+
+.terraform-slider-step.filled {
+  background: color-mix(in srgb, var(--terraform-border) 50%, var(--border-subtle));
+}
+
+/* Graduated glow based on intensity (distance from center) */
+.terraform-slider-step.glow-1 {
+  box-shadow: 0 0 3px var(--terraform-border);
+}
+
+.terraform-slider-step.glow-2 {
+  box-shadow: 0 0 6px var(--terraform-border);
+}
+
+.terraform-slider-step.glow-3 {
+  box-shadow: 0 0 10px var(--terraform-border);
+}
+
+.terraform-slider-label {
+  font-family: var(--font-ui);
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+/* Clickable kbd buttons in slider labels */
+.terraform-slider-label .kbd-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.terraform-slider-label .kbd-btn kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-muted);
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.terraform-slider-label .kbd-btn:hover kbd {
+  border-color: var(--terraform-border);
+  color: var(--terraform-icon);
+}

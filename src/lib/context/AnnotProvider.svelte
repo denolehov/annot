@@ -19,6 +19,7 @@
   import type { useSearch } from '$lib/composables/useSearch.svelte';
   import type { useMermaid } from '$lib/composables/useMermaid.svelte';
   import type { useBookmarks } from '$lib/composables/useBookmarks.svelte';
+  import type { useTerraformRegions } from '$lib/composables/useTerraformRegions.svelte';
 
   interface Props {
     // Reactive data
@@ -35,6 +36,7 @@
     search: ReturnType<typeof useSearch>;
     mermaid: ReturnType<typeof useMermaid>;
     bookmarks: ReturnType<typeof useBookmarks>;
+    terraform: ReturnType<typeof useTerraformRegions>;
 
     // Utilities
     showToast: (message: string, duration?: number) => void;
@@ -56,6 +58,7 @@
     search,
     mermaid,
     bookmarks,
+    terraform,
     showToast,
     isLineSelectable,
     getOriginalLinesForRange,
@@ -105,6 +108,11 @@
       return null;
     }
 
+    // Don't show new editor during terraforming (terraform palette is open)
+    if (interaction.phase === 'terraforming') {
+      return null;
+    }
+
     const isLast = displayIndex === lastSelectedLine && selection && !isDragging;
     if (isLast && selection) {
       return rangeToKey(selection);
@@ -121,6 +129,7 @@
     get search() { return search; },
     get mermaid() { return mermaid; },
     get bookmarks() { return bookmarks; },
+    get terraform() { return terraform; },
 
     get selection() { return selection; },
     get isDragging() { return isDragging; },

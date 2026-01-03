@@ -28,6 +28,7 @@
   import { useLineSegments } from "$lib/composables/useLineSegments.svelte";
   import { useSearch } from "$lib/composables/useSearch.svelte";
   import { useBookmarks } from "$lib/composables/useBookmarks.svelte";
+  import { useTerraformRegions } from "$lib/composables/useTerraformRegions.svelte";
   import SearchBar from "$lib/components/SearchBar.svelte";
   import { AnnotProvider } from "$lib/context";
   import type { SaveContentResponse } from "$lib/types";
@@ -188,6 +189,11 @@
     getLines: () => lines,
     getLabel: () => label,
     getMarkdownMetadata: () => markdownMetadata,
+  });
+
+  // Terraform regions (composable)
+  const terraform = useTerraformRegions({
+    getLines: () => lines,
   });
 
   // Line segmentation (composable)
@@ -628,6 +634,12 @@
           interaction.selectLine(interaction.hoverLine);
         }
       },
+      onTerraformHoveredLine: () => {
+        if (interaction.hoverLine !== null) {
+          interaction.selectLine(interaction.hoverLine);
+          interaction.openTerraform();
+        }
+      },
       onDragModifierPress: (key) => interaction.setDragModifier(key),
       onConfirmChoice: (action) => interaction.confirmChoice(action),
       onCancelChoice: () => interaction.cancelChoice(),
@@ -676,6 +688,13 @@
       // Hydrate session comment from backend
       if (res.session_comment) {
         sessionComment = contentNodesToTipTap(res.session_comment);
+      }
+
+      // Load terraform regions for visual indicators
+      const firstSourceLine = lines.find(l => l.origin.type === 'source' || l.origin.type === 'diff');
+      const firstPath = firstSourceLine ? getFilePath(firstSourceLine) : null;
+      if (firstPath) {
+        terraform.loadAll(firstPath);
       }
 
       // Listen for window close - this triggers output and exit
@@ -769,6 +788,7 @@
     {search}
     {mermaid}
     bookmarks={bookmarkState}
+    {terraform}
     {showToast}
     {isLineSelectable}
     {getOriginalLinesForRange}

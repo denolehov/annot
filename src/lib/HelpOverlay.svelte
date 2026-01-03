@@ -36,6 +36,25 @@
       ]
     },
     {
+      category: 'Terraform',
+      items: [
+        { keys: ['t'], description: 'Terraform hovered line or selection' },
+        { keys: ['1-5'], description: 'Toggle form (table/list/prose/diagram/code)' },
+        { keys: ['+'], description: 'Expand (mass)' },
+        { keys: ['-'], description: 'Condense (mass)' },
+        { keys: ['x'], description: 'Toggle remove (mass)' },
+        { keys: ['f'], description: 'Focus (gravity)' },
+        { keys: ['b'], description: 'Blur (gravity)' },
+        { keys: ['p'], description: 'Pin (gravity)' },
+        { keys: ['d'], description: 'Dissolve (gravity)' },
+        { keys: ['<'], description: 'Lean in (direction)' },
+        { keys: ['>'], description: 'Move away (direction)' },
+        { keys: ['r'], description: 'Toggle reframe (direction)' },
+        { keys: ['⌘', '↵'], description: 'Save terraform' },
+        { keys: ['⌘', 'D'], description: 'Delete terraform' },
+      ]
+    },
+    {
       category: 'Navigation',
       items: [
         { keys: ['⌘', 'F'], description: 'Search content' },
@@ -167,6 +186,7 @@
     column-gap: 24px;
     overflow-y: auto;
     flex: 1;
+    padding-right: 8px;
   }
 
   .shortcut-section {

@@ -199,30 +199,74 @@ div.line.bookmarked::before {
 	z-index: 1;
 }
 
-/* Bookmark indicator - inline, always rightmost */
-.bookmark-indicator {
+/* Terraform region indicator - purple left border on first line */
+div.line.has-terraform::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 3px;
+	background: var(--terraform-border);
+	z-index: 1;
+}
+
+/* Both bookmark and terraform - diagonal stripes (continuous across lines) */
+div.line.bookmarked.has-terraform::before {
+	background: repeating-linear-gradient(
+		-45deg,
+		var(--bookmark-color, #ef4444),
+		var(--bookmark-color, #ef4444) 3px,
+		var(--terraform-border) 3px,
+		var(--terraform-border) 6px
+	);
+	background-attachment: fixed;
+}
+
+/* Line actions container - holds trailing icons with consistent spacing */
+.line-actions {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	margin-left: 8px;
+}
+
+/* Shared base styles for all line action buttons */
+.line-action {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	margin-left: 2px;
-	margin-right: 4px;
 	padding: 2px;
 	background: transparent;
 	border: none;
 	border-radius: 4px;
-	color: var(--bookmark-color, #ef4444);
 	cursor: pointer;
-	font-size: 16px;
 	transition: color 0.15s ease, background 0.15s ease;
 }
 
-.bookmark-indicator:hover {
+.line-action:hover {
 	background: var(--bg-hover);
 }
 
-.bookmark-indicator:focus-visible {
+.line-action:focus-visible {
 	outline: 1px solid var(--focus-ring);
 	outline-offset: 2px;
+}
+
+/* Bookmark indicator */
+.bookmark-indicator {
+	color: var(--bookmark-color, #ef4444);
+	font-size: 16px;
+}
+
+/* Terraform indicator */
+.terraform-indicator {
+	color: var(--terraform-icon);
+}
+
+.terraform-indicator svg {
+	width: 14px;
+	height: 14px;
 }
 
 /* Shift+drag cursor */
@@ -724,6 +768,16 @@ div.line.separator-line:hover {
 
 .choice-button:focus {
 	outline: none;
+}
+
+.choice-button.terraform:hover,
+.choice-button.terraform:focus {
+	border-color: var(--terraform-border);
+}
+
+.choice-button.bookmark:hover,
+.choice-button.bookmark:focus {
+	border-color: var(--danger);
 }
 
 @keyframes choice-fade-in {

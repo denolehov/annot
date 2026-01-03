@@ -1,0 +1,23 @@
+---
+source: src/output/snapshot_tests.rs
+expression: output
+---
+TERRAFORM:
+
+content.md:5-8
+    4 |     line 4 content
+>   5 |     line 5 content
+>   6 |     line 6 content
+>   7 |     line 7 content
+>   8 |     line 8 content
+      └──> Restructure this into a table. Also provide a prose version. Expand moderately with more depth and examples. Make this slightly more central/prominent.
+
+---
+
+content.md:15-18
+   14 |     line 14 content
+>  15 |     line 15 content
+>  16 |     line 16 content
+>  17 |     line 17 content
+>  18 |     line 18 content
+      └──> Condense significantly to essentials. This is moderately off-target. Pivot the perspective.

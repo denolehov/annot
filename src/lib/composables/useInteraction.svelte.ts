@@ -8,8 +8,9 @@ import { isLineInRange } from '$lib/range';
  * - selecting: Drag in progress
  * - committed: Selection made, waiting for action
  * - editing: Annotation editor is open
+ * - terraforming: Terraform palette is open
  */
-export type Phase = 'idle' | 'hovering' | 'selecting' | 'committed' | 'editing';
+export type Phase = 'idle' | 'hovering' | 'selecting' | 'committed' | 'editing' | 'terraforming';
 
 export interface UseInteractionOptions {
   /** Check if a line can be selected (e.g., skip header lines in diff mode) */
@@ -57,7 +58,7 @@ export function useInteraction(options: UseInteractionOptions) {
     if (state.phase === 'hovering' && state.hoverLine === displayIdx) {
       return true;
     }
-    if (state.range && (state.phase === 'selecting' || state.phase === 'committed' || state.phase === 'editing')) {
+    if (state.range && (state.phase === 'selecting' || state.phase === 'committed' || state.phase === 'editing' || state.phase === 'terraforming')) {
       return isLineInRange(displayIdx, state.range);
     }
     return false;
@@ -300,16 +301,33 @@ export function useInteraction(options: UseInteractionOptions) {
   }
 
   /** Confirm the pending choice (called from choice buttons or keyboard) */
-  function confirmChoice(action: 'annotate' | 'bookmark') {
+  function confirmChoice(action: 'annotate' | 'bookmark' | 'terraform') {
     if (!state.pendingChoice || !state.range) return;
 
     if (action === 'bookmark') {
       const context = { start: state.range.start, end: state.range.end };
       options.onImmediateBookmark?.(context);
       state = { phase: 'idle', hoverLine: null, anchor: null, range: null, dragModifier: null, pendingChoice: false };
+    } else if (action === 'terraform') {
+      // terraform: transition to terraforming phase
+      state = { ...state, phase: 'terraforming', pendingChoice: false };
     } else {
       // annotate: clear pendingChoice, stay committed so editor opens
       state = { ...state, pendingChoice: false };
+    }
+  }
+
+  /** Open terraform palette for current selection */
+  function openTerraform() {
+    if (state.phase === 'committed' && state.range) {
+      state = { ...state, phase: 'terraforming', pendingChoice: false };
+    }
+  }
+
+  /** Close terraform palette */
+  function closeTerraform() {
+    if (state.phase === 'terraforming') {
+      state = { phase: 'idle', hoverLine: null, anchor: null, range: null, dragModifier: null, pendingChoice: false };
     }
   }
 
@@ -387,6 +405,10 @@ export function useInteraction(options: UseInteractionOptions) {
     setDragModifier,
     confirmChoice,
     cancelChoice,
+
+    // Terraform transitions
+    openTerraform,
+    closeTerraform,
   };
 }
 

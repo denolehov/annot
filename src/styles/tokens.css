@@ -58,6 +58,11 @@
 	/* Green family - success */
 	--light-green-600: #22863a;
 
+	/* Purple family - terraform */
+	--light-purple-500: #7c3aed;
+	--light-purple-600: #6d28d9;
+	--light-purple-700: #5b21b6;
+
 	/* Code syntax (GitHub Light) */
 	--light-code-keyword: #d73a49;
 	--light-code-func: #6f42c1;
@@ -95,6 +100,10 @@
 	--dark-red-900: #7f1d1d;   /* Error bg base */
 	--dark-red-400: #f87171;   /* Error text */
 	--dark-blue-500: #60a5fa;  /* Action blue */
+
+	/* Dark purple family - terraform */
+	--dark-purple-400: #a78bfa;
+	--dark-purple-500: #8b5cf6;
 
 	/* Dark code syntax (GitHub Dark Dimmed style) */
 	--dark-code-keyword: #ff7b72;  /* Soft Red */
@@ -211,6 +220,11 @@
 
 	/* Editor hover border */
 	--border-editor-hover: var(--accent-primary);
+
+	/* Terraform - deep purple */
+	--terraform-border: var(--light-purple-600);
+	--terraform-bg: color-mix(in srgb, var(--light-purple-600) 12%, transparent);
+	--terraform-icon: var(--light-purple-700);
 
 	/* Overlays */
 	--backdrop-light: rgba(250, 250, 249, 0.4);
@@ -380,6 +394,11 @@
 
 	/* Editor hover border - light in dark mode for visibility */
 	--border-editor-hover: var(--text-primary);
+
+	/* --- TERRAFORM --- */
+	--terraform-border: var(--dark-purple-400);
+	--terraform-bg: color-mix(in srgb, var(--dark-purple-500) 15%, transparent);
+	--terraform-icon: var(--dark-purple-400);
 
 	/* --- OVERLAYS --- */
 	--backdrop-light: rgba(19, 18, 15, 0.4);
