@@ -1,5 +1,20 @@
 import type { Range } from '$lib/range';
-import { isLineInRange } from '$lib/range';
+import { isLineInRange, keyToRange } from '$lib/range';
+
+/**
+ * Editor identification - which editor is currently active.
+ */
+export type EditorKind =
+  | { kind: 'annotation'; rangeKey: string }
+  | { kind: 'session' };
+
+/**
+ * Modal lock - blocks destructive transitions when a modal (like Excalidraw) is open.
+ * Orthogonal to UiState to keep interaction state pure.
+ */
+export type ModalLock =
+  | null
+  | { kind: 'excalidraw'; editorKey: string };
 
 /**
  * Discriminated union for UI interaction state.
@@ -10,7 +25,7 @@ export type UiState =
   | { phase: 'hovering'; line: number }
   | { phase: 'selecting'; anchor: number; current: number }
   | { phase: 'committed'; range: Range; pendingChoice: boolean }
-  | { phase: 'editing'; range: Range }
+  | { phase: 'editing'; editor: EditorKind }
   | { phase: 'terraforming'; range: Range };
 
 /** Derived type for phase names (for backwards compatibility) */
@@ -22,7 +37,7 @@ export type UiAction =
   | { type: 'START_SELECT'; anchor: number }
   | { type: 'EXTEND_SELECT'; to: number }
   | { type: 'COMMIT_SELECT'; pendingChoice: boolean }
-  | { type: 'OPEN_EDITOR' }
+  | { type: 'OPEN_EDITOR'; editor: EditorKind }
   | { type: 'CLOSE_EDITOR' }
   | { type: 'OPEN_TERRAFORM' }
   | { type: 'CLOSE_TERRAFORM' }
@@ -30,6 +45,9 @@ export type UiAction =
   | { type: 'CONFIRM_CHOICE'; action: 'annotate' | 'bookmark' | 'terraform' }
   | { type: 'CANCEL_CHOICE' }
   | { type: 'RESET' };
+
+/** Actions that are blocked when a modal lock is active */
+const DESTRUCTIVE_ACTIONS: UiAction['type'][] = ['START_SELECT', 'CLOSE_EDITOR', 'RESET', 'SET_SELECTION'];
 
 /**
  * Pure reducer for UI state transitions.
@@ -60,12 +78,15 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
       return { phase: 'committed', range, pendingChoice: action.pendingChoice };
 
     case 'OPEN_EDITOR':
-      if (state.phase !== 'committed') return state;
-      return { phase: 'editing', range: state.range };
+      // Can open from committed, idle, or editing (to switch editors)
+      if (state.phase === 'committed' || state.phase === 'idle' || state.phase === 'editing') {
+        return { phase: 'editing', editor: action.editor };
+      }
+      return state;
 
     case 'CLOSE_EDITOR':
       if (state.phase !== 'editing') return state;
-      return { phase: 'committed', range: state.range, pendingChoice: false };
+      return { phase: 'idle' };
 
     case 'OPEN_TERRAFORM':
       if (state.phase !== 'committed') return state;
@@ -83,7 +104,9 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
       if (action.action === 'terraform') {
         return { phase: 'terraforming', range: state.range };
       } else if (action.action === 'annotate') {
-        return { phase: 'committed', range: state.range, pendingChoice: false };
+        // Transition to editing phase with the annotation editor
+        const rangeKey = `${state.range.start}-${state.range.end}`;
+        return { phase: 'editing', editor: { kind: 'annotation', rangeKey } };
       }
       // bookmark is handled externally (callback), then reset
       return { phase: 'idle' };
@@ -121,15 +144,28 @@ export interface UseInteractionOptions {
 export function useInteraction(options: UseInteractionOptions) {
   let state = $state<UiState>({ phase: 'idle' });
 
+  // Modal lock - blocks destructive transitions when a modal is open
+  let modalLock = $state<ModalLock>(null);
+
   // Shift key tracking (for cursor styling) - separate from phase state
   let isShiftHeld = $state(false);
 
   // Drag modifier tracking (c or b key during drag) - ephemeral, not part of UiState
   let dragModifier = $state<'c' | 'b' | null>(null);
 
-  // Dispatch action through reducer
-  function dispatch(action: UiAction) {
+  // Dispatch action through reducer, respecting modal lock
+  function dispatch(action: UiAction): { blocked: boolean } {
+    if (modalLock !== null) {
+      if (DESTRUCTIVE_ACTIONS.includes(action.type)) {
+        return { blocked: true };
+      }
+      // Also block switching editors (OPEN_EDITOR while already editing)
+      if (action.type === 'OPEN_EDITOR' && state.phase === 'editing') {
+        return { blocked: true };
+      }
+    }
     state = uiReducer(state, action);
+    return { blocked: false };
   }
 
   // --- Derived getters ---
@@ -139,9 +175,14 @@ export function useInteraction(options: UseInteractionOptions) {
       case 'selecting':
         return normalizeRange(state.anchor, state.current);
       case 'committed':
-      case 'editing':
       case 'terraforming':
         return state.range;
+      case 'editing':
+        // Editing phase: derive range from editor kind
+        if (state.editor.kind === 'annotation') {
+          return keyToRange(state.editor.rangeKey);
+        }
+        return null; // Session editor has no range
       default:
         return null;
     }
@@ -299,12 +340,30 @@ export function useInteraction(options: UseInteractionOptions) {
 
   // --- Editor state transitions ---
 
-  function openEditor() {
-    dispatch({ type: 'OPEN_EDITOR' });
+  function openEditor(editor: EditorKind): { blocked: boolean } {
+    return dispatch({ type: 'OPEN_EDITOR', editor });
   }
 
-  function closeEditor() {
-    dispatch({ type: 'CLOSE_EDITOR' });
+  function closeEditor(): { blocked: boolean } {
+    return dispatch({ type: 'CLOSE_EDITOR' });
+  }
+
+  /** Check if an annotation is sealed (not being edited) */
+  function isAnnotationSealed(rangeKey: string): boolean {
+    if (state.phase !== 'editing') return true;
+    if (state.editor.kind !== 'annotation') return true;
+    return state.editor.rangeKey !== rangeKey;
+  }
+
+  /** Check if the session editor is open */
+  function isSessionEditorOpen(): boolean {
+    if (state.phase !== 'editing') return false;
+    return state.editor.kind === 'session';
+  }
+
+  /** Set modal lock (blocks destructive actions) */
+  function setModalLock(lock: ModalLock): void {
+    modalLock = lock;
   }
 
   function clearSelection() {
@@ -379,15 +438,19 @@ export function useInteraction(options: UseInteractionOptions) {
   return {
     // State getters
     get phase() { return state.phase; },
+    get state() { return state; },
     get range() { return getRange(); },
     get hoverLine() { return getHoverLine(); },
     get isShiftHeld() { return isShiftHeld; },
     get pendingChoice() { return getPendingChoice(); },
+    get modalLock() { return modalLock; },
 
     // Query functions
     isLineHighlighted,
     isLinePreview,
     showAddButton,
+    isAnnotationSealed,
+    isSessionEditorOpen,
 
     // Pointer handlers
     handlePointerDown,
@@ -410,6 +473,7 @@ export function useInteraction(options: UseInteractionOptions) {
     clearSelection,
     setSelection,
     selectLine,
+    setModalLock,
 
     // Keyboard
     handleShiftKeyDown,

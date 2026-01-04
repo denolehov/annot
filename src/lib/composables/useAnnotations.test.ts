@@ -111,24 +111,6 @@ describe('useAnnotations', () => {
     expect(missing).toBeUndefined();
   });
 
-  it('seals and unseals annotations', async () => {
-    const state = useAnnotations({ getLines });
-    const content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Test' }] }] };
-
-    await state.upsert({ start: 5, end: 10 }, content);
-    expect(state.isSealed('5-10')).toBe(false);
-
-    flushSync(() => {
-      state.seal('5-10');
-    });
-    expect(state.isSealed('5-10')).toBe(true);
-
-    flushSync(() => {
-      state.unseal('5-10');
-    });
-    expect(state.isSealed('5-10')).toBe(false);
-  });
-
   it('gets annotation at line (by end line)', async () => {
     const state = useAnnotations({ getLines });
     const content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Test' }] }] };

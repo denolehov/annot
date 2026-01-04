@@ -8,7 +8,6 @@ import { extractContentNodes, isContentEmpty } from '$lib/tiptap';
 export interface AnnotationEntry {
   range: Range;
   content: JSONContent;
-  sealed: boolean;
 }
 
 export interface UseAnnotationsOptions {
@@ -25,10 +24,6 @@ export function useAnnotations(options: UseAnnotationsOptions) {
 
   function getByKey(key: string): AnnotationEntry | undefined {
     return annotations[key];
-  }
-
-  function isSealed(key: string): boolean {
-    return annotations[key]?.sealed ?? false;
   }
 
   async function upsert(range: Range, content: JSONContent | null): Promise<void> {
@@ -52,7 +47,6 @@ export function useAnnotations(options: UseAnnotationsOptions) {
       annotations[key] = {
         range: normalizedRange,
         content,
-        sealed: annotations[key]?.sealed ?? false
       };
       const nodes = extractContentNodes(content);
       await invoke('upsert_annotation', {
@@ -68,20 +62,6 @@ export function useAnnotations(options: UseAnnotationsOptions) {
         startLine: coords.startLine,
         endLine: coords.endLine
       });
-    }
-  }
-
-  function seal(key: string): void {
-    const entry = annotations[key];
-    if (entry) {
-      annotations[key] = { ...entry, sealed: true };
-    }
-  }
-
-  function unseal(key: string): void {
-    const entry = annotations[key];
-    if (entry) {
-      annotations[key] = { ...entry, sealed: false };
     }
   }
 
@@ -133,7 +113,6 @@ export function useAnnotations(options: UseAnnotationsOptions) {
       annotations[key] = {
         range: { ...entry.range },
         content: JSON.parse(JSON.stringify(entry.content)),
-        sealed: entry.sealed,
       };
     }
   }
@@ -144,10 +123,7 @@ export function useAnnotations(options: UseAnnotationsOptions) {
     get all() { return annotations; },
     get,
     getByKey,
-    isSealed,
     upsert,
-    seal,
-    unseal,
     remove,
     getAtLine,
     hasAnnotation,

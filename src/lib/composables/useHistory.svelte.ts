@@ -56,7 +56,6 @@ function cloneSessionData(data: SessionData): SessionData {
         {
           range: { ...entry.range },
           content: JSON.parse(JSON.stringify(entry.content)),
-          sealed: entry.sealed,
         },
       ])
     ),
