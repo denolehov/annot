@@ -240,7 +240,22 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
 
               // Single fuzzy search across all items
               const filtered = fuzzySearch(allItems, query, [{ name: 'searchText', weight: 1 }]);
-              return filtered.map((f) => f.item);
+              const items = filtered.map((f) => f.item);
+
+              // Re-sort by priority: current doc (headings, annotations) → bookmarks → files
+              // This ensures contextually relevant items appear first
+              const currentDocItems = items.filter((i) => i.type === 'heading' || i.type === 'annotation');
+              const bookmarkResults = items.filter((i) => i.type === 'bookmark');
+              let fileResults = items.filter((i) => i.type === 'file');
+
+              // Soft limit files to 5 for short queries (< 4 chars) to reduce noise
+              const FILE_SOFT_LIMIT = 5;
+              const FILE_SOFT_LIMIT_THRESHOLD = 4;
+              if (query.length < FILE_SOFT_LIMIT_THRESHOLD) {
+                fileResults = fileResults.slice(0, FILE_SOFT_LIMIT);
+              }
+
+              return [...currentDocItems, ...bookmarkResults, ...fileResults];
             },
             render: createSuggestionRender<RefSuggestionItem>(
               () => refSuggestion,
