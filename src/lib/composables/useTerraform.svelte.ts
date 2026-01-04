@@ -56,6 +56,37 @@ export function useTerraform(initialRegion?: TerraformRegion) {
     form.length === 0 && mass === null && gravity === null && direction === null
   );
 
+  // --- Override status (for visual dimming based on precedence) ---
+  // Remove overrides everything
+  // Pin overrides form, mass (expand/condense), direction
+  // Dissolve overrides form only
+  const isRemoveActive = $derived(mass?.type === 'remove');
+  const isPinActive = $derived(gravity?.type === 'pin');
+  const isDissolveActive = $derived(gravity?.type === 'dissolve');
+
+  const formOverridden = $derived(isRemoveActive || isPinActive || isDissolveActive);
+  const massOverridden = $derived(isRemoveActive || isPinActive);
+  const gravityOverridden = $derived(isRemoveActive);
+  const directionOverridden = $derived(isRemoveActive || isPinActive);
+
+  // Human-readable override reasons for tooltips
+  const formOverrideReason = $derived(
+    isRemoveActive ? 'Overridden by Remove' :
+    isPinActive ? 'Overridden by Pin' :
+    isDissolveActive ? 'Overridden by Dissolve' : null
+  );
+  const massOverrideReason = $derived(
+    isRemoveActive ? 'Overridden by Remove' :
+    isPinActive ? 'Overridden by Pin' : null
+  );
+  const gravityOverrideReason = $derived(
+    isRemoveActive ? 'Overridden by Remove' : null
+  );
+  const directionOverrideReason = $derived(
+    isRemoveActive ? 'Overridden by Remove' :
+    isPinActive ? 'Overridden by Pin' : null
+  );
+
   // Update phrase from backend when state changes
   function updatePhrase() {
     if (debounceTimer) clearTimeout(debounceTimer);
@@ -193,6 +224,16 @@ export function useTerraform(initialRegion?: TerraformRegion) {
     get direction() { return direction; },
     get phrase() { return phrase; },
     get isEmpty() { return isEmpty; },
+
+    // Override status (for visual dimming based on precedence)
+    get formOverridden() { return formOverridden; },
+    get massOverridden() { return massOverridden; },
+    get gravityOverridden() { return gravityOverridden; },
+    get directionOverridden() { return directionOverridden; },
+    get formOverrideReason() { return formOverrideReason; },
+    get massOverrideReason() { return massOverrideReason; },
+    get gravityOverrideReason() { return gravityOverrideReason; },
+    get directionOverrideReason() { return directionOverrideReason; },
 
     // Form
     toggleForm,
