@@ -126,6 +126,12 @@
       await ctx.terraform.remove(range);
     } else {
       await ctx.terraform.upsert(range, region);
+      // Show toast with line range and phrase
+      const phrase = await ctx.terraform.getPhrase(region);
+      const startLine = Math.min(range.start, range.end);
+      const endLine = Math.max(range.start, range.end);
+      const lineLabel = startLine === endLine ? `Line ${startLine}` : `Lines ${startLine}-${endLine}`;
+      ctx.showToast(`${lineLabel}: ${phrase}`);
     }
 
     ctx.interaction.closeTerraform();
