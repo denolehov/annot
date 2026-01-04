@@ -29,6 +29,7 @@
   import { useSearch } from "$lib/composables/useSearch.svelte";
   import { useBookmarks } from "$lib/composables/useBookmarks.svelte";
   import { useTerraformRegions } from "$lib/composables/useTerraformRegions.svelte";
+  import { useOverlay } from "$lib/composables/useOverlay.svelte";
   import SearchBar from "$lib/components/SearchBar.svelte";
   import { AnnotProvider } from "$lib/context";
   import type { SaveContentResponse } from "$lib/types";
@@ -212,8 +213,8 @@
   let sessionComment: JSONContent | undefined = $state(undefined);
   let sessionEditorOpen = $state(false);
 
-  // CommandPalette state
-  let commandPaletteOpen = $state(false);
+  // Overlay state (command palette, help, timeline are mutually exclusive)
+  const overlay = useOverlay();
   let commandPaletteInitialState = $state<{ namespace: 'exit-modes'; mode: 'filter' } | undefined>(undefined);
   let tags: Tag[] = $state([]);
 
@@ -235,8 +236,7 @@
   // Save modal state
   let saveModalOpen = $state(false);
 
-  // Help overlay state
-  let helpOverlayOpen = $state(false);
+  // Help overlay state is now managed by useOverlay()
 
   // Content zoom state
   let contentZoom = $state(1.0);
@@ -386,13 +386,13 @@
   function handleEditLastBookmark() {
     if (bookmarkState?.lastCreatedId) {
       editBookmarkId = bookmarkState.lastCreatedId;
-      commandPaletteOpen = true;
+      overlay.openCommandPalette();
     }
   }
 
   // CommandPalette handlers
   function handleCommandPaletteClose() {
-    commandPaletteOpen = false;
+    overlay.close();
     // Clear pending states
     pendingTagCreation = null;
     editBookmarkId = null;
@@ -423,14 +423,14 @@
   function handleCommandPaletteEvent(event: string, payload: unknown) {
     if (event === 'SET_THEME') {
       setTheme(payload as ThemePreference);
-      commandPaletteOpen = false;
+      overlay.close();
     }
   }
 
   // Handle request to create tag from selected text in an editor
   function handleRequestCreateTag(editorKey: string, text: string, from: number, to: number) {
     pendingTagCreation = { editorKey, text, from, to };
-    commandPaletteOpen = true;
+    overlay.openCommandPalette();
   }
 
   // Handle tag created via CommandPalette - trigger chip insertion
@@ -615,14 +615,14 @@
       onShiftUp: () => interaction.handleShiftKeyUp(),
       onTabCycle: (dir) => dir === 'forward' ? exitModeState.cycleForward() : exitModeState.cycleBackward(),
       onOpenSessionEditor: openSessionEditor,
-      onOpenCommandPalette: () => commandPaletteOpen = true,
+      onOpenCommandPalette: () => overlay.openCommandPalette(),
       onOpenCommandPaletteWithNamespace: (namespace) => {
         commandPaletteInitialState = { namespace, mode: 'filter' };
-        commandPaletteOpen = true;
+        overlay.openCommandPalette(namespace);
       },
       onOpenSaveModal: openSaveModal,
       onOpenSearch: () => search.open(),
-      onOpenHelp: () => helpOverlayOpen = true,
+      onOpenHelp: () => overlay.openHelp(),
       onCreateSessionBookmark: handleToggleBookmark,
       onCreateSelectionBookmark: handleCreateSelectionBookmark,
       onEditLastBookmark: handleEditLastBookmark,
@@ -646,9 +646,9 @@
     },
     {
       isEditorActive: () => !!interaction.range || sessionEditorOpen,
-      isCommandPaletteOpen: () => commandPaletteOpen,
+      isCommandPaletteOpen: () => overlay.isCommandPaletteOpen(),
       isSaveModalOpen: () => saveModalOpen,
-      isHelpOverlayOpen: () => helpOverlayOpen,
+      isHelpOverlayOpen: () => overlay.isHelpOpen(),
       isSearchOpen: () => search.isOpen,
       hasHoveredLine: () => interaction.hoverLine !== null,
       hasExitModes: () => exitModeState.modes.length > 0,
@@ -915,7 +915,7 @@
   <SearchBar {search} />
 </div>
 
-{#if commandPaletteOpen && bookmarkState}
+{#if overlay.isCommandPaletteOpen() && bookmarkState}
   <CommandPalette
     {tags}
     bookmarks={bookmarkState.all}
@@ -951,8 +951,8 @@
   />
 {/if}
 
-{#if helpOverlayOpen}
-  <HelpOverlay onClose={() => helpOverlayOpen = false} />
+{#if overlay.isHelpOpen()}
+  <HelpOverlay onClose={() => overlay.close()} />
 {/if}
 
 <style>
