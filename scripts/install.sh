@@ -3,6 +3,11 @@ set -e
 
 # annot installer for macOS
 # Requires: gh CLI with repo access
+#
+# Usage:
+#   ./install.sh              Install latest (including RCs)
+#   ./install.sh --stable     Install latest stable release
+#   ./install.sh v0.5.0-rc.1  Install specific version
 
 REPO="denolehov/annot"
 APP_DIR="$HOME/.local/share/annot"
@@ -21,6 +26,20 @@ case "$(uname -m)" in
 esac
 
 echo "Installing annot for $platform..."
+
+# Parse version argument
+VERSION="${1:-}"
+
+if [[ "$VERSION" == "--help" || "$VERSION" == "-h" ]]; then
+  echo "Usage: $0 [VERSION]"
+  echo ""
+  echo "Options:"
+  echo "  (none)      Install latest release (including RCs)"
+  echo "  --stable    Install latest stable release only"
+  echo "  vX.Y.Z      Install specific version"
+  echo "  --help      Show this help"
+  exit 0
+fi
 
 # Check for gh CLI
 if ! command -v gh &> /dev/null; then
@@ -56,8 +75,28 @@ cleanup() { rm -rf "$TEMP_DIR"; }
 trap cleanup EXIT
 cd "$TEMP_DIR"
 
-echo "Downloading latest release..."
-gh release download --repo "$REPO" --pattern "*.tar.gz"
+# Determine version to install
+case "$VERSION" in
+  "")
+    VERSION=$(gh release list --repo "$REPO" --limit 1 --json tagName -q '.[0].tagName')
+    echo "Latest release: $VERSION"
+    ;;
+  "--stable")
+    VERSION=$(gh release list --repo "$REPO" --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName')
+    echo "Latest stable: $VERSION"
+    ;;
+  *)
+    if ! gh release view "$VERSION" --repo "$REPO" &>/dev/null; then
+      echo "Error: Release $VERSION not found" >&2
+      echo "Available releases:"
+      gh release list --repo "$REPO" --limit 5
+      exit 1
+    fi
+    ;;
+esac
+
+echo "Downloading $VERSION..."
+gh release download "$VERSION" --repo "$REPO" --pattern "*.tar.gz"
 
 ARCHIVE="annot-${platform}.tar.gz"
 if [[ ! -f "$ARCHIVE" ]]; then
