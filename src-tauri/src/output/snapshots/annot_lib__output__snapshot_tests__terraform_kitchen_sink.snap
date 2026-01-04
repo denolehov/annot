@@ -42,7 +42,7 @@ design-doc.md:25-28
 >  26 |     line 26 content
 >  27 |     line 27 content
 >  28 |     line 28 content
-      └──> Express via prose, code, and table. Treat as supporting context. This needs a different direction.
+      └──> Express via passage, code block, and table. Treat as supporting context. This needs a different direction.
 
 ---
 
@@ -80,7 +80,7 @@ design-doc.md:62-65
 >  63 |     line 63 content
 >  64 |     line 64 content
 >  65 |     line 65 content
-      └──> Present as a prose. Same content, reframed from a different angle.
+      └──> Present as a passage. Same content, reframed from a different angle.
 
 ---
 
