@@ -21,7 +21,7 @@
   import { tooltip } from '$lib/actions/tooltip';
   import ChoiceButtons from '$lib/components/ChoiceButtons.svelte';
   import TerraformPalette from '$lib/components/TerraformPalette.svelte';
-  import type { TerraformRegion } from '$lib/types';
+  import { isIntentEmpty, type TerraformRegion } from '$lib/types';
 
   interface Props {
     line: Line;
@@ -122,9 +122,7 @@
     const range = ctx.interaction.range;
     if (!range) return;
 
-    const isEmpty = region.form.length === 0 && !region.mass && !region.gravity && !region.direction;
-
-    if (isEmpty) {
+    if (isIntentEmpty(region.intent)) {
       await ctx.terraform.remove(range);
     } else {
       await ctx.terraform.upsert(range, region);
@@ -142,9 +140,7 @@
     const range = ctx.interaction.range;
     if (!range) return;
 
-    const isEmpty = region.form.length === 0 && !region.mass && !region.gravity && !region.direction;
-
-    if (isEmpty) {
+    if (isIntentEmpty(region.intent)) {
       await ctx.terraform.remove(range);
     } else {
       await ctx.terraform.upsert(range, region);

@@ -82,14 +82,17 @@ describe("+page.svelte", () => {
   });
 
   it("renders file content with line numbers", async () => {
-    vi.mocked(invoke).mockResolvedValue(createMockResponse({
-      label: "test.rs",
-      lines: [
-        makeLine(1, "fn main() {"),
-        makeLine(2, '    println!("hello");'),
-        makeLine(3, "}"),
-      ],
-    }));
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === 'get_terraform_regions') return Promise.resolve([]);
+      return Promise.resolve(createMockResponse({
+        label: "test.rs",
+        lines: [
+          makeLine(1, "fn main() {"),
+          makeLine(2, '    println!("hello");'),
+          makeLine(3, "}"),
+        ],
+      }));
+    });
 
     render(Page);
 
@@ -103,10 +106,13 @@ describe("+page.svelte", () => {
   });
 
   it("displays filename in header", async () => {
-    vi.mocked(invoke).mockResolvedValue(createMockResponse({
-      label: "my_module.rs",
-      lines: [makeLine(1, "// comment")],
-    }));
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === 'get_terraform_regions') return Promise.resolve([]);
+      return Promise.resolve(createMockResponse({
+        label: "my_module.rs",
+        lines: [makeLine(1, "// comment")],
+      }));
+    });
 
     render(Page);
 
@@ -138,13 +144,16 @@ describe("+page.svelte", () => {
   });
 
   it("does not open editor when Cmd+C is pressed (allows copy)", async () => {
-    vi.mocked(invoke).mockResolvedValue(createMockResponse({
-      label: "test.rs",
-      lines: [
-        makeLine(1, "fn main() {"),
-        makeLine(2, '    println!("hello");'),
-      ],
-    }));
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === 'get_terraform_regions') return Promise.resolve([]);
+      return Promise.resolve(createMockResponse({
+        label: "test.rs",
+        lines: [
+          makeLine(1, "fn main() {"),
+          makeLine(2, '    println!("hello");'),
+        ],
+      }));
+    });
 
     render(Page);
 
@@ -174,13 +183,16 @@ describe("+page.svelte", () => {
   });
 
   it("opens editor when 'c' is pressed alone on hovered line", async () => {
-    vi.mocked(invoke).mockResolvedValue(createMockResponse({
-      label: "test.rs",
-      lines: [
-        makeLine(1, "fn main() {"),
-        makeLine(2, '    println!("hello");'),
-      ],
-    }));
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === 'get_terraform_regions') return Promise.resolve([]);
+      return Promise.resolve(createMockResponse({
+        label: "test.rs",
+        lines: [
+          makeLine(1, "fn main() {"),
+          makeLine(2, '    println!("hello");'),
+        ],
+      }));
+    });
 
     render(Page);
 

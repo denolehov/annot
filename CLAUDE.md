@@ -4,307 +4,94 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**annot** is a Rust/Tauri/Svelte rewrite of [hl](https://github.com/denolehov/hl) — an ephemeral, human-in-the-loop annotation tool for AI workflows. It opens files, diffs, or piped content in a native window, allows users to annotate specific line ranges with structured feedback, and outputs annotations to stdout (or MCP responses) when the window closes.
+**annot** is a human-in-the-loop annotation tool for AI workflows. Opens files, diffs, or content in a native window for structured annotation, outputs results when closed.
 
-### Core Concept
-
-> **annot: ephemeral space for human-AI thinking**
-
-annot is a structured dialogue substrate — a medium in which human and AI take turns adding, questioning, and refining until something crystallizes. See `docs/manifesto.md` for the full philosophy.
-
-**Before planning or developing new features**, consult the manifesto to ensure alignment with:
-- The directional model (AI→Human vs Human→AI features)
-- The ephemeral identity (no persistence, zero exit cost)
-- The generative principle (humans add information, not just select)
-
-annot is designed to be:
-- **Ephemeral**: Opens, collects feedback, exits
-- **Keyboard-first**: /, g, Tab, Ctrl+K shortcuts
-- **LLM-aware**: Output format designed for Claude consumption
+**Before developing features**, read `docs/manifesto.md` — it defines what annot is and isn't.
 
 ## Build Commands
 
 ```bash
-# Development (runs both Vite dev server and Tauri)
-pnpm demo         # Opens lib.rs as demo file
-pnpm tauri dev -- -- <file>  # Open specific file
+# Development
+pnpm demo              # Opens sample.md
+pnpm demo:diff         # Opens sample.diff
+pnpm demo:portals      # Opens portals.md (portal links demo)
+pnpm tauri dev -- -- <file>   # Open specific file
 
-# Build for production
-pnpm tauri build           # Release build
-pnpm tauri build --debug   # Debug build with embedded frontend
+# Production
+pnpm tauri build              # Release build
+pnpm tauri build --debug      # Debug build with embedded frontend
 
 # Testing
-pnpm test         # Frontend tests (Vitest)
-pnpm test:watch   # Watch mode
-cargo test        # Rust tests (from src-tauri/)
+pnpm test                     # All frontend tests
+pnpm vitest run <file>        # Single frontend test file
+cargo test                    # All Rust tests (from src-tauri/)
+cargo test <name>             # Single Rust test
+cargo insta review            # Review snapshot changes
 
 # Type checking
-pnpm check        # TypeScript + Svelte
+pnpm check
 ```
 
-### Installing from GitHub Releases
-
-**Quick install** (requires repo access):
-
-```bash
-# First time: install GitHub CLI and authenticate
-brew install gh
-gh auth login
-
-# Install annot
-curl -fsSL https://raw.githubusercontent.com/denolehov/annot/main/scripts/install.sh | bash
-```
-
-**Manual install:**
-
-```bash
-gh release download --repo denolehov/annot --pattern "*.tar.gz"
-tar -xzf annot-darwin-arm64.tar.gz
-mv annot.app/Contents/MacOS/annot ~/.local/bin/
-```
-
-### Important: Dev vs Build modes
-
-- `pnpm tauri dev` / `cargo build` → Uses Vite dev server at localhost:1420
-- `pnpm tauri build` → Embeds frontend assets into binary
-
-**Gotcha**: Running `./target/debug/annot` directly after `cargo build` shows white screen because it tries to load from localhost:1420. Must use `pnpm tauri build --debug` for standalone binary.
+**Dev vs Build gotcha**: `cargo build` produces a binary that connects to localhost:1420. For standalone testing, use `pnpm tauri build --debug`.
 
 ## Architecture
 
-### Three Review Modes
+**Backend** (`src-tauri/src/`):
+- `lib.rs` — Entry points (CLI vs MCP mode), IPC command registration
+- `review.rs` — Session state, content loading
+- `commands.rs` — All Tauri IPC handlers
+- `output/` — Structured output rendering for LLM consumption
+- `mcp/` — Model Context Protocol server
+- `config.rs` — Persistent user settings (tags, exit modes, bookmarks)
+- `terraform.rs` — Natural prose directives feature
 
-1. **review_file** — Opens a file at a path for annotation
-2. **review_diff** — Opens a unified diff (git or raw) with dual-column view
-3. **review_content** — Opens ephemeral agent-generated content (plans, drafts)
+**Frontend** (`src/lib/`):
+- `composables/` — Svelte 5 runes-based state (useAnnotations, useTerraformRegions, etc.)
+- `components/` — UI components (LineRow, CodeViewer, etc.)
+- `CommandPalette/` — `:` command palette with namespaces
+- `tiptap.ts` — Rich text editor configuration
+- `types.ts` — Shared TypeScript types
 
-All modes block until the window closes, then return structured output.
-
-### Data Model
-
-```
-Annotation
-├── start_line: u32 (1-indexed)
-├── end_line: u32
-└── content: Vec<ContentNode>
-    ├── Text { text: String }
-    ├── Tag { id, name, instruction }  // Composable mini-prompts like [# SECURITY]
-    ├── Excalidraw { elements, png }   // Embedded diagrams
-    └── Media { data_url }             // Pasted images
-
-ExitMode
-├── id: String
-├── name: String           // "Apply", "Reject", etc.
-├── color: String          // CSS color
-├── instruction: String    // LLM-facing guidance
-└── is_ephemeral: bool     // true if from MCP, false if persistent
-
-Tag
-├── id: String             // 12-char stable ID
-├── name: String           // User-created name
-└── instruction: String    // LLM prompt text
-```
-
-### Output Format
-
-Structured text for LLM consumption:
-
-```
-TAGS:
-  [# SECURITY] Review for vulnerabilities
-  [# TODO] Items needing follow-up
-
-BOOKMARKS:
-  [BOOKMARK abc] auth-flow (this session)
-
-CONTEXT: plan.md [embeds: src/lib.rs, src/main.rs]
-
-GENERAL:
-  Please focus on error handling
-
-NEXT: Apply — Proceed with this plan
-
----
-
-file.rs:45-52:
-   44 | fn previous() {   // context line
->  45 | fn example() {
->  46 |     // code
-      └──> [# SECURITY] Review this for injection vulnerabilities
-           Additional comment text
-```
-
-Section meanings:
-- **TAGS**: Tag definitions used in annotations
-- **BOOKMARKS**: Referenced bookmarks with snapshots
-- **CONTEXT**: What's being reviewed (with embedded portal files)
-- **GENERAL**: High-level comment about the entire review
-- **NEXT**: What action the human wants (exit mode + instruction)
-
-### Persistence
-
-User config stored in platform-specific config directory:
-- `tags.json` — Global tag definitions
-- `exit-modes.{ext}.json` — Exit modes per file type (.rs, .go, .py)
-- `tag-usage.json` — Usage stats for smart suggestions
-
-### Frontend ↔ Backend Communication
-
-Tauri IPC commands replace the HTTP API from the Go version:
-- `get_content` — Load file/diff/ephemeral content
-- `upsert_annotation` — Create/update annotation
-- `delete_annotation` — Remove annotation
-- `set_exit_mode` — Select exit mode
-- `get_tags` / `upsert_tag` — Tag CRUD
-- `finish_session` — Close window, return output
-
-### Key UX Patterns to Preserve
-
-- **Line selection**: Click line numbers to select range
-- **Tag menu**: Type `/` in editor to trigger tag autocomplete
-- **Exit mode cycling**: Tab/Shift+Tab cycles through modes
-- **Poly-editor**: Ctrl+K opens tag/exit-mode manager
-- **Session context**: `g` opens file-level comment editor
-- **Visual feedback**: Selected exit mode colors the window border
+**Three review modes**: `review_file`, `review_diff`, `review_content` — all block until window closes.
 
 ## Reference Materials
 
-- `docs/features.md` — **Canonical product features list (keep up-to-date when adding features)**
-- `docs/manifesto.md` — annot's philosophy, identity, and directional feature model
-- `HL_REFERENCE.md` — Original hl feature set, data models, output format
-- `COMPONENTS.md` — UI component inventory with files, styles, states
-- `src/styles/README.md` — Style system guide and token reference
-- `fixtures/README.md` — Sample files for testing
-
-**Original Go implementation** (for edge cases only): `/Users/denolehov/_p/golang/hl`
-
-### When Adding New Features
-
-Checklist to keep docs in sync:
-- [ ] Update `docs/features.md` with the new feature
-- [ ] Update `src/lib/HelpOverlay.svelte` if adding keyboard shortcuts
-
-**Tauri documentation**: `/Users/denolehov/_p/docs/tauri-docs`
-
-## Tech Stack
-
-- **Backend**: Rust + Tauri v2 + clap (CLI parsing)
-- **Frontend**: Svelte 5 + SvelteKit + TypeScript
-- **Testing**: Vitest + @testing-library/svelte (frontend), cargo test (Rust)
-- **Syntax highlighting**: TBD (tree-sitter or syntect)
-- **Diff parsing**: TBD (similar-diff or custom)
-- **Rich editor**: TipTap
-
-## Style System
-
-Styles live in `src/styles/` with tokens in `tokens.css`. See `src/styles/README.md` for the full guide.
-
-- **Tokens**: All colors, spacing, radii, shadows in `tokens.css` (dark mode ready)
-- **Components**: One CSS file per component in `components/`
-- **Rule**: Never hardcode colors — use `var(--token-name)`
-
-## Fixtures
-
-Sample files for testing UI states in `fixtures/`:
-```bash
-pnpm tauri dev -- -- fixtures/files/simple.rs      # File mode
-pnpm tauri dev -- -- --diff fixtures/diffs/mixed-changes.diff  # Diff mode
-```
-
-## Tauri Configuration Notes
-
-### Window (tauri.conf.json)
-- `titleBarStyle: "Overlay"` — Traffic lights overlay content
-- `hiddenTitle: true` — No title text
-- `trafficLightPosition: { x: 12, y: 22 }` — Vertically centered in header
-
-### Permissions (capabilities/default.json)
-- `core:window:allow-start-dragging` — Required for `data-tauri-drag-region` to work
+- `docs/features.md` — **Canonical product features** (update when adding features)
+- `docs/manifesto.md` — Philosophy and directional model
+- `README.md` — MCP integration, keyboard shortcuts
+- `src/lib/HelpOverlay.svelte` — Update when adding keyboard shortcuts
 
 ## Testing Patterns
-- **Rust**: Behavior-focused tests on public API (ContentResponse format)
-- **Frontend**: Mock IPC with `vi.mock("@tauri-apps/api/core")`, test rendered output
 
-### Snapshot Testing with insta
+**Rust output tests** use insta snapshots in `src-tauri/src/output/snapshots/`. When format changes:
+1. `cargo test` — fails with diff
+2. `cargo insta review` — accept or reject
+3. Commit `.snap` files
 
-Output format tests use [insta](https://insta.rs/) for snapshot testing:
+**Frontend tests** mock Tauri IPC with `vi.mock("@tauri-apps/api/core")`.
 
-```bash
-# Run tests (creates .snap.new for new/changed snapshots)
-cargo test
+## Code Style
 
-# Interactively review pending snapshots
-cargo insta review
+- **Declarative over imperative**: `map`/`collect`/`join` over manual loops
+- **Composables pattern**: Svelte 5 runes in `src/lib/composables/`
 
-# Accept all pending snapshots
-cargo insta accept
+## Agent Output Preferences
 
-# Reject all pending snapshots
-cargo insta reject
-```
-
-Snapshot files live in `src/{module}/snapshots/`. When output format changes:
-1. Run tests — they'll fail with diffs shown
-2. Review changes with `cargo insta review`
-3. Accept if intentional, reject if bug
-
-## Code Style Preferences
-
-- **Prefer declarative over imperative**: Use functional composition (`map`/`collect`/`join`), builder patterns with closures, and data-driven approaches over manual loops with mutable state
+- **Use `review_content` for reports/summaries**: Present plans, analysis, or structured output via the MCP tool instead of inline text.
 
 ## UI Patterns
 
 ### Line Actions (right-side icons)
-
-When adding icons/buttons to the right side of lines (like copy, bookmark, terraform):
-
-1. Add your button inside the `{#if trailing || showBookmarkIcon || terraformRegionStart}` block in `LineRow.svelte`
-2. Use the `.line-action` class for base button styles
-3. The `.line-actions` container handles spacing via `gap: 2px` — no manual margins needed
-
-```svelte
-<button class="line-action my-new-action" onclick={handler}>
-  <MyIcon />
-</button>
-```
-
-CSS in `code-viewer.css`:
-```css
-.my-new-action {
-  color: var(--my-color);  /* Only add color/size overrides */
-}
-```
+Add buttons inside the `{#if trailing || showBookmarkIcon || terraformRegionStart}` block in `LineRow.svelte`. Use `.line-action` class.
 
 ### Left Border Indicators
-
-For line-range indicators (like bookmarks, terraform regions), use `::before` pseudo-elements:
-
-```css
-div.line.my-indicator::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--my-color);
-  z-index: 1;
-}
-```
-
-For overlapping indicators (e.g., bookmark + terraform), use `repeating-linear-gradient` with `background-attachment: fixed` for continuous diagonal stripes across lines.
+Use `::before` pseudo-elements with `position: absolute; left: 0; width: 3px;`. For overlapping indicators, use `repeating-linear-gradient`.
 
 ### Display Index vs Source Line Numbers
+- `displayIndex`: 1-indexed position in rendered array (UI selection)
+- Source lines: `line.origin.line` (file) or `line.origin.new_line`/`old_line` (diff)
 
-- `displayIndex`: 1-indexed position in rendered lines array (used for selection, UI)
-- Source line numbers (`line.origin.line` for source, `line.origin.new_line`/`old_line` for diff): actual file line numbers
-
-These differ when portals/embeds are present. Use `getLineNumber(line)` and `getFilePath(line)` helpers from `line-utils.ts` to extract source coordinates.
+Use `getLineNumber(line)` and `getFilePath(line)` from `line-utils.ts`.
 
 ### Terraform Regions
-
-Terraform regions persist to backend with source line numbers. The `useTerraformRegions` composable provides:
-- `loadAll(path)` — load all regions on mount for visual indicators
-- `isRegionStart(lineNum)` — returns region if line starts one (for icon)
-- `isInRegion(lineNum)` — returns boolean (for border on all lines in range)
-- `getDisplayRange(region)` — converts source lines back to display indices (for re-selecting)
+Persist to backend with source line numbers. Use `useTerraformRegions` composable for state.
