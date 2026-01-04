@@ -216,23 +216,39 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
                 }
               }
 
-              // Filter by query
-              const q = query.toLowerCase();
-              const filteredAnnotations = q ? annotationItems.filter((item) => {
-                if (item.type !== 'annotation') return false;
-                return item.key.includes(q) || item.preview.toLowerCase().includes(q);
-              }) : annotationItems;
+              // Filter by query using fuzzy search
+              const filteredAnnotations = fuzzySearch(
+                annotationItems.filter((item): item is Extract<RefSuggestionItem, { type: 'annotation' }> => item.type === 'annotation'),
+                query,
+                [{ name: 'key', weight: 2 }, { name: 'preview', weight: 1 }]
+              );
 
-              const filteredBookmarks = q ? bookmarkItems.filter((item) => {
-                if (item.type !== 'bookmark') return false;
-                const label = item.bookmark.label || item.bookmark.snapshot.source_title || '';
-                return item.bookmark.id.toLowerCase().includes(q) || label.toLowerCase().includes(q);
-              }) : bookmarkItems;
+              // For bookmarks, create searchable items with computed label
+              const bookmarksWithLabel = bookmarkItems
+                .filter((item): item is Extract<RefSuggestionItem, { type: 'bookmark' }> => item.type === 'bookmark')
+                .map((item) => ({
+                  ...item,
+                  searchLabel: item.bookmark.label || item.bookmark.snapshot.source_title || '',
+                  searchId: item.bookmark.id,
+                }));
+              const filteredBookmarks = fuzzySearch(
+                bookmarksWithLabel,
+                query,
+                [{ name: 'searchId', weight: 1 }, { name: 'searchLabel', weight: 2 }]
+              );
 
-              const filteredHeadings = q ? headingItems.filter((item) => {
-                if (item.type !== 'heading') return false;
-                return item.section.title.toLowerCase().includes(q);
-              }) : headingItems;
+              // For headings, search on title
+              const headingsWithTitle = headingItems
+                .filter((item): item is Extract<RefSuggestionItem, { type: 'heading' }> => item.type === 'heading')
+                .map((item) => ({
+                  ...item,
+                  searchTitle: item.section.title,
+                }));
+              const filteredHeadings = fuzzySearch(
+                headingsWithTitle,
+                query,
+                [{ name: 'searchTitle', weight: 1 }]
+              );
 
               // Build sectioned results
               const result: RefSuggestionItem[] = [];
