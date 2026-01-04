@@ -248,3 +248,13 @@
   border-color: var(--terraform-border);
   color: var(--terraform-icon);
 }
+
+/* Override dimming (for precedence: Remove > Pin > Dissolve) */
+.terraform-row.overridden,
+.terraform-slider-wrap.overridden {
+  opacity: 0.4;
+}
+
+.terraform-slider-wrap {
+  display: contents;
+}

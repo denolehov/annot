@@ -402,7 +402,7 @@
   </div>
 
   <!-- Form section -->
-  <div class="terraform-row">
+  <div class="terraform-row" class:overridden={terraform.formOverridden} title={terraform.formOverrideReason}>
     <span class="terraform-row-label">Form</span>
     {#each FORM_TYPES as type, idx}
       <button
@@ -429,20 +429,22 @@
       <kbd>x</kbd>
       <span>remove</span>
     </button>
-    <DiscreteSlider
-      value={getMassSliderValue()}
-      onchange={handleMassSliderChange}
-      disabled={terraform.mass?.type === 'remove'}
-      bipolar
-      steps={7}
-    >
-      {#snippet leftLabel()}<button class="kbd-btn" onclick={handleMassDecrement} title="Condense to essentials"><kbd>-</kbd></button> condense{/snippet}
-      {#snippet rightLabel()}expand <button class="kbd-btn" onclick={handleMassIncrement} title="Expand with more depth and examples"><kbd>+</kbd></button>{/snippet}
-    </DiscreteSlider>
+    <div class="terraform-slider-wrap" class:overridden={terraform.massOverridden} title={terraform.massOverrideReason}>
+      <DiscreteSlider
+        value={getMassSliderValue()}
+        onchange={handleMassSliderChange}
+        disabled={terraform.mass?.type === 'remove' || terraform.massOverridden}
+        bipolar
+        steps={7}
+      >
+        {#snippet leftLabel()}<button class="kbd-btn" onclick={handleMassDecrement} title="Condense to essentials"><kbd>-</kbd></button> condense{/snippet}
+        {#snippet rightLabel()}expand <button class="kbd-btn" onclick={handleMassIncrement} title="Expand with more depth and examples"><kbd>+</kbd></button>{/snippet}
+      </DiscreteSlider>
+    </div>
   </div>
 
   <!-- Gravity section: [pin] ← focus ←→ blur → [dissolve] -->
-  <div class="terraform-row">
+  <div class="terraform-row" class:overridden={terraform.gravityOverridden} title={terraform.gravityOverrideReason}>
     <span class="terraform-row-label">Gravity</span>
     <button
       class="terraform-toggle"
@@ -456,7 +458,7 @@
     <DiscreteSlider
       value={getGravitySliderValue()}
       onchange={handleGravitySliderChange}
-      disabled={terraform.gravity?.type === 'pin' || terraform.gravity?.type === 'dissolve'}
+      disabled={terraform.gravity?.type === 'pin' || terraform.gravity?.type === 'dissolve' || terraform.gravityOverridden}
       bipolar
       steps={7}
     >
@@ -475,7 +477,7 @@
   </div>
 
   <!-- Direction section: [reframe] ← lean in ←→ move away -->
-  <div class="terraform-row">
+  <div class="terraform-row" class:overridden={terraform.directionOverridden} title={terraform.directionOverrideReason}>
     <span class="terraform-row-label">Direction</span>
     <button
       class="terraform-toggle"
@@ -489,7 +491,7 @@
     <DiscreteSlider
       value={getDirectionSliderValue()}
       onchange={handleDirectionSliderChange}
-      disabled={terraform.direction?.type === 'reframe'}
+      disabled={terraform.direction?.type === 'reframe' || terraform.directionOverridden}
       bipolar
       steps={7}
     >

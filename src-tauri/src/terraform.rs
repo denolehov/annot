@@ -102,11 +102,29 @@ impl TerraformRegion {
     /// Convert terraform region to natural language prose.
     ///
     /// Produces human-readable instructions that an LLM can directly consume.
+    ///
+    /// Applies conflict precedence rules:
+    /// 1. Remove overrides everything — emit only "Remove this entirely."
+    /// 2. Pin blocks form, mass, direction — emit only "Preserve this exactly as written."
+    /// 3. Dissolve blocks form — still allows mass and direction
     pub fn to_prose(&self) -> String {
+        // Rule 1: Remove overrides everything
+        if matches!(self.mass, Some(MassDirective::Remove)) {
+            return "Remove this entirely.".to_string();
+        }
+
+        // Rule 2: Pin blocks form, mass (expand/condense), direction
+        if matches!(self.gravity, Some(GravityDirective::Pin)) {
+            return "Preserve this exactly as written.".to_string();
+        }
+
         let mut clauses = Vec::new();
 
-        // Form clause
-        if !self.form.is_empty() {
+        // Rule 3: Dissolve blocks form (but allows mass/direction)
+        let emit_form = !matches!(self.gravity, Some(GravityDirective::Dissolve));
+
+        // Form clause (unless blocked by dissolve)
+        if emit_form && !self.form.is_empty() {
             clauses.push(self.form_clause());
         }
 
@@ -464,5 +482,139 @@ mod tests {
         let json = serde_json::to_string(&region).unwrap();
         let deserialized: TerraformRegion = serde_json::from_str(&json).unwrap();
         assert_eq!(region, deserialized);
+    }
+
+    // ========== Conflict Precedence Tests ==========
+
+    #[test]
+    fn remove_overrides_all() {
+        // Remove should override form, gravity, and direction
+        let region = TerraformRegion {
+            start_line: 1,
+            end_line: 10,
+            form: vec![FormType::Table, FormType::List],
+            mass: Some(MassDirective::Remove),
+            gravity: Some(GravityDirective::Pin),
+            direction: Some(DirectionDirective::Reframe),
+        };
+        assert_eq!(region.to_prose(), "Remove this entirely.");
+    }
+
+    #[test]
+    fn remove_overrides_expand() {
+        // Remove should win even if expand was also somehow set (defensive)
+        let region = TerraformRegion {
+            start_line: 1,
+            end_line: 10,
+            form: vec![FormType::Prose],
+            mass: Some(MassDirective::Remove),
+            gravity: Some(GravityDirective::Focus {
+                intensity: Intensity::Significantly,
+            }),
+            direction: Some(DirectionDirective::LeanIn {
+                intensity: Intensity::Moderately,
+            }),
+        };
+        assert_eq!(region.to_prose(), "Remove this entirely.");
+    }
+
+    #[test]
+    fn pin_blocks_form_mass_direction() {
+        // Pin should block form, mass, and direction
+        let region = TerraformRegion {
+            start_line: 1,
+            end_line: 10,
+            form: vec![FormType::Table, FormType::List],
+            mass: Some(MassDirective::Expand {
+                intensity: Intensity::Moderately,
+            }),
+            gravity: Some(GravityDirective::Pin),
+            direction: Some(DirectionDirective::LeanIn {
+                intensity: Intensity::Slightly,
+            }),
+        };
+        assert_eq!(region.to_prose(), "Preserve this exactly as written.");
+    }
+
+    #[test]
+    fn pin_blocks_condense() {
+        // Pin with condense - pin wins
+        let region = TerraformRegion {
+            start_line: 1,
+            end_line: 10,
+            form: vec![],
+            mass: Some(MassDirective::Condense {
+                intensity: Intensity::Significantly,
+            }),
+            gravity: Some(GravityDirective::Pin),
+            direction: None,
+        };
+        assert_eq!(region.to_prose(), "Preserve this exactly as written.");
+    }
+
+    #[test]
+    fn dissolve_blocks_form_allows_mass_direction() {
+        // Dissolve should block form but allow mass and direction
+        let region = TerraformRegion {
+            start_line: 1,
+            end_line: 10,
+            form: vec![FormType::Table, FormType::Prose],
+            mass: Some(MassDirective::Condense {
+                intensity: Intensity::Slightly,
+            }),
+            gravity: Some(GravityDirective::Dissolve),
+            direction: Some(DirectionDirective::MoveAway {
+                intensity: Intensity::Moderately,
+            }),
+        };
+        assert_eq!(
+            region.to_prose(),
+            "Condense slightly to essentials. \
+             Remove as a unit; integrate essence into surroundings. \
+             This is moderately off-target. Pivot the perspective."
+        );
+    }
+
+    #[test]
+    fn dissolve_blocks_form_only() {
+        // Dissolve with form only - form should be blocked
+        let region = TerraformRegion {
+            start_line: 1,
+            end_line: 10,
+            form: vec![FormType::Code],
+            mass: None,
+            gravity: Some(GravityDirective::Dissolve),
+            direction: None,
+        };
+        assert_eq!(
+            region.to_prose(),
+            "Remove as a unit; integrate essence into surroundings."
+        );
+    }
+
+    #[test]
+    fn focus_blur_allow_all_axes() {
+        // Focus and blur should NOT block any axes
+        let region = TerraformRegion {
+            start_line: 1,
+            end_line: 10,
+            form: vec![FormType::List],
+            mass: Some(MassDirective::Expand {
+                intensity: Intensity::Slightly,
+            }),
+            gravity: Some(GravityDirective::Focus {
+                intensity: Intensity::Moderately,
+            }),
+            direction: Some(DirectionDirective::LeanIn {
+                intensity: Intensity::Significantly,
+            }),
+        };
+        assert_eq!(
+            region.to_prose(),
+            "Restructure this into a list. \
+             Expand slightly with more depth and examples. \
+             Make this moderately more central/prominent. \
+             You're significantly on the right track. Amplify this thinking."
+        );
     }
 }
