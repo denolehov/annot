@@ -7,16 +7,12 @@ import type { RefSnapshot, Bookmark, AnnotationRefSnapshot, SectionInfo } from '
 
 const RefSuggestionPluginKey = new PluginKey('refSuggestion');
 
-/** Menu section header for grouped @ menu (visual separator, not selectable). */
-export type RefSuggestionMenuHeader = { type: 'menu-header'; label: string };
-
 /** Unified suggestion item for @ menu - annotation, bookmark, file, or heading section. */
 export type RefSuggestionItem =
 	| { type: 'annotation'; key: string; preview: string; content: import('$lib/types').ContentNode[] }
 	| { type: 'bookmark'; bookmark: Bookmark }
 	| { type: 'file'; path: string }
-	| { type: 'heading'; section: SectionInfo }
-	| RefSuggestionMenuHeader;
+	| { type: 'heading'; section: SectionInfo };
 
 export type RefChipOptions = {
 	suggestion: Omit<SuggestionOptions<RefSuggestionItem>, 'editor' | 'pluginKey'>;

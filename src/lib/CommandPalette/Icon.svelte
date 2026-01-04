@@ -18,7 +18,12 @@
     ExcalidrawIcon,
     WarningIcon,
     ImageIcon,
-    ClipboardIcon
+    ClipboardIcon,
+    PaperclipIcon,
+    ChatBubbleIcon,
+    HeadingH1Icon,
+    HeadingH2Icon,
+    HeadingH3Icon
   } from '$lib/icons';
 
   interface Props {
@@ -47,7 +52,12 @@
     excalidraw: ExcalidrawIcon,
     warning: WarningIcon,
     image: ImageIcon,
-    clipboard: ClipboardIcon
+    clipboard: ClipboardIcon,
+    paperclip: PaperclipIcon,
+    'chat-bubble': ChatBubbleIcon,
+    'heading-h1': HeadingH1Icon,
+    'heading-h2': HeadingH2Icon,
+    'heading-h3': HeadingH3Icon
   };
 
   const IconComponent = $derived(icons[name]);

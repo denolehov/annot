@@ -26,3 +26,8 @@ export { default as FormIcon } from './FormIcon.svelte';
 export { default as MassIcon } from './MassIcon.svelte';
 export { default as GravityIcon } from './GravityIcon.svelte';
 export { default as DirectionIcon } from './DirectionIcon.svelte';
+export { default as PaperclipIcon } from './PaperclipIcon.svelte';
+export { default as ChatBubbleIcon } from './ChatBubbleIcon.svelte';
+export { default as HeadingH1Icon } from './HeadingH1Icon.svelte';
+export { default as HeadingH2Icon } from './HeadingH2Icon.svelte';
+export { default as HeadingH3Icon } from './HeadingH3Icon.svelte';

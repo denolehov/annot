@@ -9,6 +9,7 @@
   import type { RefSuggestionItem } from './tiptap/extensions';
   import type { Tag, Bookmark } from './types';
   import Icon from './CommandPalette/Icon.svelte';
+  import { BookmarkIcon } from './icons';
   import { getAnnotContext } from './context/annot-context.svelte';
 
   interface NodeRef {
@@ -539,7 +540,6 @@
 
 <!-- Portal ref suggestions (@ menu) to body, positioned with Floating UI -->
 {#if ann.refSuggestion.active && ann.refSuggestion.items.length > 0}
-  {@const selectableItems = ann.refSuggestion.items.filter((i) => i.type !== 'menu-header')}
   <div
     bind:this={refSuggestionsEl}
     use:portal
@@ -548,9 +548,7 @@
     style:zoom={ctx.contentZoom}
   >
     {#each ann.refSuggestion.items as item, idx}
-      {#if item.type === 'menu-header'}
-        <div class="ref-section-header">{item.label.toUpperCase()}</div>
-      {:else if item.type === 'annotation'}
+      {#if item.type === 'annotation'}
         <button
           type="button"
           class="ref-suggestion"
@@ -560,8 +558,9 @@
             ann.selectRefItem(item);
           }}
         >
-          <span class="ref-key">L{item.key}</span>
-          <span class="ref-preview">{item.preview || '(empty)'}</span>
+          <Icon name="chat-bubble" class="ref-icon" />
+          <span class="ref-primary">L{item.key}</span>
+          <span class="ref-secondary">{item.preview || '(empty)'}</span>
         </button>
       {:else if item.type === 'bookmark'}
         {@const displayLabel = item.bookmark.label ?? (item.bookmark.snapshot.type === 'selection' ? item.bookmark.snapshot.selected_text : item.bookmark.snapshot.source_title)}
@@ -575,41 +574,40 @@
             ann.selectRefItem(item);
           }}
         >
-          <span class="ref-key">{item.bookmark.id.slice(0, 3)}</span>
-          <div class="ref-info">
-            <span class="ref-label">{displayLabel}</span>
-            <span class="ref-meta">{item.bookmark.snapshot.source_title} · {dateStr}</span>
-          </div>
+          <BookmarkIcon filled class="ref-icon ref-icon-bookmark" />
+          <span class="ref-primary">{displayLabel}</span>
+          <span class="ref-secondary">{item.bookmark.snapshot.source_title} · {dateStr}</span>
         </button>
       {:else if item.type === 'heading'}
+        {@const headingIcon = item.section.level === 1 ? 'heading-h1' : item.section.level === 2 ? 'heading-h2' : 'heading-h3'}
         <button
           type="button"
-          class="ref-suggestion ref-heading"
+          class="ref-suggestion"
           class:selected={idx === ann.refSuggestion.selectedIndex}
           onmousedown={(e) => {
             e.preventDefault();
             ann.selectRefItem(item);
           }}
         >
-          <span class="ref-key heading-level">H{item.section.level}</span>
-          <span class="ref-label">{item.section.title}</span>
+          <Icon name={headingIcon} class="ref-icon" />
+          <span class="ref-primary">{item.section.title}</span>
         </button>
       {:else if item.type === 'file'}
         {@const filename = item.path.split('/').pop() || item.path}
         {@const parent = item.path.split('/').slice(-2, -1)[0] || ''}
         <button
           type="button"
-          class="ref-suggestion ref-file"
+          class="ref-suggestion"
           class:selected={idx === ann.refSuggestion.selectedIndex}
           onmousedown={(e) => {
             e.preventDefault();
             ann.selectRefItem(item);
           }}
         >
-          <span class="ref-key file-icon">@</span>
-          <span class="ref-label">{filename}</span>
+          <Icon name="paperclip" class="ref-icon" />
+          <span class="ref-primary">{filename}</span>
           {#if parent}
-            <span class="ref-meta">({parent})</span>
+            <span class="ref-secondary">{parent}/</span>
           {/if}
         </button>
       {/if}
