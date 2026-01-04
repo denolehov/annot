@@ -8,6 +8,9 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: write
+
 jobs:
   create-rc:
     runs-on: ubuntu-latest
@@ -21,8 +24,13 @@ jobs:
             exit 1
           fi
 
-      - name: Create and push tag
+      - name: Create tag via API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="v${{ inputs.version }}"
-          git tag "$TAG"
-          git push origin "$TAG"
+          SHA=$(git rev-parse HEAD)
+          gh api repos/${{ github.repository }}/git/refs \
+            -f ref="refs/tags/$TAG" \
+            -f sha="$SHA"
+          echo "Created tag $TAG at $SHA"
