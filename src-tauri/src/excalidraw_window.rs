@@ -324,3 +324,34 @@ pub fn excalidraw_cancel(
 
     Ok(())
 }
+
+/// Close any Excalidraw window associated with a specific placeholder ID.
+/// Called when a placeholder node is deleted from TipTap while excalidraw is still open.
+#[tauri::command]
+pub fn close_excalidraw_by_placeholder(
+    app: AppHandle,
+    excalidraw_state: State<Mutex<ExcalidrawWindowState>>,
+    placeholder_id: String,
+) -> Result<(), String> {
+    // Find the window label for this placeholder
+    let window_label = {
+        let state = excalidraw_state.lock();
+        state
+            .contexts
+            .iter()
+            .find(|(_, ctx)| matches!(&ctx.node_ref, NodeRef::Placeholder(id) if id == &placeholder_id))
+            .map(|(label, _)| label.clone())
+    };
+
+    if let Some(label) = window_label {
+        // Close the window - this will trigger the Destroyed event handler
+        // which emits the cancel result and cleans up
+        if let Some(window) = app.get_webview_window(&label) {
+            window
+                .close()
+                .map_err(|e| format!("Failed to close window: {}", e))?;
+        }
+    }
+
+    Ok(())
+}
