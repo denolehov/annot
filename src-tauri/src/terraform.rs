@@ -295,7 +295,7 @@ mod tests {
             gravity: None,
             direction: None,
         };
-        assert_eq!(region.to_prose(), "Express via table and prose.");
+        assert_eq!(region.to_prose(), "Express via table and passage.");
     }
 
     #[test]
@@ -474,7 +474,7 @@ mod tests {
         };
         assert_eq!(
             region.to_prose(),
-            "Express via detailed table and prose. Emphasize the key points. You're on the right track."
+            "Express via detailed table and passage. Emphasize the key points. You're on the right track."
         );
     }
 
@@ -592,10 +592,10 @@ mod tests {
                 intensity: Intensity::Moderately,
             }),
         };
+        // Note: Mass is blocked by Dissolve (length is irrelevant when dissolving)
         assert_eq!(
             region.to_prose(),
-            "Make this tighter. \
-             Dissolve this as a unit, integrating its essence into surroundings. \
+            "Dissolve this as a unit, integrating its essence into surroundings. \
              This needs a different direction."
         );
     }
