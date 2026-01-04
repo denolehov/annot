@@ -31,6 +31,7 @@
   let { initialRegion, onConfirm, onCancel, onChange, startLine, endLine }: Props = $props();
 
   // Capture initial region at mount time (intentional - we don't want to reset on prop changes)
+  // svelte-ignore state_referenced_locally
   const terraform = useTerraform(initialRegion);
 
   let paletteEl: HTMLDivElement;

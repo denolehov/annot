@@ -32,7 +32,7 @@
     bipolar = false,
   }: Props = $props();
 
-  const center = Math.floor(steps / 2);
+  const center = $derived(Math.floor(steps / 2));
 
   function isFilled(idx: number): boolean {
     if (bipolar) {
