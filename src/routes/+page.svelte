@@ -30,6 +30,7 @@
   import { useBookmarks } from "$lib/composables/useBookmarks.svelte";
   import { useTerraformRegions } from "$lib/composables/useTerraformRegions.svelte";
   import { useOverlay } from "$lib/composables/useOverlay.svelte";
+  import { useHistory, emptySessionData, type SessionData } from "$lib/composables/useHistory.svelte";
   import SearchBar from "$lib/components/SearchBar.svelte";
   import { AnnotProvider } from "$lib/context";
   import type { SaveContentResponse } from "$lib/types";
@@ -237,6 +238,61 @@
   let saveModalOpen = $state(false);
 
   // Help overlay state is now managed by useOverlay()
+
+  // --- History / Undo System ---
+
+  /**
+   * Capture current session state as a SessionData snapshot.
+   */
+  function captureSessionData(): SessionData {
+    return {
+      annotations: { ...annotationState.all },
+      terraform: [...terraform.all],
+      sessionComment: sessionComment ? JSON.parse(JSON.stringify(sessionComment)) : null,
+      selectedExitMode: exitModeState.selectedId,
+    };
+  }
+
+  /**
+   * Restore session state from a SessionData snapshot.
+   * Called on undo/redo.
+   */
+  async function restoreSessionData(data: SessionData): Promise<void> {
+    // Restore annotations
+    annotationState.replaceAll(data.annotations);
+
+    // Restore terraform regions
+    terraform.replaceAll(data.terraform);
+
+    // Restore session comment
+    sessionComment = data.sessionComment ? JSON.parse(JSON.stringify(data.sessionComment)) : undefined;
+
+    // Restore exit mode
+    if (data.selectedExitMode) {
+      exitModeState.select(data.selectedExitMode);
+    } else {
+      exitModeState.clearSelection();
+    }
+
+    // Note: Backend sync will be handled by restore_session_state IPC in a later milestone
+  }
+
+  // History composable for undo/redo
+  const history = useHistory({
+    onStateChange: async (data, label) => {
+      if (label === 'Undo' || label === 'Redo') {
+        await restoreSessionData(data);
+      }
+    },
+  });
+
+  /**
+   * Push current state to history before a mutation.
+   * Call this before making any change to session state.
+   */
+  function pushHistory(label: string): void {
+    history.push(captureSessionData(), label);
+  }
 
   // Content zoom state
   let contentZoom = $state(1.0);

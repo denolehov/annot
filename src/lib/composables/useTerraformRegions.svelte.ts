@@ -113,9 +113,23 @@ export function useTerraformRegions(options: UseTerraformRegionsOptions) {
     return invoke<string>('get_terraform_phrase', { region });
   }
 
+  /**
+   * Replace all regions with new data (used for undo/redo).
+   * Does NOT sync to backend - caller is responsible for that.
+   */
+  function replaceAll(newRegions: TerraformRegion[]): void {
+    regions = newRegions.map(r => ({
+      start_line: r.start_line,
+      end_line: r.end_line,
+      intent: JSON.parse(JSON.stringify(r.intent)),
+    }));
+  }
+
   return {
     /** All loaded regions (reactive) */
     get regions() { return regions; },
+    /** Alias for regions getter (for history system) */
+    get all() { return regions; },
     load,
     upsert,
     remove,
@@ -123,6 +137,7 @@ export function useTerraformRegions(options: UseTerraformRegionsOptions) {
     isRegionStart,
     isInRegion,
     getDisplayRange,
-    getPhrase
+    getPhrase,
+    replaceAll,
   };
 }
