@@ -240,12 +240,24 @@ pub struct AnnotationRefSnapshot {
     pub content: Vec<ContentNode>,
 }
 
-/// Unified reference snapshot — either annotation or bookmark.
+/// Snapshot for heading section references.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct HeadingRefSnapshot {
+    /// Source line number of the heading.
+    pub line: u32,
+    /// Heading level (1-6).
+    pub level: u32,
+    /// Heading title text.
+    pub title: String,
+}
+
+/// Unified reference snapshot — annotation, bookmark, or heading.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum RefSnapshot {
     Annotation(AnnotationRefSnapshot),
     Bookmark { bookmark: Bookmark },
+    Heading(HeadingRefSnapshot),
 }
 
 /// A normalized line range (start ≤ end).

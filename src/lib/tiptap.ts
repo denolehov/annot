@@ -745,6 +745,19 @@ const CHIP_EXTRACTORS: Record<string, ChipExtractor> = {
         path: attrs.path as string,
       };
     }
+    // Heading refs have section attributes
+    if (attrs.refType === 'heading') {
+      return {
+        type: 'ref',
+        ref_type: 'heading',
+        snapshot: {
+          type: 'heading',
+          line: attrs.sectionLine as number,
+          level: attrs.sectionLevel as number,
+          title: attrs.sectionTitle as string,
+        },
+      };
+    }
     // Annotation/bookmark refs have snapshot
     return {
       type: 'ref',

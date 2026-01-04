@@ -24,7 +24,14 @@
       items: [
         { keys: ['c'], description: 'Comment hovered line' },
         { keys: ['⇧', 'C'], description: 'Open session editor (global comment)' },
-        { keys: ['/'], description: 'Insert tag (in editor)' },
+      ]
+    },
+    {
+      category: 'Editor',
+      items: [
+        { keys: ['#'], description: 'Insert tag' },
+        { keys: ['@'], description: 'Reference (annotations, bookmarks, sections, files)' },
+        { keys: ['/'], description: 'Slash commands (/replace, /excalidraw)' },
       ]
     },
     {

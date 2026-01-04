@@ -229,14 +229,25 @@ export interface AnnotationRefSnapshot {
   content: ContentNode[];
 }
 
-/** Unified reference snapshot - either annotation or bookmark. */
-export type RefSnapshot = AnnotationRefSnapshot | { type: 'bookmark'; bookmark: Bookmark };
+/** Snapshot for heading section references. */
+export interface HeadingRefSnapshot {
+  type: 'heading';
+  /** Source line number of the heading. */
+  line: number;
+  /** Heading level (1-6). */
+  level: number;
+  /** Heading title text. */
+  title: string;
+}
+
+/** Unified reference snapshot - annotation, bookmark, or heading. */
+export type RefSnapshot = AnnotationRefSnapshot | { type: 'bookmark'; bookmark: Bookmark } | HeadingRefSnapshot;
 
 /** Unified reference node - replaces BookmarkRefNode for new references. */
 export interface RefNode {
   type: 'ref';
-  /** Discriminator for ref type: 'annotation' or 'bookmark' */
-  ref_type: 'annotation' | 'bookmark';
+  /** Discriminator for ref type: 'annotation', 'bookmark', or 'heading' */
+  ref_type: 'annotation' | 'bookmark' | 'heading';
   /** Self-contained snapshot (survives source deletion) */
   snapshot: RefSnapshot;
 }
