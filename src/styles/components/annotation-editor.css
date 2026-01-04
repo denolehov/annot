@@ -399,10 +399,6 @@
 	font-size: 12px;
 	color: var(--text-muted);
 	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	flex: 1;
-	min-width: 0;
 }
 
 /* ===========================================
