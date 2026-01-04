@@ -3,7 +3,7 @@
   import type { TerraformRegion, FormType } from '$lib/types';
   import { FORM_TYPES, INTENSITY_LEVELS } from '$lib/types';
   import DiscreteSlider from './DiscreteSlider.svelte';
-  import { GlobeIcon } from '$lib/icons';
+  import { GlobeIcon, FormIcon, MassIcon, GravityIcon, DirectionIcon, WarningIcon } from '$lib/icons';
 
   /** Explanatory titles for form buttons */
   const formTitles: Record<FormType, string> = {
@@ -402,8 +402,15 @@
   </div>
 
   <!-- Form section -->
-  <div class="terraform-row" class:overridden={terraform.formOverridden} title={terraform.formOverrideReason}>
-    <span class="terraform-row-label">Form</span>
+  <div class="terraform-row" class:overridden={terraform.formOverridden}>
+    <span class="terraform-row-label">
+      {#if terraform.formOverridden}
+        <WarningIcon class="terraform-axis-icon terraform-warning-icon" title={terraform.formOverrideReason} />
+      {:else}
+        <FormIcon class="terraform-axis-icon" />
+      {/if}
+      Form
+    </span>
     {#each FORM_TYPES as type, idx}
       <button
         class="terraform-toggle"
@@ -419,7 +426,14 @@
 
   <!-- Mass section -->
   <div class="terraform-row">
-    <span class="terraform-row-label">Mass</span>
+    <span class="terraform-row-label">
+      {#if terraform.massOverridden}
+        <WarningIcon class="terraform-axis-icon terraform-warning-icon" title={terraform.massOverrideReason} />
+      {:else}
+        <MassIcon class="terraform-axis-icon" />
+      {/if}
+      Mass
+    </span>
     <button
       class="terraform-toggle"
       class:active={terraform.mass?.type === 'remove'}
@@ -444,8 +458,15 @@
   </div>
 
   <!-- Gravity section: [pin] ← focus ←→ blur → [dissolve] -->
-  <div class="terraform-row" class:overridden={terraform.gravityOverridden} title={terraform.gravityOverrideReason}>
-    <span class="terraform-row-label">Gravity</span>
+  <div class="terraform-row" class:overridden={terraform.gravityOverridden}>
+    <span class="terraform-row-label">
+      {#if terraform.gravityOverridden}
+        <WarningIcon class="terraform-axis-icon terraform-warning-icon" title={terraform.gravityOverrideReason} />
+      {:else}
+        <GravityIcon class="terraform-axis-icon" />
+      {/if}
+      Gravity
+    </span>
     <button
       class="terraform-toggle"
       class:active={terraform.gravity?.type === 'pin'}
@@ -477,8 +498,15 @@
   </div>
 
   <!-- Direction section: [reframe] ← lean in ←→ move away -->
-  <div class="terraform-row" class:overridden={terraform.directionOverridden} title={terraform.directionOverrideReason}>
-    <span class="terraform-row-label">Direction</span>
+  <div class="terraform-row" class:overridden={terraform.directionOverridden}>
+    <span class="terraform-row-label">
+      {#if terraform.directionOverridden}
+        <WarningIcon class="terraform-axis-icon terraform-warning-icon" title={terraform.directionOverrideReason} />
+      {:else}
+        <DirectionIcon class="terraform-axis-icon" />
+      {/if}
+      Direction
+    </span>
     <button
       class="terraform-toggle"
       class:active={terraform.direction?.type === 'reframe'}

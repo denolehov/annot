@@ -193,6 +193,7 @@
 	--error-text: var(--light-red-700);
 	--danger: var(--light-red-500);
 	--danger-hover: var(--light-red-700);
+	--warning: var(--light-amber-500);
 
 	/* Diff colors (for /replace) */
 	--diff-remove-bg: rgba(220, 38, 38, 0.18);
@@ -372,6 +373,7 @@
 	--error-text: var(--dark-red-400);
 	--danger: var(--dark-red-400);
 	--danger-hover: #fca5a5; /* red-300 */
+	--warning: var(--dark-amber-400);
 
 	/* --- DIFF COLORS --- */
 	--diff-remove-bg: rgba(239, 68, 68, 0.22);

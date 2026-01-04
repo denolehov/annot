@@ -50,12 +50,26 @@
 }
 
 .terraform-row-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-ui);
   font-size: 11px;
   font-weight: 500;
   color: var(--text-muted);
-  width: 54px;
+  width: 74px;
   flex-shrink: 0;
+}
+
+.terraform-axis-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.terraform-warning-icon {
+  color: var(--warning);
+  cursor: help;
 }
 
 /* Toggle button (compact) */

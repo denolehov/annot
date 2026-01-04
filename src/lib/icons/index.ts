@@ -22,3 +22,7 @@ export { default as ImageIcon } from './ImageIcon.svelte';
 export { default as ClipboardIcon } from './ClipboardIcon.svelte';
 export { default as GlobeIcon } from './GlobeIcon.svelte';
 export { default as TerraformIcon } from './TerraformIcon.svelte';
+export { default as FormIcon } from './FormIcon.svelte';
+export { default as MassIcon } from './MassIcon.svelte';
+export { default as GravityIcon } from './GravityIcon.svelte';
+export { default as DirectionIcon } from './DirectionIcon.svelte';
