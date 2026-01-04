@@ -38,8 +38,8 @@ pub enum FormType {
 }
 
 impl FormType {
-    /// Human-readable name for output.
-    fn as_str(&self) -> &'static str {
+    /// Tag value for FORMAT directive.
+    fn as_tag(&self) -> &'static str {
         match self {
             FormType::Table => "table",
             FormType::List => "list",
@@ -102,6 +102,7 @@ impl TerraformRegion {
     /// Convert terraform region to natural language prose.
     ///
     /// Produces human-readable instructions that an LLM can directly consume.
+    /// Uses slot-filling grammar for natural, coherent output.
     ///
     /// Applies conflict precedence rules:
     /// 1. Remove overrides everything — emit only "Remove this entirely."
@@ -123,100 +124,136 @@ impl TerraformRegion {
         // Rule 3: Dissolve blocks form (but allows mass/direction)
         let emit_form = !matches!(self.gravity, Some(GravityDirective::Dissolve));
 
-        // Form clause (unless blocked by dissolve)
+        // Form + Mass combined clause (unless form blocked by dissolve)
         if emit_form && !self.form.is_empty() {
-            clauses.push(self.form_clause());
-        }
-
-        // Mass clause
-        if let Some(ref mass) = self.mass {
-            clauses.push(mass.to_clause());
+            clauses.push(self.form_mass_clause());
+        } else if let Some(ref mass) = self.mass {
+            // Mass-only clause when form is blocked
+            if let Some(verbosity) = mass.as_verbosity() {
+                clauses.push(format!("Make this {}.", verbosity));
+            }
         }
 
         // Gravity clause
         if let Some(ref gravity) = self.gravity {
-            clauses.push(gravity.to_clause());
+            if let Some(clause) = gravity.to_prose_clause() {
+                clauses.push(format!("{}.", clause));
+            }
         }
 
         // Direction clause
         if let Some(ref direction) = self.direction {
-            clauses.push(direction.to_clause());
+            clauses.push(format!("{}.", direction.to_prose_clause()));
         }
 
         clauses.join(" ")
     }
 
-    /// Build form clause based on number of selected formats.
-    fn form_clause(&self) -> String {
+    /// Build combined Form + Mass clause for natural output.
+    ///
+    /// Examples:
+    /// - Table only: "Present as a table."
+    /// - Table + detailed: "Present as a detailed table."
+    /// - Table, prose, list: "Express via table, prose, and list."
+    /// - Table, prose + comprehensive: "Express via comprehensive table, prose, and list."
+    fn form_mass_clause(&self) -> String {
+        let verbosity = self.mass.as_ref().and_then(|m| m.as_verbosity());
+
         match self.form.len() {
             0 => String::new(),
-            1 => format!("Restructure this into a {}.", self.form[0].as_str()),
-            2 => format!(
-                "Restructure this into a {}. Also provide a {} version.",
-                self.form[0].as_str(),
-                self.form[1].as_str()
-            ),
-            _ => {
-                let forms: Vec<_> = self.form.iter().map(|f| f.as_str()).collect();
-                format!("Restructure this into multiple formats: {}.", forms.join(", "))
+            1 => {
+                let form = self.form[0].as_tag();
+                match verbosity {
+                    Some(v) => format!("Present as a {} {}.", v, form),
+                    None => format!("Present as a {}.", form),
+                }
             }
+            _ => {
+                let forms: Vec<_> = self.form.iter().map(|f| f.as_tag()).collect();
+                let joined = join_with_and(&forms);
+                match verbosity {
+                    Some(v) => format!("Express via {} {}.", v, joined),
+                    None => format!("Express via {}.", joined),
+                }
+            }
+        }
+    }
+}
+
+/// Join items with commas and "and" for the last item.
+/// ["a"] -> "a"
+/// ["a", "b"] -> "a and b"
+/// ["a", "b", "c"] -> "a, b, and c"
+fn join_with_and(items: &[&str]) -> String {
+    match items.len() {
+        0 => String::new(),
+        1 => items[0].to_string(),
+        2 => format!("{} and {}", items[0], items[1]),
+        _ => {
+            let (last, rest) = items.split_last().unwrap();
+            format!("{}, and {}", rest.join(", "), last)
         }
     }
 }
 
 impl MassDirective {
-    /// Convert to natural language clause.
-    fn to_clause(&self) -> String {
+    /// Convert to VERBOSITY tag value.
+    /// Returns None for Remove (handled separately as override).
+    fn as_verbosity(&self) -> Option<&'static str> {
         match self {
-            MassDirective::Expand { intensity } => {
-                format!("Expand {} with more depth and examples.", intensity.as_adverb())
-            }
-            MassDirective::Condense { intensity } => {
-                format!("Condense {} to essentials.", intensity.as_adverb())
-            }
-            MassDirective::Remove => "Remove this entirely.".to_string(),
+            MassDirective::Expand { intensity } => Some(match intensity {
+                Intensity::Slightly => "fuller",
+                Intensity::Moderately => "detailed",
+                Intensity::Significantly => "comprehensive",
+            }),
+            MassDirective::Condense { intensity } => Some(match intensity {
+                Intensity::Slightly => "tighter",
+                Intensity::Moderately => "concise",
+                Intensity::Significantly => "minimal",
+            }),
+            MassDirective::Remove => None,
         }
     }
 }
 
 impl GravityDirective {
-    /// Convert to natural language clause.
-    fn to_clause(&self) -> String {
+    /// Convert to natural language prose clause.
+    /// Returns None for Pin (handled as full override).
+    fn to_prose_clause(&self) -> Option<&'static str> {
         match self {
-            GravityDirective::Pin => "Preserve this exactly as written.".to_string(),
-            GravityDirective::Focus { intensity } => {
-                format!("Make this {} more central/prominent.", intensity.as_adverb())
-            }
-            GravityDirective::Blur { intensity } => {
-                format!(
-                    "Reduce prominence {}; treat as supporting context.",
-                    intensity.as_adverb()
-                )
-            }
+            GravityDirective::Pin => None,
+            GravityDirective::Focus { intensity } => Some(match intensity {
+                Intensity::Slightly => "Give this slightly more weight",
+                Intensity::Moderately => "Emphasize the key points",
+                Intensity::Significantly => "Make this the centerpiece",
+            }),
+            GravityDirective::Blur { intensity } => Some(match intensity {
+                Intensity::Slightly => "Soften the emphasis slightly",
+                Intensity::Moderately => "Treat as supporting context",
+                Intensity::Significantly => "Push this to the background",
+            }),
             GravityDirective::Dissolve => {
-                "Remove as a unit; integrate essence into surroundings.".to_string()
+                Some("Dissolve this as a unit, integrating its essence into surroundings")
             }
         }
     }
 }
 
 impl DirectionDirective {
-    /// Convert to natural language clause.
-    fn to_clause(&self) -> String {
+    /// Convert to natural language prose clause.
+    fn to_prose_clause(&self) -> &'static str {
         match self {
-            DirectionDirective::LeanIn { intensity } => {
-                format!(
-                    "You're {} on the right track. Amplify this thinking.",
-                    intensity.as_adverb()
-                )
-            }
-            DirectionDirective::MoveAway { intensity } => {
-                format!(
-                    "This is {} off-target. Pivot the perspective.",
-                    intensity.as_adverb()
-                )
-            }
-            DirectionDirective::Reframe => "Same content, different framing/angle.".to_string(),
+            DirectionDirective::LeanIn { intensity } => match intensity {
+                Intensity::Slightly => "You're on the right track",
+                Intensity::Moderately => "This direction is working — keep going",
+                Intensity::Significantly => "Double down on this approach",
+            },
+            DirectionDirective::MoveAway { intensity } => match intensity {
+                Intensity::Slightly => "Consider adjusting the angle slightly",
+                Intensity::Moderately => "This needs a different direction",
+                Intensity::Significantly => "This is off-target — overhaul the approach",
+            },
+            DirectionDirective::Reframe => "Same content, reframed from a different angle",
         }
     }
 }
@@ -242,7 +279,7 @@ mod tests {
             gravity: None,
             direction: None,
         };
-        assert_eq!(region.to_prose(), "Restructure this into a table.");
+        assert_eq!(region.to_prose(), "Present as a table.");
     }
 
     #[test]
@@ -255,10 +292,7 @@ mod tests {
             gravity: None,
             direction: None,
         };
-        assert_eq!(
-            region.to_prose(),
-            "Restructure this into a table. Also provide a prose version."
-        );
+        assert_eq!(region.to_prose(), "Express via table and prose.");
     }
 
     #[test]
@@ -271,10 +305,7 @@ mod tests {
             gravity: None,
             direction: None,
         };
-        assert_eq!(
-            region.to_prose(),
-            "Restructure this into multiple formats: table, list, diagram."
-        );
+        assert_eq!(region.to_prose(), "Express via table, list, and diagram.");
     }
 
     #[test]
@@ -289,7 +320,7 @@ mod tests {
             gravity: None,
             direction: None,
         };
-        assert_eq!(region.to_prose(), "Expand moderately with more depth and examples.");
+        assert_eq!(region.to_prose(), "Make this detailed.");
     }
 
     #[test]
@@ -304,7 +335,7 @@ mod tests {
             gravity: None,
             direction: None,
         };
-        assert_eq!(region.to_prose(), "Condense significantly to essentials.");
+        assert_eq!(region.to_prose(), "Make this minimal.");
     }
 
     #[test]
@@ -345,7 +376,7 @@ mod tests {
             }),
             direction: None,
         };
-        assert_eq!(region.to_prose(), "Make this moderately more central/prominent.");
+        assert_eq!(region.to_prose(), "Emphasize the key points.");
     }
 
     #[test]
@@ -360,10 +391,7 @@ mod tests {
             }),
             direction: None,
         };
-        assert_eq!(
-            region.to_prose(),
-            "Reduce prominence slightly; treat as supporting context."
-        );
+        assert_eq!(region.to_prose(), "Soften the emphasis slightly.");
     }
 
     #[test]
@@ -378,7 +406,7 @@ mod tests {
         };
         assert_eq!(
             region.to_prose(),
-            "Remove as a unit; integrate essence into surroundings."
+            "Dissolve this as a unit, integrating its essence into surroundings."
         );
     }
 
@@ -394,10 +422,7 @@ mod tests {
                 intensity: Intensity::Significantly,
             }),
         };
-        assert_eq!(
-            region.to_prose(),
-            "You're significantly on the right track. Amplify this thinking."
-        );
+        assert_eq!(region.to_prose(), "Double down on this approach.");
     }
 
     #[test]
@@ -412,7 +437,7 @@ mod tests {
                 intensity: Intensity::Moderately,
             }),
         };
-        assert_eq!(region.to_prose(), "This is moderately off-target. Pivot the perspective.");
+        assert_eq!(region.to_prose(), "This needs a different direction.");
     }
 
     #[test]
@@ -425,7 +450,7 @@ mod tests {
             gravity: None,
             direction: Some(DirectionDirective::Reframe),
         };
-        assert_eq!(region.to_prose(), "Same content, different framing/angle.");
+        assert_eq!(region.to_prose(), "Same content, reframed from a different angle.");
     }
 
     #[test]
@@ -446,10 +471,7 @@ mod tests {
         };
         assert_eq!(
             region.to_prose(),
-            "Restructure this into a table. Also provide a prose version. \
-             Expand moderately with more depth and examples. \
-             Make this moderately more central/prominent. \
-             You're slightly on the right track. Amplify this thinking."
+            "Express via detailed table and prose. Emphasize the key points. You're on the right track."
         );
     }
 
@@ -569,9 +591,9 @@ mod tests {
         };
         assert_eq!(
             region.to_prose(),
-            "Condense slightly to essentials. \
-             Remove as a unit; integrate essence into surroundings. \
-             This is moderately off-target. Pivot the perspective."
+            "Make this tighter. \
+             Dissolve this as a unit, integrating its essence into surroundings. \
+             This needs a different direction."
         );
     }
 
@@ -588,7 +610,7 @@ mod tests {
         };
         assert_eq!(
             region.to_prose(),
-            "Remove as a unit; integrate essence into surroundings."
+            "Dissolve this as a unit, integrating its essence into surroundings."
         );
     }
 
@@ -611,10 +633,7 @@ mod tests {
         };
         assert_eq!(
             region.to_prose(),
-            "Restructure this into a list. \
-             Expand slightly with more depth and examples. \
-             Make this moderately more central/prominent. \
-             You're significantly on the right track. Amplify this thinking."
+            "Present as a fuller list. Emphasize the key points. Double down on this approach."
         );
     }
 }
