@@ -78,8 +78,9 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
       return { phase: 'committed', range, pendingChoice: action.pendingChoice };
 
     case 'OPEN_EDITOR':
-      // Can open from committed, idle, or editing (to switch editors)
-      if (state.phase === 'committed' || state.phase === 'idle' || state.phase === 'editing') {
+      // Can open from committed, idle, hovering, or editing (to switch editors)
+      // Hovering is just a visual state - shouldn't block opening session editor
+      if (state.phase === 'committed' || state.phase === 'idle' || state.phase === 'hovering' || state.phase === 'editing') {
         return { phase: 'editing', editor: action.editor };
       }
       return state;
