@@ -216,64 +216,31 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
                 }
               }
 
-              // Filter by query using fuzzy search
-              const filteredAnnotations = fuzzySearch(
-                annotationItems.filter((item): item is Extract<RefSuggestionItem, { type: 'annotation' }> => item.type === 'annotation'),
-                query,
-                [{ name: 'key', weight: 2 }, { name: 'preview', weight: 1 }]
-              );
+              // Build unified list with searchText for fuzzy matching
+              const allItems = [
+                ...annotationItems.map((item) => ({
+                  item,
+                  searchText: item.type === 'annotation' ? `${item.key} ${item.preview}` : '',
+                })),
+                ...bookmarkItems.map((item) => ({
+                  item,
+                  searchText: item.type === 'bookmark'
+                    ? `${item.bookmark.id} ${item.bookmark.label || item.bookmark.snapshot.source_title || ''}`
+                    : '',
+                })),
+                ...headingItems.map((item) => ({
+                  item,
+                  searchText: item.type === 'heading' ? item.section.title : '',
+                })),
+                ...fileItems.map((item) => ({
+                  item,
+                  searchText: item.type === 'file' ? item.path : '',
+                })),
+              ];
 
-              // For bookmarks, create searchable items with computed label
-              const bookmarksWithLabel = bookmarkItems
-                .filter((item): item is Extract<RefSuggestionItem, { type: 'bookmark' }> => item.type === 'bookmark')
-                .map((item) => ({
-                  ...item,
-                  searchLabel: item.bookmark.label || item.bookmark.snapshot.source_title || '',
-                  searchId: item.bookmark.id,
-                }));
-              const filteredBookmarks = fuzzySearch(
-                bookmarksWithLabel,
-                query,
-                [{ name: 'searchId', weight: 1 }, { name: 'searchLabel', weight: 2 }]
-              );
-
-              // For headings, search on title
-              const headingsWithTitle = headingItems
-                .filter((item): item is Extract<RefSuggestionItem, { type: 'heading' }> => item.type === 'heading')
-                .map((item) => ({
-                  ...item,
-                  searchTitle: item.section.title,
-                }));
-              const filteredHeadings = fuzzySearch(
-                headingsWithTitle,
-                query,
-                [{ name: 'searchTitle', weight: 1 }]
-              );
-
-              // Build sectioned results
-              const result: RefSuggestionItem[] = [];
-
-              if (filteredAnnotations.length > 0) {
-                result.push({ type: 'menu-header', label: 'Annotations' });
-                result.push(...filteredAnnotations);
-              }
-
-              if (filteredBookmarks.length > 0) {
-                result.push({ type: 'menu-header', label: 'Bookmarks' });
-                result.push(...filteredBookmarks);
-              }
-
-              if (filteredHeadings.length > 0) {
-                result.push({ type: 'menu-header', label: 'Sections' });
-                result.push(...filteredHeadings);
-              }
-
-              if (fileItems.length > 0) {
-                result.push({ type: 'menu-header', label: 'Files' });
-                result.push(...fileItems);
-              }
-
-              return result;
+              // Single fuzzy search across all items
+              const filtered = fuzzySearch(allItems, query, [{ name: 'searchText', weight: 1 }]);
+              return filtered.map((f) => f.item);
             },
             render: createSuggestionRender<RefSuggestionItem>(
               () => refSuggestion,
