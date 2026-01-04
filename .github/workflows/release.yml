@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   build-macos:
-    runs-on: macos-14  # Apple Silicon runner
+    runs-on: macos-26  # Apple Silicon runner (Tahoe)
     steps:
       - uses: actions/checkout@v4
         with:
