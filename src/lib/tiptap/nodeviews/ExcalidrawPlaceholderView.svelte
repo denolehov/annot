@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { NodeViewWrapper } from 'svelte-tiptap';
 	import type { NodeViewProps } from '@tiptap/core';
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { ExcalidrawIcon } from '$lib/icons';
 
 	let { node, getPos }: NodeViewProps = $props();
@@ -20,6 +20,16 @@
 				chipEl.dispatchEvent(event);
 			}
 		});
+	});
+
+	onDestroy(() => {
+		// Notify that placeholder was deleted while excalidraw might still be open
+		// This allows cleanup of orphaned excalidraw windows
+		// Use document.dispatchEvent since chipEl may be detached from DOM during destroy
+		const event = new CustomEvent('excalidraw-placeholder-destroyed', {
+			detail: { placeholderId: node.attrs.placeholderId },
+		});
+		document.dispatchEvent(event);
 	});
 </script>
 

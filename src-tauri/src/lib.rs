@@ -35,8 +35,8 @@ use commands::{
     upsert_annotation, upsert_exit_mode, upsert_tag, upsert_terraform,
 };
 use excalidraw_window::{
-    excalidraw_cancel, excalidraw_save, get_excalidraw_context, open_excalidraw_window,
-    ExcalidrawWindowState,
+    close_excalidraw_by_placeholder, excalidraw_cancel, excalidraw_save, get_excalidraw_context,
+    open_excalidraw_window, ExcalidrawWindowState,
 };
 use files::{invalidate_file_cache, list_project_files, FileCache, FileCacheState};
 use mermaid_window::{get_mermaid_source, open_mermaid_window, MermaidWindowState};
@@ -78,6 +78,7 @@ macro_rules! all_commands {
             get_excalidraw_context,
             excalidraw_save,
             excalidraw_cancel,
+            close_excalidraw_by_placeholder,
             get_config,
             save_config,
             export_to_obsidian,

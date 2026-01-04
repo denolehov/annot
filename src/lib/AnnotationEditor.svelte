@@ -311,6 +311,26 @@
     }
   }
 
+  // Handle placeholder destruction - close orphaned excalidraw windows
+  async function handlePlaceholderDestroyed(e: Event) {
+    const detail = (e as CustomEvent).detail as { placeholderId: string };
+
+    // Check if we have an active excalidraw modal for this editor
+    if (ctx.interaction.modalLock?.kind === 'excalidraw' &&
+        ctx.interaction.modalLock.editorKey === rangeKey) {
+      // Close the orphaned excalidraw window
+      try {
+        await invoke('close_excalidraw_by_placeholder', {
+          placeholderId: detail.placeholderId,
+        });
+      } catch (e) {
+        console.error('Failed to close excalidraw window:', e);
+        // Clear modal lock anyway to unblock interaction
+        ctx.interaction.setModalLock(null);
+      }
+    }
+  }
+
   // Handle Excalidraw events and scroll into view
   onMount(() => {
     const handleExcalidrawCreate = (e: Event) => {
@@ -325,6 +345,9 @@
 
     element?.addEventListener('excalidraw-create', handleExcalidrawCreate);
     element?.addEventListener('excalidraw-edit', handleExcalidrawEdit);
+
+    // Listen for placeholder destruction (dispatched on document)
+    document.addEventListener('excalidraw-placeholder-destroyed', handlePlaceholderDestroyed);
 
     // Listen for Excalidraw results from the window
     listen<ExcalidrawResult>('excalidraw-result', (event) => {
@@ -371,6 +394,7 @@
     return () => {
       element?.removeEventListener('excalidraw-create', handleExcalidrawCreate);
       element?.removeEventListener('excalidraw-edit', handleExcalidrawEdit);
+      document.removeEventListener('excalidraw-placeholder-destroyed', handlePlaceholderDestroyed);
     };
   });
 
