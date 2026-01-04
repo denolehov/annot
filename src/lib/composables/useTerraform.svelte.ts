@@ -2,20 +2,13 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   FormType,
   Intensity,
-  MassDirective,
-  GravityDirective,
+  MassChange,
+  GravityChange,
   DirectionDirective,
   TerraformRegion,
+  TerraformIntent,
 } from '$lib/types';
-import { INTENSITY_LEVELS, FORM_TYPES } from '$lib/types';
-
-/** Internal state for terraform palette. */
-export interface TerraformState {
-  form: FormType[];
-  mass: MassDirective | null;
-  gravity: GravityDirective | null;
-  direction: DirectionDirective | null;
-}
+import { INTENSITY_LEVELS, FORM_TYPES, emptyTransformIntent, isIntentEmpty } from '$lib/types';
 
 /** Intensity display labels for UI. */
 export const INTENSITY_LABELS: Record<Intensity, string> = {
@@ -37,35 +30,41 @@ export const FORM_LABELS: Record<FormType, string> = {
 const DEFAULT_INTENSITY: Intensity = 'slightly';
 
 /** Debounce delay for phrase IPC calls (ms). */
-const PHRASE_DEBOUNCE_MS = 200;
+const PHRASE_DEBOUNCE_MS = 20;
 
 /** Create terraform state composable for palette. */
 export function useTerraform(initialRegion?: TerraformRegion) {
-  // Initialize state from existing region or empty
-  let form: FormType[] = $state(initialRegion?.form ?? []);
-  let mass: MassDirective | null = $state(initialRegion?.mass ?? null);
-  let gravity: GravityDirective | null = $state(initialRegion?.gravity ?? null);
-  let direction: DirectionDirective | null = $state(initialRegion?.direction ?? null);
+  // Single intent state - type-safe combinations only
+  let intent: TerraformIntent = $state(initialRegion?.intent ?? emptyTransformIntent());
+
+  // Store previous transform state for recovery when exiting terminal modes
+  let previousTransform: (TerraformIntent & { kind: 'transform' }) | null = $state(null);
 
   // Phrase from backend (updated via debounced IPC)
   let phrase = $state('');
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Check if state is empty (nothing configured)
-  const isEmpty = $derived(
-    form.length === 0 && mass === null && gravity === null && direction === null
+  const isEmpty = $derived(isIntentEmpty(intent));
+
+  // --- Derived state for UI convenience ---
+  // These expose the inner fields when in transform mode
+  const form = $derived(intent.kind === 'transform' ? intent.form : []);
+  const mass = $derived(intent.kind === 'transform' ? intent.mass : null);
+  const gravity = $derived(intent.kind === 'transform' ? intent.gravity : null);
+  const direction = $derived(
+    intent.kind === 'transform' ? intent.direction :
+    intent.kind === 'dissolve' ? intent.direction :
+    null
   );
 
-  // --- Override status (for visual dimming based on precedence) ---
-  // Remove overrides everything
-  // Pin overrides form, mass (expand/condense), direction
-  // Dissolve overrides form only
-  const isRemoveActive = $derived(mass?.type === 'remove');
-  const isPinActive = $derived(gravity?.type === 'pin');
-  const isDissolveActive = $derived(gravity?.type === 'dissolve');
+  // --- Override status for visual dimming ---
+  const isRemoveActive = $derived(intent.kind === 'remove');
+  const isPinActive = $derived(intent.kind === 'pin');
+  const isDissolveActive = $derived(intent.kind === 'dissolve');
 
   const formOverridden = $derived(isRemoveActive || isPinActive || isDissolveActive);
-  const massOverridden = $derived(isRemoveActive || isPinActive);
+  const massOverridden = $derived(isRemoveActive || isPinActive || isDissolveActive);
   const gravityOverridden = $derived(isRemoveActive);
   const directionOverridden = $derived(isRemoveActive || isPinActive);
 
@@ -77,7 +76,8 @@ export function useTerraform(initialRegion?: TerraformRegion) {
   );
   const massOverrideReason = $derived(
     isRemoveActive ? 'Overridden by Remove' :
-    isPinActive ? 'Overridden by Pin' : null
+    isPinActive ? 'Overridden by Pin' :
+    isDissolveActive ? 'Overridden by Dissolve' : null
   );
   const gravityOverrideReason = $derived(
     isRemoveActive ? 'Overridden by Remove' : null
@@ -95,10 +95,7 @@ export function useTerraform(initialRegion?: TerraformRegion) {
       const region: TerraformRegion = {
         start_line: 0,
         end_line: 0,
-        form,
-        mass,
-        gravity,
-        direction,
+        intent,
       };
       try {
         phrase = await invoke<string>('get_terraform_phrase', { region });
@@ -110,98 +107,195 @@ export function useTerraform(initialRegion?: TerraformRegion) {
 
   // Trigger phrase update on any state change
   $effect(() => {
-    // Access all reactive state to create dependencies
-    void form;
-    void mass;
-    void gravity;
-    void direction;
+    void intent;
     updatePhrase();
   });
 
-  // --- Form mutations ---
-  function toggleForm(type: FormType): void {
-    const idx = form.indexOf(type);
-    if (idx >= 0) {
-      form = form.filter((_, i) => i !== idx);
-    } else {
-      form = [...form, type];
+  // --- Helper: ensure we're in transform mode ---
+  function ensureTransform(): TerraformIntent & { kind: 'transform' } {
+    if (intent.kind === 'transform') {
+      return intent;
+    }
+    // Transition to transform, preserving direction if coming from dissolve
+    const newIntent: TerraformIntent = {
+      kind: 'transform',
+      form: [],
+      mass: null,
+      gravity: null,
+      direction: intent.kind === 'dissolve' ? intent.direction : null,
+    };
+    intent = newIntent;
+    return newIntent;
+  }
+
+  // --- Helper: save current transform state before entering terminal mode ---
+  function saveTransformState(): void {
+    if (intent.kind === 'transform') {
+      previousTransform = intent;
     }
   }
 
-  // --- Mass mutations ---
+  // --- Terminal state setters ---
+  function setRemove(): void {
+    saveTransformState();
+    intent = { kind: 'remove' };
+  }
+
+  function clearRemove(): void {
+    if (intent.kind === 'remove') {
+      intent = previousTransform ?? emptyTransformIntent();
+      previousTransform = null;
+    }
+  }
+
+  function setPin(): void {
+    saveTransformState();
+    intent = { kind: 'pin' };
+  }
+
+  function clearPin(): void {
+    if (intent.kind === 'pin') {
+      intent = previousTransform ?? emptyTransformIntent();
+      previousTransform = null;
+    }
+  }
+
+  function setDissolve(): void {
+    saveTransformState();
+    // Preserve direction when transitioning to dissolve
+    const currentDirection = intent.kind === 'transform' ? intent.direction :
+                             intent.kind === 'dissolve' ? intent.direction : null;
+    intent = { kind: 'dissolve', direction: currentDirection };
+  }
+
+  function clearDissolve(): void {
+    if (intent.kind === 'dissolve') {
+      // Restore previous transform, merging in any direction changes made in dissolve mode
+      const prev = previousTransform;
+      intent = {
+        kind: 'transform',
+        form: prev?.form ?? [],
+        mass: prev?.mass ?? null,
+        gravity: prev?.gravity ?? null,
+        direction: intent.direction, // Keep direction from dissolve mode
+      };
+      previousTransform = null;
+    }
+  }
+
+  // --- Form mutations (auto-switch to transform) ---
+  function toggleForm(type: FormType): void {
+    const t = ensureTransform();
+    const idx = t.form.indexOf(type);
+    if (idx >= 0) {
+      intent = { ...t, form: t.form.filter((_, i) => i !== idx) };
+    } else {
+      intent = { ...t, form: [...t.form, type] };
+    }
+  }
+
+  // --- Mass mutations (auto-switch to transform) ---
   function setMassExpand(intensity: Intensity = DEFAULT_INTENSITY): void {
-    mass = { type: 'expand', intensity };
+    const t = ensureTransform();
+    intent = { ...t, mass: { type: 'expand', intensity } };
   }
 
   function setMassCondense(intensity: Intensity = DEFAULT_INTENSITY): void {
-    mass = { type: 'condense', intensity };
-  }
-
-  function setMassRemove(): void {
-    mass = { type: 'remove' };
+    const t = ensureTransform();
+    intent = { ...t, mass: { type: 'condense', intensity } };
   }
 
   function clearMass(): void {
-    mass = null;
+    if (intent.kind === 'transform') {
+      intent = { ...intent, mass: null };
+    }
   }
 
   function adjustMassIntensity(delta: number): void {
-    if (!mass || mass.type === 'remove') return;
-    const currentIdx = INTENSITY_LEVELS.indexOf(mass.intensity);
+    if (intent.kind !== 'transform' || !intent.mass) return;
+    const currentIdx = INTENSITY_LEVELS.indexOf(intent.mass.intensity);
     const newIdx = Math.max(0, Math.min(INTENSITY_LEVELS.length - 1, currentIdx + delta));
-    mass = { ...mass, intensity: INTENSITY_LEVELS[newIdx] };
+    intent = { ...intent, mass: { ...intent.mass, intensity: INTENSITY_LEVELS[newIdx] } };
   }
 
-  // --- Gravity mutations ---
-  function setGravityPin(): void {
-    gravity = { type: 'pin' };
-  }
-
-  function setGravityDissolve(): void {
-    gravity = { type: 'dissolve' };
-  }
-
+  // --- Gravity mutations (auto-switch to transform) ---
   function setGravityFocus(intensity: Intensity = DEFAULT_INTENSITY): void {
-    gravity = { type: 'focus', intensity };
+    const t = ensureTransform();
+    intent = { ...t, gravity: { type: 'focus', intensity } };
   }
 
   function setGravityBlur(intensity: Intensity = DEFAULT_INTENSITY): void {
-    gravity = { type: 'blur', intensity };
+    const t = ensureTransform();
+    intent = { ...t, gravity: { type: 'blur', intensity } };
   }
 
   function clearGravity(): void {
-    gravity = null;
+    if (intent.kind === 'transform') {
+      intent = { ...intent, gravity: null };
+    }
   }
 
   function adjustGravityIntensity(delta: number): void {
-    if (!gravity || gravity.type === 'pin' || gravity.type === 'dissolve') return;
-    const currentIdx = INTENSITY_LEVELS.indexOf(gravity.intensity);
+    if (intent.kind !== 'transform' || !intent.gravity) return;
+    const currentIdx = INTENSITY_LEVELS.indexOf(intent.gravity.intensity);
     const newIdx = Math.max(0, Math.min(INTENSITY_LEVELS.length - 1, currentIdx + delta));
-    gravity = { ...gravity, intensity: INTENSITY_LEVELS[newIdx] };
+    intent = { ...intent, gravity: { ...intent.gravity, intensity: INTENSITY_LEVELS[newIdx] } };
   }
 
-  // --- Direction mutations ---
+  // --- Direction mutations (works in transform or dissolve) ---
   function setDirectionReframe(): void {
-    direction = { type: 'reframe' };
+    if (intent.kind === 'transform') {
+      intent = { ...intent, direction: { type: 'reframe' } };
+    } else if (intent.kind === 'dissolve') {
+      intent = { ...intent, direction: { type: 'reframe' } };
+    } else {
+      // Auto-switch to transform if in terminal state
+      intent = { kind: 'transform', form: [], mass: null, gravity: null, direction: { type: 'reframe' } };
+    }
   }
 
   function setDirectionLeanIn(intensity: Intensity = DEFAULT_INTENSITY): void {
-    direction = { type: 'leanin', intensity };
+    if (intent.kind === 'transform') {
+      intent = { ...intent, direction: { type: 'leanin', intensity } };
+    } else if (intent.kind === 'dissolve') {
+      intent = { ...intent, direction: { type: 'leanin', intensity } };
+    } else {
+      intent = { kind: 'transform', form: [], mass: null, gravity: null, direction: { type: 'leanin', intensity } };
+    }
   }
 
   function setDirectionMoveAway(intensity: Intensity = DEFAULT_INTENSITY): void {
-    direction = { type: 'moveaway', intensity };
+    if (intent.kind === 'transform') {
+      intent = { ...intent, direction: { type: 'moveaway', intensity } };
+    } else if (intent.kind === 'dissolve') {
+      intent = { ...intent, direction: { type: 'moveaway', intensity } };
+    } else {
+      intent = { kind: 'transform', form: [], mass: null, gravity: null, direction: { type: 'moveaway', intensity } };
+    }
   }
 
   function clearDirection(): void {
-    direction = null;
+    if (intent.kind === 'transform') {
+      intent = { ...intent, direction: null };
+    } else if (intent.kind === 'dissolve') {
+      intent = { ...intent, direction: null };
+    }
   }
 
   function adjustDirectionIntensity(delta: number): void {
-    if (!direction || direction.type === 'reframe') return;
-    const currentIdx = INTENSITY_LEVELS.indexOf(direction.intensity);
+    const dir = intent.kind === 'transform' ? intent.direction :
+                intent.kind === 'dissolve' ? intent.direction : null;
+    if (!dir || dir.type === 'reframe') return;
+
+    const currentIdx = INTENSITY_LEVELS.indexOf(dir.intensity);
     const newIdx = Math.max(0, Math.min(INTENSITY_LEVELS.length - 1, currentIdx + delta));
-    direction = { ...direction, intensity: INTENSITY_LEVELS[newIdx] };
+    const newDirection = { ...dir, intensity: INTENSITY_LEVELS[newIdx] };
+
+    if (intent.kind === 'transform') {
+      intent = { ...intent, direction: newDirection };
+    } else if (intent.kind === 'dissolve') {
+      intent = { ...intent, direction: newDirection };
+    }
   }
 
   // --- Serialization ---
@@ -209,15 +303,15 @@ export function useTerraform(initialRegion?: TerraformRegion) {
     return {
       start_line: startLine,
       end_line: endLine,
-      form,
-      mass,
-      gravity,
-      direction,
+      intent,
     };
   }
 
   return {
-    // State (getters for reactivity)
+    // Intent (full access)
+    get intent() { return intent; },
+
+    // Derived fields for UI convenience
     get form() { return form; },
     get mass() { return mass; },
     get gravity() { return gravity; },
@@ -235,19 +329,24 @@ export function useTerraform(initialRegion?: TerraformRegion) {
     get gravityOverrideReason() { return gravityOverrideReason; },
     get directionOverrideReason() { return directionOverrideReason; },
 
+    // Terminal state setters
+    setRemove,
+    clearRemove,
+    setPin,
+    clearPin,
+    setDissolve,
+    clearDissolve,
+
     // Form
     toggleForm,
 
     // Mass
     setMassExpand,
     setMassCondense,
-    setMassRemove,
     clearMass,
     adjustMassIntensity,
 
     // Gravity
-    setGravityPin,
-    setGravityDissolve,
     setGravityFocus,
     setGravityBlur,
     clearGravity,
@@ -264,4 +363,3 @@ export function useTerraform(initialRegion?: TerraformRegion) {
     toRegion,
   };
 }
-

@@ -964,7 +964,7 @@ description: "Create a well-structured git commit"
 
 #[test]
 fn terraform_single_region() {
-    use crate::terraform::{FormType, Intensity, MassDirective, TerraformRegion};
+    use crate::terraform::{FormType, Intensity, MassChange, TerraformIntent, TerraformRegion};
 
     let source = ContentSource::Cli(CliSource::File {
         path: PathBuf::from("plan.md"),
@@ -984,12 +984,14 @@ fn terraform_single_region() {
         file.terraform_regions.push(TerraformRegion {
             start_line: 5,
             end_line: 8,
-            form: vec![FormType::Table],
-            mass: Some(MassDirective::Expand {
-                intensity: Intensity::Moderately,
-            }),
-            gravity: None,
-            direction: None,
+            intent: TerraformIntent::Transform {
+                form: vec![FormType::Table],
+                mass: Some(MassChange::Expand {
+                    intensity: Intensity::Moderately,
+                }),
+                gravity: None,
+                direction: None,
+            },
         });
     }
 
@@ -1000,7 +1002,8 @@ fn terraform_single_region() {
 #[test]
 fn terraform_multiple_regions() {
     use crate::terraform::{
-        DirectionDirective, FormType, GravityDirective, Intensity, MassDirective, TerraformRegion,
+        DirectionDirective, FormType, GravityChange, Intensity, MassChange, TerraformIntent,
+        TerraformRegion,
     };
 
     let source = ContentSource::Cli(CliSource::File {
@@ -1021,28 +1024,32 @@ fn terraform_multiple_regions() {
         file.terraform_regions.push(TerraformRegion {
             start_line: 5,
             end_line: 8,
-            form: vec![FormType::Table, FormType::Prose],
-            mass: Some(MassDirective::Expand {
-                intensity: Intensity::Moderately,
-            }),
-            gravity: Some(GravityDirective::Focus {
-                intensity: Intensity::Slightly,
-            }),
-            direction: None,
+            intent: TerraformIntent::Transform {
+                form: vec![FormType::Table, FormType::Prose],
+                mass: Some(MassChange::Expand {
+                    intensity: Intensity::Moderately,
+                }),
+                gravity: Some(GravityChange::Focus {
+                    intensity: Intensity::Slightly,
+                }),
+                direction: None,
+            },
         });
 
         // Second region: condense with direction
         file.terraform_regions.push(TerraformRegion {
             start_line: 15,
             end_line: 18,
-            form: vec![],
-            mass: Some(MassDirective::Condense {
-                intensity: Intensity::Significantly,
-            }),
-            gravity: None,
-            direction: Some(DirectionDirective::MoveAway {
-                intensity: Intensity::Moderately,
-            }),
+            intent: TerraformIntent::Transform {
+                form: vec![],
+                mass: Some(MassChange::Condense {
+                    intensity: Intensity::Significantly,
+                }),
+                gravity: None,
+                direction: Some(DirectionDirective::MoveAway {
+                    intensity: Intensity::Moderately,
+                }),
+            },
         });
     }
 
@@ -1052,7 +1059,7 @@ fn terraform_multiple_regions() {
 
 #[test]
 fn terraform_with_annotations() {
-    use crate::terraform::{FormType, Intensity, MassDirective, TerraformRegion};
+    use crate::terraform::{FormType, Intensity, MassChange, TerraformIntent, TerraformRegion};
 
     let source = ContentSource::Cli(CliSource::File {
         path: PathBuf::from("mixed.md"),
@@ -1072,12 +1079,14 @@ fn terraform_with_annotations() {
         file.terraform_regions.push(TerraformRegion {
             start_line: 5,
             end_line: 8,
-            form: vec![FormType::List],
-            mass: Some(MassDirective::Expand {
-                intensity: Intensity::Moderately,
-            }),
-            gravity: None,
-            direction: None,
+            intent: TerraformIntent::Transform {
+                form: vec![FormType::List],
+                mass: Some(MassChange::Expand {
+                    intensity: Intensity::Moderately,
+                }),
+                gravity: None,
+                direction: None,
+            },
         });
 
         // Annotation
@@ -1099,7 +1108,7 @@ fn terraform_with_annotations() {
 
 #[test]
 fn terraform_pin_and_dissolve() {
-    use crate::terraform::{GravityDirective, TerraformRegion};
+    use crate::terraform::{TerraformIntent, TerraformRegion};
 
     let source = ContentSource::Cli(CliSource::File {
         path: PathBuf::from("gravity.md"),
@@ -1119,20 +1128,14 @@ fn terraform_pin_and_dissolve() {
         file.terraform_regions.push(TerraformRegion {
             start_line: 3,
             end_line: 4,
-            form: vec![],
-            mass: None,
-            gravity: Some(GravityDirective::Pin),
-            direction: None,
+            intent: TerraformIntent::Pin,
         });
 
         // Dissolve region
         file.terraform_regions.push(TerraformRegion {
             start_line: 12,
             end_line: 14,
-            form: vec![],
-            mass: None,
-            gravity: Some(GravityDirective::Dissolve),
-            direction: None,
+            intent: TerraformIntent::Dissolve { direction: None },
         });
     }
 
@@ -1142,7 +1145,7 @@ fn terraform_pin_and_dissolve() {
 
 #[test]
 fn terraform_reframe() {
-    use crate::terraform::{DirectionDirective, TerraformRegion};
+    use crate::terraform::{DirectionDirective, TerraformIntent, TerraformRegion};
 
     let source = ContentSource::Cli(CliSource::File {
         path: PathBuf::from("reframe.md"),
@@ -1161,10 +1164,12 @@ fn terraform_reframe() {
         file.terraform_regions.push(TerraformRegion {
             start_line: 5,
             end_line: 8,
-            form: vec![],
-            mass: None,
-            gravity: None,
-            direction: Some(DirectionDirective::Reframe),
+            intent: TerraformIntent::Transform {
+                form: vec![],
+                mass: None,
+                gravity: None,
+                direction: Some(DirectionDirective::Reframe),
+            },
         });
     }
 
@@ -1174,7 +1179,7 @@ fn terraform_reframe() {
 
 #[test]
 fn terraform_remove() {
-    use crate::terraform::{MassDirective, TerraformRegion};
+    use crate::terraform::{TerraformIntent, TerraformRegion};
 
     let source = ContentSource::Cli(CliSource::File {
         path: PathBuf::from("remove.md"),
@@ -1193,10 +1198,7 @@ fn terraform_remove() {
         file.terraform_regions.push(TerraformRegion {
             start_line: 5,
             end_line: 8,
-            form: vec![],
-            mass: Some(MassDirective::Remove),
-            gravity: None,
-            direction: None,
+            intent: TerraformIntent::Remove,
         });
     }
 
@@ -1205,10 +1207,11 @@ fn terraform_remove() {
 }
 
 /// Comprehensive terraform test that exercises every feature:
-/// - Multiple terraform regions with all axes
+/// - Multiple terraform regions with all intents
 /// - All form types (single, double, multi-select)
-/// - All mass directives (expand, condense, remove)
-/// - All gravity directives (pin, focus, blur, dissolve)
+/// - All mass changes (expand, condense)
+/// - All gravity changes (focus, blur)
+/// - Terminal states (remove, pin, dissolve)
 /// - All direction directives (lean-in, move-away, reframe)
 /// - All intensity levels
 /// - Combined with annotations
@@ -1216,7 +1219,8 @@ fn terraform_remove() {
 #[test]
 fn terraform_kitchen_sink() {
     use crate::terraform::{
-        DirectionDirective, FormType, GravityDirective, Intensity, MassDirective, TerraformRegion,
+        DirectionDirective, FormType, GravityChange, Intensity, MassChange, TerraformIntent,
+        TerraformRegion,
     };
 
     let config = UserConfig::with_data(
@@ -1248,82 +1252,81 @@ fn terraform_kitchen_sink() {
         file.terraform_regions.push(TerraformRegion {
             start_line: 5,
             end_line: 8,
-            form: vec![FormType::Table],
-            mass: Some(MassDirective::Expand {
-                intensity: Intensity::Slightly,
-            }),
-            gravity: Some(GravityDirective::Focus {
-                intensity: Intensity::Moderately,
-            }),
-            direction: Some(DirectionDirective::LeanIn {
-                intensity: Intensity::Significantly,
-            }),
+            intent: TerraformIntent::Transform {
+                form: vec![FormType::Table],
+                mass: Some(MassChange::Expand {
+                    intensity: Intensity::Slightly,
+                }),
+                gravity: Some(GravityChange::Focus {
+                    intensity: Intensity::Moderately,
+                }),
+                direction: Some(DirectionDirective::LeanIn {
+                    intensity: Intensity::Significantly,
+                }),
+            },
         });
 
         // Region 2: Two forms + condense significantly
         file.terraform_regions.push(TerraformRegion {
             start_line: 15,
             end_line: 18,
-            form: vec![FormType::List, FormType::Diagram],
-            mass: Some(MassDirective::Condense {
-                intensity: Intensity::Significantly,
-            }),
-            gravity: None,
-            direction: None,
+            intent: TerraformIntent::Transform {
+                form: vec![FormType::List, FormType::Diagram],
+                mass: Some(MassChange::Condense {
+                    intensity: Intensity::Significantly,
+                }),
+                gravity: None,
+                direction: None,
+            },
         });
 
         // Region 3: Multiple forms + blur a bit + move-away moderately
         file.terraform_regions.push(TerraformRegion {
             start_line: 25,
             end_line: 28,
-            form: vec![FormType::Prose, FormType::Code, FormType::Table],
-            mass: None,
-            gravity: Some(GravityDirective::Blur {
-                intensity: Intensity::Moderately,
-            }),
-            direction: Some(DirectionDirective::MoveAway {
-                intensity: Intensity::Moderately,
-            }),
+            intent: TerraformIntent::Transform {
+                form: vec![FormType::Prose, FormType::Code, FormType::Table],
+                mass: None,
+                gravity: Some(GravityChange::Blur {
+                    intensity: Intensity::Moderately,
+                }),
+                direction: Some(DirectionDirective::MoveAway {
+                    intensity: Intensity::Moderately,
+                }),
+            },
         });
 
         // Region 4: Pin only (preserve exactly)
         file.terraform_regions.push(TerraformRegion {
             start_line: 35,
             end_line: 36,
-            form: vec![],
-            mass: None,
-            gravity: Some(GravityDirective::Pin),
-            direction: None,
+            intent: TerraformIntent::Pin,
         });
 
         // Region 5: Dissolve only (integrate into surroundings)
         file.terraform_regions.push(TerraformRegion {
             start_line: 42,
             end_line: 45,
-            form: vec![],
-            mass: None,
-            gravity: Some(GravityDirective::Dissolve),
-            direction: None,
+            intent: TerraformIntent::Dissolve { direction: None },
         });
 
         // Region 6: Remove entirely
         file.terraform_regions.push(TerraformRegion {
             start_line: 52,
             end_line: 55,
-            form: vec![],
-            mass: Some(MassDirective::Remove),
-            gravity: None,
-            direction: None,
+            intent: TerraformIntent::Remove,
         });
 
         // Region 7: Reframe only
         file.terraform_regions.push(TerraformRegion {
             start_line: 62,
             end_line: 65,
-            form: vec![FormType::Prose],
-            mass: None,
-            gravity: None,
-            direction: Some(DirectionDirective::Reframe),
+            intent: TerraformIntent::Transform {
+                form: vec![FormType::Prose],
+                mass: None,
+                gravity: None,
+                direction: Some(DirectionDirective::Reframe),
+            },
         });
 
         // Add some annotations alongside terraform regions

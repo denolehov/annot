@@ -1,7 +1,7 @@
 <script lang="ts">
   import { useTerraform, FORM_LABELS } from '$lib/composables/useTerraform.svelte';
   import type { TerraformRegion, FormType } from '$lib/types';
-  import { FORM_TYPES, INTENSITY_LEVELS } from '$lib/types';
+  import { FORM_TYPES, INTENSITY_LEVELS, emptyTransformIntent } from '$lib/types';
   import DiscreteSlider from './DiscreteSlider.svelte';
   import { GlobeIcon, FormIcon, MassIcon, GravityIcon, DirectionIcon, WarningIcon } from '$lib/icons';
 
@@ -99,10 +99,7 @@
       const emptyRegion: TerraformRegion = {
         start_line: startLine,
         end_line: endLine,
-        form: [],
-        mass: null,
-        gravity: null,
-        direction: null,
+        intent: emptyTransformIntent(),
       };
       onChange?.(emptyRegion);
       onCancel();
@@ -122,7 +119,7 @@
     // Mass: x toggles remove
     else if (event.key === 'x') {
       event.preventDefault();
-      toggleMassRemove();
+      toggleRemove();
     }
     // Mass: + moves toward expand, - moves toward condense
     // Steps through: slightly → moderately → significantly
@@ -148,15 +145,14 @@
     // Gravity: f moves toward focus/pin, b moves toward blur/dissolve
     else if (event.key === 'f') {
       event.preventDefault();
-      const gravity = terraform.gravity;
-      if (gravity?.type === 'pin') {
+      if (terraform.intent.kind === 'pin') {
         // Already pinned, do nothing
-      } else if (gravity?.type === 'dissolve') {
+      } else if (terraform.intent.kind === 'dissolve') {
         terraform.setGravityBlur('significantly'); // dissolve → max blur
       } else {
         const pos = getGravitySliderValue();
         if (pos === 0) {
-          terraform.setGravityPin(); // max focus → pin
+          terraform.setPin(); // max focus → pin
         } else {
           handleGravitySliderChange(pos - 1);
         }
@@ -164,15 +160,14 @@
     }
     else if (event.key === 'b') {
       event.preventDefault();
-      const gravity = terraform.gravity;
-      if (gravity?.type === 'dissolve') {
+      if (terraform.intent.kind === 'dissolve') {
         // Already dissolved, do nothing
-      } else if (gravity?.type === 'pin') {
+      } else if (terraform.intent.kind === 'pin') {
         terraform.setGravityFocus('significantly'); // pin → max focus
       } else {
         const pos = getGravitySliderValue();
         if (pos === 6) {
-          terraform.setGravityDissolve(); // max blur → dissolve
+          terraform.setDissolve(); // max blur → dissolve
         } else {
           handleGravitySliderChange(pos + 1);
         }
@@ -206,7 +201,7 @@
   // 3=neutral, 4=expand slightly, 5=expand moderately, 6=expand significantly
   function getMassSliderValue(): number {
     const mass = terraform.mass;
-    if (!mass || mass.type === 'remove') return 3; // neutral
+    if (!mass) return 3; // neutral (includes when in remove/pin/dissolve mode)
     if (mass.type === 'condense') {
       switch (mass.intensity) {
         case 'significantly': return 0;
@@ -234,11 +229,11 @@
     }
   }
 
-  function toggleMassRemove() {
-    if (terraform.mass?.type === 'remove') {
-      terraform.clearMass();
+  function toggleRemove() {
+    if (terraform.intent.kind === 'remove') {
+      terraform.clearRemove();
     } else {
-      terraform.setMassRemove();
+      terraform.setRemove();
     }
   }
 
@@ -247,10 +242,12 @@
   // 3=neutral, 4=blur slightly, 5=blur moderately, 6=blur significantly
   // Pin and dissolve are beyond the slider (toggle buttons) but fill the corresponding side
   function getGravitySliderValue(): number {
+    // For pin/dissolve intents, show slider at the extreme
+    if (terraform.intent.kind === 'pin') return 0;
+    if (terraform.intent.kind === 'dissolve') return 6;
+
     const gravity = terraform.gravity;
     if (!gravity) return 3; // neutral
-    if (gravity.type === 'pin') return 0; // fill left side
-    if (gravity.type === 'dissolve') return 6; // fill right side
     if (gravity.type === 'focus') {
       switch (gravity.intensity) {
         case 'significantly': return 0;
@@ -279,18 +276,18 @@
   }
 
   function toggleGravityPin() {
-    if (terraform.gravity?.type === 'pin') {
-      terraform.setGravityFocus('significantly'); // back to max focus
+    if (terraform.intent.kind === 'pin') {
+      terraform.clearPin();
     } else {
-      terraform.setGravityPin();
+      terraform.setPin();
     }
   }
 
   function toggleGravityDissolve() {
-    if (terraform.gravity?.type === 'dissolve') {
-      terraform.setGravityBlur('significantly'); // back to max blur
+    if (terraform.intent.kind === 'dissolve') {
+      terraform.clearDissolve();
     } else {
-      terraform.setGravityDissolve();
+      terraform.setDissolve();
     }
   }
 
@@ -348,14 +345,13 @@
   }
 
   function handleGravityFocusClick() {
-    const gravity = terraform.gravity;
-    if (gravity?.type === 'pin') return;
-    if (gravity?.type === 'dissolve') {
+    if (terraform.intent.kind === 'pin') return;
+    if (terraform.intent.kind === 'dissolve') {
       terraform.setGravityBlur('significantly');
     } else {
       const pos = getGravitySliderValue();
       if (pos === 0) {
-        terraform.setGravityPin();
+        terraform.setPin();
       } else {
         handleGravitySliderChange(pos - 1);
       }
@@ -363,14 +359,13 @@
   }
 
   function handleGravityBlurClick() {
-    const gravity = terraform.gravity;
-    if (gravity?.type === 'dissolve') return;
-    if (gravity?.type === 'pin') {
+    if (terraform.intent.kind === 'dissolve') return;
+    if (terraform.intent.kind === 'pin') {
       terraform.setGravityFocus('significantly');
     } else {
       const pos = getGravitySliderValue();
       if (pos === 6) {
-        terraform.setGravityDissolve();
+        terraform.setDissolve();
       } else {
         handleGravitySliderChange(pos + 1);
       }
@@ -436,8 +431,8 @@
     </span>
     <button
       class="terraform-toggle"
-      class:active={terraform.mass?.type === 'remove'}
-      onclick={toggleMassRemove}
+      class:active={terraform.intent.kind === 'remove'}
+      onclick={toggleRemove}
       title="Remove this content entirely"
     >
       <kbd>x</kbd>
@@ -447,7 +442,7 @@
       <DiscreteSlider
         value={getMassSliderValue()}
         onchange={handleMassSliderChange}
-        disabled={terraform.mass?.type === 'remove' || terraform.massOverridden}
+        disabled={terraform.intent.kind === 'remove' || terraform.massOverridden}
         bipolar
         steps={7}
       >
@@ -469,7 +464,7 @@
     </span>
     <button
       class="terraform-toggle"
-      class:active={terraform.gravity?.type === 'pin'}
+      class:active={terraform.intent.kind === 'pin'}
       onclick={toggleGravityPin}
       title="Preserve exactly as written"
     >
@@ -479,7 +474,7 @@
     <DiscreteSlider
       value={getGravitySliderValue()}
       onchange={handleGravitySliderChange}
-      disabled={terraform.gravity?.type === 'pin' || terraform.gravity?.type === 'dissolve' || terraform.gravityOverridden}
+      disabled={terraform.intent.kind === 'pin' || terraform.intent.kind === 'dissolve' || terraform.gravityOverridden}
       bipolar
       steps={7}
     >
@@ -488,7 +483,7 @@
     </DiscreteSlider>
     <button
       class="terraform-toggle"
-      class:active={terraform.gravity?.type === 'dissolve'}
+      class:active={terraform.intent.kind === 'dissolve'}
       onclick={toggleGravityDissolve}
       title="Remove as unit; integrate into surroundings"
     >
@@ -528,7 +523,7 @@
     </DiscreteSlider>
   </div>
 
-  {#if !terraform.isEmpty}
+  {#if !terraform.isEmpty && terraform.phrase}
     <div class="terraform-phrase">"{terraform.phrase}"</div>
   {/if}
 

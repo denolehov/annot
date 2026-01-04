@@ -310,18 +310,15 @@ export const INTENSITY_LEVELS: Intensity[] = ['slightly', 'moderately', 'signifi
 /** All form types in order (for buttons). */
 export const FORM_TYPES: FormType[] = ['table', 'list', 'prose', 'diagram', 'code'];
 
-/** Quantity directive: expand, condense, or remove. */
-export type MassDirective =
+/** Mass change: expand or condense (remove is a separate intent). */
+export type MassChange =
   | { type: 'expand'; intensity: Intensity }
-  | { type: 'condense'; intensity: Intensity }
-  | { type: 'remove' };
+  | { type: 'condense'; intensity: Intensity };
 
-/** Importance directive: pin, focus, blur, or dissolve. */
-export type GravityDirective =
-  | { type: 'pin' }
+/** Gravity change: focus or blur (pin/dissolve are separate intents). */
+export type GravityChange =
   | { type: 'focus'; intensity: Intensity }
-  | { type: 'blur'; intensity: Intensity }
-  | { type: 'dissolve' };
+  | { type: 'blur'; intensity: Intensity };
 
 /** Correctness signal: lean-in, move-away, or reframe. */
 export type DirectionDirective =
@@ -329,16 +326,45 @@ export type DirectionDirective =
   | { type: 'moveaway'; intensity: Intensity }
   | { type: 'reframe' };
 
+/** Type-safe terraform intent — invalid combinations are unrepresentable. */
+export type TerraformIntent =
+  | { kind: 'remove' }
+  | { kind: 'pin' }
+  | { kind: 'dissolve'; direction: DirectionDirective | null }
+  | {
+      kind: 'transform';
+      form: FormType[];
+      mass: MassChange | null;
+      gravity: GravityChange | null;
+      direction: DirectionDirective | null;
+    };
+
 /** A terraform region attached to a line range. */
 export interface TerraformRegion {
   start_line: number;
   end_line: number;
-  /** Target formats (multi-select). */
-  form: FormType[];
-  /** Quantity control. */
-  mass: MassDirective | null;
-  /** Importance control. */
-  gravity: GravityDirective | null;
-  /** Correctness signal. */
-  direction: DirectionDirective | null;
+  /** The transformation intent — type-safe combinations only. */
+  intent: TerraformIntent;
+}
+
+/** Create a default empty transform intent. */
+export function emptyTransformIntent(): TerraformIntent {
+  return {
+    kind: 'transform',
+    form: [],
+    mass: null,
+    gravity: null,
+    direction: null
+  };
+}
+
+/** Check if an intent is effectively empty (no transformation requested). */
+export function isIntentEmpty(intent: TerraformIntent): boolean {
+  if (intent.kind !== 'transform') return false;
+  return (
+    intent.form.length === 0 &&
+    intent.mass === null &&
+    intent.gravity === null &&
+    intent.direction === null
+  );
 }
