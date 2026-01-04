@@ -119,8 +119,29 @@ export function useAnnotations(options: UseAnnotationsOptions) {
     return annotations;
   }
 
+  /**
+   * Replace all annotations with new data (used for undo/redo).
+   * Does NOT sync to backend - caller is responsible for that.
+   */
+  function replaceAll(newAnnotations: Record<string, AnnotationEntry>): void {
+    // Clear existing
+    for (const key of Object.keys(annotations)) {
+      delete annotations[key];
+    }
+    // Add new
+    for (const [key, entry] of Object.entries(newAnnotations)) {
+      annotations[key] = {
+        range: { ...entry.range },
+        content: JSON.parse(JSON.stringify(entry.content)),
+        sealed: entry.sealed,
+      };
+    }
+  }
+
   return {
     get annotations() { return annotations; },
+    /** Alias for annotations getter (for history system) */
+    get all() { return annotations; },
     get,
     getByKey,
     isSealed,
@@ -132,5 +153,6 @@ export function useAnnotations(options: UseAnnotationsOptions) {
     hasAnnotation,
     allRanges,
     allEntries,
+    replaceAll,
   };
 }

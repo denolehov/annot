@@ -62,16 +62,39 @@ export function useExitModes() {
     }
   }
 
+  /**
+   * Select exit mode by ID (for history restore).
+   * Does NOT sync to backend - caller is responsible for that.
+   */
+  function select(modeId: string): void {
+    const idx = modes.findIndex(m => m.id === modeId);
+    if (idx >= 0) {
+      selectedIndex = idx;
+    }
+  }
+
+  /**
+   * Clear selection (for history restore).
+   * Does NOT sync to backend - caller is responsible for that.
+   */
+  function clearSelection(): void {
+    selectedIndex = null;
+  }
+
   return {
     get modes() { return modes; },
     get selectedIndex() { return selectedIndex; },
     set selectedIndex(val: number | null) { selectedIndex = val; },
     get selectedMode() { return selectedMode; },
+    /** Get selected mode ID (for history system) */
+    get selectedId() { return selectedIndex !== null && modes[selectedIndex] ? modes[selectedIndex].id : null; },
     initialize,
     cycleForward,
     cycleBackward,
     selectById,
     setModes,
     syncToBackend,
+    select,
+    clearSelection,
   };
 }
