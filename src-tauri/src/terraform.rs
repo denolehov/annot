@@ -39,13 +39,14 @@ pub enum FormType {
 
 impl FormType {
     /// Tag value for FORMAT directive.
+    /// Note: "prose" becomes "passage" to work with articles ("a passage" not "a prose").
     fn as_tag(&self) -> &'static str {
         match self {
             FormType::Table => "table",
             FormType::List => "list",
-            FormType::Prose => "prose",
+            FormType::Prose => "passage",
             FormType::Diagram => "diagram",
-            FormType::Code => "code",
+            FormType::Code => "code block",
         }
     }
 }
@@ -121,16 +122,18 @@ impl TerraformRegion {
 
         let mut clauses = Vec::new();
 
-        // Rule 3: Dissolve blocks form (but allows mass/direction)
-        let emit_form = !matches!(self.gravity, Some(GravityDirective::Dissolve));
+        // Rule 3: Dissolve blocks form AND mass — if dissolving, shape/length are irrelevant
+        let is_dissolving = matches!(self.gravity, Some(GravityDirective::Dissolve));
 
-        // Form + Mass combined clause (unless form blocked by dissolve)
-        if emit_form && !self.form.is_empty() {
+        // Form + Mass combined clause (unless blocked by dissolve)
+        if !is_dissolving && !self.form.is_empty() {
             clauses.push(self.form_mass_clause());
-        } else if let Some(ref mass) = self.mass {
-            // Mass-only clause when form is blocked
-            if let Some(verbosity) = mass.as_verbosity() {
-                clauses.push(format!("Make this {}.", verbosity));
+        } else if !is_dissolving {
+            if let Some(ref mass) = self.mass {
+                // Mass-only clause when form is empty (but not dissolving)
+                if let Some(verbosity) = mass.as_verbosity() {
+                    clauses.push(format!("Make this {}.", verbosity));
+                }
             }
         }
 
