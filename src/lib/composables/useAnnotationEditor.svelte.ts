@@ -247,12 +247,8 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
               (state) => { refSuggestion = state; },
               () => refCommand,
               (cmd) => { refCommand = cmd; },
-              (item) => item.type !== 'menu-header' // Skip menu headers in navigation
             ),
             command: ({ editor, range, props }: { editor: Editor; range: Range; props: RefSuggestionItem }) => {
-              // Skip menu headers - they're not selectable
-              if (props.type === 'menu-header') return;
-
               if (props.type === 'file') {
                 // File reference - no snapshot, just path
                 editor
