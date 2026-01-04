@@ -356,8 +356,19 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
         getOnUpdate()(isContentEmpty(json) ? null : json);
       },
       onBlur: ({ editor: blurEditor }) => {
-        // Don't dismiss while Excalidraw modal is open or suggestion menus are active
-        if (!getSealed() && !tagSuggestion.active && !refSuggestion.active && !excalidrawModalOpen) {
+        // Don't dismiss while Excalidraw modal is open
+        if (!getSealed() && !excalidrawModalOpen) {
+          // Close any active suggestion menus on blur
+          // (blur means focus left both editor AND popup, since popup buttons preventDefault)
+          if (tagSuggestion.active) {
+            tagSuggestion = { ...tagSuggestion, active: false };
+          }
+          if (refSuggestion.active) {
+            refSuggestion = { ...refSuggestion, active: false };
+          }
+          if (slashSuggestion.active) {
+            slashSuggestion = { ...slashSuggestion, active: false };
+          }
           const editorDom = blurEditor.view.dom as HTMLElement;
           const json = blurEditor.getJSON();
 
