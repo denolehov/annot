@@ -30,7 +30,7 @@ import {
   ExcalidrawChip,
   ExcalidrawPlaceholder,
 } from '../tiptap/extensions';
-import type { Tag, Bookmark, RefSnapshot, AnnotationRefSnapshot, ContentNode } from '../types';
+import type { Tag, Bookmark, RefSnapshot, AnnotationRefSnapshot, ContentNode, SectionInfo } from '../types';
 import type { AnnotationEntry } from './useAnnotations.svelte';
 import { fuzzySearch } from '../fuzzy';
 
@@ -59,6 +59,8 @@ export interface AnnotationEditorOptions {
   getOnImagePasteBlocked: () => (() => void) | undefined;
   /** Returns the original lines content for /replace command */
   getOriginalLines?: () => string;
+  /** Returns markdown sections for @ autocomplete (reactive, null if not markdown mode) */
+  getSections?: () => SectionInfo[] | null;
 }
 
 function createInitialSuggestionState<T>(): SuggestionState<T> {
@@ -117,7 +119,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
     const el = options.element();
     if (!el) return;
 
-    const { getSealed, getTags, getBookmarks, getAnnotationEntries, getCurrentRangeKey, getOnUpdate, getOnDismiss } = options;
+    const { getSealed, getTags, getBookmarks, getAnnotationEntries, getCurrentRangeKey, getOnUpdate, getOnDismiss, getSections } = options;
 
     editor = new Editor({
       element: el,
@@ -170,6 +172,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
               const currentKey = getCurrentRangeKey();
               const annotations = getAnnotationEntries();
               const bookmarks = getBookmarks();
+              const sections = getSections?.() ?? null;
 
               // Build annotation items (exclude current annotation)
               const annotationItems: RefSuggestionItem[] = Object.entries(annotations)
@@ -191,6 +194,14 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
                 bookmark: b,
               }));
 
+              // Build heading items (only in markdown mode)
+              const headingItems: RefSuggestionItem[] = sections
+                ? sections.map((s) => ({
+                    type: 'heading' as const,
+                    section: s,
+                  }))
+                : [];
+
               // Fetch file items (only if query >= 2 chars for performance)
               let fileItems: RefSuggestionItem[] = [];
               if (query.length >= 2) {
@@ -205,7 +216,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
                 }
               }
 
-              // Filter annotations and bookmarks by query
+              // Filter by query
               const q = query.toLowerCase();
               const filteredAnnotations = q ? annotationItems.filter((item) => {
                 if (item.type !== 'annotation') return false;
@@ -218,21 +229,31 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
                 return item.bookmark.id.toLowerCase().includes(q) || label.toLowerCase().includes(q);
               }) : bookmarkItems;
 
+              const filteredHeadings = q ? headingItems.filter((item) => {
+                if (item.type !== 'heading') return false;
+                return item.section.title.toLowerCase().includes(q);
+              }) : headingItems;
+
               // Build sectioned results
               const result: RefSuggestionItem[] = [];
 
               if (filteredAnnotations.length > 0) {
-                result.push({ type: 'section', label: 'Annotations' });
+                result.push({ type: 'menu-header', label: 'Annotations' });
                 result.push(...filteredAnnotations);
               }
 
               if (filteredBookmarks.length > 0) {
-                result.push({ type: 'section', label: 'Bookmarks' });
+                result.push({ type: 'menu-header', label: 'Bookmarks' });
                 result.push(...filteredBookmarks);
               }
 
+              if (filteredHeadings.length > 0) {
+                result.push({ type: 'menu-header', label: 'Sections' });
+                result.push(...filteredHeadings);
+              }
+
               if (fileItems.length > 0) {
-                result.push({ type: 'section', label: 'Files' });
+                result.push({ type: 'menu-header', label: 'Files' });
                 result.push(...fileItems);
               }
 
@@ -243,11 +264,11 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
               (state) => { refSuggestion = state; },
               () => refCommand,
               (cmd) => { refCommand = cmd; },
-              (item) => item.type !== 'section' // Skip section headers in navigation
+              (item) => item.type !== 'menu-header' // Skip menu headers in navigation
             ),
             command: ({ editor, range, props }: { editor: Editor; range: Range; props: RefSuggestionItem }) => {
-              // Skip section headers - they're not selectable
-              if (props.type === 'section') return;
+              // Skip menu headers - they're not selectable
+              if (props.type === 'menu-header') return;
 
               if (props.type === 'file') {
                 // File reference - no snapshot, just path
@@ -258,6 +279,27 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
                     {
                       type: 'refChip',
                       attrs: { refType: 'file', path: props.path },
+                    },
+                    { type: 'text', text: ' ' },
+                  ])
+                  .run();
+                return;
+              }
+
+              if (props.type === 'heading') {
+                // Heading section reference
+                editor
+                  .chain()
+                  .focus()
+                  .insertContentAt(range, [
+                    {
+                      type: 'refChip',
+                      attrs: {
+                        refType: 'heading',
+                        sectionLine: props.section.source_line,
+                        sectionLevel: props.section.level,
+                        sectionTitle: props.section.title,
+                      },
                     },
                     { type: 'text', text: ' ' },
                   ])

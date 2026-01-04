@@ -141,6 +141,7 @@
     getOnDismiss: () => () => onDismiss?.(),
     getOnImagePasteBlocked: () => onImagePasteBlocked,
     getOriginalLines: () => getOriginalLines?.() ?? '',
+    getSections: () => ctx.markdownMetadata?.sections ?? null,
   });
 
   // Excalidraw window state (tracks if window is open to prevent blur dismiss)
@@ -538,7 +539,7 @@
 
 <!-- Portal ref suggestions (@ menu) to body, positioned with Floating UI -->
 {#if ann.refSuggestion.active && ann.refSuggestion.items.length > 0}
-  {@const selectableItems = ann.refSuggestion.items.filter((i) => i.type !== 'section')}
+  {@const selectableItems = ann.refSuggestion.items.filter((i) => i.type !== 'menu-header')}
   <div
     bind:this={refSuggestionsEl}
     use:portal
@@ -547,7 +548,7 @@
     style:zoom={ctx.contentZoom}
   >
     {#each ann.refSuggestion.items as item, idx}
-      {#if item.type === 'section'}
+      {#if item.type === 'menu-header'}
         <div class="ref-section-header">{item.label.toUpperCase()}</div>
       {:else if item.type === 'annotation'}
         <button
@@ -579,6 +580,19 @@
             <span class="ref-label">{displayLabel}</span>
             <span class="ref-meta">{item.bookmark.snapshot.source_title} · {dateStr}</span>
           </div>
+        </button>
+      {:else if item.type === 'heading'}
+        <button
+          type="button"
+          class="ref-suggestion ref-heading"
+          class:selected={idx === ann.refSuggestion.selectedIndex}
+          onmousedown={(e) => {
+            e.preventDefault();
+            ann.selectRefItem(item);
+          }}
+        >
+          <span class="ref-key heading-level">H{item.section.level}</span>
+          <span class="ref-label">{item.section.title}</span>
         </button>
       {:else if item.type === 'file'}
         {@const filename = item.path.split('/').pop() || item.path}

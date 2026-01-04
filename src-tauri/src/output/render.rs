@@ -109,6 +109,9 @@ fn render_node(
                     let short_id = &bookmark.id[..bookmark.id.len().min(3)];
                     format!("[BOOKMARK {}]", short_id)
                 }
+                RefSnapshot::Heading(snap) => {
+                    format!("[H{} {}]", snap.level, snap.title)
+                }
             }
         }
         ContentNode::File { path } => {

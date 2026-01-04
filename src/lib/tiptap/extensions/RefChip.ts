@@ -3,19 +3,20 @@ import { SvelteNodeViewRenderer } from 'svelte-tiptap';
 import Suggestion, { type SuggestionOptions } from '@tiptap/suggestion';
 import { PluginKey } from '@tiptap/pm/state';
 import RefChipView from '../nodeviews/RefChipView.svelte';
-import type { RefSnapshot, Bookmark, AnnotationRefSnapshot } from '$lib/types';
+import type { RefSnapshot, Bookmark, AnnotationRefSnapshot, SectionInfo } from '$lib/types';
 
 const RefSuggestionPluginKey = new PluginKey('refSuggestion');
 
-/** Section header for grouped @ menu. */
-export type RefSuggestionSection = { type: 'section'; label: string };
+/** Menu section header for grouped @ menu (visual separator, not selectable). */
+export type RefSuggestionMenuHeader = { type: 'menu-header'; label: string };
 
-/** Unified suggestion item for @ menu - annotation, bookmark, or file. */
+/** Unified suggestion item for @ menu - annotation, bookmark, file, or heading section. */
 export type RefSuggestionItem =
 	| { type: 'annotation'; key: string; preview: string; content: import('$lib/types').ContentNode[] }
 	| { type: 'bookmark'; bookmark: Bookmark }
 	| { type: 'file'; path: string }
-	| RefSuggestionSection;
+	| { type: 'heading'; section: SectionInfo }
+	| RefSuggestionMenuHeader;
 
 export type RefChipOptions = {
 	suggestion: Omit<SuggestionOptions<RefSuggestionItem>, 'editor' | 'pluginKey'>;
@@ -29,9 +30,13 @@ export const RefChip = Node.create<RefChipOptions>({
 
 	addAttributes() {
 		return {
-			refType: { default: null }, // 'annotation' | 'bookmark' | 'file'
+			refType: { default: null }, // 'annotation' | 'bookmark' | 'file' | 'heading'
 			snapshot: { default: null }, // RefSnapshot (for annotation/bookmark)
 			path: { default: null }, // string (for file refs)
+			// Heading section attributes
+			sectionLine: { default: null }, // number (source line of heading)
+			sectionLevel: { default: null }, // number (1-6)
+			sectionTitle: { default: null }, // string
 		};
 	},
 
@@ -42,10 +47,15 @@ export const RefChip = Node.create<RefChipOptions>({
 				getAttrs: (dom) => {
 					const element = dom as HTMLElement;
 					const snapshotData = element.getAttribute('data-snapshot');
+					const sectionLine = element.getAttribute('data-section-line');
+					const sectionLevel = element.getAttribute('data-section-level');
 					return {
 						refType: element.getAttribute('data-ref-type') || null,
 						snapshot: snapshotData ? JSON.parse(snapshotData) : null,
 						path: element.getAttribute('data-path') || null,
+						sectionLine: sectionLine ? parseInt(sectionLine, 10) : null,
+						sectionLevel: sectionLevel ? parseInt(sectionLevel, 10) : null,
+						sectionTitle: element.getAttribute('data-section-title') || null,
 					};
 				},
 			},
@@ -56,10 +66,15 @@ export const RefChip = Node.create<RefChipOptions>({
 		const refType = node.attrs.refType as string;
 		const snapshot = node.attrs.snapshot as RefSnapshot | null;
 		const path = node.attrs.path as string | null;
+		const sectionLine = node.attrs.sectionLine as number | null;
+		const sectionLevel = node.attrs.sectionLevel as number | null;
+		const sectionTitle = node.attrs.sectionTitle as string | null;
 
 		// Build display text based on type
 		let displayText = '[@?]';
-		if (refType === 'file' && path) {
+		if (refType === 'heading' && sectionLevel && sectionTitle) {
+			displayText = `[H${sectionLevel} ${sectionTitle}]`;
+		} else if (refType === 'file' && path) {
 			const filename = path.split('/').pop() || path;
 			displayText = `[@${filename}]`;
 		} else if (snapshot) {
@@ -82,6 +97,9 @@ export const RefChip = Node.create<RefChipOptions>({
 				'data-ref-type': refType || '',
 				'data-snapshot': snapshot ? JSON.stringify(snapshot) : '',
 				'data-path': path || '',
+				'data-section-line': sectionLine?.toString() || '',
+				'data-section-level': sectionLevel?.toString() || '',
+				'data-section-title': sectionTitle || '',
 				class: `tag-chip ref-chip ref-${refType || 'unknown'}`,
 			}),
 			displayText,
