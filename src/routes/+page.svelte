@@ -212,7 +212,6 @@
 
   // Session comment state (global/file-level comment)
   let sessionComment: JSONContent | undefined = $state(undefined);
-  let sessionEditorOpen = $state(false);
 
   // Overlay state (command palette, help, timeline are mutually exclusive)
   const overlay = useOverlay();
@@ -340,34 +339,34 @@
     await annotationState.upsert(range, content);
   }
 
-  function sealCurrentAnnotation() {
-    const sel = interaction.range;
-    if (!sel) return;
-
-    // Don't seal if we're creating a tag from this editor - user will return after CP closes
+  function closeCurrentEditor() {
+    // Don't close if we're creating a tag from this editor - user will return after CP closes
     if (pendingTagCreation) return;
 
-    const key = rangeToKey(sel);
-    const entry = annotationState.getByKey(key);
-    if (entry) {
-      annotationState.seal(key);
-    } else {
-      // Remove empty annotation
-      annotationState.remove(key);
+    const state = interaction.state;
+    if (state.phase !== 'editing') return;
+
+    // If closing an annotation editor, remove empty annotations
+    if (state.editor.kind === 'annotation') {
+      const entry = annotationState.getByKey(state.editor.rangeKey);
+      if (!entry) {
+        annotationState.remove(state.editor.rangeKey);
+      }
     }
-    interaction.clearSelection();
+
+    interaction.closeEditor();
   }
 
   // Session comment handlers
   function openSessionEditor() {
-    sessionEditorOpen = true;
+    interaction.openEditor({ kind: 'session' });
   }
 
   function closeSessionEditor() {
     // Don't close if we're creating a tag from this editor - user will return after CP closes
     if (pendingTagCreation?.editorKey === 'session') return;
 
-    sessionEditorOpen = false;
+    interaction.closeEditor();
   }
 
   async function updateSessionComment(content: JSONContent | null) {
@@ -580,7 +579,6 @@
     };
 
     await annotationState.upsert(displayRange, newContent);
-    annotationState.seal(rangeKey);
     showToast('Error added to feedback');
   }
 
@@ -659,7 +657,7 @@
   let annotationSlotProps = $derived({
     pendingTagInsertion,
     onUpdate: updateAnnotation,
-    onDismiss: sealCurrentAnnotation,
+    onDismiss: closeCurrentEditor,
     onRequestCreateTag: handleRequestCreateTag,
     onImagePasteBlocked: handleImagePasteBlocked,
   });
@@ -687,7 +685,11 @@
       onZoomReset: () => contentZoom = 1.0,
       onCommentHoveredLine: () => {
         if (interaction.hoverLine !== null) {
-          interaction.selectLine(interaction.hoverLine);
+          const line = interaction.hoverLine;
+          interaction.selectLine(line);
+          // Open editor after selecting (selectLine transitions to committed)
+          const rangeKey = `${line}-${line}`;
+          interaction.openEditor({ kind: 'annotation', rangeKey });
         }
       },
       onTerraformHoveredLine: () => {
@@ -701,7 +703,7 @@
       onCancelChoice: () => interaction.cancelChoice(),
     },
     {
-      isEditorActive: () => !!interaction.range || sessionEditorOpen,
+      isEditorActive: () => interaction.phase === 'editing',
       isCommandPaletteOpen: () => overlay.isCommandPaletteOpen(),
       isSaveModalOpen: () => saveModalOpen,
       isHelpOverlayOpen: () => overlay.isHelpOpen(),
@@ -795,7 +797,6 @@
           ]
         };
         annotationState.upsert(range, newContent);
-        annotationState.seal(rangeKey);
         showToast('Diagram saved as annotation');
       });
     } catch (e) {
@@ -866,7 +867,7 @@
     <div style:zoom={contentZoom}>
       <SessionEditor
         content={sessionComment}
-        isOpen={sessionEditorOpen}
+        isOpen={interaction.isSessionEditorOpen()}
         pendingTagInsertion={pendingTagInsertion?.editorKey === 'session' ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
         onUpdate={updateSessionComment}
         onOpen={openSessionEditor}

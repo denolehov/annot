@@ -48,11 +48,10 @@
     <AnnotationEditor
       {rangeKey}
       content={ctx.annotations.getByKey(rangeKey)?.content}
-      sealed={ctx.annotations.isSealed(rangeKey)}
+      sealed={ctx.interaction.isAnnotationSealed(rangeKey)}
       onUpdate={(content) => onUpdate(rangeKey, content)}
       onUnseal={() => {
-        ctx.interaction.setSelection(keyToRange(rangeKey));
-        ctx.annotations.unseal(rangeKey);
+        ctx.interaction.openEditor({ kind: 'annotation', rangeKey });
       }}
       {onDismiss}
       tags={ctx.tags}

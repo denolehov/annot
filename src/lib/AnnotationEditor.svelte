@@ -145,8 +145,6 @@
     getSections: () => ctx.markdownMetadata?.sections ?? null,
   });
 
-  // Excalidraw window state (tracks if window is open to prevent blur dismiss)
-  let excalidrawWindowOpen = $state(false);
   let excalidrawResultUnlisten: UnlistenFn | null = null;
   let mermaidOpenUnlisten: UnlistenFn | null = null;
 
@@ -164,9 +162,15 @@
   let slashSuggestionsEl: HTMLDivElement | undefined = $state();
   let refSuggestionsEl: HTMLDivElement | undefined = $state();
 
+  // Derive excalidraw open state from modal lock
+  const isExcalidrawOpen = $derived(
+    ctx.interaction.modalLock?.kind === 'excalidraw' &&
+    ctx.interaction.modalLock.editorKey === rangeKey
+  );
+
   // Sync Excalidraw window state with composable (prevents blur dismiss)
   $effect(() => {
-    ann.setExcalidrawModalOpen(excalidrawWindowOpen);
+    ann.setExcalidrawModalOpen(isExcalidrawOpen);
   });
 
   // Scroll selected tag suggestion into view on keyboard navigation
@@ -214,7 +218,7 @@
 
   // Open Excalidraw window for creating new diagram
   async function openExcalidrawCreate(placeholderId: string) {
-    excalidrawWindowOpen = true;
+    ctx.interaction.setModalLock({ kind: 'excalidraw', editorKey: rangeKey });
     try {
       await invoke('open_excalidraw_window', {
         elements: '[]',
@@ -223,13 +227,13 @@
       });
     } catch (e) {
       console.error('Failed to open Excalidraw window:', e);
-      excalidrawWindowOpen = false;
+      ctx.interaction.setModalLock(null);
     }
   }
 
   // Open Excalidraw window for editing existing diagram
   async function openExcalidrawEdit(nodeId: string, elements: string) {
-    excalidrawWindowOpen = true;
+    ctx.interaction.setModalLock({ kind: 'excalidraw', editorKey: rangeKey });
     try {
       await invoke('open_excalidraw_window', {
         elements: elements || '[]',
@@ -238,7 +242,7 @@
       });
     } catch (e) {
       console.error('Failed to open Excalidraw window:', e);
-      excalidrawWindowOpen = false;
+      ctx.interaction.setModalLock(null);
     }
   }
 
@@ -247,7 +251,7 @@
     // Only handle results for our annotation
     if (result.range_key !== rangeKey) return;
 
-    excalidrawWindowOpen = false;
+    ctx.interaction.setModalLock(null);
 
     if (result.outcome.type === 'Cancelled') {
       // Handle cancel

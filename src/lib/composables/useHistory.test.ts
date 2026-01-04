@@ -18,7 +18,6 @@ describe('useHistory', () => {
         '10-15': {
           range: { start: 10, end: 15 },
           content: { type: 'doc', content: [] },
-          sealed: true,
         },
       },
     };
@@ -35,15 +34,15 @@ describe('useHistory', () => {
     // Push first change
     history.push({
       ...emptySessionData(),
-      annotations: { '10-15': { range: { start: 10, end: 15 }, content: { type: 'doc' }, sealed: true } },
+      annotations: { '10-15': { range: { start: 10, end: 15 }, content: { type: 'doc' } } },
     }, 'First');
 
     // Push second change
     history.push({
       ...emptySessionData(),
       annotations: {
-        '10-15': { range: { start: 10, end: 15 }, content: { type: 'doc' }, sealed: true },
-        '20-25': { range: { start: 20, end: 25 }, content: { type: 'doc' }, sealed: true },
+        '10-15': { range: { start: 10, end: 15 }, content: { type: 'doc' } },
+        '20-25': { range: { start: 20, end: 25 }, content: { type: 'doc' } },
       },
     }, 'Second');
 
@@ -136,17 +135,17 @@ describe('useHistory', () => {
     const original: SessionData = {
       ...emptySessionData(),
       annotations: {
-        '10-15': { range: { start: 10, end: 15 }, content: { type: 'doc' }, sealed: true },
+        '10-15': { range: { start: 10, end: 15 }, content: { type: 'doc' } },
       },
     };
 
     history.push(original, 'Push');
 
     // Modify original
-    original.annotations['10-15'].sealed = false;
+    original.annotations['10-15'].range.start = 999;
 
     // History should not be affected
-    expect(history.current.annotations['10-15'].sealed).toBe(true);
+    expect(history.current.annotations['10-15'].range.start).toBe(10);
   });
 
   it('initialize resets history', () => {
