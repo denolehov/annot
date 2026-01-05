@@ -87,6 +87,8 @@
   }
 
   async function handleCancel() {
+    // Prevent onCloseRequested from triggering save
+    closeHandled = true;
     try {
       await invoke('excalidraw_cancel');
     } catch (e) {
@@ -142,8 +144,6 @@
         container: containerEl,
         initialElements: parsedElements,
         theme: effectiveTheme,
-        onSave: handleSave,
-        onCancel: tryCancel,
       });
 
       // Track initial state for change detection AFTER mounting
@@ -204,24 +204,35 @@
     }
   });
 
-  onDestroy(() => {
-    handle?.unmount();
-    unlistenClose?.();
-  });
-
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       e.preventDefault();
+      e.stopPropagation();
       if (showConfirmDialog) {
         dismissConfirm();
       } else {
         tryCancel();
       }
+    } else if (e.key === 'Enter' && showConfirmDialog) {
+      e.preventDefault();
+      e.stopPropagation();
+      confirmCancel();
     }
   }
-</script>
 
-<svelte:window onkeydown={handleKeyDown} />
+  onDestroy(() => {
+    handle?.unmount();
+    unlistenClose?.();
+    // Remove capture listener
+    window.removeEventListener('keydown', handleKeyDown, true);
+  });
+
+  // Use capture phase to intercept Escape before Excalidraw handles it
+  $effect(() => {
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  });
+</script>
 
 <div class="excalidraw-window">
   <header class="window-header" data-tauri-drag-region>
@@ -233,6 +244,13 @@
     <div class="excalidraw-error">{error}</div>
   {/if}
   <div bind:this={containerEl} class="excalidraw-container"></div>
+  <footer class="status-bar">
+    <div class="status-bar-left"></div>
+    <div class="status-bar-right">
+      <span class="kbd-hint"><kbd>Esc</kbd> dismiss</span>
+      <span class="kbd-hint"><kbd>⌘W</kbd> save and close</span>
+    </div>
+  </footer>
 </div>
 
 {#if showConfirmDialog}
@@ -247,8 +265,14 @@
     >
       <p class="confirm-message">Discard unsaved drawing?</p>
       <div class="confirm-buttons">
-        <button class="confirm-btn confirm-btn-cancel" onclick={dismissConfirm}>Keep editing</button>
-        <button class="confirm-btn confirm-btn-discard" onclick={confirmCancel}>Discard</button>
+        <button class="confirm-btn" onclick={dismissConfirm}>
+          <kbd>Esc</kbd>
+          <span>Keep editing</span>
+        </button>
+        <button class="confirm-btn confirm-btn-discard" onclick={confirmCancel}>
+          <kbd>⏎</kbd>
+          <span>Discard</span>
+        </button>
       </div>
     </div>
   </div>
@@ -290,7 +314,7 @@
 
   .excalidraw-container {
     width: 100%;
-    height: calc(100% - 40px);
+    height: calc(100% - 40px - 32px);
     margin-top: 40px;
     position: relative;
   }
@@ -326,42 +350,58 @@
     color: var(--error-text);
   }
 
-  /* Control buttons positioned in window */
-  :global(.excalidraw-controls) {
-    position: absolute;
-    bottom: 16px;
-    right: 16px;
+  /* Footer status bar */
+  .status-bar {
+    flex-shrink: 0;
     display: flex;
-    gap: 8px;
-    z-index: 10;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 6px 16px;
+    height: 32px;
+    box-sizing: border-box;
+    background: var(--bg-main);
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    font-size: 12px;
   }
 
-  :global(.excalidraw-save),
-  :global(.excalidraw-cancel) {
-    padding: 8px 16px;
-    border-radius: var(--radius-md);
+  .status-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .status-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .kbd-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-muted);
     font-family: var(--font-ui);
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    border: none;
-    transition: opacity var(--transition-normal);
+    font-size: 11px;
   }
 
-  :global(.excalidraw-save:hover),
-  :global(.excalidraw-cancel:hover) {
-    opacity: 0.9;
-  }
-
-  :global(.excalidraw-save) {
-    background: var(--accent-primary);
-    color: white;
-  }
-
-  :global(.excalidraw-cancel) {
+  .kbd-hint kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
     background: var(--bg-panel);
-    color: var(--text-primary);
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--border-normal);
+    border-radius: 4px;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
   }
 
   /* Confirm dialog */
@@ -394,39 +434,34 @@
 
   .confirm-buttons {
     display: flex;
-    gap: 12px;
+    gap: 8px;
     justify-content: center;
   }
 
   .confirm-btn {
-    padding: 10px 20px;
-    border-radius: var(--radius-lg);
-    font-family: var(--font-ui);
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    border: none;
-    transition:
-      opacity var(--transition-normal),
-      transform 0.1s;
-  }
-
-  .confirm-btn:hover {
-    opacity: 0.9;
-  }
-
-  .confirm-btn:active {
-    transform: scale(0.98);
-  }
-
-  .confirm-btn-cancel {
-    background: var(--bg-panel);
-    color: var(--text-primary);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--bg-window);
     border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: border-color 0.1s ease, background 0.1s ease;
   }
 
-  .confirm-btn-discard {
-    background: var(--danger);
-    color: white;
+  .confirm-btn:hover,
+  .confirm-btn:focus {
+    background: var(--bg-main);
+    border-color: var(--selection-border);
+    outline: none;
+  }
+
+  .confirm-btn-discard:hover,
+  .confirm-btn-discard:focus {
+    border-color: var(--danger);
   }
 </style>
