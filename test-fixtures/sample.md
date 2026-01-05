@@ -196,6 +196,37 @@ In CLI mode, image paste is disabled (text-only output).
 | **Cmd+S** | Save to file |
 | **Cmd+/-/0** | Zoom |
 
+## Color Palette
+
+Design tokens with inline color previews:
+
+```css
+:root {
+  /* Primary colors */
+  --primary: #3b82f6;
+  --primary-dark: #1d4ed8;
+  --primary-light: #93c5fd;
+
+  /* Semantic colors */
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error: #ef4444;
+
+  /* Neutrals */
+  --gray-50: #f9fafb;
+  --gray-900: #111827;
+
+  /* With alpha */
+  --overlay: #00000080;
+  --highlight: #fbbf2440;
+}
+```
+
+Colors in different contexts:
+- Brand color: `#6366f1` (Indigo 500)
+- Short hex: `#fff` and `#000`
+- With alpha: `#ff000080` (50% red)
+
 ---
 
 ## Closing

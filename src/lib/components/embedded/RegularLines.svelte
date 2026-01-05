@@ -8,6 +8,7 @@
   import type { Line, SectionInfo } from '$lib/types';
   import { getLineNumber, getDiffKind } from '$lib/line-utils';
   import { highlightMatches, clearHighlights } from '$lib/search-highlight';
+  import { injectColorSwatches, clearColorSwatches } from '$lib/color-preview';
   import { invoke } from '@tauri-apps/api/core';
   import CopyButton from '$lib/components/CopyButton.svelte';
   import AnnotationSlot, { type AnnotationSlotProps } from '$lib/components/AnnotationSlot.svelte';
@@ -71,6 +72,19 @@
       endLine: section.end_line,
     });
   }
+
+  // Inject color swatches for HEX values
+  $effect(() => {
+    // Track lines to re-run when content changes
+    void lines;
+    // Use microtask to ensure DOM is updated after render
+    queueMicrotask(() => {
+      for (const el of codeRefs.values()) {
+        clearColorSwatches(el);
+        injectColorSwatches(el);
+      }
+    });
+  });
 
   // Apply search highlights when matches change
   $effect(() => {
