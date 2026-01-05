@@ -134,11 +134,19 @@
       const htmlEl = el as HTMLElement;
       if (htmlEl.offsetTop >= scrollTop) {
         const displayIdx = parseInt(htmlEl.dataset.displayIdx ?? '1', 10);
-        const line = lines[displayIdx - 1];
-        const sourceLineNum = line ? getLineNumber(line) : null;
-        if (sourceLineNum === null) continue;
 
-        contentTracking.updateFromLine(sourceLineNum);
+        if (diffMetadata) {
+          // Diff mode: hunk boundaries use display_line (position in rendered view),
+          // so we pass displayIdx directly
+          contentTracking.updateFromLine(displayIdx);
+        } else {
+          // Markdown/source mode: section boundaries use source_line from the
+          // original file, so we need the actual source line number
+          const line = lines[displayIdx - 1];
+          const sourceLineNum = line ? getLineNumber(line) : null;
+          if (sourceLineNum === null) continue;
+          contentTracking.updateFromLine(sourceLineNum);
+        }
         break;
       }
     }
