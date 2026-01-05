@@ -1,0 +1,44 @@
+/* ===========================================
+   COLOR PREVIEW SWATCHES
+
+   Inline color swatches displayed before HEX values
+   =========================================== */
+
+.color-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  background-color: var(--swatch-color);
+  border: 1px solid var(--border-strong);
+  border-radius: 2px;
+  margin-right: 3px;
+  vertical-align: middle;
+  /* Prevent selection of the swatch */
+  user-select: none;
+  /* Don't let swatch break to next line separately from value */
+  white-space: nowrap;
+}
+
+/* Checkerboard background for colors with alpha */
+.color-swatch[data-has-alpha] {
+  background-image:
+    linear-gradient(45deg, var(--border-subtle) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--border-subtle) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--border-subtle) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--border-subtle) 75%);
+  background-size: 4px 4px;
+  background-position: 0 0, 0 2px, 2px -2px, -2px 0px;
+  background-color: var(--swatch-color);
+  /* Blend mode to show alpha over checkerboard */
+  background-blend-mode: normal;
+}
+
+/* Ensure proper layering for alpha colors */
+.color-swatch[data-has-alpha]::before {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-color: var(--swatch-color);
+  border-radius: 1px;
+}
