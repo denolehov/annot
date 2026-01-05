@@ -18,6 +18,7 @@
   import { getAnnotContext } from '$lib/context';
   import { highlightMatches, clearHighlights } from '$lib/search-highlight';
   import ChoiceButtons from '$lib/components/ChoiceButtons.svelte';
+  import Icon from '$lib/CommandPalette/Icon.svelte';
 
   interface Props {
     lines: Array<{ line: Line; displayIndex: number }>;
@@ -146,7 +147,7 @@
       .filter(({ lineIndex }) => !isSeparator(lineIndex))
   );
 
-  // Calculate column count (for colspan)
+  // Calculate column count (for colspan): data cells + gutter
   let columnCount = $derived(
     visibleLines[0] ? splitTableRow(visibleLines[0].line.content).length + 1 : 2
   );
@@ -186,9 +187,30 @@
   function handleChooseBookmark() {
     ctx.interaction.confirmChoice('bookmark');
   }
+
+  let copied = $state(false);
+
+  async function handleCopyTable() {
+    const tableMarkdown = lines.map(l => l.line.content).join('\n');
+    try {
+      await navigator.clipboard.writeText(tableMarkdown);
+      copied = true;
+      setTimeout(() => (copied = false), 1500);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  }
 </script>
 
 <div class="table-wrapper" class:can-scroll-left={canScrollLeft} class:can-scroll-right={canScrollRight} class:is-dragging={ctx.isDragging}>
+  <button
+    class="table-copy-btn"
+    class:copied
+    onclick={handleCopyTable}
+    title={copied ? 'Copied!' : 'Copy table'}
+  >
+    <Icon name={copied ? 'check' : 'copy-code'} />
+  </button>
   <div class="table-scroller" use:setupScrollIndicators>
     <table class="content-table">
       <tbody>
@@ -503,5 +525,39 @@
 
   .choice-buttons-cell {
     padding: 4px 0 4px 8px;
+  }
+
+  /* Table copy button - top right, always visible */
+  .table-copy-btn {
+    position: absolute;
+    top: 0;
+    right: 4px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 16px;
+    z-index: 10;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+
+  .table-copy-btn:hover {
+    color: var(--text-secondary);
+    background: var(--bg-hover);
+  }
+
+  .table-copy-btn.copied {
+    color: var(--success, #22c55e);
+  }
+
+  .table-copy-btn:focus-visible {
+    outline: 1px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 </style>
