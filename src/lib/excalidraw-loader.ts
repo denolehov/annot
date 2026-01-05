@@ -23,8 +23,6 @@ export interface ExcalidrawLoaderOptions {
   container: HTMLElement;
   initialElements?: ExcalidrawElement[];
   theme?: EffectiveTheme;
-  onSave?: (elements: readonly ExcalidrawElement[], png: string) => void;
-  onCancel?: () => void;
 }
 
 let loadPromise: Promise<typeof import('@excalidraw/excalidraw')> | null = null;
@@ -67,7 +65,7 @@ export async function mountExcalidraw(
     import('@excalidraw/excalidraw/index.css'),
   ]);
 
-  const { Excalidraw, exportToBlob } = ExcalidrawModule;
+  const { Excalidraw } = ExcalidrawModule;
 
   // Create root
   const root = createRoot(options.container);
@@ -81,73 +79,26 @@ export async function mountExcalidraw(
 
   // Create wrapper component using createElement (no JSX needed)
   const ExcalidrawWrapper = () => {
-    return React.createElement(
-      React.Fragment,
-      null,
-      // Excalidraw - renders directly, will fill container
-      React.createElement(Excalidraw, {
-        theme: options.theme === 'dark' ? 'dark' : 'light',
-        initialData: {
-          elements: options.initialElements || [],
-        },
-        excalidrawAPI: (api: ExcalidrawAPI) => {
-          excalidrawAPI = api;
-          // Center diagram in viewport after canvas renders
-          if (options.initialElements?.length) {
-            requestAnimationFrame(() => {
-              api.scrollToContent(options.initialElements!, {
-                fitToViewport: true,
-                viewportZoomFactor: 0.9,
-              });
+    return React.createElement(Excalidraw, {
+      theme: options.theme === 'dark' ? 'dark' : 'light',
+      initialData: {
+        elements: options.initialElements || [],
+      },
+      excalidrawAPI: (api: ExcalidrawAPI) => {
+        excalidrawAPI = api;
+        // Center diagram in viewport after canvas renders
+        if (options.initialElements?.length) {
+          requestAnimationFrame(() => {
+            api.scrollToContent(options.initialElements!, {
+              fitToViewport: true,
+              viewportZoomFactor: 0.9,
             });
-          }
-          // Signal that API is ready
-          resolveReady();
-        },
-      }),
-      // Control buttons - positioned via CSS
-      React.createElement(
-        'div',
-        { className: 'excalidraw-controls' },
-        React.createElement(
-          'button',
-          {
-            className: 'excalidraw-cancel',
-            onClick: () => options.onCancel?.(),
-          },
-          'Cancel'
-        ),
-        React.createElement(
-          'button',
-          {
-            className: 'excalidraw-save',
-            onClick: async () => {
-              if (excalidrawAPI && options.onSave) {
-                const elements = excalidrawAPI.getSceneElements();
-                try {
-                  const blob = await exportToBlob({
-                    elements,
-                    mimeType: 'image/png',
-                    appState: excalidrawAPI.getAppState(),
-                    files: excalidrawAPI.getFiles(),
-                  });
-                  const reader = new FileReader();
-                  reader.onloadend = () => {
-                    options.onSave!(elements, reader.result as string);
-                  };
-                  reader.readAsDataURL(blob);
-                } catch (e) {
-                  console.error('Failed to export Excalidraw to PNG:', e);
-                  // Still save elements even if PNG export fails
-                  options.onSave!(elements, '');
-                }
-              }
-            },
-          },
-          'Save'
-        )
-      )
-    );
+          });
+        }
+        // Signal that API is ready
+        resolveReady();
+      },
+    });
   };
 
   // Render and wait for API to be ready
