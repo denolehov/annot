@@ -24,9 +24,9 @@ pnpm tauri build --debug      # Debug build with embedded frontend
 # Testing
 pnpm test                     # All frontend tests
 pnpm vitest run <file>        # Single frontend test file
-cargo test                    # All Rust tests (from src-tauri/)
-cargo test <name>             # Single Rust test
-cargo insta review            # Review snapshot changes
+pnpm test:rust                # All Rust tests
+pnpm test:rust -- <name>      # Single Rust test
+cargo insta review            # Review snapshot changes (from src-tauri/)
 
 # Type checking
 pnpm check
