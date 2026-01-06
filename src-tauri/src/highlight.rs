@@ -62,6 +62,8 @@ impl Highlighter {
             "jsx" | "mjs" | "cjs" => "js",
             // Svelte → HTML (syntect default doesn't include Svelte)
             "svelte" => "html",
+            // Kotlin → Java (syntect default doesn't include Kotlin)
+            "kt" | "kts" => "java",
             _ => ext,
         }
     }
