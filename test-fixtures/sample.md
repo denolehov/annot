@@ -229,6 +229,44 @@ Colors in different contexts:
 
 ---
 
+## YAML Example
+
+Configuration with various YAML patterns:
+
+```yaml
+name: annot
+version: "1.0.0"
+
+features:
+  - annotations
+  - exit-modes
+  - tags
+  - portals
+
+config:
+  theme: dark
+  auto-save: true
+  keybindings:
+    annotate: "c"
+    seal: "Cmd+Enter"
+    palette: ":"
+
+nested:
+  list:
+    - item-one
+    - item-two
+    - nested-item:
+        key: value
+        another-key: "string-value"
+
+multiline: |
+  This is a multiline
+  string with dashes - like this
+  and more - content here
+```
+
+---
+
 ## Closing
 
 The core of annot:
