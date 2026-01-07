@@ -42,7 +42,7 @@ enum Command {
     Mcp,
     /// Manage bookmarks
     #[command(subcommand)]
-    Bookmarks(BookmarksCommand),
+    Bookmark(BookmarksCommand),
     /// Print version information
     Version,
 }
@@ -84,7 +84,7 @@ fn main() {
     let cli = Cli::parse();
 
     // Handle bookmark subcommands that don't need Tauri (list/show/delete)
-    if let Some(Command::Bookmarks(cmd)) = &cli.command {
+    if let Some(Command::Bookmark(cmd)) = &cli.command {
         if !matches!(cmd, BookmarksCommand::Open { .. }) {
             handle_bookmarks_command(cmd);
             return;
@@ -101,7 +101,7 @@ fn main() {
     let context = tauri::generate_context!();
 
     // Handle bookmark open (needs Tauri window)
-    if let Some(Command::Bookmarks(BookmarksCommand::Open { id })) = &cli.command {
+    if let Some(Command::Bookmark(BookmarksCommand::Open { id })) = &cli.command {
         handle_bookmark_open(id, context);
         return;
     }
