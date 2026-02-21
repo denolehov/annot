@@ -96,13 +96,27 @@ use state::AppState;
 /// Shared flag to prevent app exit in MCP mode.
 pub type ShouldExit = Arc<AtomicBool>;
 
+/// When true, CLI outputs JSON with base64 images instead of plain text.
+/// Newtype wrapper to avoid Tauri state collision with ShouldExit.
+pub struct JsonOutputFlag(pub AtomicBool);
+
+impl JsonOutputFlag {
+    pub fn new(value: bool) -> Self {
+        Self(AtomicBool::new(value))
+    }
+
+    pub fn get(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+}
+
 /// Serializes MCP sessions so only one review runs at a time.
 /// Held for the entire session lifecycle (window open → user closes → result returned).
 pub type SessionLock = Mutex<()>;
 
 /// Run in CLI mode (file/stdin input, prints result, exits).
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run(state: AppState, context: tauri::Context) {
+pub fn run(state: AppState, context: tauri::Context, json_output: bool) {
     // Convert AppState to Review (auto-detects file vs diff mode)
     let review = Review::cli(state.content, state.config, "main".to_string());
 
@@ -110,6 +124,7 @@ pub fn run(state: AppState, context: tauri::Context) {
         .plugin(tauri_plugin_opener::init())
         .manage::<ActiveReview>(Mutex::new(Some(review)))
         .manage::<ShouldExit>(Arc::new(AtomicBool::new(true))) // CLI mode: allow exit
+        .manage::<JsonOutputFlag>(JsonOutputFlag::new(json_output))
         .manage(Mutex::new(MermaidWindowState::new()))
         .manage(Mutex::new(ExcalidrawWindowState::new()))
         .manage::<FileCacheState>(Mutex::new(FileCache::new()))
@@ -165,6 +180,7 @@ pub fn run_mcp(context: tauri::Context) {
         .plugin(tauri_plugin_opener::init())
         .manage::<ActiveReview>(Mutex::new(None))
         .manage::<ShouldExit>(should_exit)
+        .manage::<JsonOutputFlag>(JsonOutputFlag::new(false))
         .manage::<SessionLock>(Mutex::new(()))
         .manage(Mutex::new(MermaidWindowState::new()))
         .manage(Mutex::new(ExcalidrawWindowState::new()))
