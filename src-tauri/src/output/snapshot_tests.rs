@@ -1376,3 +1376,175 @@ fn terraform_kitchen_sink() {
     let output = format_output(&review, OutputMode::Cli).text;
     insta::assert_snapshot!(output);
 }
+
+// ========== JSON Output Tests ==========
+
+#[test]
+fn json_output_empty_review() {
+    let review = make_review("test.rs", vec![], HashMap::new());
+    let result = format_output(&review, OutputMode::Mcp);
+    let json_str = super::format_json(&result);
+    let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+
+    assert_eq!(parsed["text"], "");
+    assert_eq!(parsed["images"], serde_json::json!([]));
+}
+
+#[test]
+fn json_output_text_only() {
+    let mut annotations = HashMap::new();
+    annotations.insert(
+        LineRange::new(5, 5),
+        Annotation {
+            start_line: 5,
+            end_line: 5,
+            content: vec![ContentNode::Text {
+                text: "Fix this".to_string(),
+            }],
+        },
+    );
+
+    let lines = make_lines("handler.rs", 1, 10);
+    let review = make_review("handler.rs", lines, annotations);
+    let result = format_output(&review, OutputMode::Mcp);
+    let json_str = super::format_json(&result);
+    let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+
+    // Text should contain the annotation
+    let text = parsed["text"].as_str().unwrap();
+    assert!(text.contains("Fix this"), "JSON text should contain annotation");
+    assert!(text.contains("handler.rs:5"), "JSON text should contain file location");
+
+    // No images
+    assert_eq!(parsed["images"].as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn json_output_with_images() {
+    use crate::mcp::tools::SessionImage;
+
+    let result = super::FormatResult {
+        text: "handler.rs:5\n>   5 | code\n      └──> Has image: [Figure 1]".to_string(),
+        images: vec![SessionImage {
+            figure: 1,
+            data: "iVBORw0KGgoAAAANS".to_string(),
+            mime_type: "image/png".to_string(),
+        }],
+        metadata: super::FormatMetadata::default(),
+    };
+
+    let json_str = super::format_json(&result);
+    let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+
+    // Text present
+    assert!(parsed["text"].as_str().unwrap().contains("[Figure 1]"));
+
+    // Image present with correct fields
+    let images = parsed["images"].as_array().unwrap();
+    assert_eq!(images.len(), 1);
+    assert_eq!(images[0]["figure"], 1);
+    assert_eq!(images[0]["data"], "iVBORw0KGgoAAAANS");
+    assert_eq!(images[0]["mime_type"], "image/png");
+}
+
+#[test]
+fn json_output_with_multiple_images() {
+    use crate::mcp::tools::SessionImage;
+
+    let result = super::FormatResult {
+        text: "[Figure 1] and [Figure 2]".to_string(),
+        images: vec![
+            SessionImage {
+                figure: 1,
+                data: "png_data_1".to_string(),
+                mime_type: "image/png".to_string(),
+            },
+            SessionImage {
+                figure: 2,
+                data: "jpeg_data_2".to_string(),
+                mime_type: "image/jpeg".to_string(),
+            },
+        ],
+        metadata: super::FormatMetadata::default(),
+    };
+
+    let json_str = super::format_json(&result);
+    let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+
+    let images = parsed["images"].as_array().unwrap();
+    assert_eq!(images.len(), 2);
+    assert_eq!(images[0]["figure"], 1);
+    assert_eq!(images[0]["mime_type"], "image/png");
+    assert_eq!(images[1]["figure"], 2);
+    assert_eq!(images[1]["mime_type"], "image/jpeg");
+}
+
+#[test]
+fn json_output_is_valid_json() {
+    // Test with a realistic review containing special characters
+    let mut annotations = HashMap::new();
+    annotations.insert(
+        LineRange::new(3, 3),
+        Annotation {
+            start_line: 3,
+            end_line: 3,
+            content: vec![ContentNode::Text {
+                text: "Contains \"quotes\" and\nnewlines and <html>".to_string(),
+            }],
+        },
+    );
+
+    let lines = make_lines("test.rs", 1, 5);
+    let review = make_review("test.rs", lines, annotations);
+    let result = format_output(&review, OutputMode::Mcp);
+    let json_str = super::format_json(&result);
+
+    // Must be valid JSON
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&json_str);
+    assert!(parsed.is_ok(), "Output must be valid JSON: {}", json_str);
+
+    // Must have both fields
+    let value = parsed.unwrap();
+    assert!(value.get("text").is_some());
+    assert!(value.get("images").is_some());
+}
+
+#[test]
+fn json_output_mcp_mode_collects_media_as_images() {
+    // When a Media node is in an annotation, MCP mode collects it as an image
+    let mut annotations = HashMap::new();
+    annotations.insert(
+        LineRange::new(5, 5),
+        Annotation {
+            start_line: 5,
+            end_line: 5,
+            content: vec![
+                ContentNode::Text {
+                    text: "Screenshot: ".to_string(),
+                },
+                ContentNode::Media {
+                    image: "data:image/png;base64,AAAA".to_string(),
+                    mime_type: "image/png".to_string(),
+                },
+            ],
+        },
+    );
+
+    let lines = make_lines("app.rs", 1, 10);
+    let review = make_review("app.rs", lines, annotations);
+    let result = format_output(&review, OutputMode::Mcp);
+
+    // Text should have [Figure N] placeholder
+    assert!(result.text.contains("[Figure 1]"));
+    // Image should be collected
+    assert_eq!(result.images.len(), 1);
+    assert_eq!(result.images[0].data, "AAAA");
+    assert_eq!(result.images[0].mime_type, "image/png");
+
+    // JSON should include both
+    let json_str = super::format_json(&result);
+    let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+    assert!(parsed["text"].as_str().unwrap().contains("[Figure 1]"));
+    assert_eq!(parsed["images"].as_array().unwrap().len(), 1);
+}
+

@@ -43,6 +43,38 @@ pub enum OutputMode {
 pub struct FormatResult {
     pub text: String,
     pub images: Vec<SessionImage>,
+    /// Structured metadata for JSON output (used by pi extension for TUI rendering).
+    pub metadata: FormatMetadata,
+}
+
+/// Structured metadata extracted during formatting.
+#[derive(Default)]
+pub struct FormatMetadata {
+    pub annotation_count: usize,
+    pub general_comment: Option<String>,
+    pub exit_mode: Option<String>,
+    pub general_comment_count: usize,
+    pub terraform_count: usize,
+    pub bookmark_count: usize,
+}
+
+/// Serialize a FormatResult as JSON for `--json` CLI output.
+pub fn format_json(result: &FormatResult) -> String {
+    let json = serde_json::json!({
+        "text": result.text,
+        "images": result.images.iter().map(|img| serde_json::json!({
+            "figure": img.figure,
+            "data": img.data,
+            "mime_type": img.mime_type,
+        })).collect::<Vec<_>>(),
+        "annotation_count": result.metadata.annotation_count,
+        "general_comment": result.metadata.general_comment,
+        "exit_mode": result.metadata.exit_mode,
+        "general_comment_count": result.metadata.general_comment_count,
+        "terraform_count": result.metadata.terraform_count,
+        "bookmark_count": result.metadata.bookmark_count,
+    });
+    serde_json::to_string(&json).expect("FormatResult JSON serialization should not fail")
 }
 
 /// Reconstructs content for export, with portals embedded as code blocks.
@@ -354,6 +386,7 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
         return FormatResult {
             text: String::new(),
             images: Vec::new(),
+            metadata: FormatMetadata::default(),
         };
     }
 
@@ -522,9 +555,53 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
         out.raw_line(&format!("Saved to {}", saved_path.display()));
     }
 
+    // Build metadata for structured JSON output
+    let annotation_count = review
+        .files
+        .values()
+        .map(|target| target.annotations.len())
+        .sum();
+
+    let terraform_count = review
+        .files
+        .values()
+        .map(|target| target.terraform_regions.len())
+        .sum();
+
+    let general_comment_count = if review.session_comment.as_ref()
+        .map(|c| !c.is_empty())
+        .unwrap_or(false) { 1 } else { 0 };
+
+    let bookmark_count = collect_unique_bookmarks(review).len();
+
+    let general_comment = review.session_comment.as_ref().and_then(|comment| {
+        if comment.is_empty() {
+            None
+        } else {
+            Some(render_content(comment, &mut Vec::new(), &mut 0usize, OutputMode::Cli))
+        }
+    });
+
+    let exit_mode = review.selected_exit_mode_id.as_ref().and_then(|mode_id| {
+        review
+            .config
+            .exit_modes()
+            .iter()
+            .find(|m| &m.id == mode_id)
+            .map(|em| em.name.clone())
+    });
+
     FormatResult {
         text: out.build(),
         images,
+        metadata: FormatMetadata {
+            annotation_count,
+            general_comment,
+            exit_mode,
+            general_comment_count,
+            terraform_count,
+            bookmark_count,
+        },
     }
 }
 

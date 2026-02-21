@@ -7,7 +7,7 @@ use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 use crate::config::{self, Config, Theme};
 use crate::lang::extension_to_fence_language;
-use crate::output::{export_content, export_section, format_output, OutputMode};
+use crate::output::{export_content, export_section, format_json, format_output, OutputMode};
 use crate::review::ActiveReview;
 use crate::input::{ContentSource, McpSource};
 use crate::state::{
@@ -45,12 +45,18 @@ macro_rules! with_review {
 pub fn get_content(
     window: WebviewWindow,
     review_state: State<ActiveReview>,
+    json_output: State<crate::JsonOutputFlag>,
 ) -> Result<ContentResponse, String> {
     let guard = review_state.lock();
     let review = guard.as_ref().ok_or("No active review")?;
-    review
+    let mut response = review
         .to_response_for_window(window.label())
-        .ok_or_else(|| "Cannot get content for this window type".into())
+        .ok_or_else(|| String::from("Cannot get content for this window type"))?;
+    // JSON output mode can carry images, so allow image paste
+    if json_output.get() {
+        response.allows_image_paste = true;
+    }
+    Ok(response)
 }
 
 #[tauri::command]
@@ -136,6 +142,7 @@ pub fn get_terraform_phrase(region: TerraformRegion) -> String {
 pub fn finish_review(
     review_state: State<ActiveReview>,
     should_exit: State<ShouldExit>,
+    json_output: State<crate::JsonOutputFlag>,
     app: AppHandle,
 ) -> Result<(), String> {
     let mut guard = review_state.lock();
@@ -145,14 +152,15 @@ pub fn finish_review(
     collect_tag_usage(&mut review);
 
     let is_mcp = review.is_mcp();
-    let result = format_output(
-        &review,
-        if is_mcp {
-            OutputMode::Mcp
-        } else {
-            OutputMode::Cli
-        },
-    );
+    let is_json = json_output.get();
+
+    // JSON mode uses Mcp output mode to collect images separately
+    let output_mode = if is_mcp || is_json {
+        OutputMode::Mcp
+    } else {
+        OutputMode::Cli
+    };
+    let result = format_output(&review, output_mode);
 
     // Close all windows
     let labels: Vec<_> = review.window_labels().map(|s| s.to_string()).collect();
@@ -165,8 +173,13 @@ pub fn finish_review(
     if let Some(tx) = review.take_result_sender() {
         // MCP mode: send result via channel
         tx.send(result).map_err(|_| "Failed to send result")?;
+    } else if is_json {
+        // CLI JSON mode: structured output with images
+        println!("{}", format_json(&result));
+        should_exit.store(true, Ordering::SeqCst);
+        app.exit(0);
     } else {
-        // CLI mode: print and exit
+        // CLI plain text mode
         if !result.text.is_empty() {
             print!("{}", result.text);
             let _ = std::io::stdout().flush();

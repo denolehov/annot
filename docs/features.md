@@ -246,6 +246,20 @@ All block until window closes, returning structured output with annotations, exi
 
 ---
 
+## CLI Flags
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output annotations as JSON with base64 images (for tool integrations) |
+| `--exit-mode "Name:Instruction"` | Add a transient exit mode button (repeatable) |
+| `-l, --label <LABEL>` | Label for stdin content (syntax highlighting) |
+
+`--json` returns `{"text": "...", "images": [{"figure": 1, "data": "base64...", "mime_type": "image/png"}]}` instead of plain text. Used by the Pi extension to pipe images back to the agent.
+
+`--exit-mode` can be repeated to add multiple buttons. Colors auto-cycle.
+
+---
+
 ## Configuration
 
 Persisted in `~/.config/annot/`:

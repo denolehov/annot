@@ -34,6 +34,16 @@ struct Cli {
     /// Label for stdin content (affects syntax highlighting and output headers)
     #[arg(short = 'l', long = "label", default_value = "stdin")]
     label: String,
+
+    /// Output annotations as JSON (includes base64 images)
+    #[arg(long)]
+    json: bool,
+
+    /// Add an exit mode button: "name:instruction" (repeatable)
+    ///
+    /// Example: --exit-mode "Apply:Apply the changes" --exit-mode "Reject:Discard"
+    #[arg(long = "exit-mode", value_name = "NAME:INSTRUCTION")]
+    exit_modes: Vec<String>,
 }
 
 #[derive(clap::Subcommand)]
@@ -136,7 +146,29 @@ fn main() {
     };
 
     // Load config
-    let config = annot_lib::state::UserConfig::load();
+    let mut config = annot_lib::state::UserConfig::load();
+
+    // Parse CLI exit modes and prepend as transient
+    if !cli.exit_modes.is_empty() {
+        let default_colors = ["#22c55e", "#eab308", "#ef4444", "#3b82f6", "#a855f7", "#f97316"];
+        let transient_modes: Vec<annot_lib::state::ExitMode> = cli
+            .exit_modes
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| {
+                let (name, instruction) = s.split_once(':')?;
+                Some(annot_lib::state::ExitMode {
+                    id: annot_lib::id::generate(),
+                    name: name.trim().to_string(),
+                    color: default_colors[i % default_colors.len()].to_string(),
+                    instruction: instruction.trim().to_string(),
+                    order: i as u32,
+                    source: annot_lib::state::ExitModeSource::Transient,
+                })
+            })
+            .collect();
+        config.prepend_transient_modes(transient_modes);
+    }
 
     // Create content model based on rendering mode
     let content = match input.rendering_mode {
@@ -159,7 +191,7 @@ fn main() {
 
     let state = AppState::new(content, config);
 
-    annot_lib::run(state, context);
+    annot_lib::run(state, context, cli.json);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -388,5 +420,5 @@ fn handle_bookmark_open(id: &str, context: tauri::Context) {
     };
 
     let state = AppState::new(content, config);
-    annot_lib::run(state, context);
+    annot_lib::run(state, context, false);
 }
