@@ -1,5 +1,51 @@
 # Changelog
 
+## [0.6.0](https://github.com/denolehov/annot/compare/v0.5.0...v0.6.0) (2026-02-25)
+
+
+### Features
+
+* add ? help overlay ([7a5e27c](https://github.com/denolehov/annot/commit/7a5e27cd60ac376091703756edceeb3c053adea3))
+* add /remove command that is like /replace but with empty content ([493a829](https://github.com/denolehov/annot/commit/493a829bf84379e7e416ac143e470437a83c44a5))
+* add an ability to copy tables ([5afd422](https://github.com/denolehov/annot/commit/5afd4223e0873be2624f20cba9f917a877422a1d))
+* add HEX color preview ([7d87463](https://github.com/denolehov/annot/commit/7d87463456bcce7bd5aaaf15bf869ffd2f71ea77))
+* add icons for each of the terraform axis ([d60a402](https://github.com/denolehov/annot/commit/d60a4026f1112d6f97affd3694a341391185c8e8))
+* add sorting to `annot bookmarks list` command ([3e16168](https://github.com/denolehov/annot/commit/3e16168c4f9d31515dc8a4628d783668ca63be6a))
+* add svg icons to distinguish different item types in @ ref menu ([2f73984](https://github.com/denolehov/annot/commit/2f73984319fa4bbb303deac90f27c0434c5235f2))
+* add terraform axes precedence rules ([52654f8](https://github.com/denolehov/annot/commit/52654f8685b21bae080453269b6444e5dd0419cf))
+* add terraform regions for structured content transformation ([bb9c082](https://github.com/denolehov/annot/commit/bb9c0826091dbd427685dd9469acecb0af62f0ec))
+* add version subcommand ([62d6b74](https://github.com/denolehov/annot/commit/62d6b7428a05f369bf255f5efc953908c580cd0c))
+* allow referencing markdown headings via @ in annotation ([9eed904](https://github.com/denolehov/annot/commit/9eed9043ea7fdae9b64ceff520d7dc6971b7106b))
+* CLI --json output, --exit-mode flag, and structured metadata ([16d189d](https://github.com/denolehov/annot/commit/16d189daf199df9351ba652287ef35a91286e35b))
+* natural prose terraform directives ([6ce5c0c](https://github.com/denolehov/annot/commit/6ce5c0c09b22dd7ffd8f513c16ab644bacde2516))
+* remove redundant categories from the @ ref menu so that fuzzy search works properly ([d83657b](https://github.com/denolehov/annot/commit/d83657bf421e15a52c0e72fad79a54584ffaec3c))
+* show toast on successful terraform apply ([45b30fa](https://github.com/denolehov/annot/commit/45b30fa8d3f086fa4884c31688fbd665e8d92eb3))
+* the bookmarks subcommand is now `annot bookmark` (singular) ([5b4f7ae](https://github.com/denolehov/annot/commit/5b4f7ae23aacf93f3c85711d78b2bd047b5060af))
+* use fuzzy search in @ annotation menu ([8f35456](https://github.com/denolehov/annot/commit/8f354560ef056a87319998d81f89cad6bfb92c12))
+
+
+### Bug Fixes
+
+* ? help modal layout organization ([4db4b28](https://github.com/denolehov/annot/commit/4db4b2830a54cc6003512299179c068705a5c6d7))
+* @ ref menu ranking improvements ([7cd2e48](https://github.com/denolehov/annot/commit/7cd2e48479fb99137087e0c8906a66b4cdea8c62))
+* allow blurring the annotation editor if tag/ref/command suggestion menu is active ([e76a1ba](https://github.com/denolehov/annot/commit/e76a1ba9eb6b0ba03dcc6b125b491fb5eb1245f4))
+* allow opening session editor from hovering phase ([af5a317](https://github.com/denolehov/annot/commit/af5a3173aa838ab2f19f03b3f512c89c97efa4d8))
+* build workflow now accepts tag param ([8ca04ad](https://github.com/denolehov/annot/commit/8ca04ad3b2c49e1dc8b85d1a65088b08fe20192b))
+* chip font size is now consistent with the annotation editor size ([3a2ec96](https://github.com/denolehov/annot/commit/3a2ec96c8165e91859a98f3d1bb82db1a02b6197))
+* contradictory terraform prose outputs are no longer possible ([89017b6](https://github.com/denolehov/annot/commit/89017b6281cada5dd74179bf5afa484555c57de8))
+* fix buggy excalidraw close confirmation dialog ([004dc32](https://github.com/denolehov/annot/commit/004dc324ec2df5ccb01680ab154ab3e6d2767614))
+* hunk context is now properly tracked in diff mode and shown in ([dae79bb](https://github.com/denolehov/annot/commit/dae79bb48613b0c21247bb7db01442dd083cb716))
+* make non-sensical terraform states impossible to represent ([bf3aa5a](https://github.com/denolehov/annot/commit/bf3aa5a55432081b5b11a7c8714ead08f3e8c56d))
+* prevent orphaned excalidraw windows if excalidraw chip was deleted ([d9d5e3e](https://github.com/denolehov/annot/commit/d9d5e3eda092e829b08ea3b83a78b328bc1810c5))
+* properly track open editor to prevent double open editors ([ee8a06b](https://github.com/denolehov/annot/commit/ee8a06b3a2e57f1dd59a5737dec1b324fb5cfd2c))
+* reset selected text when selecting for annotation ([0f3b567](https://github.com/denolehov/annot/commit/0f3b56741c5f8bda481e1e79ecbae6505a7a8f54))
+* sealed annotation editors no longer disappear when selecting new ([d0c63cd](https://github.com/denolehov/annot/commit/d0c63cde5a4531ad1569a9d34898013c23426165))
+* terraform element padding is now consistent with the annotation editor padding ([46f8a09](https://github.com/denolehov/annot/commit/46f8a091b3dbad37cfef419b072263ce7b9e6079))
+* treat kotlin syntax as java for highlighting ([646fbec](https://github.com/denolehov/annot/commit/646fbecb67a5ac34ccfdd30ca927d43cf17831bd))
+* trigger build workflow on release publish event ([45e064b](https://github.com/denolehov/annot/commit/45e064b85027b9f612640f803d3c2bd2f50cdc7b))
+* use rangeKey instead of interaction.range in updateAnnotation ([416d536](https://github.com/denolehov/annot/commit/416d536e6abd2d74c23fe87f81a5e85753145ac9))
+* yaml list items are no longer broken ([72a4ebb](https://github.com/denolehov/annot/commit/72a4ebbab20955fdcbeea89fa4139477ae784bc0))
+
 ## [0.5.0](https://github.com/denolehov/annot/compare/v0.4.0...v0.5.0) (2026-02-25)
 
 
