@@ -1,7 +1,7 @@
 {
   "name": "annot",
   "version": "0.4.0",
-  "description": "",
+  "description": "Human-in-the-loop annotation tool for AI workflows",
   "type": "module",
   "scripts": {
     "postinstall": "node scripts/copy-excalidraw-fonts.js",
@@ -21,7 +21,7 @@
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "install:local": "ln -sf $PWD/src-tauri/target/release/bundle/macos/annot.app/Contents/MacOS/annot ~/.local/bin/annot && echo 'Installed annot to ~/.local/bin/annot'"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0",
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.0",
     "@excalidraw/mermaid-to-excalidraw": "^2.0.0",
