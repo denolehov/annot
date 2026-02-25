@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.5.0](https://github.com/denolehov/annot/compare/v0.4.0...v0.5.0) (2026-02-25)
+
+
+### Features
+
+* add an ability to copy tables ([3b32a52](https://github.com/denolehov/annot/commit/3b32a525108daa55ec9ba7be71624b052250e595))
+* add HEX color preview ([9ad623c](https://github.com/denolehov/annot/commit/9ad623ca73300ad07847b10f03a9b99887b580e6))
+* add icons for each of the terraform axis ([d2d6c4c](https://github.com/denolehov/annot/commit/d2d6c4c68c9479942db10c5714b43b6c2358d382))
+* add sorting to `annot bookmarks list` command ([500de7c](https://github.com/denolehov/annot/commit/500de7cd51d932e647bb1e20cecae9605ca8a002))
+* add svg icons to distinguish different item types in @ ref menu ([d363c6c](https://github.com/denolehov/annot/commit/d363c6c4c895b0c9fd281752625acd0474c97cdd))
+* add terraform axes precedence rules ([1f09e91](https://github.com/denolehov/annot/commit/1f09e91ace19de9d2c45c249ed64751f25af63fd))
+* add terraform regions for structured content transformation ([b73735a](https://github.com/denolehov/annot/commit/b73735a8ddf8f377ae06d47a0a3564e42cbf4b6f))
+* add version subcommand ([a8132a2](https://github.com/denolehov/annot/commit/a8132a257fdd95835989a0808031d02d555397e5))
+* allow referencing markdown headings via @ in annotation ([ddacd15](https://github.com/denolehov/annot/commit/ddacd1538e870075bb77eff5405bada075795ac7))
+* CLI --json output, --exit-mode flag, and structured metadata ([9dee07f](https://github.com/denolehov/annot/commit/9dee07fd98b2c0749bdd91adbf6ffaa3ffc30fa7))
+* natural prose terraform directives ([7b1be69](https://github.com/denolehov/annot/commit/7b1be6932125ad116642f3d1b9ad1c3cb668f5b1))
+* remove redundant categories from the @ ref menu so that fuzzy search works properly ([0f87a62](https://github.com/denolehov/annot/commit/0f87a62d0ad58d1782e11f3c8ec53b73ba1236a0))
+* show toast on successful terraform apply ([bc83553](https://github.com/denolehov/annot/commit/bc83553ab648e9edd685871d4438a28bc0c16b26))
+* the bookmarks subcommand is now `annot bookmark` (singular) ([674057d](https://github.com/denolehov/annot/commit/674057d45dfc9cfc3b9df57211c655f8545ead1b))
+* use fuzzy search in @ annotation menu ([0111c56](https://github.com/denolehov/annot/commit/0111c56dee9a97b2fd3351b560c1ea5f2e6990fc))
+
+
+### Bug Fixes
+
+* @ ref menu ranking improvements ([515eb63](https://github.com/denolehov/annot/commit/515eb639d617a382a8ee07e1e4355069b6b747dc))
+* allow blurring the annotation editor if tag/ref/command suggestion menu is active ([4817f11](https://github.com/denolehov/annot/commit/4817f1108a67cd099e5a3eadddf7d61db6a88c2f))
+* allow opening session editor from hovering phase ([07e078a](https://github.com/denolehov/annot/commit/07e078ab65f292b3b3f660f7756e436dca91d812))
+* contradictory terraform prose outputs are no longer possible ([ff63e75](https://github.com/denolehov/annot/commit/ff63e7581e2cd5414ae8cfa94fa874f4342d8c09))
+* fix buggy excalidraw close confirmation dialog ([1ff2384](https://github.com/denolehov/annot/commit/1ff23845b4d35dec300edd900625f63f3a28cb78))
+* hunk context is now properly tracked in diff mode and shown in ([93624e2](https://github.com/denolehov/annot/commit/93624e24395deb47723163a34201f696ef150971))
+* make non-sensical terraform states impossible to represent ([f6c3ea1](https://github.com/denolehov/annot/commit/f6c3ea1cff51ef8cf241e7931bb2c731619ef73e))
+* prevent orphaned excalidraw windows if excalidraw chip was deleted ([2f7322a](https://github.com/denolehov/annot/commit/2f7322aef3857d605e67dc7cb7efa52812e46c35))
+* properly track open editor to prevent double open editors ([b69c715](https://github.com/denolehov/annot/commit/b69c7158ce34e07388589eef50fc44108ecc9edf))
+* terraform element padding is now consistent with the annotation editor padding ([fa5e53a](https://github.com/denolehov/annot/commit/fa5e53a2b29b2446b384bccc4280d97dde5a57a6))
+* treat kotlin syntax as java for highlighting ([b024827](https://github.com/denolehov/annot/commit/b024827934a41abc2afc72045d6310dafefda479))
+* yaml list items are no longer broken ([cc19c7a](https://github.com/denolehov/annot/commit/cc19c7a335ae20dd48bcefb4a00621608ab82bb3))
+
 ## [0.4.0](https://github.com/denolehov/annot/compare/v0.3.0...v0.4.0) (2026-01-03)
 
 
