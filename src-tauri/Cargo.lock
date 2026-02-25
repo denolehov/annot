@@ -43,7 +43,7 @@ dependencies = [
 
 [[package]]
 name = "annot"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "arboard",
  "base64 0.22.1",
