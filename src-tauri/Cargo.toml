@@ -3,6 +3,7 @@ name = "annot"
 version = "0.4.0" # x-release-please-version
 description = "Human-in-the-loop annotation tool for AI workflows"
 authors = ["Denys Oliekhov"]
+license = "AGPL-3.0"
 edition = "2021"
 repository = "https://github.com/denolehov/annot"
 
