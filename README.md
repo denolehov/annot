@@ -2,6 +2,8 @@
 
 An annotation tool for human-in-the-loop AI workflows.
 
+> **Platform**: macOS only. Not tested on Linux or Windows.
+
 ## Why
 
 When working with AI coding agents, you sometimes need to *point at things* — mark a section for refactoring, flag a suspicious pattern, or leave a note that says "this, but more X."
