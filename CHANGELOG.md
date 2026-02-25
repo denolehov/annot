@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/denolehov/annot/compare/v0.6.0...v0.7.0) (2026-02-25)
+
+
+### Features
+
+* add Homebrew tap automation to release workflow ([1605ef0](https://github.com/denolehov/annot/commit/1605ef02ea0c96f3c5698300f8f22b947005a01e))
+
 ## [0.6.0](https://github.com/denolehov/annot/compare/v0.5.0...v0.6.0) (2026-02-25)
 
 
