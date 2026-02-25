@@ -90,16 +90,18 @@ jobs:
 
       - name: Package artifact
         run: |
+          TAG="${{ steps.get-tag.outputs.tag }}"
+          VERSION="${TAG#v}"
           cd src-tauri/target/release/bundle/macos
           mkdir annot
           cp -r annot.app annot/
-          tar -czvf annot-darwin-arm64.tar.gz annot
-          mv annot-darwin-arm64.tar.gz $GITHUB_WORKSPACE/
+          tar -czvf "annot-${VERSION}-darwin-arm64.tar.gz" annot
+          mv "annot-${VERSION}-darwin-arm64.tar.gz" $GITHUB_WORKSPACE/
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: annot-darwin-arm64.tar.gz
+          files: annot-*-darwin-arm64.tar.gz
           tag_name: ${{ steps.get-tag.outputs.tag }}
 
   update-homebrew:
@@ -116,4 +118,4 @@ jobs:
             prefix.install "annot.app"
             bin.install_symlink prefix/"annot.app/Contents/MacOS/annot"
           test: 'system bin/"annot", "--version"'
-          custom_tarball: "annot-darwin-arm64"
+          target_darwin_arm64: true
