@@ -1,0 +1,11 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window width:30 {\n            text \"Left\" align:left\n            text \"Center\" align:center\n            text \"Right\" align:right\n        }\n    }\"#).unwrap()"
+---
++----------------------------+
+|                            |
+| Left                       |
+|           Center           |
+|                      Right |
+|                            |
++----------------------------+

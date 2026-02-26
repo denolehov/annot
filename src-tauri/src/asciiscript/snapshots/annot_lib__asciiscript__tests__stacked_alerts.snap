@@ -1,0 +1,13 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        alert type:error { text \"Critical error!\" }\n        alert type:warn { text \"Warning message\" }\n        alert type:info { text \"Information note\" }\n    }\"#).unwrap()"
+---
+╔═ ERROR ═════════╗
+║ Critical error! ║
+╚═════════════════╝
+┌─ WARNING ───────┐
+│ Warning message │
+└─────────────────┘
+┌─ INFO ───────────┐
+│ Information note │
+└──────────────────┘

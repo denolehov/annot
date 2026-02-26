@@ -1,0 +1,6 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        input width:10\n        input width:20 placeholder:\"email@example.com\"\n    }\"#).unwrap()"
+---
+[________]
+[email@example.com_]

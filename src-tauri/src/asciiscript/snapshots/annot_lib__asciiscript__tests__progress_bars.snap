@@ -1,0 +1,9 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        progress 0\n        progress 25\n        progress 50\n        progress 75\n        progress 100\n    }\"#).unwrap()"
+---
+[░░░░░░░░░░░░░] 0%
+[███░░░░░░░░░░] 25%
+[██████░░░░░░░] 50%
+[█████████░░░░] 75%
+[█████████████] 100%
