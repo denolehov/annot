@@ -6,6 +6,12 @@ An annotation tool for human-in-the-loop AI workflows.
 
 ![annot screenshot](docs/screenshot.png)
 
+## Why
+
+AI agents work fast, but "make it better" is a lossy feedback channel. When an agent drafts a plan, proposes a refactor, or generates code — you need a way to point at specific lines and say what you actually mean, before any of it becomes real.
+
+annot is that moment of review. It opens a window, you shape the content with located, structured feedback, then it closes and gets out of the way.
+
 ## Install
 
 ```bash
@@ -40,7 +46,7 @@ Add to your MCP settings (`~/.claude/settings.json` or project `.claude/settings
 }
 ```
 
-Claude now has three tools: `review_file`, `review_diff`, and `review_content`. Ask it to review something and a window opens for your feedback.
+Claude now has review tools (`review_file`, `review_diff`, `review_content`) and bookmark tools (`get_bookmark`, `list_bookmarks`). Ask it to review something and a window opens for your feedback.
 
 ### Standalone
 
@@ -90,7 +96,7 @@ Signal *intent* when closing a review. Instead of just closing, indicate what sh
 
 ### Session context
 
-Press `g` to add comments that apply to the entire review — framing context like "focus on error handling, ignore style."
+Press `Shift+C` to add comments that apply to the entire review — framing context like "focus on error handling, ignore style."
 
 ### More
 
@@ -129,16 +135,45 @@ Press `g` to add comments that apply to the entire review — framing context li
 | `label` | string | yes | Display name with .md extension |
 | `exit_modes` | array | no | Ephemeral exit modes for this session |
 
+### `get_bookmark`
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | string | yes | Full or prefix bookmark ID |
+
+### `list_bookmarks`
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `limit` | number | no | Maximum number of bookmarks to return |
+| `search` | string | no | Filter by label, selected text, or context |
+| `project` | string | no | Filter by project path |
+| `sort` | string | no | Sort order: "asc" (default) or "desc" |
+
 ## Keyboard shortcuts
 
 | Shortcut | Function |
 |---|---|
 | Click line numbers | Select/deselect lines |
-| Shift+Click | Select range |
-| `/` (in editor) | Tag autocomplete menu |
+| Shift+Drag | Select range |
+| c | Comment hovered line |
+| Shift+C | Session context (global comment) |
+| b | Bookmark hovered line or selection |
+| Shift+B | Bookmark entire session |
 | Tab / Shift+Tab | Cycle exit modes |
-| g | Session context editor |
+| Alt+Tab | Exit mode picker |
 | : | Command palette |
+| Cmd+F | Search |
+| Cmd+S | Save to file |
+| ? | Help overlay |
+
+**In annotation editor:**
+
+| Shortcut | Function |
+|---|---|
+| # | Insert tag |
+| @ | Reference (annotations, bookmarks, sections) |
+| / | Slash commands (/replace, /excalidraw) |
 
 ## License
 
