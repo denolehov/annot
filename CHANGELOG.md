@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/denolehov/annot/compare/v0.7.0...v0.7.1) (2026-03-01)
+
+
+### Bug Fixes
+
+* include version in release artifact name for Homebrew ([e76e1ca](https://github.com/denolehov/annot/commit/e76e1ca5a23ec20ea0ddc21b2f45fb633d2d9387))
+
 ## [0.7.0](https://github.com/denolehov/annot/compare/v0.6.0...v0.7.0) (2026-02-25)
 
 
