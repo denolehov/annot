@@ -1,0 +1,11 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window width:60 {\n            row {\n                column {\n                    text \"Left Column\"\n                    checkbox \"Option A\"\n                    checkbox \"Option B\"\n                }\n                column {\n                    text \"Right Column\"\n                    radio \"Choice 1\"\n                    radio \"Choice 2\" selected\n                }\n            }\n        }\n    }\"#).unwrap()"
+---
++----------------------------------------------------------+
+|                                                          |
+| Left Column  Right Column                                |
+| [ ] Option A ( ) Choice 1                                |
+| [ ] Option B (o) Choice 2                                |
+|                                                          |
++----------------------------------------------------------+

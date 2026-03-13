@@ -1,0 +1,18 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Options\" {\n            checkbox \"Option 1\" checked\n            checkbox \"Option 2\"\n            checkbox \"Option 3\" checked\n            checkbox \"Option 4\"\n            checkbox \"Option 5\" checked\n            checkbox \"Option 6\"\n            checkbox \"Option 7\"\n            checkbox \"Option 8\" checked\n            checkbox \"Option 9\"\n            checkbox \"Option 10\"\n        }\n    }\"#).unwrap()"
+---
++-- Options ----+
+|               |
+| [x] Option 1  |
+| [ ] Option 2  |
+| [x] Option 3  |
+| [ ] Option 4  |
+| [x] Option 5  |
+| [ ] Option 6  |
+| [ ] Option 7  |
+| [x] Option 8  |
+| [ ] Option 9  |
+| [ ] Option 10 |
+|               |
++---------------+

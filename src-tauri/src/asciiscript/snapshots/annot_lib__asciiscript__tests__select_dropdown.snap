@@ -1,0 +1,6 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        select \"Mono\" width:12\n        select \"Very Long Option Name\" width:12\n    }\"#).unwrap()"
+---
+[Mono      v]
+[Very Lon… v]

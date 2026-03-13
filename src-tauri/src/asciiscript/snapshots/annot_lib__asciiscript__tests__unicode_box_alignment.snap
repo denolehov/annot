@@ -1,0 +1,24 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"日本語タイトル\" width:40 {\n            box \"设置 ⚙️\" {\n                text \"你好世界\"\n                text \"Hello World\"\n                checkbox \"启用 🔔 通知\" checked\n            }\n            separator\n            table {\n                header {\n                    col \"名前\" width:10\n                    col \"Status\" width:10\n                }\n                tr { td \"田中太郎\" td \"✅ Active\" }\n                tr { td \"Alice\" td \"❌ Inactive\" }\n                tr { td \"北京\" td \"🔄 Pending\" }\n            }\n            row { spacer button \"取消\" button \"确定 ✓\" }\n        }\n    }\"#).unwrap()"
+---
++-- 日本語タイトル --------------------+
+|                                      |
+| +-- 设置 ⚙️ -----------------------+ |
+| |                                  | |
+| | 你好世界                         | |
+| | Hello World                      | |
+| | [x] 启用 🔔 通知                 | |
+| |                                  | |
+| +----------------------------------+ |
+| ------------------------------------ |
+| +------------+------------+          |
+| | 名前       | Status     |          |
+| +------------+------------+          |
+| | 田中太郎   | ✅ Active  |          |
+| | Alice      | ❌ Inacti… |          |
+| | 北京       | 🔄 Pending |          |
+| +------------+------------+          |
+|                  [ 取消 ] [ 确定 ✓ ] |
+|                                      |
++--------------------------------------+

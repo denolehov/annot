@@ -1,0 +1,20 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Commit Changes\" width:55 {\n            section \"Changed Files\" {\n                list {\n                    item \"src/main.rs\" selected\n                    item \"src/lib.rs\"\n                    item \"Cargo.toml\"\n                }\n            }\n            separator\n            text \"Commit message:\"\n            input width:45 placeholder:\"Enter commit message...\"\n            separator\n            checkbox \"Amend previous commit\"\n            checkbox \"Sign commit\"\n            separator\n            row { button \"Cancel\" spacer button \"Commit\" }\n        }\n    }\"#).unwrap()"
+---
++-- Commit Changes -----------------------------------+
+|                                                     |
+| ## Changed Files                                    |
+|    > src/main.rs                                    |
+|      src/lib.rs                                     |
+|      Cargo.toml                                     |
+| --------------------------------------------------- |
+| Commit message:                                     |
+| [Enter commit message...____________________]       |
+| --------------------------------------------------- |
+| [ ] Amend previous commit                           |
+| [ ] Sign commit                                     |
+| --------------------------------------------------- |
+| [ Cancel ]                              [ Commit ]  |
+|                                                     |
++-----------------------------------------------------+

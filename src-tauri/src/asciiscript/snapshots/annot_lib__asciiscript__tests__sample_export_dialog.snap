@@ -1,0 +1,18 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n  window \"Export Options\" width:45 {\n    section \"Format\" {\n      row { text \"Type:\" select \"PDF Document\" width:25 }\n      row { text \"Quality:\" select \"High (300 DPI)\" width:25 }\n    }\n    separator\n    section \"Destination\" {\n      row {\n        radio \"Local file\" selected\n      }\n      row {\n        radio \"Cloud storage\"\n      }\n      row {\n        radio \"Email attachment\"\n      }\n    }\n    separator\n    row gap:2 {\n      spacer\n      button \"Cancel\"\n      button \"Export\" style:bold\n    }\n  }\n}\"#).unwrap()"
+---
++-- Export Options -------------------------+
+|                                           |
+| ## Format                                 |
+|   Type: [PDF Document           v]        |
+|   Quality: [High (300 DPI)         v]     |
+| ----------------------------------------- |
+| ## Destination                            |
+|   (o) Local file                          |
+|   ( ) Cloud storage                       |
+|   ( ) Email attachment                    |
+| ----------------------------------------- |
+|                    [ Cancel ]  [ Export ] |
+|                                           |
++-------------------------------------------+
