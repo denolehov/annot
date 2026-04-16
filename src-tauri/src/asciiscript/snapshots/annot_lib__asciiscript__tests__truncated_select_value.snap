@@ -1,0 +1,5 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout { select \"This value is way too long to fit\" width:15 }\"#).unwrap()"
+---
+[This value … v]

@@ -1,0 +1,7 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        alert type:info {\n            text \"Here's some information\"\n        }\n    }\"#).unwrap()"
+---
+┌─ INFO ──────────────────┐
+│ Here's some information │
+└─────────────────────────┘

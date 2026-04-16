@@ -1,0 +1,10 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        section \"Outer\" {\n            text \"Outer content\"\n            section \"Inner\" {\n                text \"Inner content\"\n                section \"Deep\" {\n                    text \"Deep content\"\n                }\n            }\n        }\n    }\"#).unwrap()"
+---
+## Outer
+  Outer content
+  ## Inner
+    Inner content
+    ## Deep
+      Deep content

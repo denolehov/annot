@@ -1,0 +1,7 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        button \"Save & Exit\"\n        checkbox \"Enable \\\"quotes\\\" option\"\n        text \"100% complete\"\n    }\"#).unwrap()"
+---
+[ Save & Exit ]
+[ ] Enable "quotes" option
+100% complete

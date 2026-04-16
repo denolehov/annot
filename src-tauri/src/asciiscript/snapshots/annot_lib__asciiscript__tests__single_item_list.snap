@@ -1,0 +1,5 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        list { item \"Only one\" }\n    }\"#).unwrap()"
+---
+   Only one
