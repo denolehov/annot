@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1](https://github.com/denolehov/annot/compare/v0.8.0...v0.8.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* update the annot version to 0.8.0. ([8cf869d](https://github.com/denolehov/annot/commit/8cf869d2983f603a199f1ef7decffcdc82642c22))
+* update the annot version to 0.8.0. ([bcb2b94](https://github.com/denolehov/annot/commit/bcb2b947bdf140bfce160e0e9bbcd34f936a9d6f))
+
 ## [0.8.0](https://github.com/denolehov/annot/compare/v0.7.1...v0.8.0) (2026-05-14)
 
 
