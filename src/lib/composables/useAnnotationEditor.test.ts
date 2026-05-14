@@ -32,10 +32,6 @@ vi.mock('@tiptap/core', () => {
   };
 });
 
-vi.mock('@tiptap/starter-kit', () => ({
-  default: { configure: vi.fn(() => ({})) },
-}));
-
 vi.mock('@tiptap/extension-placeholder', () => ({
   default: { configure: vi.fn(() => ({})) },
 }));
@@ -45,6 +41,7 @@ vi.mock('../tiptap', () => ({
   trimContent: vi.fn((content) => content),
   isContentEmpty: vi.fn(() => true),
   extractContentNodes: vi.fn(() => []),
+  AnnotBulletList: {},
   ImagePasteHandler: { configure: vi.fn(() => ({})) },
   TextPasteHandler: {},
   SlashCommands: { configure: vi.fn(() => ({})) },

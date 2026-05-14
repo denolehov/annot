@@ -1,11 +1,27 @@
 import { untrack } from 'svelte';
 import { invoke } from '@tauri-apps/api/core';
 import { Editor, type JSONContent, type Range } from '@tiptap/core';
-import StarterKit from '@tiptap/starter-kit';
+// Explicit extension list — no StarterKit grab-bag. Every extension here is a
+// deliberate choice; nothing rides along silently (see docs/tiptap-rebuild-spec.md).
+// Notably absent: TrailingNode (appended a phantom empty paragraph after any
+// non-paragraph block, and raced with input-rule undo).
+import { Document } from '@tiptap/extension-document';
+import { Paragraph } from '@tiptap/extension-paragraph';
+import { Text } from '@tiptap/extension-text';
+import { Bold } from '@tiptap/extension-bold';
+import { Italic } from '@tiptap/extension-italic';
+import { Strike } from '@tiptap/extension-strike';
+import { Code } from '@tiptap/extension-code';
+import { Underline } from '@tiptap/extension-underline';
+import { Link } from '@tiptap/extension-link';
+import { HardBreak } from '@tiptap/extension-hard-break';
+import { OrderedList, ListItem, ListKeymap } from '@tiptap/extension-list';
+import { Dropcursor, Gapcursor, UndoRedo } from '@tiptap/extensions';
 import Placeholder from '@tiptap/extension-placeholder';
 import {
   trimContent,
   isContentEmpty,
+  AnnotBulletList,
   ImagePasteHandler,
   TextPasteHandler,
   SlashCommands,
@@ -124,12 +140,27 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
     editor = new Editor({
       element: el,
       extensions: [
-        StarterKit.configure({
-          heading: false,
-          blockquote: false,
-          codeBlock: false,
-          horizontalRule: false,
-        }),
+        // Core schema
+        Document,
+        Paragraph,
+        Text,
+        // Marks
+        Bold,
+        Italic,
+        Strike,
+        Code,
+        Underline,
+        Link,
+        // Nodes & list behavior
+        HardBreak,
+        AnnotBulletList, // `- ` only — see tiptap.ts; stock also matches `+`/`*`
+        OrderedList,
+        ListItem,
+        ListKeymap,
+        // Editing affordances
+        Dropcursor,
+        Gapcursor,
+        UndoRedo,
         Placeholder.configure({
           placeholder: 'Type annotation…',
         }),

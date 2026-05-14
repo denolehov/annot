@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   trimContent,
   isContentEmpty,
+  AnnotBulletList,
   EditorShortcuts,
   extractContentNodes,
   parseFenceFromJson,
@@ -11,7 +12,13 @@ import {
 } from './tiptap';
 import { ReplacePreview } from './tiptap/extensions';
 import { Editor, type JSONContent } from '@tiptap/core';
-import StarterKit from '@tiptap/starter-kit';
+import { Document } from '@tiptap/extension-document';
+import { Paragraph } from '@tiptap/extension-paragraph';
+import { Text } from '@tiptap/extension-text';
+import { ListItem, OrderedList } from '@tiptap/extension-list';
+
+/** Minimal schema for tests that need a live Editor (not the full annot kit). */
+const baseKit = [Document, Paragraph, Text];
 
 // ============================================================================
 // Test Helpers - Factory functions for TipTap JSON nodes
@@ -204,7 +211,7 @@ describe('EditorShortcuts', () => {
     editor = new Editor({
       element: container,
       extensions: [
-        StarterKit,
+        ...baseKit,
         EditorShortcuts.configure({ onSubmit }),
       ],
       content: '<p>Hello</p>',
@@ -232,7 +239,7 @@ describe('EditorShortcuts', () => {
     editor = new Editor({
       element: container,
       extensions: [
-        StarterKit,
+        ...baseKit,
         EditorShortcuts.configure({ onDismiss }),
       ],
       content: '<p>Hello</p>',
@@ -256,7 +263,7 @@ describe('EditorShortcuts', () => {
     editor = new Editor({
       element: container,
       extensions: [
-        StarterKit,
+        ...baseKit,
         EditorShortcuts.configure({ onSubmit }),
       ],
       content: '<p>Hello</p>',
@@ -273,6 +280,62 @@ describe('EditorShortcuts', () => {
 
     // onSubmit should NOT be called for plain Enter
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+describe('list input rules', () => {
+  let editor: Editor;
+  let container: HTMLDivElement;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    editor = new Editor({
+      element: container,
+      extensions: [...baseKit, AnnotBulletList, OrderedList, ListItem],
+      content: '<p></p>',
+    });
+  });
+
+  afterEach(() => {
+    editor?.destroy();
+    container?.remove();
+  });
+
+  /** Insert `marker`, then trigger input rules as if a space were typed after it. */
+  const typeMarkerThenSpace = (marker: string) => {
+    editor.commands.focus();
+    editor.commands.insertContent(marker);
+    const { from } = editor.state.selection;
+    editor.view.someProp('handleTextInput', (f) => f(editor.view, from, from, ' '));
+  };
+
+  const hasNodeType = (type: string): boolean => {
+    let found = false;
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === type) found = true;
+    });
+    return found;
+  };
+
+  it('converts "- " into a bullet list', () => {
+    typeMarkerThenSpace('-');
+    expect(hasNodeType('bulletList')).toBe(true);
+  });
+
+  it('does NOT convert "+ " into a bullet list (stock tiptap would)', () => {
+    typeMarkerThenSpace('+');
+    expect(hasNodeType('bulletList')).toBe(false);
+  });
+
+  it('does NOT convert "* " into a bullet list (stock tiptap would)', () => {
+    typeMarkerThenSpace('*');
+    expect(hasNodeType('bulletList')).toBe(false);
+  });
+
+  it('converts "1. " into an ordered list', () => {
+    typeMarkerThenSpace('1.');
+    expect(hasNodeType('orderedList')).toBe(true);
   });
 });
 
@@ -1224,7 +1287,7 @@ describe('ReplacePreview position verification', () => {
     // Verify that ProseMirror position 0 corresponds to the first block child
     editor = new Editor({
       element: container,
-      extensions: [StarterKit, ReplacePreview],
+      extensions: [...baseKit, ReplacePreview],
       content: {
         type: 'doc',
         content: [
@@ -1244,7 +1307,7 @@ describe('ReplacePreview position verification', () => {
   it('second block child has position > 0', () => {
     editor = new Editor({
       element: container,
-      extensions: [StarterKit, ReplacePreview],
+      extensions: [...baseKit, ReplacePreview],
       content: {
         type: 'doc',
         content: [
