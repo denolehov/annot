@@ -99,6 +99,8 @@ pub fn open_mermaid_window(
             .title_bar_style(tauri::TitleBarStyle::Overlay)
             .hidden_title(true)
             .traffic_light_position(tauri::LogicalPosition::new(12.0, 22.0));
+        #[cfg(target_os = "linux")]
+        let b = b.decorations(false);
         b
     };
 
