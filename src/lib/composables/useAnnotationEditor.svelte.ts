@@ -86,6 +86,29 @@ function createInitialSuggestionState<T>(): SuggestionState<T> {
   };
 }
 
+type SuggestionKind = 'tag' | 'slash' | 'ref';
+
+/**
+ * The one suggestion menu currently in play. `#tag`, `@ref`, and `/slash` are
+ * mutually exclusive — only one can be open — so they share a single
+ * discriminated-union state rather than three parallel fields + command refs.
+ */
+type ActiveSuggestion =
+  | { kind: 'tag'; state: SuggestionState<Tag>; command: ((item: Tag) => void) | null }
+  | { kind: 'slash'; state: SuggestionState<SlashCommand>; command: ((item: SlashCommand) => void) | null }
+  | { kind: 'ref'; state: SuggestionState<RefSuggestionItem>; command: ((item: RefSuggestionItem) => void) | null };
+
+/**
+ * Stable inactive state the per-kind getters fall back to. Never mutated — all
+ * write paths produce fresh objects — so it is safe to share.
+ */
+const EMPTY_SUGGESTION: SuggestionState<never> = createInitialSuggestionState();
+
+/** Mark the active suggestion's menu closed, keeping its kind and command. */
+function closeSuggestion(s: ActiveSuggestion): ActiveSuggestion {
+  return { ...s, state: { ...s.state, active: false } } as ActiveSuggestion;
+}
+
 
 /**
  * Composable for managing TipTap editor lifecycle, extensions, and suggestion state.
@@ -109,12 +132,51 @@ function extractPreviewFromContent(nodes: ContentNode[]): string {
 
 export function useAnnotationEditor(options: AnnotationEditorOptions) {
   let editor: Editor | null = $state(null);
-  let tagSuggestion = $state<SuggestionState<Tag>>(createInitialSuggestionState());
-  let slashSuggestion = $state<SuggestionState<SlashCommand>>(createInitialSuggestionState());
-  let refSuggestion = $state<SuggestionState<RefSuggestionItem>>(createInitialSuggestionState());
-  let tagCommand: ((item: Tag) => void) | null = null;
-  let slashCommandFn: ((item: SlashCommand) => void) | null = null;
-  let refCommand: ((item: RefSuggestionItem) => void) | null = null;
+
+  // #tag, @ref, and /slash menus are mutually exclusive — one shared state
+  // instead of three parallel $state fields plus three command refs.
+  let activeSuggestion = $state<ActiveSuggestion | null>(null);
+
+  /**
+   * Bridge createSuggestionRender's four typed get/set callbacks to the shared
+   * activeSuggestion union for one `kind`, as a tuple ready to spread in.
+   */
+  function suggestionBridge<T>(
+    kind: SuggestionKind
+  ): [
+    () => SuggestionState<T>,
+    (state: SuggestionState<T>) => void,
+    () => ((item: T) => void) | null,
+    (command: ((item: T) => void) | null) => void,
+  ] {
+    return [
+      () =>
+        (activeSuggestion?.kind === kind
+          ? activeSuggestion.state
+          : EMPTY_SUGGESTION) as SuggestionState<T>,
+      (state) => {
+        activeSuggestion = {
+          kind,
+          state,
+          command: activeSuggestion?.kind === kind ? activeSuggestion.command : null,
+        } as ActiveSuggestion;
+      },
+      () =>
+        (activeSuggestion?.kind === kind
+          ? activeSuggestion.command
+          : null) as ((item: T) => void) | null,
+      (command) => {
+        activeSuggestion = {
+          kind,
+          state:
+            activeSuggestion?.kind === kind
+              ? activeSuggestion.state
+              : createInitialSuggestionState(),
+          command,
+        } as ActiveSuggestion;
+      },
+    ];
+  }
 
   // Track if Excalidraw modal is open (prevents blur dismiss)
   let excalidrawModalOpen = false;
@@ -166,12 +228,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
             items: ({ query }: { query: string }) => {
               return fuzzySearch(getTags(), query, [{ name: 'name', weight: 1 }]);
             },
-            render: createSuggestionRender<Tag>(
-              () => tagSuggestion,
-              (state) => { tagSuggestion = state; },
-              () => tagCommand,
-              (cmd) => { tagCommand = cmd; }
-            ),
+            render: createSuggestionRender<Tag>(...suggestionBridge<Tag>('tag')),
             command: ({ editor, range, props }: { editor: Editor; range: Range; props: Tag }) => {
               editor
                 .chain()
@@ -284,12 +341,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
 
               return [...currentDocItems, ...bookmarkResults, ...fileResults];
             },
-            render: createSuggestionRender<RefSuggestionItem>(
-              () => refSuggestion,
-              (state) => { refSuggestion = state; },
-              () => refCommand,
-              (cmd) => { refCommand = cmd; },
-            ),
+            render: createSuggestionRender<RefSuggestionItem>(...suggestionBridge<RefSuggestionItem>('ref')),
             command: ({ editor, range, props }: { editor: Editor; range: Range; props: RefSuggestionItem }) => {
               if (props.type === 'file') {
                 // File reference - no snapshot, just path
@@ -378,12 +430,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
             ...createSlashSuggestion({
               getOriginalLines: options.getOriginalLines,
             }),
-            render: createSuggestionRender<SlashCommand>(
-              () => slashSuggestion,
-              (state) => { slashSuggestion = state; },
-              () => slashCommandFn,
-              (cmd) => { slashCommandFn = cmd; }
-            ),
+            render: createSuggestionRender<SlashCommand>(...suggestionBridge<SlashCommand>('slash')),
           },
         }),
         EditorShortcuts.configure({
@@ -391,17 +438,9 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
             editor?.commands.blur();
           },
           onDismiss: () => {
-            // Close suggestion menu first, then dismiss editor on second Escape
-            if (tagSuggestion.active) {
-              tagSuggestion = { ...tagSuggestion, active: false };
-              return;
-            }
-            if (slashSuggestion.active) {
-              slashSuggestion = { ...slashSuggestion, active: false };
-              return;
-            }
-            if (refSuggestion.active) {
-              refSuggestion = { ...refSuggestion, active: false };
+            // First Escape closes an open suggestion menu; second blurs the editor.
+            if (activeSuggestion?.state.active) {
+              activeSuggestion = closeSuggestion(activeSuggestion);
               return;
             }
             editor?.commands.blur();
@@ -421,16 +460,10 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
       onBlur: ({ editor: blurEditor }) => {
         // Don't dismiss while Excalidraw modal is open
         if (!getSealed() && !excalidrawModalOpen) {
-          // Close any active suggestion menus on blur
+          // Close any active suggestion menu on blur
           // (blur means focus left both editor AND popup, since popup buttons preventDefault)
-          if (tagSuggestion.active) {
-            tagSuggestion = { ...tagSuggestion, active: false };
-          }
-          if (refSuggestion.active) {
-            refSuggestion = { ...refSuggestion, active: false };
-          }
-          if (slashSuggestion.active) {
-            slashSuggestion = { ...slashSuggestion, active: false };
+          if (activeSuggestion?.state.active) {
+            activeSuggestion = closeSuggestion(activeSuggestion);
           }
           const editorDom = blurEditor.view.dom as HTMLElement;
           const json = blurEditor.getJSON();
@@ -498,23 +531,31 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
 
   return {
     get editor() { return editor; },
-    get tagSuggestion() { return tagSuggestion; },
-    get slashSuggestion() { return slashSuggestion; },
-    get refSuggestion() { return refSuggestion; },
+    // Per-kind views onto the shared activeSuggestion — the consumer renders a
+    // distinct popup per kind, so it still asks per kind.
+    get tagSuggestion(): SuggestionState<Tag> {
+      return activeSuggestion?.kind === 'tag' ? activeSuggestion.state : EMPTY_SUGGESTION;
+    },
+    get slashSuggestion(): SuggestionState<SlashCommand> {
+      return activeSuggestion?.kind === 'slash' ? activeSuggestion.state : EMPTY_SUGGESTION;
+    },
+    get refSuggestion(): SuggestionState<RefSuggestionItem> {
+      return activeSuggestion?.kind === 'ref' ? activeSuggestion.state : EMPTY_SUGGESTION;
+    },
 
     /** Execute selected tag item */
     selectTagItem(item: Tag) {
-      tagCommand?.(item);
+      if (activeSuggestion?.kind === 'tag') activeSuggestion.command?.(item);
     },
 
     /** Execute selected slash command item */
     selectSlashItem(item: SlashCommand) {
-      slashCommandFn?.(item);
+      if (activeSuggestion?.kind === 'slash') activeSuggestion.command?.(item);
     },
 
     /** Execute selected ref item */
     selectRefItem(item: RefSuggestionItem) {
-      refCommand?.(item);
+      if (activeSuggestion?.kind === 'ref') activeSuggestion.command?.(item);
     },
 
     /** Insert a tag chip at the specified position (for pending tag insertion) */
