@@ -17,7 +17,7 @@
   import CodeBlock from "$lib/components/embedded/CodeBlock.svelte";
   import Table from "$lib/components/embedded/Table.svelte";
   import RegularLines from "$lib/components/embedded/RegularLines.svelte";
-  import { Header, StatusBar, SessionEditor } from "$lib/components";
+  import { Header, StatusBar, SessionEditor, WindowResizeHandles } from "$lib/components";
   import { useExitModes } from "$lib/composables/useExitModes.svelte";
   import { useContentTracking } from "$lib/composables/useContentTracking.svelte";
   import { useInteraction } from "$lib/composables/useInteraction.svelte";
@@ -835,6 +835,8 @@
 </script>
 
 <svelte:window onkeydown={keyboard.handleKeyDown} onkeyup={keyboard.handleKeyUp} />
+
+<WindowResizeHandles />
 
 <main class="viewer" style:--mode-color={exitModeState.selectedMode?.color ?? 'transparent'}>
   {#if error}
