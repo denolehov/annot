@@ -3,7 +3,10 @@
   import Icon from '$lib/CommandPalette/Icon.svelte';
   import { BookmarkIcon } from '$lib/icons';
   import { getAnnotContext } from '$lib/context';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
   import type { DiffFileInfo, HunkInfo, SectionInfo } from '$lib/types';
+
+  declare const __IS_MACOS__: boolean;
 
   interface Props {
     label: string;
@@ -126,11 +129,25 @@
     <button class="header-btn" onclick={onOpenSaveModal} title="Save to file (Cmd+S)">
       <Icon name="save" />
     </button>
+    {#if !__IS_MACOS__}
+      <button class="header-btn close-btn" onclick={() => getCurrentWindow().close()} title="Close (Ctrl+W)">
+        ×
+      </button>
+    {/if}
   </div>
 </header>
 
 <style>
   .bookmark-btn.bookmarked {
+    color: #ef4444;
+  }
+
+  .close-btn {
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .close-btn:hover {
     color: #ef4444;
   }
 </style>
