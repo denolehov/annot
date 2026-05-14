@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 
 use tauri::WebviewWindowBuilder;
 
+pub mod channel;
 pub mod commands;
 pub mod config;
 pub mod diff;
@@ -140,7 +141,7 @@ pub fn run(state: AppState, context: tauri::Context, json_output: bool) {
                     "main",
                     tauri::WebviewUrl::App("index.html".into()),
                 )
-                .title("annot")
+                .title(channel::current().display_name())
                 .inner_size(1000.0, 700.0)
                 .visible(false); // Will be shown after content loads
                 #[cfg(target_os = "macos")]

@@ -1,0 +1,14 @@
+{
+  "productName": "annot (preview)",
+  "identifier": "com.denolehov.annot.preview",
+  "mainBinaryName": "annot-preview",
+  "bundle": {
+    "icon": [
+      "icons-preview/32x32.png",
+      "icons-preview/128x128.png",
+      "icons-preview/128x128@2x.png",
+      "icons-preview/icon.icns",
+      "icons-preview/icon.ico"
+    ]
+  }
+}

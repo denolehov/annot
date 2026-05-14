@@ -158,9 +158,11 @@ fn save_merged<T: Mergeable + Serialize + DeserializeOwned>(
     Ok(())
 }
 
-/// Returns the config directory path: ~/.config/annot/ on Unix, %APPDATA%\annot\ on Windows.
+/// Returns the config directory path, e.g. `~/.config/annot/` on Unix or
+/// `%APPDATA%\annot\` on Windows. Preview builds resolve to an `annot-preview`
+/// subdirectory instead, keeping their config isolated from stable's.
 pub fn config_dir() -> Option<PathBuf> {
-    dirs::config_dir().map(|p| p.join("annot"))
+    dirs::config_dir().map(|p| p.join(crate::channel::current().config_subdir()))
 }
 
 /// Ensures the config directory exists.

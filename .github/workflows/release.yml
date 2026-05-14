@@ -108,6 +108,9 @@ jobs:
 
   update-homebrew:
     needs: build-macos
+    # Skip prerelease tags (e.g. v1.2.3-rc.1) so they never overwrite the
+    # stable annot.rb formula. Preview builds use preview.yml + annot-preview.rb.
+    if: ${{ !contains(needs.build-macos.outputs.tag, '-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
