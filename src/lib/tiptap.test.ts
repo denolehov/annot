@@ -307,7 +307,11 @@ describe('list input rules', () => {
     editor.commands.focus();
     editor.commands.insertContent(marker);
     const { from } = editor.state.selection;
-    editor.view.someProp('handleTextInput', (f) => f(editor.view, from, from, ' '));
+    // 5th arg (`deflt`) is required by the prosemirror-view types; tiptap's
+    // input-rule handler ignores it, so a stub transaction is fine.
+    editor.view.someProp('handleTextInput', (f) =>
+      f(editor.view, from, from, ' ', () => editor.state.tr),
+    );
   };
 
   const hasNodeType = (type: string): boolean => {
@@ -434,72 +438,6 @@ describe('extractContentNodes', () => {
     expect(nodes).toHaveLength(1);
     // Bold wraps first, then italic wraps around that
     expect(nodes[0]).toEqual({ type: 'text', text: '***emphasis***' });
-  });
-
-  it('preserves underline formatting as HTML', () => {
-    const input: JSONContent = {
-      type: 'doc',
-      content: [
-        {
-          type: 'paragraph',
-          content: [
-            { type: 'text', text: 'some ' },
-            { type: 'text', text: 'underlined', marks: [{ type: 'underline' }] },
-            { type: 'text', text: ' text' },
-          ],
-        },
-      ],
-    };
-    const nodes = extractContentNodes(input);
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0]).toEqual({ type: 'text', text: 'some <u>underlined</u> text' });
-  });
-
-  it('preserves link formatting as markdown', () => {
-    const input: JSONContent = {
-      type: 'doc',
-      content: [
-        {
-          type: 'paragraph',
-          content: [
-            { type: 'text', text: 'click ' },
-            {
-              type: 'text',
-              text: 'here',
-              marks: [{ type: 'link', attrs: { href: 'https://example.com' } }],
-            },
-          ],
-        },
-      ],
-    };
-    const nodes = extractContentNodes(input);
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0]).toEqual({ type: 'text', text: 'click [here](https://example.com)' });
-  });
-
-  it('handles link with other formatting (bold link)', () => {
-    const input: JSONContent = {
-      type: 'doc',
-      content: [
-        {
-          type: 'paragraph',
-          content: [
-            {
-              type: 'text',
-              text: 'important',
-              marks: [
-                { type: 'bold' },
-                { type: 'link', attrs: { href: 'https://example.com' } },
-              ],
-            },
-          ],
-        },
-      ],
-    };
-    const nodes = extractContentNodes(input);
-    expect(nodes).toHaveLength(1);
-    // Bold applied first, then wrapped in link
-    expect(nodes[0]).toEqual({ type: 'text', text: '[**important**](https://example.com)' });
   });
 
   it('preserves bullet list formatting', () => {

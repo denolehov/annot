@@ -44,9 +44,6 @@ dependencies:
   '@tiptap/extension-italic':
     specifier: ^3.23.4
     version: 3.23.4(@tiptap/core@3.23.4)
-  '@tiptap/extension-link':
-    specifier: ^3.23.4
-    version: 3.23.4(@tiptap/core@3.23.4)(@tiptap/pm@3.23.4)
   '@tiptap/extension-list':
     specifier: ^3.23.4
     version: 3.23.4(@tiptap/core@3.23.4)(@tiptap/pm@3.23.4)
@@ -60,9 +57,6 @@ dependencies:
     specifier: ^3.23.4
     version: 3.23.4(@tiptap/core@3.23.4)
   '@tiptap/extension-text':
-    specifier: ^3.23.4
-    version: 3.23.4(@tiptap/core@3.23.4)
-  '@tiptap/extension-underline':
     specifier: ^3.23.4
     version: 3.23.4(@tiptap/core@3.23.4)
   '@tiptap/extensions':
@@ -1478,17 +1472,6 @@ packages:
       '@tiptap/core': 3.23.4(@tiptap/pm@3.23.4)
     dev: false
 
-  /@tiptap/extension-link@3.23.4(@tiptap/core@3.23.4)(@tiptap/pm@3.23.4):
-    resolution: {integrity: sha512-XjxltY7MomwfTs6jmN6Bw5bb/upb34lpyqv2RiXppFTK25Br7ipksRjUpWpB4/csZeg30qwrLGVKxCol38ffrw==}
-    peerDependencies:
-      '@tiptap/core': 3.23.4
-      '@tiptap/pm': 3.23.4
-    dependencies:
-      '@tiptap/core': 3.23.4(@tiptap/pm@3.23.4)
-      '@tiptap/pm': 3.23.4
-      linkifyjs: 4.3.3
-    dev: false
-
   /@tiptap/extension-list@3.23.4(@tiptap/core@3.23.4)(@tiptap/pm@3.23.4):
     resolution: {integrity: sha512-yuauDm6qW/7q+ZO0YJBKQEGdnUm6DDTJM8AMp9bMZrT4jRf/zyUtNcZ91QEfFvBcyVuI+10PIOXtNPevhQ741Q==}
     peerDependencies:
@@ -1525,14 +1508,6 @@ packages:
 
   /@tiptap/extension-text@3.23.4(@tiptap/core@3.23.4):
     resolution: {integrity: sha512-q9kxver/MR18p66aWZHSPycnr9hcBFyVGeGj8gf+BQCzn5hpvtSYTfLvk1nq8GFhygdQ9/e3f7B5ovrm/jnpvw==}
-    peerDependencies:
-      '@tiptap/core': 3.23.4
-    dependencies:
-      '@tiptap/core': 3.23.4(@tiptap/pm@3.23.4)
-    dev: false
-
-  /@tiptap/extension-underline@3.23.4(@tiptap/core@3.23.4):
-    resolution: {integrity: sha512-F1ocPT10LV+seky25R1TMCRdc/Iof99jLcDSYDGr6mNEDY4ct2RvOeSM8aDdYq6CkH+vXt3i3JDeRwV23KzswQ==}
     peerDependencies:
       '@tiptap/core': 3.23.4
     dependencies:
@@ -2853,10 +2828,6 @@ packages:
       lightningcss-win32-arm64-msvc: 1.32.0
       lightningcss-win32-x64-msvc: 1.32.0
     dev: true
-
-  /linkifyjs@4.3.3:
-    resolution: {integrity: sha512-P8aEP5U/D1/IlTY2OeYsErdwh9bGuLE30NcXtKEjgdHcahveQoQwM2yZNsioQHsWFz0P7KKudisbrzCgR0sDHg==}
-    dev: false
 
   /locate-character@3.0.0:
     resolution: {integrity: sha512-SW13ws7BjaeJ6p7Q6CO2nchbYEc3X3J6WrmTTDto7yMPqVSZTUyY5Tjbid+Ab8gLnATtygYtiDIJGQRRn2ZOiA==}

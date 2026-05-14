@@ -689,28 +689,21 @@ const MARK_WRAPPERS: Record<string, (text: string) => string> = {
   italic: (t) => `*${t}*`,
   strike: (t) => `~~${t}~~`,
   code: (t) => `\`${t}\``,
-  underline: (t) => `<u>${t}</u>`, // No standard markdown, use HTML
 };
 
 /**
  * Apply TipTap marks to text, converting to markdown format.
- * Links are applied last to wrap the formatted text.
  */
 function applyMarks(text: string, marks?: JSONContent['marks']): string {
   if (!marks) return text;
 
   let result = text;
-  let linkHref: string | null = null;
-
   for (const mark of marks) {
-    if (mark.type === 'link') {
-      linkHref = mark.attrs?.href ?? null;
-    } else if (MARK_WRAPPERS[mark.type]) {
+    if (MARK_WRAPPERS[mark.type]) {
       result = MARK_WRAPPERS[mark.type](result);
     }
   }
-
-  return linkHref ? `[${result}](${linkHref})` : result;
+  return result;
 }
 
 /**

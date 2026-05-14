@@ -12,11 +12,9 @@ import { Bold } from '@tiptap/extension-bold';
 import { Italic } from '@tiptap/extension-italic';
 import { Strike } from '@tiptap/extension-strike';
 import { Code } from '@tiptap/extension-code';
-import { Underline } from '@tiptap/extension-underline';
-import { Link } from '@tiptap/extension-link';
 import { HardBreak } from '@tiptap/extension-hard-break';
 import { OrderedList, ListItem, ListKeymap } from '@tiptap/extension-list';
-import { Dropcursor, Gapcursor, UndoRedo } from '@tiptap/extensions';
+import { Gapcursor, UndoRedo } from '@tiptap/extensions';
 import Placeholder from '@tiptap/extension-placeholder';
 import {
   trimContent,
@@ -144,21 +142,19 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
         Document,
         Paragraph,
         Text,
-        // Marks
+        // Marks — authorable by typing markdown (`**x**`, `*x*`, `~~x~~`, `` `x` ``).
+        // No Underline (no markdown syntax, emits <u> HTML) or Link (no authoring path).
         Bold,
         Italic,
         Strike,
         Code,
-        Underline,
-        Link,
         // Nodes & list behavior
         HardBreak,
         AnnotBulletList, // `- ` only — see tiptap.ts; stock also matches `+`/`*`
         OrderedList,
         ListItem,
         ListKeymap,
-        // Editing affordances
-        Dropcursor,
+        // Editing affordances — no Dropcursor (annot has no drag-and-drop)
         Gapcursor,
         UndoRedo,
         Placeholder.configure({
