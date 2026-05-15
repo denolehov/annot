@@ -101,7 +101,7 @@ jobs:
           mv "annot-${VERSION}-darwin-arm64.tar.gz" $GITHUB_WORKSPACE/
 
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: annot-*-darwin-arm64.tar.gz
           tag_name: ${{ steps.get-tag.outputs.tag }}
