@@ -28,7 +28,7 @@ clap = { version = "4", features = ["derive"] }
 syntect = "5"
 thiserror = "2"
 dirs = "5"
-fs4 = "0.12"
+fs4 = "1.1"
 rand = "0.8"
 rmcp = { version = "1.7.0", features = ["server", "transport-io"] }
 tokio = { version = "1.48.0", features = ["full"] }
