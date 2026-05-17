@@ -88,8 +88,8 @@
             # GIO modules path so glib-networking (TLS) is found by WebKit at runtime
             export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules"
 
-            # pnpm@8.10.2 is pinned in package.json via corepack.
-            # nixpkgs ships a different pnpm version — disable strict corepack enforcement.
+            # pnpm@10.28.0 is pinned in package.json; nixpkgs ships the same version.
+            # Disable strict corepack enforcement so the nixpkgs pnpm binary is used directly.
             export COREPACK_ENABLE_STRICT=0
 
             echo "annot dev shell ready"
