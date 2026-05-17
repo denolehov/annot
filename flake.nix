@@ -40,7 +40,7 @@
             rustc
             rustfmt
             clippy
-            nodejs_22
+            nodejs_24
             pnpm
           ];
 
