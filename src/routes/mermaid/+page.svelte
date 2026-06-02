@@ -249,6 +249,11 @@
 			smartFit();
 		}
 	}
+
+	async function closeWindow() {
+		const win = getCurrentWindow();
+		await win.close();
+	}
 </script>
 
 <svelte:window onkeydown={handleKeyDown} />
@@ -256,6 +261,15 @@
 <div class="mermaid-window">
 	<header class="window-header" data-tauri-drag-region>
 		<span class="window-title">Mermaid</span>
+		<button
+			class="window-close"
+			onclick={closeWindow}
+			title="Close"
+			aria-label="Close"
+			data-tauri-drag-region="false"
+		>
+			×
+		</button>
 	</header>
 	{#if loading}
 		<div class="mermaid-loading">Rendering diagram...</div>
@@ -307,6 +321,32 @@
 		font-size: 13px;
 		font-weight: 500;
 		color: var(--text-secondary);
+	}
+
+	.window-close {
+		position: absolute;
+		right: 8px;
+		top: 50%;
+		transform: translateY(-50%);
+		-webkit-app-region: no-drag;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		padding: 0;
+		background: transparent;
+		border: none;
+		border-radius: 4px;
+		color: var(--text-secondary);
+		font-size: 18px;
+		line-height: 1;
+		cursor: pointer;
+	}
+
+	.window-close:hover {
+		background: var(--bg-window);
+		color: var(--text-primary);
 	}
 
 	.mermaid-canvas {
