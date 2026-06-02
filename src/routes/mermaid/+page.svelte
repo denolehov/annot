@@ -7,6 +7,8 @@
 	import panzoom from 'panzoom';
 	import type { PanZoom } from 'panzoom';
 
+	declare const __IS_MACOS__: boolean;
+
 	interface MermaidContext {
 		source: string;
 		file_path: string;
@@ -261,15 +263,17 @@
 <div class="mermaid-window">
 	<header class="window-header" data-tauri-drag-region>
 		<span class="window-title">Mermaid</span>
-		<button
-			class="window-close"
-			onclick={closeWindow}
-			title="Close"
-			aria-label="Close"
-			data-tauri-drag-region="false"
-		>
-			×
-		</button>
+		{#if !__IS_MACOS__}
+			<button
+				class="window-close"
+				onclick={closeWindow}
+				title="Close"
+				aria-label="Close"
+				data-tauri-drag-region="false"
+			>
+				×
+			</button>
+		{/if}
 	</header>
 	{#if loading}
 		<div class="mermaid-loading">Rendering diagram...</div>

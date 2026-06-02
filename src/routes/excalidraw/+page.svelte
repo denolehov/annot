@@ -6,6 +6,8 @@
   import type { ExcalidrawHandle } from '$lib/excalidraw-loader';
   import { initTheme } from '$lib/theme';
 
+  declare const __IS_MACOS__: boolean;
+
   interface NodeRef {
     type: 'Chip' | 'Placeholder';
     id: string;
@@ -244,15 +246,17 @@
 <div class="excalidraw-window">
   <header class="window-header" data-tauri-drag-region>
     <span class="window-title">Excalidraw</span>
-    <button
-      class="window-close"
-      onclick={closeWindow}
-      title="Save and close"
-      aria-label="Save and close"
-      data-tauri-drag-region="false"
-    >
-      ×
-    </button>
+    {#if !__IS_MACOS__}
+      <button
+        class="window-close"
+        onclick={closeWindow}
+        title="Save and close"
+        aria-label="Save and close"
+        data-tauri-drag-region="false"
+      >
+        ×
+      </button>
+    {/if}
   </header>
   {#if loading}
     <div class="excalidraw-loading">Loading Excalidraw...</div>
