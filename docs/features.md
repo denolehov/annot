@@ -277,7 +277,8 @@ Atomic writes with file locking for concurrent safety.
 
 Native Tauri app for:
 - **macOS** — overlay title bar, traffic light positioning, native Cmd+W close
-- **Linux** — tested on NixOS with Wayland (via XWayland); requires `GDK_BACKEND=x11`
-  and `WEBKIT_DISABLE_DMABUF_RENDERER=1` for correct WebKit2GTK rendering (baked into
-  the Nix-installed binary automatically)
+- **Linux** — borderless window with custom chrome (in-app title bar, close button,
+  and resize handles); tested on NixOS with Wayland (via XWayland); requires
+  `GDK_BACKEND=x11` and `WEBKIT_DISABLE_DMABUF_RENDERER=1` for correct WebKit2GTK
+  rendering (baked into the Nix-installed binary automatically)
 - Windows (untested)
