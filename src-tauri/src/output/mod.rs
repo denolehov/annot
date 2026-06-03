@@ -13,6 +13,7 @@ mod snapshot_tests;
 
 use std::collections::{BTreeMap, HashMap};
 
+use crate::channel::Channel;
 use crate::lang;
 use crate::mcp::tools::SessionImage;
 use crate::portal::LoadedPortal;
@@ -56,11 +57,14 @@ pub struct FormatMetadata {
     pub general_comment_count: usize,
     pub terraform_count: usize,
     pub bookmark_count: usize,
+    /// Release channel this build belongs to. `Stable` on release builds, so
+    /// stable output is unaffected; `Preview(sha)` carries the build's SHA.
+    pub channel: Channel,
 }
 
 /// Serialize a FormatResult as JSON for `--json` CLI output.
 pub fn format_json(result: &FormatResult) -> String {
-    let json = serde_json::json!({
+    let mut json = serde_json::json!({
         "text": result.text,
         "images": result.images.iter().map(|img| serde_json::json!({
             "figure": img.figure,
@@ -74,6 +78,11 @@ pub fn format_json(result: &FormatResult) -> String {
         "terraform_count": result.metadata.terraform_count,
         "bookmark_count": result.metadata.bookmark_count,
     });
+    // Only non-stable builds carry a `channel` key, so stable JSON is unchanged.
+    if result.metadata.channel.is_preview() {
+        json["channel"] = serde_json::to_value(&result.metadata.channel)
+            .expect("Channel JSON serialization should not fail");
+    }
     serde_json::to_string(&json).expect("FormatResult JSON serialization should not fail")
 }
 
@@ -398,6 +407,13 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
     let builder_mode = calculate_builder_mode(content, max_line);
     let mut out = OutputBuilder::new(builder_mode);
 
+    // Non-stable builds announce themselves so feedback is traceable to a
+    // specific build. Stable adds nothing here, keeping its output unchanged.
+    if let Some(marker) = crate::channel::current().marker() {
+        out.raw_line(&format!("[annot {marker}]"));
+        out.blank_line();
+    }
+
     // TAGS block (if any tags are used)
     let unique_tags = collect_unique_tags(review);
     if !unique_tags.is_empty() {
@@ -601,6 +617,7 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
             general_comment_count,
             terraform_count,
             bookmark_count,
+            channel: crate::channel::current().clone(),
         },
     }
 }

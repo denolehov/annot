@@ -20,7 +20,7 @@ Examples:
 
 #[derive(Parser)]
 #[command(name = "annot")]
-#[command(version)]
+#[command(version = annot_lib::channel::version_string())]
 #[command(about = "Ephemeral annotation tool for AI workflows")]
 #[command(long_about = EXAMPLES)]
 struct Cli {
@@ -103,7 +103,7 @@ fn main() {
 
     // Handle version subcommand (doesn't need Tauri)
     if let Some(Command::Version) = cli.command {
-        println!("annot {}", env!("CARGO_PKG_VERSION"));
+        println!("annot {}", annot_lib::channel::version_string());
         return;
     }
 

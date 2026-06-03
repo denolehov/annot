@@ -414,7 +414,7 @@ fn run_session_with_state(
 
     let builder = {
         let b = WebviewWindowBuilder::new(app_handle, &window_label, tauri::WebviewUrl::App("index.html".into()))
-            .title("annot")
+            .title(crate::channel::current().display_name())
             .inner_size(1000.0, 700.0)
             .visible(false); // Will be shown after content loads
         #[cfg(target_os = "macos")]
