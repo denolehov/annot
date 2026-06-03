@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/denolehov/annot/compare/v0.10.1...v0.11.0) (2026-06-03)
+
+
+### Features
+
+* **linux:** Borderless window for linux ([#55](https://github.com/denolehov/annot/issues/55)) ([e0e56e1](https://github.com/denolehov/annot/commit/e0e56e18621b220ef111d1dabfb70d93e8be1304))
+
 ## [0.10.1](https://github.com/denolehov/annot/compare/v0.10.0...v0.10.1) (2026-06-03)
 
 
