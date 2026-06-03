@@ -292,8 +292,8 @@
         dispatch({ type: 'TAB' });
         return;
       }
-      // Cmd-D: delete item being edited (EDIT_FORM only)
-      if (e.key === 'd' && e.metaKey && machineState.type === 'EDIT_FORM') {
+      // Cmd-D / Ctrl-D: delete item being edited (EDIT_FORM only)
+      if (e.key === 'd' && (e.metaKey || e.ctrlKey) && machineState.type === 'EDIT_FORM') {
         e.preventDefault();
         dispatch({ type: 'DELETE' });
         return;
@@ -346,8 +346,8 @@
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       dispatch({ type: 'ARROW_DOWN' });
-    } else if (e.key === 'd' && e.metaKey && machineState.type === 'ITEM_FILTER') {
-      // Cmd-D: delete selected/preselected item
+    } else if (e.key === 'd' && (e.metaKey || e.ctrlKey) && machineState.type === 'ITEM_FILTER') {
+      // Cmd-D / Ctrl-D: delete selected/preselected item
       e.preventDefault();
       dispatch({ type: 'DELETE' });
     } else if (e.key === 'Backspace') {
