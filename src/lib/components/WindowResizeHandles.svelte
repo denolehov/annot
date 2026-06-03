@@ -1,7 +1,16 @@
 <script lang="ts">
-  import { getCurrentWindow, type ResizeDirection } from '@tauri-apps/api/window';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
 
-  declare const __IS_MACOS__: boolean;
+  // ResizeDirection is declared in @tauri-apps/api/window.d.ts but not exported, so inline it here.
+  type ResizeDirection =
+    | 'East'
+    | 'North'
+    | 'NorthEast'
+    | 'NorthWest'
+    | 'South'
+    | 'SouthEast'
+    | 'SouthWest'
+    | 'West';
 
   function onMouseDown(direction: ResizeDirection) {
     return (e: MouseEvent) => {

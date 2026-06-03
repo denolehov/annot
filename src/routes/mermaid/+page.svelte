@@ -7,8 +7,6 @@
 	import panzoom from 'panzoom';
 	import type { PanZoom } from 'panzoom';
 
-	declare const __IS_MACOS__: boolean;
-
 	interface MermaidContext {
 		source: string;
 		file_path: string;

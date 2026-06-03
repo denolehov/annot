@@ -6,8 +6,6 @@
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import type { DiffFileInfo, HunkInfo, SectionInfo } from '$lib/types';
 
-  declare const __IS_MACOS__: boolean;
-
   interface Props {
     label: string;
     currentFile: DiffFileInfo | null;

@@ -6,8 +6,6 @@
   import type { ExcalidrawHandle } from '$lib/excalidraw-loader';
   import { initTheme } from '$lib/theme';
 
-  declare const __IS_MACOS__: boolean;
-
   interface NodeRef {
     type: 'Chip' | 'Placeholder';
     id: string;
