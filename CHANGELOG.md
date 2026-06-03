@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/denolehov/annot/compare/v0.10.0...v0.10.1) (2026-06-03)
+
+
+### Bug Fixes
+
+* **linux:** honor Ctrl+D in command palette delete handlers ([b2b11af](https://github.com/denolehov/annot/commit/b2b11af6cc0b72c9507066ddb71b49248f46ae07))
+
 ## [0.10.0](https://github.com/denolehov/annot/compare/v0.9.1...v0.10.0) (2026-06-02)
 
 
