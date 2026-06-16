@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/denolehov/annot/compare/v0.11.0...v0.12.0) (2026-06-16)
+
+
+### Features
+
+* **windows:** Add Windows compatibility to annot ([#62](https://github.com/denolehov/annot/issues/62)) ([d6db9b5](https://github.com/denolehov/annot/commit/d6db9b5ba22043f24123dcad8b3af93917f98f58))
+
 ## [0.11.0](https://github.com/denolehov/annot/compare/v0.10.1...v0.11.0) (2026-06-03)
 
 
