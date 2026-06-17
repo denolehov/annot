@@ -5,7 +5,6 @@ describe('useHistory', () => {
   it('starts with empty session data', () => {
     const history = useHistory();
     expect(history.current.annotations).toEqual({});
-    expect(history.current.terraform).toEqual([]);
     expect(history.current.sessionComment).toBeNull();
     expect(history.current.selectedExitMode).toBeNull();
   });

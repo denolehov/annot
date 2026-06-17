@@ -1,5 +1,4 @@
 import type { JSONContent } from '@tiptap/core';
-import type { TerraformRegion } from '$lib/types';
 import type { AnnotationEntry } from './useAnnotations.svelte';
 
 /**
@@ -9,8 +8,6 @@ import type { AnnotationEntry } from './useAnnotations.svelte';
 export interface SessionData {
   /** Annotations keyed by range string (e.g., "10-15") */
   annotations: Record<string, AnnotationEntry>;
-  /** Terraform regions for the current file */
-  terraform: TerraformRegion[];
   /** Session-level comment (TipTap JSON) */
   sessionComment: JSONContent | null;
   /** Selected exit mode ID */
@@ -59,11 +56,6 @@ function cloneSessionData(data: SessionData): SessionData {
         },
       ])
     ),
-    terraform: data.terraform.map(r => ({
-      start_line: r.start_line,
-      end_line: r.end_line,
-      intent: JSON.parse(JSON.stringify(r.intent)),
-    })),
     sessionComment: data.sessionComment ? JSON.parse(JSON.stringify(data.sessionComment)) : null,
     selectedExitMode: data.selectedExitMode,
   };
@@ -75,7 +67,6 @@ function cloneSessionData(data: SessionData): SessionData {
 export function emptySessionData(): SessionData {
   return {
     annotations: {},
-    terraform: [],
     sessionComment: null,
     selectedExitMode: null,
   };

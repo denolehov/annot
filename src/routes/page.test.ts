@@ -83,7 +83,6 @@ describe("+page.svelte", () => {
 
   it("renders file content with line numbers", async () => {
     vi.mocked(invoke).mockImplementation((cmd: string) => {
-      if (cmd === 'get_terraform_regions') return Promise.resolve([]);
       return Promise.resolve(createMockResponse({
         label: "test.rs",
         lines: [
@@ -107,7 +106,6 @@ describe("+page.svelte", () => {
 
   it("displays filename in header", async () => {
     vi.mocked(invoke).mockImplementation((cmd: string) => {
-      if (cmd === 'get_terraform_regions') return Promise.resolve([]);
       return Promise.resolve(createMockResponse({
         label: "my_module.rs",
         lines: [makeLine(1, "// comment")],
@@ -145,7 +143,6 @@ describe("+page.svelte", () => {
 
   it("does not open editor when Cmd+C is pressed (allows copy)", async () => {
     vi.mocked(invoke).mockImplementation((cmd: string) => {
-      if (cmd === 'get_terraform_regions') return Promise.resolve([]);
       return Promise.resolve(createMockResponse({
         label: "test.rs",
         lines: [
@@ -184,7 +181,6 @@ describe("+page.svelte", () => {
 
   it("opens editor when 'c' is pressed alone on hovered line", async () => {
     vi.mocked(invoke).mockImplementation((cmd: string) => {
-      if (cmd === 'get_terraform_regions') return Promise.resolve([]);
       return Promise.resolve(createMockResponse({
         label: "test.rs",
         lines: [

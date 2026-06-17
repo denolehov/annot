@@ -4,7 +4,7 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo, ConfigSnapshot } from "$lib/types";
-  import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, isHorizontalRule, getFilePath } from "$lib/line-utils";
+  import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, isHorizontalRule } from "$lib/line-utils";
   import { rangeToKey, keyToRange, isLineInRange, validateRange, type Range } from "$lib/range";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap, findExcalidrawChip } from "$lib/tiptap";
   import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
@@ -28,7 +28,6 @@
   import { useLineSegments } from "$lib/composables/useLineSegments.svelte";
   import { useSearch } from "$lib/composables/useSearch.svelte";
   import { useBookmarks } from "$lib/composables/useBookmarks.svelte";
-  import { useTerraformRegions } from "$lib/composables/useTerraformRegions.svelte";
   import { useOverlay } from "$lib/composables/useOverlay.svelte";
   import { useHistory, emptySessionData, type SessionData } from "$lib/composables/useHistory.svelte";
   import SearchBar from "$lib/components/SearchBar.svelte";
@@ -202,11 +201,6 @@
     getMarkdownMetadata: () => markdownMetadata,
   });
 
-  // Terraform regions (composable)
-  const terraform = useTerraformRegions({
-    getLines: () => lines,
-  });
-
   // Line segmentation (composable)
   const lineSegmentation = useLineSegments(() => lines);
 
@@ -254,7 +248,6 @@
   function captureSessionData(): SessionData {
     return {
       annotations: { ...annotationState.all },
-      terraform: [...terraform.all],
       sessionComment: sessionComment ? JSON.parse(JSON.stringify(sessionComment)) : null,
       selectedExitMode: exitModeState.selectedId,
     };
@@ -267,9 +260,6 @@
   async function restoreSessionData(data: SessionData): Promise<void> {
     // Restore annotations
     annotationState.replaceAll(data.annotations);
-
-    // Restore terraform regions
-    terraform.replaceAll(data.terraform);
 
     // Restore session comment
     sessionComment = data.sessionComment ? JSON.parse(JSON.stringify(data.sessionComment)) : undefined;
@@ -688,12 +678,6 @@
           interaction.openEditor({ kind: 'annotation', rangeKey });
         }
       },
-      onTerraformHoveredLine: () => {
-        if (interaction.hoverLine !== null) {
-          interaction.selectLine(interaction.hoverLine);
-          interaction.openTerraform();
-        }
-      },
       onDragModifierPress: (key) => interaction.setDragModifier(key),
       onConfirmChoice: (action) => interaction.confirmChoice(action),
       onCancelChoice: () => interaction.cancelChoice(),
@@ -742,13 +726,6 @@
       // Hydrate session comment from backend
       if (res.session_comment) {
         sessionComment = contentNodesToTipTap(res.session_comment);
-      }
-
-      // Load terraform regions for visual indicators
-      const firstSourceLine = lines.find(l => l.origin.type === 'source' || l.origin.type === 'diff');
-      const firstPath = firstSourceLine ? getFilePath(firstSourceLine) : null;
-      if (firstPath) {
-        terraform.loadAll(firstPath);
       }
 
       // Listen for window close - this triggers output and exit
@@ -846,7 +823,6 @@
     {search}
     {mermaid}
     bookmarks={bookmarkState}
-    {terraform}
     {showToast}
     {isLineSelectable}
     {getOriginalLinesForRange}

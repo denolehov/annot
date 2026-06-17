@@ -24,8 +24,7 @@ export type UiState =
   | { phase: 'idle' }
   | { phase: 'selecting'; anchor: number; current: number }
   | { phase: 'committed'; range: Range; pendingChoice: boolean }
-  | { phase: 'editing'; editor: EditorKind }
-  | { phase: 'terraforming'; range: Range };
+  | { phase: 'editing'; editor: EditorKind };
 
 /** Derived type for phase names (for backwards compatibility) */
 export type Phase = UiState['phase'];
@@ -36,10 +35,8 @@ export type UiAction =
   | { type: 'COMMIT_SELECT'; pendingChoice: boolean }
   | { type: 'OPEN_EDITOR'; editor: EditorKind }
   | { type: 'CLOSE_EDITOR' }
-  | { type: 'OPEN_TERRAFORM' }
-  | { type: 'CLOSE_TERRAFORM' }
   | { type: 'SET_SELECTION'; range: Range }
-  | { type: 'CONFIRM_CHOICE'; action: 'annotate' | 'bookmark' | 'terraform' }
+  | { type: 'CONFIRM_CHOICE'; action: 'annotate' | 'bookmark' }
   | { type: 'CANCEL_CHOICE' }
   | { type: 'RESET' };
 
@@ -76,22 +73,12 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
       if (state.phase !== 'editing') return state;
       return { phase: 'idle' };
 
-    case 'OPEN_TERRAFORM':
-      if (state.phase !== 'committed') return state;
-      return { phase: 'terraforming', range: state.range };
-
-    case 'CLOSE_TERRAFORM':
-      if (state.phase !== 'terraforming') return state;
-      return { phase: 'idle' };
-
     case 'SET_SELECTION':
       return { phase: 'committed', range: action.range, pendingChoice: false };
 
     case 'CONFIRM_CHOICE':
       if (state.phase !== 'committed' || !state.pendingChoice) return state;
-      if (action.action === 'terraform') {
-        return { phase: 'terraforming', range: state.range };
-      } else if (action.action === 'annotate') {
+      if (action.action === 'annotate') {
         // Transition to editing phase with the annotation editor
         const rangeKey = `${state.range.start}-${state.range.end}`;
         return { phase: 'editing', editor: { kind: 'annotation', rangeKey } };
@@ -169,7 +156,6 @@ export function useInteraction(options: UseInteractionOptions) {
       case 'selecting':
         return normalizeRange(state.anchor, state.current);
       case 'committed':
-      case 'terraforming':
         return state.range;
       case 'editing':
         // Editing phase: derive range from editor kind
@@ -195,7 +181,7 @@ export function useInteraction(options: UseInteractionOptions) {
    */
   function isLineHighlighted(displayIdx: number): boolean {
     const range = getRange();
-    if (range && (state.phase === 'selecting' || state.phase === 'committed' || state.phase === 'editing' || state.phase === 'terraforming')) {
+    if (range && (state.phase === 'selecting' || state.phase === 'committed' || state.phase === 'editing')) {
       return isLineInRange(displayIdx, range);
     }
     return false;
@@ -374,7 +360,7 @@ export function useInteraction(options: UseInteractionOptions) {
     }
   }
 
-  function confirmChoice(action: 'annotate' | 'bookmark' | 'terraform') {
+  function confirmChoice(action: 'annotate' | 'bookmark') {
     if (state.phase !== 'committed' || !state.pendingChoice) return;
 
     if (action === 'bookmark') {
@@ -388,16 +374,6 @@ export function useInteraction(options: UseInteractionOptions) {
 
   function cancelChoice() {
     dispatch({ type: 'CANCEL_CHOICE' });
-  }
-
-  // --- Terraform transitions ---
-
-  function openTerraform() {
-    dispatch({ type: 'OPEN_TERRAFORM' });
-  }
-
-  function closeTerraform() {
-    dispatch({ type: 'CLOSE_TERRAFORM' });
   }
 
   // --- Shift key handlers ---
@@ -472,10 +448,6 @@ export function useInteraction(options: UseInteractionOptions) {
     setDragModifier,
     confirmChoice,
     cancelChoice,
-
-    // Terraform transitions
-    openTerraform,
-    closeTerraform,
   };
 }
 

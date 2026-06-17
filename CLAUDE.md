@@ -122,10 +122,9 @@ process before rebuilding or you'll get `Access is denied (os error 5)`.
 - `output/` — Structured output rendering for LLM consumption
 - `mcp/` — Model Context Protocol server
 - `config.rs` — Persistent user settings (tags, exit modes, bookmarks)
-- `terraform.rs` — Natural prose directives feature
 
 **Frontend** (`src/lib/`):
-- `composables/` — Svelte 5 runes-based state (useAnnotations, useTerraformRegions, etc.)
+- `composables/` — Svelte 5 runes-based state (useAnnotations, etc.)
 - `components/` — UI components (LineRow, CodeViewer, etc.)
 - `CommandPalette/` — `:` command palette with namespaces
 - `tiptap.ts` — Rich text editor configuration
@@ -184,7 +183,7 @@ Kill the stray `annot.exe` before rebuilding.
 ## UI Patterns
 
 ### Line Actions (right-side icons)
-Add buttons inside the `{#if trailing || showBookmarkIcon || terraformRegionStart}` block in `LineRow.svelte`. Use `.line-action` class.
+Add buttons inside the `{#if trailing || showBookmarkIcon}` block in `LineRow.svelte`. Use `.line-action` class.
 
 ### Left Border Indicators
 Use `::before` pseudo-elements with `position: absolute; left: 0; width: 3px;`. For overlapping indicators, use `repeating-linear-gradient`.
@@ -194,6 +193,3 @@ Use `::before` pseudo-elements with `position: absolute; left: 0; width: 3px;`. 
 - Source lines: `line.origin.line` (file) or `line.origin.new_line`/`old_line` (diff)
 
 Use `getLineNumber(line)` and `getFilePath(line)` from `line-utils.ts`.
-
-### Terraform Regions
-Persist to backend with source line numbers. Use `useTerraformRegions` composable for state.
