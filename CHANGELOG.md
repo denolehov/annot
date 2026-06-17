@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.1](https://github.com/denolehov/annot/compare/v0.12.0...v0.12.1) (2026-06-17)
+
+
+### Performance Improvements
+
+* **annotations:** debounce per-keystroke annotation sync ([b3efb69](https://github.com/denolehov/annot/commit/b3efb69ee17128ba150ccff4590784841a61d3ab))
+* **annotations:** edit content in place to avoid per-keystroke re-renders ([d05278d](https://github.com/denolehov/annot/commit/d05278d5da0cafaa7d59c1abfb347d24b7e72d4a))
+* **annotations:** O(1) line→annotation lookup via end-line map ([3a2b2be](https://github.com/denolehov/annot/commit/3a2b2be0debec46bdf250506cf032ff2b6593f80))
+* **annotations:** O(1) per-line annotation lookup ([b166498](https://github.com/denolehov/annot/commit/b166498cdb84d427b38a36f6f49fb8b3b7ddc515))
+* **viewer:** hit-test the current-position lookup ([8e77395](https://github.com/denolehov/annot/commit/8e7739568127801c23b8a79f9e266501b8954a9c))
+* **viewer:** take hover out of the reactive path ([a125527](https://github.com/denolehov/annot/commit/a125527ba4e918fecaeb5d75ee11f799f07eba64))
+
 ## [0.12.0](https://github.com/denolehov/annot/compare/v0.11.0...v0.12.0) (2026-06-16)
 
 
