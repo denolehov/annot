@@ -127,26 +127,7 @@ add the `src-tauri\target\release\` directory to your `PATH`, or reference the `
 
 ### With Claude Code
 
-**macOS** — add to your MCP settings (`~/.claude/settings.json` or project `.claude/settings.json`):
-
-```json
-{
-  "mcpServers": {
-    "annot": {
-      "command": "annot",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-**Linux** — use the CLI instead:
-
-```bash
-claude mcp add --scope user annot annot mcp
-```
-
-**Windows** — use the CLI (same as Linux):
+Run the following command on **macOS**, **Linux**, or **Windows**:
 
 ```bash
 claude mcp add --scope user annot annot mcp
