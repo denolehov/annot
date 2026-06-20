@@ -23,7 +23,7 @@ export type ModalLock =
 export type UiState =
   | { phase: 'idle' }
   | { phase: 'selecting'; anchor: number; current: number }
-  | { phase: 'committed'; range: Range; pendingChoice: boolean }
+  | { phase: 'committed'; range: Range }
   | { phase: 'editing'; editor: EditorKind };
 
 /** Derived type for phase names (for backwards compatibility) */
@@ -32,12 +32,10 @@ export type Phase = UiState['phase'];
 export type UiAction =
   | { type: 'START_SELECT'; anchor: number }
   | { type: 'EXTEND_SELECT'; to: number }
-  | { type: 'COMMIT_SELECT'; pendingChoice: boolean }
+  | { type: 'COMMIT_SELECT' }
   | { type: 'OPEN_EDITOR'; editor: EditorKind }
   | { type: 'CLOSE_EDITOR' }
   | { type: 'SET_SELECTION'; range: Range }
-  | { type: 'CONFIRM_CHOICE'; action: 'annotate' | 'bookmark' }
-  | { type: 'CANCEL_CHOICE' }
   | { type: 'RESET' };
 
 /** Actions that are blocked when a modal lock is active */
@@ -60,7 +58,7 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
     case 'COMMIT_SELECT':
       if (state.phase !== 'selecting') return state;
       const range = normalizeRange(state.anchor, state.current);
-      return { phase: 'committed', range, pendingChoice: action.pendingChoice };
+      return { phase: 'committed', range };
 
     case 'OPEN_EDITOR':
       // Can open from committed, idle, or editing (to switch editors)
@@ -74,23 +72,7 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
       return { phase: 'idle' };
 
     case 'SET_SELECTION':
-      return { phase: 'committed', range: action.range, pendingChoice: false };
-
-    case 'CONFIRM_CHOICE':
-      if (state.phase !== 'committed' || !state.pendingChoice) return state;
-      if (action.action === 'annotate') {
-        // Transition to editing phase with the annotation editor
-        const rangeKey = `${state.range.start}-${state.range.end}`;
-        return { phase: 'editing', editor: { kind: 'annotation', rangeKey } };
-      }
-      // bookmark is handled externally (callback), then reset
-      return { phase: 'idle' };
-
-    case 'CANCEL_CHOICE':
-      if (state.phase === 'committed' && state.pendingChoice) {
-        return { phase: 'idle' };
-      }
-      return state;
+      return { phase: 'committed', range: action.range };
 
     case 'RESET':
       return { phase: 'idle' };
@@ -112,8 +94,6 @@ export interface UseInteractionOptions {
   isLineSelectable: (displayIdx: number) => boolean;
   /** Constrain selection to bounds (e.g., hunk bounds in diff mode) */
   constrainToBounds: (displayIdx: number, anchorIdx: number) => number;
-  /** Called when 'b' was held during drag — create bookmark immediately */
-  onImmediateBookmark?: (context: { start: number; end: number }) => void;
 }
 
 export function useInteraction(options: UseInteractionOptions) {
@@ -125,13 +105,10 @@ export function useInteraction(options: UseInteractionOptions) {
   // Shift key tracking (for cursor styling) - separate from phase state
   let isShiftHeld = $state(false);
 
-  // Drag modifier tracking (c or b key during drag) - ephemeral, not part of UiState
-  let dragModifier = $state<'c' | 'b' | null>(null);
-
   // Hovered line — deliberately NOT part of the reducer state. Hover changes on
   // every mouse-move; if 10k LineRows derived from it they'd all re-run each move.
   // The hover *visual* is pure CSS (:hover); this value only feeds keyboard actions
-  // that need "the line under the cursor" (bookmark/annotate without a selection).
+  // that need "the line under the cursor" (annotate without a selection).
   let hoverLine = $state<number | null>(null);
 
   // Dispatch action through reducer, respecting modal lock
@@ -172,10 +149,6 @@ export function useInteraction(options: UseInteractionOptions) {
     return hoverLine;
   }
 
-  function getPendingChoice(): boolean {
-    return state.phase === 'committed' && state.pendingChoice;
-  }
-
   /**
    * Check if a line should show selection highlight.
    */
@@ -210,7 +183,6 @@ export function useInteraction(options: UseInteractionOptions) {
     clearNativeSelection();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
-    dragModifier = null;
     dispatch({ type: 'START_SELECT', anchor: displayIdx });
   }
 
@@ -245,18 +217,11 @@ export function useInteraction(options: UseInteractionOptions) {
     if (state.phase !== 'selecting') return;
 
     const range = normalizeRange(state.anchor, state.current);
-    const rangeContext = { start: range.start, end: range.end };
+    const rangeKey = `${range.start}-${range.end}`;
 
-    if (dragModifier === 'b') {
-      options.onImmediateBookmark?.(rangeContext);
-      dispatch({ type: 'RESET' });
-    } else if (dragModifier === 'c') {
-      dispatch({ type: 'COMMIT_SELECT', pendingChoice: false });
-    } else {
-      dispatch({ type: 'COMMIT_SELECT', pendingChoice: true });
-    }
-
-    dragModifier = null;
+    // Releasing a selection opens the annotation editor directly.
+    dispatch({ type: 'COMMIT_SELECT' });
+    dispatch({ type: 'OPEN_EDITOR', editor: { kind: 'annotation', rangeKey } });
   }
 
   function handleContentPointerDown(e: PointerEvent) {
@@ -271,7 +236,6 @@ export function useInteraction(options: UseInteractionOptions) {
     e.preventDefault();
     clearNativeSelection();
 
-    dragModifier = null;
     dispatch({ type: 'START_SELECT', anchor: displayIdx });
   }
 
@@ -352,30 +316,6 @@ export function useInteraction(options: UseInteractionOptions) {
     }
   }
 
-  // --- Drag modifier methods ---
-
-  function setDragModifier(key: 'c' | 'b') {
-    if (state.phase === 'selecting') {
-      dragModifier = key;
-    }
-  }
-
-  function confirmChoice(action: 'annotate' | 'bookmark') {
-    if (state.phase !== 'committed' || !state.pendingChoice) return;
-
-    if (action === 'bookmark') {
-      const range = state.range;
-      options.onImmediateBookmark?.({ start: range.start, end: range.end });
-      dispatch({ type: 'RESET' });
-    } else {
-      dispatch({ type: 'CONFIRM_CHOICE', action });
-    }
-  }
-
-  function cancelChoice() {
-    dispatch({ type: 'CANCEL_CHOICE' });
-  }
-
   // --- Shift key handlers ---
 
   function handleShiftKeyDown() {
@@ -386,17 +326,6 @@ export function useInteraction(options: UseInteractionOptions) {
     isShiftHeld = false;
   }
 
-  /** Get context for bookmark creation: committed selection or hovered line. */
-  function getBookmarkContext(): { start: number; end: number } | null {
-    if (state.phase === 'committed') {
-      return { start: state.range.start, end: state.range.end };
-    }
-    if (state.phase === 'idle' && hoverLine !== null) {
-      return { start: hoverLine, end: hoverLine };
-    }
-    return null;
-  }
-
   return {
     // State getters
     get phase() { return state.phase; },
@@ -404,7 +333,6 @@ export function useInteraction(options: UseInteractionOptions) {
     get range() { return getRange(); },
     get hoverLine() { return getHoverLine(); },
     get isShiftHeld() { return isShiftHeld; },
-    get pendingChoice() { return getPendingChoice(); },
     get modalLock() { return modalLock; },
 
     // Query functions
@@ -440,14 +368,6 @@ export function useInteraction(options: UseInteractionOptions) {
     // Keyboard
     handleShiftKeyDown,
     handleShiftKeyUp,
-
-    // Bookmark context
-    getBookmarkContext,
-
-    // Drag modifier / choice methods
-    setDragModifier,
-    confirmChoice,
-    cancelChoice,
   };
 }
 

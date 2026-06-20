@@ -1,4 +1,4 @@
-//! ID generation for persistent entities (bookmarks, tags, exit modes).
+//! ID generation for persistent entities (tags, exit modes).
 //!
 //! Follows jj's approach: random bytes encoded as "reverse hex" using k-z instead of 0-9a-f.
 //! This produces IDs like `kmwvzxyqstnp` — always lowercase, always 12 chars.

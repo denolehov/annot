@@ -17,15 +17,12 @@ use crate::lang;
 use crate::mcp::tools::SessionImage;
 use crate::portal::LoadedPortal;
 use crate::review::{FileKey, Review};
-use crate::state::{
-    Annotation, Bookmark, ContentModel, ContentNode, LineSemantics,
-    PortalSemantics,
-};
+use crate::state::{Annotation, ContentModel, ContentNode, LineSemantics, PortalSemantics};
 
 pub use builder::{BuilderMode, OutputBuilder, SECTION_DIVIDER, SEPARATOR};
 pub use render::render_content;
 
-use formatters::{calculate_builder_mode, format_annotation, format_bookmark, format_legend};
+use formatters::{calculate_builder_mode, format_annotation, format_legend};
 
 /// Output mode determines how content is formatted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -54,7 +51,6 @@ pub struct FormatMetadata {
     pub general_comment: Option<String>,
     pub exit_mode: Option<String>,
     pub general_comment_count: usize,
-    pub bookmark_count: usize,
 }
 
 /// Serialize a FormatResult as JSON for `--json` CLI output.
@@ -70,7 +66,6 @@ pub fn format_json(result: &FormatResult) -> String {
         "general_comment": result.metadata.general_comment,
         "exit_mode": result.metadata.exit_mode,
         "general_comment_count": result.metadata.general_comment_count,
-        "bookmark_count": result.metadata.bookmark_count,
     });
     serde_json::to_string(&json).expect("FormatResult JSON serialization should not fail")
 }
@@ -307,55 +302,6 @@ fn collect_unique_tags(review: &Review) -> BTreeMap<String, String> {
     tags
 }
 
-/// Collect unique bookmarks referenced from all content nodes (session comment + annotations).
-/// Returns embedded Bookmark data in order of first occurrence (keyed by ID).
-fn collect_unique_bookmarks(review: &Review) -> Vec<Bookmark> {
-    use indexmap::IndexMap;
-    let mut bookmarks: IndexMap<String, Bookmark> = IndexMap::new();
-
-    let mut process_nodes = |nodes: &[ContentNode]| {
-        for node in nodes {
-            match node {
-                ContentNode::BookmarkRef { id, bookmark, .. } => {
-                    bookmarks
-                        .entry(id.clone())
-                        .or_insert_with(|| bookmark.clone());
-                }
-                ContentNode::Ref { snapshot, .. } => {
-                    if let crate::state::RefSnapshot::Bookmark { bookmark } = snapshot {
-                        bookmarks
-                            .entry(bookmark.id.clone())
-                            .or_insert_with(|| bookmark.clone());
-                    }
-                }
-                // Other node types don't contain bookmark references
-                ContentNode::Text { .. }
-                | ContentNode::Tag { .. }
-                | ContentNode::Media { .. }
-                | ContentNode::Excalidraw { .. }
-                | ContentNode::Replace { .. }
-                | ContentNode::Error { .. }
-                | ContentNode::Paste { .. }
-                | ContentNode::File { .. } => {}
-            }
-        }
-    };
-
-    // Collect from session comment
-    if let Some(ref comment) = review.session_comment {
-        process_nodes(comment);
-    }
-
-    // Collect from all file annotations
-    for file in review.files.values() {
-        for annotation in file.annotations.values() {
-            process_nodes(&annotation.content);
-        }
-    }
-
-    bookmarks.into_values().collect()
-}
-
 /// Format all annotations as structured output for LLM consumption.
 pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
     // Get content from root_view
@@ -396,17 +342,6 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
     if !unique_tags.is_empty() {
         out.section("TAGS", |b| {
             format_legend(b, &unique_tags);
-        });
-    }
-
-    // BOOKMARKS block (if any bookmarks are referenced)
-    let unique_bookmarks = collect_unique_bookmarks(review);
-    if !unique_bookmarks.is_empty() {
-        out.section("BOOKMARKS", |b| {
-            for bookmark in &unique_bookmarks {
-                let created_this_session = review.session_created_bookmarks.contains(&bookmark.id);
-                format_bookmark(b, bookmark, created_this_session);
-            }
         });
     }
 
@@ -529,8 +464,6 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
         .map(|c| !c.is_empty())
         .unwrap_or(false) { 1 } else { 0 };
 
-    let bookmark_count = collect_unique_bookmarks(review).len();
-
     let general_comment = review.session_comment.as_ref().and_then(|comment| {
         if comment.is_empty() {
             None
@@ -556,7 +489,6 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
             general_comment,
             exit_mode,
             general_comment_count,
-            bookmark_count,
         },
     }
 }

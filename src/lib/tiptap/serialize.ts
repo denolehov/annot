@@ -1,5 +1,5 @@
 import type { JSONContent } from '@tiptap/core';
-import type { ContentNode, Bookmark, RefSnapshot } from '../types';
+import type { ContentNode, RefSnapshot } from '../types';
 
 // ============================================================================
 // extractContentNodes: Transform TipTap JSON to ContentNode[]
@@ -69,12 +69,6 @@ const CHIP_EXTRACTORS: Record<string, ChipExtractor> = {
     type: 'paste',
     content: attrs.content as string,
   }),
-  bookmarkChip: (attrs) => ({
-    type: 'bookmarkref',
-    id: attrs.id as string,
-    label: attrs.label as string,
-    bookmark: attrs.bookmark as Bookmark,
-  }),
   refChip: (attrs) => {
     // File refs have a path attribute instead of snapshot
     if (attrs.refType === 'file' && attrs.path) {
@@ -96,10 +90,10 @@ const CHIP_EXTRACTORS: Record<string, ChipExtractor> = {
         },
       };
     }
-    // Annotation/bookmark refs have snapshot
+    // Annotation refs have snapshot
     return {
       type: 'ref',
-      ref_type: attrs.refType as 'annotation' | 'bookmark',
+      ref_type: attrs.refType as 'annotation',
       snapshot: attrs.snapshot as RefSnapshot,
     };
   },
@@ -389,18 +383,8 @@ export function contentNodesToTipTap(nodes: ContentNode[] | null): JSONContent |
           lineCount,
         },
       });
-    } else if (node.type === 'bookmarkref') {
-      // Legacy: Insert bookmark chip inline with full embedded bookmark data
-      currentParagraph.push({
-        type: 'bookmarkChip',
-        attrs: {
-          id: node.id,
-          label: node.label,
-          bookmark: node.bookmark,
-        },
-      });
     } else if (node.type === 'ref') {
-      // Unified ref chip inline - handles both annotation and bookmark refs
+      // Unified ref chip inline - handles annotation and heading refs
       currentParagraph.push({
         type: 'refChip',
         attrs: {

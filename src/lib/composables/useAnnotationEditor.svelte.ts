@@ -44,7 +44,7 @@ import {
   ExcalidrawChip,
   ExcalidrawPlaceholder,
 } from '../tiptap/extensions';
-import type { Tag, Bookmark, RefSnapshot, AnnotationRefSnapshot, ContentNode, SectionInfo } from '../types';
+import type { Tag, RefSnapshot, AnnotationRefSnapshot, ContentNode, SectionInfo } from '../types';
 import type { AnnotationEntry } from './useAnnotations.svelte';
 import { fuzzySearch } from '../fuzzy';
 
@@ -57,8 +57,6 @@ export interface AnnotationEditorOptions {
   getSealed: () => boolean;
   /** Returns available tags for autocomplete (reactive) */
   getTags: () => Tag[];
-  /** Returns available bookmarks for @ autocomplete (reactive) */
-  getBookmarks: () => Bookmark[];
   /** Returns all annotation entries for @ autocomplete (reactive) */
   getAnnotationEntries: () => Record<string, AnnotationEntry>;
   /** Returns the current annotation's range key (to exclude from suggestions) */
@@ -195,7 +193,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
     const el = options.element();
     if (!el) return;
 
-    const { getSealed, getTags, getBookmarks, getAnnotationEntries, getCurrentRangeKey, getOnUpdate, getOnDismiss, getSections } = options;
+    const { getSealed, getTags, getAnnotationEntries, getCurrentRangeKey, getOnUpdate, getOnDismiss, getSections } = options;
 
     editor = new Editor({
       element: el,
@@ -248,14 +246,13 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
             },
           },
         }),
-        // Unified RefChip with @ trigger for annotations, bookmarks, and files
+        // Unified RefChip with @ trigger for annotations, headings, and files
         RefChip.configure({
           suggestion: {
             char: '@',
             items: async ({ query }: { query: string }): Promise<RefSuggestionItem[]> => {
               const currentKey = getCurrentRangeKey();
               const annotations = getAnnotationEntries();
-              const bookmarks = getBookmarks();
               const sections = getSections?.() ?? null;
 
               // Build annotation items (exclude current annotation)
@@ -271,12 +268,6 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
                     content: nodes,
                   };
                 });
-
-              // Build bookmark items
-              const bookmarkItems: RefSuggestionItem[] = bookmarks.map((b) => ({
-                type: 'bookmark' as const,
-                bookmark: b,
-              }));
 
               // Build heading items (only in markdown mode)
               const headingItems: RefSuggestionItem[] = sections
@@ -306,12 +297,6 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
                   item,
                   searchText: item.type === 'annotation' ? `${item.key} ${item.preview}` : '',
                 })),
-                ...bookmarkItems.map((item) => ({
-                  item,
-                  searchText: item.type === 'bookmark'
-                    ? `${item.bookmark.id} ${item.bookmark.label || item.bookmark.snapshot.source_title || ''}`
-                    : '',
-                })),
                 ...headingItems.map((item) => ({
                   item,
                   searchText: item.type === 'heading' ? item.section.title : '',
@@ -326,10 +311,9 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
               const filtered = fuzzySearch(allItems, query, [{ name: 'searchText', weight: 1 }]);
               const items = filtered.map((f) => f.item);
 
-              // Re-sort by priority: current doc (headings, annotations) → bookmarks → files
+              // Re-sort by priority: current doc (headings, annotations) → files
               // This ensures contextually relevant items appear first
               const currentDocItems = items.filter((i) => i.type === 'heading' || i.type === 'annotation');
-              const bookmarkResults = items.filter((i) => i.type === 'bookmark');
               let fileResults = items.filter((i) => i.type === 'file');
 
               // Soft limit files to 5 for short queries (< 4 chars) to reduce noise
@@ -339,7 +323,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
                 fileResults = fileResults.slice(0, FILE_SOFT_LIMIT);
               }
 
-              return [...currentDocItems, ...bookmarkResults, ...fileResults];
+              return [...currentDocItems, ...fileResults];
             },
             render: createSuggestionRender<RefSuggestionItem>(...suggestionBridge<RefSuggestionItem>('ref')),
             command: ({ editor, range, props }: { editor: Editor; range: Range; props: RefSuggestionItem }) => {
@@ -380,25 +364,15 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
                 return;
               }
 
-              let snapshot: RefSnapshot;
-              let refType: 'annotation' | 'bookmark';
+              if (props.type !== 'annotation') return;
 
-              if (props.type === 'annotation') {
-                refType = 'annotation';
-                snapshot = {
-                  type: 'annotation',
-                  source_key: props.key,
-                  source_file: null, // Same file
-                  preview: props.preview,
-                  content: props.content,
-                } as AnnotationRefSnapshot;
-              } else {
-                refType = 'bookmark';
-                snapshot = {
-                  type: 'bookmark',
-                  bookmark: props.bookmark,
-                };
-              }
+              const snapshot: RefSnapshot = {
+                type: 'annotation',
+                source_key: props.key,
+                source_file: null, // Same file
+                preview: props.preview,
+                content: props.content,
+              } as AnnotationRefSnapshot;
 
               editor
                 .chain()
@@ -406,7 +380,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
                 .insertContentAt(range, [
                   {
                     type: 'refChip',
-                    attrs: { refType, snapshot },
+                    attrs: { refType: 'annotation', snapshot },
                   },
                   { type: 'text', text: ' ' },
                 ])

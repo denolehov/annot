@@ -32,16 +32,8 @@
       category: 'Editor',
       items: [
         { keys: ['#'], description: 'Insert tag' },
-        { keys: ['@'], description: 'Reference (annotations, bookmarks, sections, files)' },
+        { keys: ['@'], description: 'Reference (annotations, sections, files)' },
         { keys: ['/'], description: 'Slash commands (/replace, /excalidraw)' },
-      ]
-    },
-    {
-      category: 'Bookmarks',
-      items: [
-        { keys: ['b'], description: 'Bookmark hovered line or selection' },
-        { keys: [keys.shift, 'B'], description: 'Bookmark entire session' },
-        { keys: ['e'], description: 'Edit last created bookmark' },
       ]
     },
     {
@@ -58,7 +50,6 @@
       category: 'Selection',
       items: [
         { keys: [keys.shift, 'drag'], description: 'Select line range' },
-        { keys: ['Esc'], description: 'Cancel pending choice' },
       ]
     },
     {

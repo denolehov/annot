@@ -9,18 +9,13 @@ use crate::config::{self, Config, Theme};
 use crate::lang::extension_to_fence_language;
 use crate::output::{export_content, export_section, format_json, format_output, OutputMode};
 use crate::review::ActiveReview;
-use crate::input::{ContentSource, McpSource};
-use crate::state::{
-    Bookmark, BookmarkSnapshot, ContentMetadata, ContentNode, ContentResponse, ExitMode,
-    SessionType, Tag, TagUsageStats,
-};
+use crate::state::{ContentNode, ContentResponse, ExitMode, Tag, TagUsageStats};
 
 /// Snapshot of config data for reload_config command.
 #[derive(Serialize)]
 pub struct ConfigSnapshot {
     pub tags: Vec<Tag>,
     pub exit_modes: Vec<ExitMode>,
-    pub bookmarks: Vec<Bookmark>,
 }
 use crate::ShouldExit;
 
@@ -298,15 +293,6 @@ pub fn reorder_exit_modes(
     })
 }
 
-// --- Bookmark commands ---
-
-#[tauri::command]
-pub fn get_bookmarks(review_state: State<ActiveReview>) -> Result<Vec<Bookmark>, String> {
-    let guard = review_state.lock();
-    let review = guard.as_ref().ok_or("No active review")?;
-    Ok(review.config.bookmarks().to_vec())
-}
-
 /// Reload config from disk, merging new items while preserving in-session edits.
 /// Called on window focus to pick up changes from other annot windows.
 #[tauri::command]
@@ -319,145 +305,6 @@ pub fn reload_config(review_state: State<ActiveReview>) -> Result<ConfigSnapshot
     Ok(ConfigSnapshot {
         tags: review.config.tags().to_vec(),
         exit_modes: review.config.exit_modes().to_vec(),
-        bookmarks: review.config.bookmarks().to_vec(),
-    })
-}
-
-#[tauri::command]
-pub fn create_bookmark(
-    review_state: State<ActiveReview>,
-    label: Option<String>,
-) -> Result<Bookmark, String> {
-    with_review!(review_state, |review| {
-        // Determine session type from the content source
-        let source = &review.root_view.content().source;
-        let source_type = match source {
-            ContentSource::Mcp(McpSource::Diff { .. }) => SessionType::Diff,
-            ContentSource::Mcp(McpSource::Content { .. }) => SessionType::Content,
-            _ => SessionType::File,
-        };
-
-        // Get source title (label) and full content
-        let source_title = review.root_view.content().label.clone();
-        let context = review
-            .root_view
-            .content()
-            .lines
-            .iter()
-            .map(|l| l.content.as_str())
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        let snapshot = BookmarkSnapshot::Session {
-            source_type,
-            source_title,
-            context,
-        };
-
-        // Auto-derive label from H1 heading for markdown content if not provided
-        let label = label.or_else(|| {
-            if let ContentMetadata::Markdown(md) = &review.root_view.content().metadata {
-                md.sections.iter().find(|s| s.level == 1).map(|s| s.title.clone())
-            } else {
-                None
-            }
-        });
-
-        // Get current working directory as project path
-        let project_path = std::env::current_dir().ok();
-
-        let bookmark = Bookmark::new(label, project_path, snapshot);
-        review.config.upsert_bookmark(bookmark.clone());
-        review.session_created_bookmarks.insert(bookmark.id.clone());
-
-        Ok(bookmark)
-    })
-}
-
-#[tauri::command]
-pub fn create_selection_bookmark(
-    review_state: State<ActiveReview>,
-    start_line: usize,
-    end_line: usize,
-    label: Option<String>,
-) -> Result<Bookmark, String> {
-    with_review!(review_state, |review| {
-        // Determine session type from the content source
-        let source = &review.root_view.content().source;
-        let source_type = match source {
-            ContentSource::Mcp(McpSource::Diff { .. }) => SessionType::Diff,
-            ContentSource::Mcp(McpSource::Content { .. }) => SessionType::Content,
-            _ => SessionType::File,
-        };
-
-        let lines = &review.root_view.content().lines;
-
-        // Extract selected text (display indices are 1-indexed)
-        let selected_text = lines
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| *i + 1 >= start_line && *i + 1 <= end_line)
-            .map(|(_, l)| l.content.as_str())
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        // Get source title and full context
-        let source_title = review.root_view.content().label.clone();
-        let context = lines
-            .iter()
-            .map(|l| l.content.as_str())
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        let snapshot = BookmarkSnapshot::Selection {
-            source_type,
-            source_title,
-            context,
-            selected_text,
-        };
-
-        let project_path = std::env::current_dir().ok();
-        let bookmark = Bookmark::new(label, project_path, snapshot);
-        review.config.upsert_bookmark(bookmark.clone());
-        review.session_created_bookmarks.insert(bookmark.id.clone());
-
-        Ok(bookmark)
-    })
-}
-
-#[tauri::command]
-pub fn update_bookmark(
-    review_state: State<ActiveReview>,
-    id: String,
-    label: String,
-) -> Result<Bookmark, String> {
-    with_review!(review_state, |review| {
-        let bookmark = review
-            .config
-            .get_bookmark(&id)
-            .ok_or_else(|| format!("Bookmark not found: {}", id))?
-            .clone();
-
-        let updated = Bookmark {
-            label: Some(label),
-            ..bookmark
-        };
-        review.config.upsert_bookmark(updated.clone());
-
-        Ok(updated)
-    })
-}
-
-#[tauri::command]
-pub fn delete_bookmark(
-    review_state: State<ActiveReview>,
-    id: String,
-) -> Result<Vec<Bookmark>, String> {
-    with_review!(review_state, |review| {
-        if !review.config.delete_bookmark(&id) {
-            return Err(format!("Bookmark not found: {}", id));
-        }
-        Ok(review.config.bookmarks().to_vec())
     })
 }
 

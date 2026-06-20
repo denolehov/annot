@@ -3,7 +3,6 @@
 	import type { NodeViewProps } from '@tiptap/core';
 	import type { RefSnapshot } from '$lib/types';
 	import AnnotationRefChip from './AnnotationRefChip.svelte';
-	import BookmarkRefChip from './BookmarkRefChip.svelte';
 	import FileRefChip from './FileRefChip.svelte';
 	import HeadingRefChip from './HeadingRefChip.svelte';
 
@@ -13,7 +12,6 @@
 		| { kind: 'heading'; level: number; title: string; line: number }
 		| { kind: 'file'; path: string }
 		| { kind: 'annotation'; snapshot: RefSnapshot & { type: 'annotation' } }
-		| { kind: 'bookmark'; snapshot: RefSnapshot & { type: 'bookmark' } }
 		| { kind: 'unknown' };
 
 	const variant = $derived.by((): RefVariant => {
@@ -27,9 +25,6 @@
 		}
 		if (refType === 'annotation' && snapshot?.type === 'annotation') {
 			return { kind: 'annotation', snapshot };
-		}
-		if (refType === 'bookmark' && snapshot?.type === 'bookmark') {
-			return { kind: 'bookmark', snapshot };
 		}
 		return { kind: 'unknown' };
 	});
@@ -49,7 +44,5 @@
 				path={variant.path}
 			/>{:else if variant.kind === 'annotation'}<AnnotationRefChip
 				snapshot={variant.snapshot}
-			/>{:else if variant.kind === 'bookmark'}<BookmarkRefChip
-				snapshot={variant.snapshot.bookmark}
 			/>{:else}<span class="ref-icon">@</span><span class="ref-content">?</span>{/if}</span
 	></NodeViewWrapper>

@@ -96,18 +96,10 @@ fn render_node(
             // Output pasted content as plain text
             content.clone()
         }
-        ContentNode::BookmarkRef { id, .. } => {
-            let short_id = &id[..id.len().min(3)];
-            format!("[BOOKMARK {}]", short_id)
-        }
         ContentNode::Ref { snapshot, .. } => {
             match snapshot {
                 RefSnapshot::Annotation(snap) => {
                     format!("[ANNOTATION L{}]", snap.source_key)
-                }
-                RefSnapshot::Bookmark { bookmark } => {
-                    let short_id = &bookmark.id[..bookmark.id.len().min(3)];
-                    format!("[BOOKMARK {}]", short_id)
                 }
                 RefSnapshot::Heading(snap) => {
                     format!("[H{} {}]", snap.level, snap.title)

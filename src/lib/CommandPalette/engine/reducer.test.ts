@@ -752,7 +752,7 @@ describe('reducer: initial state', () => {
       const state: State = { type: 'IDLE' };
       const result = reduce(
         state,
-        { type: 'OPEN', initialState: { namespace: 'bookmarks', mode: 'edit', itemId: 'tag-1' } },
+        { type: 'OPEN', initialState: { namespace: 'exit-modes', mode: 'edit', itemId: 'tag-1' } },
         ctx
       );
 
@@ -778,11 +778,11 @@ describe('reducer: initial state', () => {
 
 // Regression test: deleting last item in no-create namespace should go back to NAMESPACE_FILTER
 describe('reducer: delete last item in no-create namespace', () => {
-  // Namespace that can delete but not create (like bookmarks)
-  const bookmarksNamespace: Namespace = {
-    id: 'bookmarks',
-    label: 'Bookmarks',
-    icon: 'bookmark',
+  // Namespace that can delete but not create
+  const noCreateNamespace: Namespace = {
+    id: 'saved-items',
+    label: 'Saved Items',
+    icon: 'hashtag',
     ItemComponent: MockItemComponent,
     fields: [{ key: 'label', label: 'Label', type: 'text' }],
     hotkeys: [{ key: 'e', label: 'edit', action: 'EDIT' }],
@@ -790,24 +790,24 @@ describe('reducer: delete last item in no-create namespace', () => {
   };
 
   it('should transition to NAMESPACE_FILTER after deleting last item when namespace cannot create', () => {
-    // Context with only one bookmark item (the last one)
+    // Context with only one item (the last one)
     const ctx: QueryContext = {
-      namespaces: [bookmarksNamespace],
+      namespaces: [noCreateNamespace],
       filterNamespaces(query: string): Namespace[] {
-        return [bookmarksNamespace];
+        return [noCreateNamespace];
       },
       getItems(namespace: Namespace): Item[] {
-        return [{ id: 'bookmark-1', name: 'My Bookmark', values: { label: 'My Bookmark' } }];
+        return [{ id: 'item-1', name: 'My Item', values: { label: 'My Item' } }];
       },
       filterItems(namespace: Namespace, query: string): Item[] {
-        return [{ id: 'bookmark-1', name: 'My Bookmark', values: { label: 'My Bookmark' } }];
+        return [{ id: 'item-1', name: 'My Item', values: { label: 'My Item' } }];
       },
     };
 
     // Start in ITEM_FILTER with pendingDelete armed (user pressed 'd' once)
     const state: State = {
       type: 'ITEM_FILTER',
-      namespace: bookmarksNamespace,
+      namespace: noCreateNamespace,
       query: '',
       selectedIndex: 0,
       pendingDelete: true,
@@ -820,8 +820,8 @@ describe('reducer: delete last item in no-create namespace', () => {
     // Should emit DELETE_ITEM command
     expect(result.commands).toContainEqual({
       type: 'DELETE_ITEM',
-      namespace: 'bookmarks',
-      itemId: 'bookmark-1',
+      namespace: 'saved-items',
+      itemId: 'item-1',
     });
 
     // BUG: After deleting the last item in a namespace that cannot create,
@@ -830,29 +830,29 @@ describe('reducer: delete last item in no-create namespace', () => {
   });
 
   it('should stay in ITEM_FILTER after deleting when more items remain', () => {
-    // Context with two bookmark items
+    // Context with two items
     const ctx: QueryContext = {
-      namespaces: [bookmarksNamespace],
+      namespaces: [noCreateNamespace],
       filterNamespaces(query: string): Namespace[] {
-        return [bookmarksNamespace];
+        return [noCreateNamespace];
       },
       getItems(namespace: Namespace): Item[] {
         return [
-          { id: 'bookmark-1', name: 'Bookmark 1', values: { label: 'Bookmark 1' } },
-          { id: 'bookmark-2', name: 'Bookmark 2', values: { label: 'Bookmark 2' } },
+          { id: 'item-1', name: 'Item 1', values: { label: 'Item 1' } },
+          { id: 'item-2', name: 'Item 2', values: { label: 'Item 2' } },
         ];
       },
       filterItems(namespace: Namespace, query: string): Item[] {
         return [
-          { id: 'bookmark-1', name: 'Bookmark 1', values: { label: 'Bookmark 1' } },
-          { id: 'bookmark-2', name: 'Bookmark 2', values: { label: 'Bookmark 2' } },
+          { id: 'item-1', name: 'Item 1', values: { label: 'Item 1' } },
+          { id: 'item-2', name: 'Item 2', values: { label: 'Item 2' } },
         ];
       },
     };
 
     const state: State = {
       type: 'ITEM_FILTER',
-      namespace: bookmarksNamespace,
+      namespace: noCreateNamespace,
       query: '',
       selectedIndex: 0,
       pendingDelete: true,
@@ -868,22 +868,22 @@ describe('reducer: delete last item in no-create namespace', () => {
   it('should select previous item when deleting last item in list', () => {
     // Context with three items
     const ctx: QueryContext = {
-      namespaces: [bookmarksNamespace],
+      namespaces: [noCreateNamespace],
       filterNamespaces(query: string): Namespace[] {
-        return [bookmarksNamespace];
+        return [noCreateNamespace];
       },
       getItems(namespace: Namespace): Item[] {
         return [
-          { id: 'bookmark-1', name: 'Bookmark 1', values: { label: 'Bookmark 1' } },
-          { id: 'bookmark-2', name: 'Bookmark 2', values: { label: 'Bookmark 2' } },
-          { id: 'bookmark-3', name: 'Bookmark 3', values: { label: 'Bookmark 3' } },
+          { id: 'item-1', name: 'Item 1', values: { label: 'Item 1' } },
+          { id: 'item-2', name: 'Item 2', values: { label: 'Item 2' } },
+          { id: 'item-3', name: 'Item 3', values: { label: 'Item 3' } },
         ];
       },
       filterItems(namespace: Namespace, query: string): Item[] {
         return [
-          { id: 'bookmark-1', name: 'Bookmark 1', values: { label: 'Bookmark 1' } },
-          { id: 'bookmark-2', name: 'Bookmark 2', values: { label: 'Bookmark 2' } },
-          { id: 'bookmark-3', name: 'Bookmark 3', values: { label: 'Bookmark 3' } },
+          { id: 'item-1', name: 'Item 1', values: { label: 'Item 1' } },
+          { id: 'item-2', name: 'Item 2', values: { label: 'Item 2' } },
+          { id: 'item-3', name: 'Item 3', values: { label: 'Item 3' } },
         ];
       },
     };
@@ -891,7 +891,7 @@ describe('reducer: delete last item in no-create namespace', () => {
     // Deleting item at index 2 (last item)
     const state: State = {
       type: 'ITEM_FILTER',
-      namespace: bookmarksNamespace,
+      namespace: noCreateNamespace,
       query: '',
       selectedIndex: 2,
       pendingDelete: true,
@@ -911,22 +911,22 @@ describe('reducer: delete last item in no-create namespace', () => {
   it('should keep same index when deleting non-last item (now points to next)', () => {
     // Context with three items
     const ctx: QueryContext = {
-      namespaces: [bookmarksNamespace],
+      namespaces: [noCreateNamespace],
       filterNamespaces(query: string): Namespace[] {
-        return [bookmarksNamespace];
+        return [noCreateNamespace];
       },
       getItems(namespace: Namespace): Item[] {
         return [
-          { id: 'bookmark-1', name: 'Bookmark 1', values: { label: 'Bookmark 1' } },
-          { id: 'bookmark-2', name: 'Bookmark 2', values: { label: 'Bookmark 2' } },
-          { id: 'bookmark-3', name: 'Bookmark 3', values: { label: 'Bookmark 3' } },
+          { id: 'item-1', name: 'Item 1', values: { label: 'Item 1' } },
+          { id: 'item-2', name: 'Item 2', values: { label: 'Item 2' } },
+          { id: 'item-3', name: 'Item 3', values: { label: 'Item 3' } },
         ];
       },
       filterItems(namespace: Namespace, query: string): Item[] {
         return [
-          { id: 'bookmark-1', name: 'Bookmark 1', values: { label: 'Bookmark 1' } },
-          { id: 'bookmark-2', name: 'Bookmark 2', values: { label: 'Bookmark 2' } },
-          { id: 'bookmark-3', name: 'Bookmark 3', values: { label: 'Bookmark 3' } },
+          { id: 'item-1', name: 'Item 1', values: { label: 'Item 1' } },
+          { id: 'item-2', name: 'Item 2', values: { label: 'Item 2' } },
+          { id: 'item-3', name: 'Item 3', values: { label: 'Item 3' } },
         ];
       },
     };
@@ -934,7 +934,7 @@ describe('reducer: delete last item in no-create namespace', () => {
     // Deleting item at index 0 (first item)
     const state: State = {
       type: 'ITEM_FILTER',
-      namespace: bookmarksNamespace,
+      namespace: noCreateNamespace,
       query: '',
       selectedIndex: 0,
       pendingDelete: true,
@@ -945,7 +945,7 @@ describe('reducer: delete last item in no-create namespace', () => {
 
     expect(result.state.type).toBe('ITEM_FILTER');
     if (result.state.type === 'ITEM_FILTER') {
-      // Index stays at 0, which now points to what was bookmark-2
+      // Index stays at 0, which now points to what was item-2
       expect(result.state.selectedIndex).toBe(0);
     }
   });
@@ -953,22 +953,22 @@ describe('reducer: delete last item in no-create namespace', () => {
   it('should keep same index when deleting middle item', () => {
     // Context with three items
     const ctx: QueryContext = {
-      namespaces: [bookmarksNamespace],
+      namespaces: [noCreateNamespace],
       filterNamespaces(query: string): Namespace[] {
-        return [bookmarksNamespace];
+        return [noCreateNamespace];
       },
       getItems(namespace: Namespace): Item[] {
         return [
-          { id: 'bookmark-1', name: 'Bookmark 1', values: { label: 'Bookmark 1' } },
-          { id: 'bookmark-2', name: 'Bookmark 2', values: { label: 'Bookmark 2' } },
-          { id: 'bookmark-3', name: 'Bookmark 3', values: { label: 'Bookmark 3' } },
+          { id: 'item-1', name: 'Item 1', values: { label: 'Item 1' } },
+          { id: 'item-2', name: 'Item 2', values: { label: 'Item 2' } },
+          { id: 'item-3', name: 'Item 3', values: { label: 'Item 3' } },
         ];
       },
       filterItems(namespace: Namespace, query: string): Item[] {
         return [
-          { id: 'bookmark-1', name: 'Bookmark 1', values: { label: 'Bookmark 1' } },
-          { id: 'bookmark-2', name: 'Bookmark 2', values: { label: 'Bookmark 2' } },
-          { id: 'bookmark-3', name: 'Bookmark 3', values: { label: 'Bookmark 3' } },
+          { id: 'item-1', name: 'Item 1', values: { label: 'Item 1' } },
+          { id: 'item-2', name: 'Item 2', values: { label: 'Item 2' } },
+          { id: 'item-3', name: 'Item 3', values: { label: 'Item 3' } },
         ];
       },
     };
@@ -976,7 +976,7 @@ describe('reducer: delete last item in no-create namespace', () => {
     // Deleting item at index 1 (middle item)
     const state: State = {
       type: 'ITEM_FILTER',
-      namespace: bookmarksNamespace,
+      namespace: noCreateNamespace,
       query: '',
       selectedIndex: 1,
       pendingDelete: true,
@@ -987,7 +987,7 @@ describe('reducer: delete last item in no-create namespace', () => {
 
     expect(result.state.type).toBe('ITEM_FILTER');
     if (result.state.type === 'ITEM_FILTER') {
-      // Index stays at 1, which now points to what was bookmark-3
+      // Index stays at 1, which now points to what was item-3
       expect(result.state.selectedIndex).toBe(1);
     }
   });

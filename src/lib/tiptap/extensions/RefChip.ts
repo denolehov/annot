@@ -3,14 +3,13 @@ import { SvelteNodeViewRenderer } from 'svelte-tiptap';
 import Suggestion, { type SuggestionOptions } from '@tiptap/suggestion';
 import { PluginKey } from '@tiptap/pm/state';
 import RefChipView from '../nodeviews/RefChipView.svelte';
-import type { RefSnapshot, Bookmark, AnnotationRefSnapshot, SectionInfo } from '$lib/types';
+import type { RefSnapshot, AnnotationRefSnapshot, SectionInfo } from '$lib/types';
 
 const RefSuggestionPluginKey = new PluginKey('refSuggestion');
 
-/** Unified suggestion item for @ menu - annotation, bookmark, file, or heading section. */
+/** Unified suggestion item for @ menu - annotation, file, or heading section. */
 export type RefSuggestionItem =
 	| { type: 'annotation'; key: string; preview: string; content: import('$lib/types').ContentNode[] }
-	| { type: 'bookmark'; bookmark: Bookmark }
 	| { type: 'file'; path: string }
 	| { type: 'heading'; section: SectionInfo };
 
@@ -26,8 +25,8 @@ export const RefChip = Node.create<RefChipOptions>({
 
 	addAttributes() {
 		return {
-			refType: { default: null }, // 'annotation' | 'bookmark' | 'file' | 'heading'
-			snapshot: { default: null }, // RefSnapshot (for annotation/bookmark)
+			refType: { default: null }, // 'annotation' | 'file' | 'heading'
+			snapshot: { default: null }, // RefSnapshot (for annotation)
 			path: { default: null }, // string (for file refs)
 			// Heading section attributes
 			sectionLine: { default: null }, // number (source line of heading)
@@ -78,11 +77,6 @@ export const RefChip = Node.create<RefChipOptions>({
 				const annSnap = snapshot as AnnotationRefSnapshot;
 				const preview = annSnap.preview?.slice(0, 20) || '';
 				displayText = `[@L${annSnap.source_key}${preview ? ' · ' + preview : ''}...]`;
-			} else if (refType === 'bookmark' && snapshot.type === 'bookmark') {
-				const shortId = snapshot.bookmark.id?.slice(0, 3) || '';
-				const label = snapshot.bookmark.label || snapshot.bookmark.snapshot.source_title || '';
-				const truncLabel = label.length > 20 ? label.slice(0, 20) + '...' : label;
-				displayText = `[@${shortId}${truncLabel ? ' · ' + truncLabel : ''}]`;
 			}
 		}
 

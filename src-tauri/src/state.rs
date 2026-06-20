@@ -198,20 +198,10 @@ pub enum ContentNode {
     Error { source: String, message: String },
     /// Pasted text content collapsed into a chip (large paste).
     Paste { content: String },
-    /// Reference to a bookmark (captured moment of attention).
-    /// Embeds full bookmark data at insertion time for "detachment" —
-    /// if the bookmark is later deleted, the reference still renders fully.
-    BookmarkRef {
-        id: String,
-        label: String,
-        /// Full bookmark data captured at insertion time.
-        /// Used for output if the bookmark no longer exists (detached).
-        bookmark: Bookmark,
-    },
-    /// Unified reference (annotation or bookmark).
-    /// New format that supports referencing other annotations within the session.
+    /// Unified reference (annotation or heading).
+    /// Supports referencing other annotations within the session.
     Ref {
-        /// Discriminator: "annotation" or "bookmark"
+        /// Discriminator: "annotation" or "heading"
         ref_type: String,
         /// Self-contained snapshot (survives source deletion)
         snapshot: RefSnapshot,
@@ -224,7 +214,7 @@ pub enum ContentNode {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// UNIFIED REFERENCE SYSTEM — @ mentions for annotations and bookmarks
+// UNIFIED REFERENCE SYSTEM — @ mentions for annotations and headings
 // ════════════════════════════════════════════════════════════════════════════
 
 /// Snapshot for annotation references (self-contained).
@@ -251,12 +241,11 @@ pub struct HeadingRefSnapshot {
     pub title: String,
 }
 
-/// Unified reference snapshot — annotation, bookmark, or heading.
+/// Unified reference snapshot — annotation or heading.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum RefSnapshot {
     Annotation(AnnotationRefSnapshot),
-    Bookmark { bookmark: Bookmark },
     Heading(HeadingRefSnapshot),
 }
 
@@ -369,152 +358,6 @@ impl ExitMode {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// BOOKMARKS — capture moments of attention for later reference
-// ════════════════════════════════════════════════════════════════════════════
-
-/// A bookmark capturing a moment of attention during an annot session.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct Bookmark {
-    /// Unique 12-character base32 ID (prefix-matchable).
-    pub id: String,
-    /// User-provided or auto-derived label.
-    pub label: Option<String>,
-    /// When this bookmark was created.
-    pub created_at: DateTime<Utc>,
-    /// Project context (cwd at creation time).
-    pub project_path: Option<std::path::PathBuf>,
-    /// The captured content snapshot.
-    pub snapshot: BookmarkSnapshot,
-}
-
-impl HasId for Bookmark {
-    fn id(&self) -> &str {
-        &self.id
-    }
-}
-
-/// The content snapshot captured by a bookmark.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum BookmarkSnapshot {
-    /// Entire session content.
-    Session {
-        source_type: SessionType,
-        source_title: String,
-        /// Full document snapshot.
-        context: String,
-    },
-    /// Inline selection within session.
-    Selection {
-        source_type: SessionType,
-        source_title: String,
-        /// Full document snapshot.
-        context: String,
-        /// The text the user selected.
-        selected_text: String,
-    },
-}
-
-/// Type of session where the bookmark was created.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum SessionType {
-    File,
-    Diff,
-    Content,
-}
-
-impl BookmarkSnapshot {
-    /// Get the source title for this snapshot.
-    pub fn source_title(&self) -> &str {
-        match self {
-            BookmarkSnapshot::Session { source_title, .. }
-            | BookmarkSnapshot::Selection { source_title, .. } => source_title,
-        }
-    }
-
-    /// Get a preview of the content (first N lines).
-    pub fn preview(&self, max_lines: usize) -> String {
-        self.content()
-            .lines()
-            .take(max_lines)
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
-    /// Get the full content of this snapshot.
-    pub fn content(&self) -> &str {
-        match self {
-            BookmarkSnapshot::Session { context, .. }
-            | BookmarkSnapshot::Selection { context, .. } => context,
-        }
-    }
-}
-
-impl Bookmark {
-    /// Creates a new bookmark.
-    /// Label is user-provided only; display_label() derives from content for output.
-    pub fn new(
-        label: Option<String>,
-        project_path: Option<std::path::PathBuf>,
-        snapshot: BookmarkSnapshot,
-    ) -> Self {
-        Self {
-            id: crate::id::generate(),
-            label, // User-provided only, no auto-derivation
-            created_at: Utc::now(),
-            project_path,
-            snapshot,
-        }
-    }
-
-    /// Get display label for output: user label if set, otherwise derived from content.
-    /// - Selection bookmarks: first ~50 chars of selected_text
-    /// - Session bookmarks: first heading (for .md) or source_title
-    pub fn display_label(&self) -> String {
-        if let Some(ref label) = self.label {
-            return label.clone();
-        }
-        match &self.snapshot {
-            BookmarkSnapshot::Selection { selected_text, .. } => {
-                Self::truncate(selected_text.lines().next().unwrap_or(selected_text), 50)
-            }
-            BookmarkSnapshot::Session {
-                source_title,
-                context,
-                ..
-            } => {
-                // For markdown: extract first # heading
-                if source_title.ends_with(".md") {
-                    if let Some(heading) = Self::extract_first_heading(context) {
-                        return Self::truncate(&heading, 50);
-                    }
-                }
-                source_title.clone()
-            }
-        }
-    }
-
-    /// Extract the first markdown heading from content.
-    fn extract_first_heading(content: &str) -> Option<String> {
-        content
-            .lines()
-            .find(|line| line.starts_with('#'))
-            .map(|line| line.trim_start_matches('#').trim().to_string())
-    }
-
-    /// Truncate a string to max_len, adding ellipsis if needed.
-    fn truncate(s: &str, max_len: usize) -> String {
-        if s.len() <= max_len {
-            s.to_string()
-        } else {
-            let truncated: String = s.chars().take(max_len - 1).collect();
-            format!("{}…", truncated)
-        }
-    }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
 // CONTENT MODEL — immutable after construction
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -567,15 +410,13 @@ pub struct SessionState {
 // USER CONFIG — encapsulates deletion tracking
 // ════════════════════════════════════════════════════════════════════════════
 
-/// User configuration for tags, exit modes, and bookmarks.
+/// User configuration for tags and exit modes.
 /// Encapsulates deletion tracking for safe concurrent writes.
 pub struct UserConfig {
     tags: Vec<Tag>,
     exit_modes: Vec<ExitMode>,
-    bookmarks: Vec<Bookmark>,
     deleted_tags: HashSet<String>,
     deleted_exit_modes: HashSet<String>,
-    deleted_bookmarks: HashSet<String>,
     /// Tag usage statistics (global + per-language).
     usage_stats: TagUsageStats,
 }
@@ -594,10 +435,8 @@ impl UserConfig {
         Self {
             tags: config::load_tags(),
             exit_modes,
-            bookmarks: config::load_bookmarks(),
             deleted_tags: HashSet::new(),
             deleted_exit_modes: HashSet::new(),
-            deleted_bookmarks: HashSet::new(),
             usage_stats: config::load_tag_usage(),
         }
     }
@@ -614,14 +453,11 @@ impl UserConfig {
         let mut disk_exit_modes = config::load_exit_modes();
         let disk_commands = config::discover_commands();
         disk_exit_modes.extend(disk_commands);
-        let disk_bookmarks = config::load_bookmarks();
 
         // Merge: add new items from disk that aren't already in memory and weren't deleted
         self.tags = Self::merge_for_reload(&self.tags, disk_tags, &self.deleted_tags);
         self.exit_modes =
             Self::merge_for_reload(&self.exit_modes, disk_exit_modes, &self.deleted_exit_modes);
-        self.bookmarks =
-            Self::merge_for_reload(&self.bookmarks, disk_bookmarks, &self.deleted_bookmarks);
     }
 
     /// Merge memory and disk collections: memory wins, new disk items added, deleted items excluded.
@@ -651,10 +487,8 @@ impl UserConfig {
         Self {
             tags: Vec::new(),
             exit_modes: Vec::new(),
-            bookmarks: Vec::new(),
             deleted_tags: HashSet::new(),
             deleted_exit_modes: HashSet::new(),
-            deleted_bookmarks: HashSet::new(),
             usage_stats: TagUsageStats::default(),
         }
     }
@@ -757,61 +591,14 @@ impl UserConfig {
         self.exit_modes.extend(modes);
     }
 
-    /// Get all bookmarks.
-    pub fn bookmarks(&self) -> &[Bookmark] {
-        &self.bookmarks
-    }
-
-    /// Get a bookmark by ID or prefix.
-    ///
-    /// Returns `Some(bookmark)` if exactly one bookmark matches the prefix,
-    /// `None` if no match or ambiguous (multiple matches).
-    pub fn get_bookmark(&self, id_prefix: &str) -> Option<&Bookmark> {
-        let matches: Vec<_> = self
-            .bookmarks
-            .iter()
-            .filter(|b| b.id.starts_with(id_prefix))
-            .collect();
-
-        match matches.len() {
-            1 => Some(matches[0]),
-            _ => None, // Ambiguous or not found
-        }
-    }
-
-    /// Insert or update a bookmark, then save to disk.
-    pub fn upsert_bookmark(&mut self, bookmark: Bookmark) {
-        if let Some(existing) = self.bookmarks.iter_mut().find(|b| b.id == bookmark.id) {
-            *existing = bookmark;
-        } else {
-            self.bookmarks.push(bookmark);
-        }
-        let _ = config::save_bookmarks(&self.bookmarks, &self.deleted_bookmarks);
-    }
-
-    /// Delete a bookmark by ID, then save to disk.
-    pub fn delete_bookmark(&mut self, id: &str) -> bool {
-        let len_before = self.bookmarks.len();
-        self.bookmarks.retain(|b| b.id != id);
-        if self.bookmarks.len() < len_before {
-            self.deleted_bookmarks.insert(id.to_string());
-            let _ = config::save_bookmarks(&self.bookmarks, &self.deleted_bookmarks);
-            true
-        } else {
-            false
-        }
-    }
-
     /// Create config with specific tags and exit modes (for testing).
     #[cfg(test)]
     pub fn with_data(tags: Vec<Tag>, exit_modes: Vec<ExitMode>) -> Self {
         Self {
             tags,
             exit_modes,
-            bookmarks: Vec::new(),
             deleted_tags: HashSet::new(),
             deleted_exit_modes: HashSet::new(),
-            deleted_bookmarks: HashSet::new(),
             usage_stats: TagUsageStats::default(),
         }
     }
@@ -851,8 +638,6 @@ pub struct ContentResponse {
     pub metadata: ContentMetadata,
     /// Whether image paste is allowed (MCP mode only).
     pub allows_image_paste: bool,
-    /// All bookmarks for @ autocomplete.
-    pub bookmarks: Vec<Bookmark>,
 }
 
 // Render functions moved to crate::markdown (render_line, render_inline)
@@ -1258,7 +1043,6 @@ impl AppState {
             session_comment: self.session.comment.clone(),
             metadata: self.content.metadata.clone(),
             allows_image_paste: self.content.source.allows_image_paste(),
-            bookmarks: self.config.bookmarks().to_vec(),
         }
     }
 

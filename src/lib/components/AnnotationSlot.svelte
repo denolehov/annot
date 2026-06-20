@@ -25,7 +25,7 @@
    * Handles the conditional rendering, keying, and prop threading for annotations
    * in Portal, CodeBlock, Table, and regular line contexts.
    *
-   * Uses context for: annotations, interaction, tags, bookmarks, allowsImagePaste, getOriginalLinesForRange
+   * Uses context for: annotations, interaction, tags, allowsImagePaste, getOriginalLinesForRange
    */
   import AnnotationEditor from '$lib/AnnotationEditor.svelte';
   import { keyToRange } from '$lib/range';
@@ -55,7 +55,6 @@
       }}
       {onDismiss}
       tags={ctx.tags}
-      bookmarks={ctx.bookmarks.all}
       annotationEntries={ctx.annotations.allEntries()}
       allowsImagePaste={ctx.allowsImagePaste}
       {onImagePasteBlocked}

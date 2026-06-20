@@ -8,25 +8,10 @@ TAGS:
   [# SECURITY] Review for security vulnerabilities
   [# TODO] Action item for follow-up
 
-BOOKMARKS:
-  [BOOKMARK new] error-handler (this session)
-  [BOOKMARK old] auth-validation
-    Source: src/auth.rs
-    Project: /projects/myapp
-    Created: 2026-02-16
-────────────────────────────────────
-    fn validate_token(token: &str) -> Result<User, AuthError> {
-        // validation logic
-    }
-────────────────────────────────────
-
-
 GENERAL:
   Overall code review feedback.
   
   [# PERF] Watch for N+1 queries in the data layer.
-  
-  See also: [BOOKMARK new] for error handling patterns.
 
 NEXT: Apply with Changes — Apply the code but incorporate the suggested modifications
 
@@ -37,7 +22,7 @@ src/main.rs:10-12
 >  10 |     line 10 content
 >  11 |     line 11 content
 >  12 |     line 12 content
-      └──> [# SECURITY] This authentication logic needs review. See [BOOKMARK old] for context.
+      └──> [# SECURITY] This authentication logic needs review.
 
 ---
 
@@ -57,7 +42,7 @@ src/main.rs:40-42
 >  40 |     line 40 content
 >  41 |     line 41 content
 >  42 |     line 42 content
-      └──> [# TODO] Cross-reference: see [ANNOTATION L10-12] and @ref:file:src/handlers/api.rs. Also related to [BOOKMARK new]
+      └──> [# TODO] Cross-reference: see [ANNOTATION L10-12] and @ref:file:src/handlers/api.rs.
 
 ---
 

@@ -6,7 +6,6 @@ import type { useAnnotations } from '$lib/composables/useAnnotations.svelte';
 import type { useExitModes } from '$lib/composables/useExitModes.svelte';
 import type { useSearch } from '$lib/composables/useSearch.svelte';
 import type { useMermaid } from '$lib/composables/useMermaid.svelte';
-import type { useBookmarks } from '$lib/composables/useBookmarks.svelte';
 
 /**
  * AnnotContext - Shared state and utilities for annot components.
@@ -21,7 +20,6 @@ export interface AnnotContext {
   exitModes: ReturnType<typeof useExitModes>;
   search: ReturnType<typeof useSearch>;
   mermaid: ReturnType<typeof useMermaid>;
-  bookmarks: ReturnType<typeof useBookmarks>;
 
   // Derived values (computed once in provider)
   readonly selection: Range | null;

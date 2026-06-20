@@ -136,7 +136,7 @@ claude mcp add --scope user annot annot mcp
 Make sure `annot.exe` is on your `PATH` first (see build instructions above), or pass
 the full path: `claude mcp add --scope user annot "C:\path\to\annot.exe" mcp`.
 
-Claude now has review tools (`review_file`, `review_diff`, `review_content`) and bookmark tools (`get_bookmark`, `list_bookmarks`). Ask it to review something and a window opens for your feedback.
+Claude now has review tools (`review_file`, `review_diff`, `review_content`). Ask it to review something and a window opens for your feedback.
 
 ### Standalone
 
@@ -193,7 +193,6 @@ Press `Shift+C` to add comments that apply to the entire review — framing cont
 - **Syntax highlighting** for 50+ languages
 - **Mermaid diagrams** rendered inline
 - **Portal links** — embed live code from other files
-- **Bookmarks** — save and recall annotations across sessions
 - **`/excalidraw`** — draw diagrams inside annotations
 - **`/replace`** — propose inline code changes
 
@@ -225,21 +224,6 @@ Press `Shift+C` to add comments that apply to the entire review — framing cont
 | `label` | string | yes | Display name with .md extension |
 | `exit_modes` | array | no | Ephemeral exit modes for this session |
 
-### `get_bookmark`
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `id` | string | yes | Full or prefix bookmark ID |
-
-### `list_bookmarks`
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `limit` | number | no | Maximum number of bookmarks to return |
-| `search` | string | no | Filter by label, selected text, or context |
-| `project` | string | no | Filter by project path |
-| `sort` | string | no | Sort order: "asc" (default) or "desc" |
-
 ## Keyboard shortcuts
 
 | Shortcut | Function |
@@ -248,8 +232,6 @@ Press `Shift+C` to add comments that apply to the entire review — framing cont
 | Shift+Drag | Select range |
 | c | Comment hovered line |
 | Shift+C | Session context (global comment) |
-| b | Bookmark hovered line or selection |
-| Shift+B | Bookmark entire session |
 | Tab / Shift+Tab | Cycle exit modes |
 | Alt+Tab | Exit mode picker |
 | : | Command palette |
@@ -262,7 +244,7 @@ Press `Shift+C` to add comments that apply to the entire review — framing cont
 | Shortcut | Function |
 |---|---|
 | # | Insert tag |
-| @ | Reference (annotations, bookmarks, sections) |
+| @ | Reference (annotations, sections, files) |
 | / | Slash commands (/replace, /excalidraw) |
 
 ## License

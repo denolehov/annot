@@ -5,8 +5,8 @@
    *
    * ⚠️ SYNC WARNING: This component uses <tr>/<td> structure instead of <div>/<span>,
    * so it cannot use LineRow.svelte. When LineRow is modified (especially for:
-   * selection state, bookmark support, event handlers, new CSS classes), check if
-   * equivalent changes are needed here.
+   * selection state, event handlers, new CSS classes), check if equivalent
+   * changes are needed here.
    */
   import type { Snippet } from 'svelte';
   import type { Line } from '$lib/types';
@@ -17,18 +17,14 @@
   } from '$lib/utils/tableParser';
   import { getAnnotContext } from '$lib/context';
   import { highlightMatches, clearHighlights } from '$lib/search-highlight';
-  import ChoiceButtons from '$lib/components/ChoiceButtons.svelte';
   import Icon from '$lib/CommandPalette/Icon.svelte';
 
   interface Props {
     lines: Array<{ line: Line; displayIndex: number }>;
-    isLineBookmarked?: (displayIdx: number) => boolean;
-    isFirstLineOfBookmark?: (displayIdx: number) => boolean;
-    deleteBookmarkAtLine?: (displayIdx: number) => void;
     annotationSlot: Snippet<[displayIndex: number, rangeKey: string | null]>;
   }
 
-  let { lines, isLineBookmarked, isFirstLineOfBookmark, deleteBookmarkAtLine, annotationSlot }: Props = $props();
+  let { lines, annotationSlot }: Props = $props();
 
   const ctx = getAnnotContext();
 
@@ -173,21 +169,6 @@
   let firstDisplayIndex = $derived(visibleLines[0]?.displayIndex ?? -1);
   let lastDisplayIndex = $derived(visibleLines[visibleLines.length - 1]?.displayIndex ?? -1);
 
-  // Check if choice buttons should show for a given display index
-  function shouldShowChoiceButtons(displayIdx: number): boolean {
-    if (!ctx.interaction.pendingChoice || ctx.interaction.range === null) return false;
-    const rangeEnd = Math.max(ctx.interaction.range.start, ctx.interaction.range.end);
-    return displayIdx === rangeEnd;
-  }
-
-  function handleChooseAnnotate() {
-    ctx.interaction.confirmChoice('annotate');
-  }
-
-  function handleChooseBookmark() {
-    ctx.interaction.confirmChoice('bookmark');
-  }
-
   let copied = $state(false);
 
   async function handleCopyTable() {
@@ -221,7 +202,6 @@
           {@const isHeader = isHeaderRow(lineIndex)}
           {@const isFirst = displayIndex === firstDisplayIndex}
           {@const isLast = displayIndex === lastDisplayIndex}
-          {@const bookmarked = isLineBookmarked?.(displayIndex)}
 
           {@const isPreview = ctx.interaction.isLinePreview(displayIndex)}
           <tr
@@ -229,7 +209,6 @@
             class:selected={isSelected(displayIndex)}
             class:annotated={hasAnnotation(displayIndex)}
             class:preview={isPreview}
-            class:bookmarked
             class:table-header-row={isHeader}
             class:table-first-row={isFirst}
             class:table-last-row={isLast}
@@ -280,15 +259,6 @@
               <td class="gutter-cell annotation-gutter"></td>
               <td colspan={columnCount - 1} class="annotation-cell">
                 {@render annotationSlot(displayIndex, rangeKey)}
-              </td>
-            </tr>
-          {/if}
-
-          {#if shouldShowChoiceButtons(displayIndex)}
-            <tr class="choice-buttons-row">
-              <td class="gutter-cell"></td>
-              <td colspan={columnCount - 1} class="choice-buttons-cell">
-                <ChoiceButtons onAnnotate={handleChooseAnnotate} onBookmark={handleChooseBookmark} />
               </td>
             </tr>
           {/if}
@@ -496,35 +466,6 @@
   /* Show add button on preview rows (hover state) */
   .content-row.preview .add-btn {
     display: flex;
-  }
-
-  /* Bookmarked rows - border + background tint (no icon, tables are dense enough) */
-  .content-row.bookmarked .gutter-cell::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 3px;
-    background: var(--bookmark-color, #ef4444);
-    z-index: 5;
-  }
-
-  .content-row.bookmarked .gutter-cell,
-  .content-row.bookmarked .table-cell {
-    background-color: color-mix(in srgb, var(--bookmark-color, #ef4444) 8%, transparent);
-  }
-
-  /* Choice buttons row */
-  .choice-buttons-row {
-    background:
-      var(--chip-pattern-bg),
-      var(--bg-code-block);
-    background-size: var(--chip-pattern-size), auto;
-  }
-
-  .choice-buttons-cell {
-    padding: 4px 0 4px 8px;
   }
 
   /* Table copy button - top right, always visible */

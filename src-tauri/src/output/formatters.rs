@@ -6,9 +6,7 @@
 use std::collections::BTreeMap;
 
 use crate::mcp::tools::SessionImage;
-use crate::state::{
-    Annotation, Bookmark, ContentMetadata, ContentModel, LineOrigin,
-};
+use crate::state::{Annotation, ContentMetadata, ContentModel, LineOrigin};
 
 use super::builder::{BuilderMode, OutputBuilder};
 use super::render::render_content;
@@ -18,36 +16,6 @@ use super::OutputMode;
 pub fn format_legend(out: &mut OutputBuilder, tags: &BTreeMap<String, String>) {
     for (name, instruction) in tags {
         out.line(&format!("[# {}] {}", name, instruction));
-    }
-}
-
-/// Format a single bookmark entry.
-pub fn format_bookmark(out: &mut OutputBuilder, bookmark: &Bookmark, created_this_session: bool) {
-    let short_id = &bookmark.id[..bookmark.id.len().min(3)];
-    let display_label = bookmark.display_label();
-
-    if created_this_session {
-        // Condensed: created this session, agent already has context
-        out.line(&format!(
-            "[BOOKMARK {}] {} (this session)",
-            short_id, display_label
-        ));
-    } else {
-        // Full: pre-existing bookmark, emit full context
-        out.line(&format!("[BOOKMARK {}] {}", short_id, display_label));
-        out.indented(|b| {
-            b.field("Source", &bookmark.snapshot.source_title());
-            if let Some(ref project) = bookmark.project_path {
-                b.field("Project", &project.display().to_string());
-            }
-            b.field("Created", &bookmark.created_at.format("%Y-%m-%d").to_string());
-            b.separator();
-            for line in bookmark.snapshot.content().lines() {
-                b.line(line);
-            }
-            b.separator();
-        });
-        out.blank_line();
     }
 }
 

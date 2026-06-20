@@ -27,7 +27,6 @@
   import { useMermaid } from "$lib/composables/useMermaid.svelte";
   import { useLineSegments } from "$lib/composables/useLineSegments.svelte";
   import { useSearch } from "$lib/composables/useSearch.svelte";
-  import { useBookmarks } from "$lib/composables/useBookmarks.svelte";
   import { useOverlay } from "$lib/composables/useOverlay.svelte";
   import { useHistory, emptySessionData, type SessionData } from "$lib/composables/useHistory.svelte";
   import SearchBar from "$lib/components/SearchBar.svelte";
@@ -62,12 +61,6 @@
   let toastMessage = $state<string | null>(null);
   let toastExiting = $state(false);
   let toastTimeout: ReturnType<typeof setTimeout> | null = null;
-
-  // Bookmark ID to edit when opening command palette (set by e key, cleared after use)
-  let editBookmarkId = $state<string | null>(null);
-
-  // Bookmarks composable (initialized in onMount after data is loaded)
-  let bookmarkState: ReturnType<typeof useBookmarks> | null = $state(null);
 
   function showToast(message: string, duration = 3000) {
     if (toastTimeout) clearTimeout(toastTimeout);
@@ -177,13 +170,6 @@
   const interaction = useInteraction({
     isLineSelectable,
     constrainToBounds: selectionBounds.constrainToSelectionBounds,
-    onImmediateBookmark: async (context) => {
-      // Called when 'b' was held during drag — create bookmark immediately
-      if (!bookmarkState) return;
-      await bookmarkState.toggleSelection(context.start, context.end);
-      const shortId = bookmarkState.lastCreatedId?.slice(0, 3) ?? '';
-      showToast(`Bookmarked as ${shortId} · [e] edit`);
-    },
   });
 
   // Annotation state (composable)
@@ -377,86 +363,12 @@
     showToast(`Saved to ${response.saved_path}`);
   }
 
-  // Bookmark toggle handler
-  async function handleToggleBookmark() {
-    if (!bookmarkState) return;
-    const wasBookmarked = bookmarkState.isSessionBookmarked;
-    await bookmarkState.toggleSession();
-    if (wasBookmarked) {
-      showToast('Bookmark removed');
-    } else {
-      const shortId = bookmarkState.lastCreatedId?.slice(0, 3) ?? '';
-      showToast(`Bookmarked as ${shortId} · [e] edit`);
-    }
-  }
-
-  // Create or toggle selection bookmark handler
-  async function handleCreateSelectionBookmark(context: { start: number; end: number }) {
-    if (!bookmarkState) return;
-    const existing = bookmarkState.findByLineRange(context.start, context.end);
-    await bookmarkState.toggleSelection(context.start, context.end);
-    if (existing) {
-      showToast('Bookmark removed');
-    } else {
-      const shortId = bookmarkState.lastCreatedId?.slice(0, 3) ?? '';
-      showToast(`Bookmarked as ${shortId} · [e] edit`);
-    }
-  }
-
-  // Check if a display index is in any bookmarked range
-  function isLineBookmarked(displayIdx: number): boolean {
-    return bookmarkState?.isLineInBookmarkedRange(displayIdx) ?? false;
-  }
-
-  // Check if a display index is the first line of any bookmark
-  function isFirstLineOfBookmark(displayIdx: number): boolean {
-    return bookmarkState?.isFirstLineOfBookmark(displayIdx) ?? false;
-  }
-
-  // Delete bookmark by display index (for inline delete button)
-  function deleteBookmarkAtLine(displayIdx: number): void {
-    const id = bookmarkState?.getBookmarkIdAtStart(displayIdx);
-    if (id) {
-      bookmarkState?.delete(id);
-      showToast('Bookmark removed');
-    }
-  }
-
-  // Edit last created bookmark handler
-  function handleEditLastBookmark() {
-    if (bookmarkState?.lastCreatedId) {
-      editBookmarkId = bookmarkState.lastCreatedId;
-      overlay.openCommandPalette();
-    }
-  }
-
   // CommandPalette handlers
   function handleCommandPaletteClose() {
     overlay.close();
     // Clear pending states
     pendingTagCreation = null;
-    editBookmarkId = null;
     commandPaletteInitialState = undefined;
-  }
-
-  async function handleBookmarkDeleted(id: string) {
-    // Composable handles all state updates
-    await bookmarkState?.delete(id);
-  }
-
-  async function handleBookmarkUpdated(id: string, label: string) {
-    // Capture before await (onClose may clear editBookmarkId while we await)
-    const wasEditTriggered = editBookmarkId === id;
-
-    // Composable handles state update
-    await bookmarkState?.update(id, label);
-
-    // Show toast if edit was triggered via 'e' key
-    if (wasEditTriggered) {
-      const shortId = id.slice(0, 3);
-      const displayLabel = label ? `"${label}"` : '(no label)';
-      showToast(`${shortId} → ${displayLabel}`);
-    }
   }
 
   // Handle events from CommandPalette (e.g., theme change)
@@ -663,9 +575,6 @@
       onCloseWindow: () => getCurrentWindow().close(),
       onOpenSearch: () => search.open(),
       onOpenHelp: () => overlay.openHelp(),
-      onCreateSessionBookmark: handleToggleBookmark,
-      onCreateSelectionBookmark: handleCreateSelectionBookmark,
-      onEditLastBookmark: handleEditLastBookmark,
       onZoomIn: () => contentZoom = Math.min(contentZoom + 0.1, 3.0),
       onZoomOut: () => contentZoom = Math.max(contentZoom - 0.1, 0.5),
       onZoomReset: () => contentZoom = 1.0,
@@ -678,9 +587,6 @@
           interaction.openEditor({ kind: 'annotation', rangeKey });
         }
       },
-      onDragModifierPress: (key) => interaction.setDragModifier(key),
-      onConfirmChoice: (action) => interaction.confirmChoice(action),
-      onCancelChoice: () => interaction.cancelChoice(),
     },
     {
       isEditorActive: () => interaction.phase === 'editing',
@@ -691,11 +597,6 @@
       hasHoveredLine: () => interaction.hoverLine !== null,
       hasExitModes: () => exitModeState.modes.length > 0,
       isHoveredLineSelectable: () => interaction.hoverLine !== null && isLineSelectable(interaction.hoverLine),
-      hasLastCreatedBookmark: () => !!bookmarkState?.lastCreatedId,
-      getBookmarkContext: () => interaction.getBookmarkContext(),
-      getPhase: () => interaction.phase,
-      isShiftHeld: () => interaction.isShiftHeld,
-      isPendingChoice: () => interaction.pendingChoice,
     }
   );
 
@@ -710,7 +611,6 @@
       label = res.label;
       lines = res.lines;
       tags = res.tags;
-      bookmarkState = useBookmarks(res.bookmarks);
       exitModeState.initialize(res.exit_modes, res.selected_exit_mode_id);
       metadata = res.metadata;
       allowsImagePaste = res.allows_image_paste;
@@ -793,7 +693,6 @@
         const snapshot = await invoke<ConfigSnapshot>('reload_config');
         tags = snapshot.tags;
         exitModeState.setModes(snapshot.exit_modes);
-        bookmarkState?.reloadFromSnapshot(snapshot.bookmarks);
       } catch {
         // Ignore errors - reload is best-effort
       }
@@ -808,7 +707,7 @@
 <main class="viewer" style:--mode-color={exitModeState.selectedMode?.color ?? 'transparent'}>
   {#if error}
     <div class="error">{error}</div>
-  {:else if !bookmarkState || lines.length === 0}
+  {:else if lines.length === 0}
     <div class="loading">Loading...</div>
   {:else}
   <AnnotProvider
@@ -822,7 +721,6 @@
     exitModes={exitModeState}
     {search}
     {mermaid}
-    bookmarks={bookmarkState}
     {showToast}
     {isLineSelectable}
     {getOriginalLinesForRange}
@@ -838,7 +736,6 @@
       hasSessionComment={sessionComment !== undefined}
       onOpenSessionEditor={openSessionEditor}
       onOpenSaveModal={openSaveModal}
-      onCreateBookmark={handleToggleBookmark}
       zoomLevel={contentZoom}
     />
     <div style:zoom={contentZoom}>
@@ -877,7 +774,7 @@
       >
       {#each lineSegmentation.segments as segment}
         {#if segment.type === 'portal'}
-          <Portal lines={segment.lines} {isLineBookmarked} {isFirstLineOfBookmark} {deleteBookmarkAtLine}>
+          <Portal lines={segment.lines}>
             {#snippet annotationSlot(displayIndex, rangeKey)}
               <AnnotationSlot {rangeKey} {...annotationSlotProps} />
             {/snippet}
@@ -896,9 +793,6 @@
             lines={segment.lines}
             language={segment.language}
             color={segment.color}
-            {isLineBookmarked}
-            {isFirstLineOfBookmark}
-            {deleteBookmarkAtLine}
             onMermaidOpen={mermaidBlock && !mermaidError ? () => mermaid.openMermaidWindow(mermaidBlock) : undefined}
             onExcalidrawOpen={mermaidBlock ? () => openExcalidrawFromMermaid(
               mermaidBlock,  // source block for content extraction
@@ -913,7 +807,7 @@
             {/snippet}
           </CodeBlock>
         {:else if segment.type === 'table'}
-          <Table lines={segment.lines} {isLineBookmarked} {isFirstLineOfBookmark} {deleteBookmarkAtLine}>
+          <Table lines={segment.lines}>
             {#snippet annotationSlot(displayIndex, rangeKey)}
               <AnnotationSlot {rangeKey} {...annotationSlotProps} />
             {/snippet}
@@ -926,9 +820,6 @@
         {:else}
           <RegularLines
             lines={segment.lines}
-            {isLineBookmarked}
-            {isFirstLineOfBookmark}
-            {deleteBookmarkAtLine}
             {annotationSlotProps}
           />
         {/if}
@@ -948,25 +839,20 @@
   <SearchBar {search} />
 </div>
 
-{#if overlay.isCommandPaletteOpen() && bookmarkState}
+{#if overlay.isCommandPaletteOpen()}
   <CommandPalette
     {tags}
-    bookmarks={bookmarkState.all}
     exitModes={exitModeState.modes}
     zoomLevel={contentZoom}
     onClose={handleCommandPaletteClose}
     onSetExitMode={handleSetExitModeFromPalette}
     onTagsChange={handleTagsChange}
     onExitModesChange={handleExitModesChange}
-    onBookmarkDeleted={handleBookmarkDeleted}
-    onBookmarkUpdated={handleBookmarkUpdated}
     {showToast}
     onOpenSaveModal={openSaveModal}
     initialState={pendingTagCreation
       ? { namespace: 'tags', mode: 'create', prefill: { instruction: pendingTagCreation.text } }
-      : editBookmarkId
-        ? { namespace: 'bookmarks', mode: 'edit', itemId: editBookmarkId }
-        : commandPaletteInitialState}
+      : commandPaletteInitialState}
     onItemCreated={handleItemCreated}
     onEvent={handleCommandPaletteEvent}
   />

@@ -4,12 +4,11 @@
   import { invoke } from '@tauri-apps/api/core';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { reduce, computeItemList } from './engine/reducer';
-  import { createQueryContext, setTagItems, setExitModeItems, setBookmarkItems, bookmarkToItem, saveTagItem, deleteTagItem, saveExitModeItem, deleteExitModeItem, saveBookmarkItem, deleteBookmarkItem, reorderExitModeItems, generateTagId, generateExitModeId, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId } from './namespaces';
+  import { createQueryContext, setTagItems, setExitModeItems, saveTagItem, deleteTagItem, saveExitModeItem, deleteExitModeItem, reorderExitModeItems, generateTagId, generateExitModeId, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId } from './namespaces';
   import type { State, Action, Command, Item, Namespace, InitialState } from './engine/types';
   import { getFilterPlaceholder, canDelete, isItemEditable } from './engine/types';
-  import type { Tag, ExitMode, Bookmark } from '$lib/types';
+  import type { Tag, ExitMode } from '$lib/types';
   import Icon from './Icon.svelte';
-  import BookmarkEditView from './BookmarkEditView.svelte';
 
   // Config type matching Rust
   interface Config {
@@ -21,14 +20,11 @@
   interface Props {
     tags: Tag[];
     exitModes: ExitMode[];
-    bookmarks: Bookmark[];
     zoomLevel?: number;
     onClose: () => void;
     onSetExitMode: (modeId: string) => void;
     onTagsChange?: (tags: Tag[]) => void;
     onExitModesChange?: (modes: ExitMode[]) => void;
-    onBookmarkDeleted?: (id: string) => void;
-    onBookmarkUpdated?: (id: string, label: string) => void;
     showToast?: (message: string) => void;
     onOpenSaveModal?: () => void;
     initialState?: InitialState;
@@ -36,7 +32,7 @@
     onEvent?: (event: string, payload: unknown) => void;
   }
 
-  let { tags, exitModes, bookmarks, zoomLevel = 1, onClose, onSetExitMode, onTagsChange, onExitModesChange, onBookmarkDeleted, onBookmarkUpdated, showToast, onOpenSaveModal, initialState, onItemCreated, onEvent }: Props = $props();
+  let { tags, exitModes, zoomLevel = 1, onClose, onSetExitMode, onTagsChange, onExitModesChange, showToast, onOpenSaveModal, initialState, onItemCreated, onEvent }: Props = $props();
 
   // Convert domain types to Item format
   function tagToItem(tag: Tag): Item {
@@ -69,10 +65,6 @@
 
   $effect(() => {
     setExitModeItems(exitModes.map(exitModeToItem));
-  });
-
-  $effect(() => {
-    setBookmarkItems(bookmarks.map(bookmarkToItem));
   });
 
   // State machine
@@ -164,11 +156,6 @@
             const orig = exitModes.find((m) => m.id === i.id);
             return itemToExitMode(i, orig);
           }));
-        } else if (cmd.namespace === 'bookmarks') {
-          saveBookmarkItem(cmd.item);
-          onBookmarkUpdated?.(cmd.item.id, cmd.item.values.label || cmd.item.name);
-          // Force state update to trigger itemListData recompute
-          machineState = { ...machineState };
         }
         break;
       }
@@ -183,9 +170,6 @@
             const orig = exitModes.find((m) => m.id === i.id);
             return itemToExitMode(i, orig);
           }));
-        } else if (cmd.namespace === 'bookmarks') {
-          deleteBookmarkItem(cmd.itemId);
-          onBookmarkDeleted?.(cmd.itemId);
         }
         inputEl?.focus();
         break;
@@ -704,7 +688,7 @@
     </div>
 
   {:else if machineState.type === 'EDIT_FORM' || machineState.type === 'CREATE_FORM'}
-    <!-- Header row (shared between bookmark and generic forms) -->
+    <!-- Header row -->
     <div class="input-row">
       <span class="search-icon"><Icon name={machineState.type === 'CREATE_FORM' ? 'plus' : 'edit'} /></span>
       <span class="ns-prefix"><Icon name={getNamespaceIcon(machineState.namespace)} /> {machineState.namespace.label}</span>
@@ -712,22 +696,9 @@
       <span class="mode-prefix">{machineState.type === 'CREATE_FORM' ? 'New' : 'Edit'}</span>
     </div>
 
-    {#if machineState.type === 'EDIT_FORM' && machineState.namespace.id === 'bookmarks'}
-      <!-- Bookmark-specific edit view with context/metadata -->
-      {@const editState = machineState}
-      {@const fullBookmark = bookmarks.find(b => b.id === editState.item.id)}
-      {#if fullBookmark}
-        <BookmarkEditView
-          bookmark={fullBookmark}
-          labelValue={machineState.values.label || ''}
-          focusedField={machineState.focusedField}
-          pendingDelete={machineState.pendingDelete}
-        />
-      {/if}
-    {:else}
-      <!-- Generic form rendering -->
-      <div class="form-view" class:pending-delete={machineState.type === 'EDIT_FORM' && machineState.pendingDelete}>
-        <form>
+    <!-- Generic form rendering -->
+    <div class="form-view" class:pending-delete={machineState.type === 'EDIT_FORM' && machineState.pendingDelete}>
+      <form>
           {#each machineState.namespace.fields as field, i}
             <div class="field" class:focused={machineState.focusedField === i}>
               <label for={field.key}>{field.label}</label>
@@ -760,7 +731,6 @@
           {/each}
         </form>
       </div>
-    {/if}
   {/if}
 
   <!-- Footer with keyboard hints -->

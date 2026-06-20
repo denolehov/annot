@@ -34,9 +34,9 @@ const actionOnlyNamespace: Namespace = {
 };
 
 const noCreateNamespace: Namespace = {
-  id: 'bookmarks',
-  label: 'Bookmarks',
-  icon: 'bookmark',
+  id: 'saved-items',
+  label: 'Saved Items',
+  icon: 'hashtag',
   ItemComponent: MockItemComponent,
   fields: [{ key: 'label', label: 'Label', type: 'text' }],
   capabilities: { create: false },

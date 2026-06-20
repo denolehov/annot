@@ -1,7 +1,6 @@
 <script lang="ts">
   import CopyDropdown from '$lib/CopyDropdown.svelte';
   import Icon from '$lib/CommandPalette/Icon.svelte';
-  import { BookmarkIcon } from '$lib/icons';
   import { getAnnotContext } from '$lib/context';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import type { DiffFileInfo, HunkInfo, SectionInfo } from '$lib/types';
@@ -16,7 +15,6 @@
     hasSessionComment: boolean;
     onOpenSessionEditor: () => void;
     onOpenSaveModal: () => void;
-    onCreateBookmark: () => void;
     zoomLevel: number;
   }
 
@@ -30,14 +28,12 @@
     hasSessionComment,
     onOpenSessionEditor,
     onOpenSaveModal,
-    onCreateBookmark,
     zoomLevel
   }: Props = $props();
 
   const ctx = getAnnotContext();
   const metadata = $derived(ctx.metadata);
   const showToast = ctx.showToast;
-  const isBookmarked = $derived(ctx.bookmarks.isSessionBookmarked);
 
   const diffMetadata = $derived(metadata.type === 'diff' ? metadata : null);
   const markdownMetadata = $derived(metadata.type === 'markdown' ? metadata : null);
@@ -120,9 +116,6 @@
     {#if zoomLevel !== 1.0}
       <span class="zoom-indicator">{Math.round(zoomLevel * 100)}%</span>
     {/if}
-    <button class="header-btn bookmark-btn" class:bookmarked={isBookmarked} onclick={onCreateBookmark} title="Bookmark session (b)">
-      <BookmarkIcon filled={isBookmarked} />
-    </button>
     <CopyDropdown {showToast} />
     <button class="header-btn" onclick={onOpenSaveModal} title="Save to file (Cmd+S)">
       <Icon name="save" />
@@ -136,10 +129,6 @@
 </header>
 
 <style>
-  .bookmark-btn.bookmarked {
-    color: #ef4444;
-  }
-
   .close-btn {
     font-size: 16px;
     line-height: 1;

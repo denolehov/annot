@@ -8,9 +8,8 @@
   import { useAnnotationEditor, type AnnotationEntry } from './composables';
   import { trimContent, isContentEmpty } from './tiptap';
   import type { RefSuggestionItem } from './tiptap/extensions';
-  import type { Tag, Bookmark } from './types';
+  import type { Tag } from './types';
   import Icon from './CommandPalette/Icon.svelte';
-  import { BookmarkIcon } from './icons';
   import { getAnnotContext } from './context/annot-context.svelte';
 
   interface NodeRef {
@@ -106,7 +105,6 @@
     onUnseal?: () => void;
     onDismiss?: () => void;
     tags?: Tag[];
-    bookmarks?: Bookmark[];
     annotationEntries?: Record<string, AnnotationEntry>;
     allowsImagePaste?: boolean;
     onImagePasteBlocked?: () => void;
@@ -116,7 +114,7 @@
     getOriginalLines?: () => string; // Returns original lines content for /replace
   }
 
-  let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], bookmarks = [], annotationEntries = {}, allowsImagePaste = false, onImagePasteBlocked, onRequestCreateTag, pendingTagInsertion, rangeKey = '', getOriginalLines }: Props = $props();
+  let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], annotationEntries = {}, allowsImagePaste = false, onImagePasteBlocked, onRequestCreateTag, pendingTagInsertion, rangeKey = '', getOriginalLines }: Props = $props();
 
   // Get zoom level from context for floating elements
   const ctx = getAnnotContext();
@@ -135,7 +133,6 @@
     getContent: () => content,
     getSealed: () => sealed,
     getTags: () => tags,
-    getBookmarks: () => bookmarks,
     getAnnotationEntries: () => annotationEntries,
     getCurrentRangeKey: () => rangeKey,
     getAllowsImagePaste: () => allowsImagePaste,
@@ -590,22 +587,6 @@
           <Icon name="chat-bubble" class="ref-icon" />
           <span class="ref-primary">L{item.key}</span>
           <span class="ref-secondary">{item.preview || '(empty)'}</span>
-        </button>
-      {:else if item.type === 'bookmark'}
-        {@const displayLabel = item.bookmark.label ?? (item.bookmark.snapshot.type === 'selection' ? item.bookmark.snapshot.selected_text : item.bookmark.snapshot.source_title)}
-        {@const dateStr = new Date(item.bookmark.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-        <button
-          type="button"
-          class="ref-suggestion"
-          class:selected={idx === ann.refSuggestion.selectedIndex}
-          onmousedown={(e) => {
-            e.preventDefault();
-            ann.selectRefItem(item);
-          }}
-        >
-          <BookmarkIcon filled class="ref-icon ref-icon-bookmark" />
-          <span class="ref-primary">{displayLabel}</span>
-          <span class="ref-secondary">{item.bookmark.snapshot.source_title} · {dateStr}</span>
         </button>
       {:else if item.type === 'heading'}
         {@const headingIcon = item.section.level === 1 ? 'heading-h1' : item.section.level === 2 ? 'heading-h2' : 'heading-h3'}

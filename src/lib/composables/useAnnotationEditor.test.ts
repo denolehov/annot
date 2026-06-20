@@ -78,7 +78,6 @@ describe('useAnnotationEditor', () => {
     getContent: () => undefined,
     getSealed: () => false,
     getTags: () => [],
-    getBookmarks: () => [],
     getAnnotationEntries: () => ({}),
     getCurrentRangeKey: () => '',
     getAllowsImagePaste: () => true,

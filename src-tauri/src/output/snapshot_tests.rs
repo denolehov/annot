@@ -10,15 +10,13 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
 
-use chrono::{DateTime, Utc};
 use tempfile::NamedTempFile;
 
 use crate::input::{CliSource, ContentSource, DiffSource, McpSource};
 use crate::review::Review;
 use crate::state::{
-    AnnotationRefSnapshot, Annotation, Bookmark, BookmarkSnapshot, ContentMetadata,
-    ContentModel, ContentNode, ExitMode, ExitModeSource, Line, LineOrigin, LineRange,
-    LineSemantics, RefSnapshot, SessionType, UserConfig,
+    AnnotationRefSnapshot, Annotation, ContentMetadata, ContentModel, ContentNode, ExitMode,
+    ExitModeSource, Line, LineOrigin, LineRange, LineSemantics, RefSnapshot, UserConfig,
 };
 
 use super::{format_output, OutputMode};
@@ -616,13 +614,11 @@ fn context_line_whitespace_only() {
 
 /// Comprehensive test that exercises every output feature:
 /// - TAGS section (multiple tags)
-/// - BOOKMARKS section (both "this session" and pre-existing)
 /// - CONTEXT (would need portals, skipped for simplicity)
 /// - GENERAL block (session comment with tags and refs)
 /// - NEXT block (exit mode)
 /// - Multiple annotations with:
 ///   - Tags
-///   - Bookmark references (BookmarkRef and Ref variants)
 ///   - Annotation references
 ///   - File references
 ///   - Replace blocks
@@ -633,9 +629,6 @@ fn context_line_whitespace_only() {
 /// - Saved to path
 #[test]
 fn kitchen_sink_everything() {
-    // Fixed timestamp so the rendered "Created:" date is deterministic.
-    let fixed_created_at: DateTime<Utc> = "2026-02-16T00:00:00Z".parse().unwrap();
-
     let config = UserConfig::with_data(
         vec![], // tags loaded from annotations
         vec![ExitMode {
@@ -648,36 +641,9 @@ fn kitchen_sink_everything() {
         }],
     );
 
-    // Create a pre-existing bookmark (not created this session)
-    let old_bookmark = Bookmark {
-        id: "oldbookmark1".to_string(),
-        label: Some("auth-validation".to_string()),
-        created_at: fixed_created_at,
-        project_path: Some(PathBuf::from("/projects/myapp")),
-        snapshot: BookmarkSnapshot::Selection {
-            source_type: SessionType::File,
-            source_title: "src/auth.rs".to_string(),
-            context: "fn validate_token(token: &str) -> Result<User, AuthError> {\n    // validation logic\n}".to_string(),
-            selected_text: "validate_token".to_string(),
-        },
-    };
-
-    // Create a bookmark from "this session"
-    let new_bookmark = Bookmark {
-        id: "newbookmark2".to_string(),
-        label: Some("error-handler".to_string()),
-        created_at: fixed_created_at,
-        project_path: None,
-        snapshot: BookmarkSnapshot::Session {
-            source_type: SessionType::Content,
-            source_title: "error-handling-plan.md".to_string(),
-            context: "# Error Handling Plan\n\nHandle errors gracefully.".to_string(),
-        },
-    };
-
     let mut annotations = HashMap::new();
 
-    // Annotation 1: Tags + text + bookmark ref (legacy format)
+    // Annotation 1: Tags + text
     annotations.insert(
         LineRange::new(10, 12),
         Annotation {
@@ -690,15 +656,7 @@ fn kitchen_sink_everything() {
                     instruction: "Review for security vulnerabilities".to_string(),
                 },
                 ContentNode::Text {
-                    text: " This authentication logic needs review. See ".to_string(),
-                },
-                ContentNode::BookmarkRef {
-                    id: "oldbookmark1".to_string(),
-                    label: "auth-validation".to_string(),
-                    bookmark: old_bookmark.clone(),
-                },
-                ContentNode::Text {
-                    text: " for context.".to_string(),
+                    text: " This authentication logic needs review.".to_string(),
                 },
             ],
         },
@@ -727,7 +685,7 @@ fn kitchen_sink_everything() {
         },
     );
 
-    // Annotation 3: Annotation ref + file ref + new-style bookmark ref
+    // Annotation 3: Annotation ref + file ref
     annotations.insert(
         LineRange::new(40, 42),
         Annotation {
@@ -760,13 +718,7 @@ fn kitchen_sink_everything() {
                     path: "src/handlers/api.rs".to_string(),
                 },
                 ContentNode::Text {
-                    text: ". Also related to ".to_string(),
-                },
-                ContentNode::Ref {
-                    ref_type: "bookmark".to_string(),
-                    snapshot: RefSnapshot::Bookmark {
-                        bookmark: new_bookmark.clone(),
-                    },
+                    text: ".".to_string(),
                 },
             ],
         },
@@ -826,7 +778,7 @@ fn kitchen_sink_everything() {
         config,
     );
 
-    // Set session comment with tags and bookmark ref
+    // Set session comment with tags
     review.session_comment = Some(vec![
         ContentNode::Text {
             text: "Overall code review feedback.\n\n".to_string(),
@@ -837,20 +789,9 @@ fn kitchen_sink_everything() {
             instruction: "Performance consideration".to_string(),
         },
         ContentNode::Text {
-            text: " Watch for N+1 queries in the data layer.\n\nSee also: ".to_string(),
-        },
-        ContentNode::BookmarkRef {
-            id: "newbookmark2".to_string(),
-            label: "error-handler".to_string(),
-            bookmark: new_bookmark.clone(),
-        },
-        ContentNode::Text {
-            text: " for error handling patterns.".to_string(),
+            text: " Watch for N+1 queries in the data layer.".to_string(),
         },
     ]);
-
-    // Mark new_bookmark as created this session
-    review.session_created_bookmarks.insert("newbookmark2".to_string());
 
     // Set exit mode
     review.selected_exit_mode_id = Some("apply-with-changes".to_string());

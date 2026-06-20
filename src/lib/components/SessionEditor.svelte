@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * SessionEditor - File-level/global comment editor.
-   * Uses context for: tags, bookmarks, allowsImagePaste
+   * Uses context for: tags, allowsImagePaste
    */
   import type { JSONContent, Tag } from '$lib/types';
   import AnnotationEditor from '$lib/AnnotationEditor.svelte';
@@ -41,7 +41,6 @@
       onUnseal={onOpen}
       onDismiss={onClose}
       tags={ctx.tags}
-      bookmarks={ctx.bookmarks.all}
       annotationEntries={ctx.annotations.allEntries()}
       allowsImagePaste={ctx.allowsImagePaste}
       {onImagePasteBlocked}

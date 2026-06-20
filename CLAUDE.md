@@ -121,7 +121,7 @@ process before rebuilding or you'll get `Access is denied (os error 5)`.
 - `commands.rs` — All Tauri IPC handlers
 - `output/` — Structured output rendering for LLM consumption
 - `mcp/` — Model Context Protocol server
-- `config.rs` — Persistent user settings (tags, exit modes, bookmarks)
+- `config.rs` — Persistent user settings (tags, exit modes)
 
 **Frontend** (`src/lib/`):
 - `composables/` — Svelte 5 runes-based state (useAnnotations, etc.)
@@ -183,7 +183,7 @@ Kill the stray `annot.exe` before rebuilding.
 ## UI Patterns
 
 ### Line Actions (right-side icons)
-Add buttons inside the `{#if trailing || showBookmarkIcon}` block in `LineRow.svelte`. Use `.line-action` class.
+Add buttons inside the `{#if trailing}` block in `LineRow.svelte`. Use `.line-action` class.
 
 ### Left Border Indicators
 Use `::before` pseudo-elements with `position: absolute; left: 0; width: 3px;`. For overlapping indicators, use `repeating-linear-gradient`.

@@ -43,12 +43,12 @@ Review agent-generated content — plans, drafts, analysis. Markdown rendering w
 - **Images**: Paste screenshots directly into annotations
 - **Excalidraw diagrams**: Sketch ideas visually (can also convert Mermaid diagrams to Excalidraw)
 - **Replace blocks**: Propose code replacements with before/after display
-- **Bookmark references**: Link to previously captured moments
+- **References**: Link to annotations, sections, and project files
 
 ### Slash Commands in Annotation Editor
 - `/` triggers command menu (Excalidraw, Replace block, etc.)
 - `#` triggers tag autocomplete
-- `@` triggers bookmark reference autocomplete
+- `@` triggers reference autocomplete (annotations, sections, files)
 
 ### Tag System
 - Create custom tags with names and LLM instructions
@@ -81,17 +81,6 @@ See the validation logic in [validate](src/lib.rs#L45-L60)
 ```
 
 This fetches and displays the actual code inline, syntax-highlighted. Max 50 portals, 500 lines each. Sensitive paths blocked.
-
----
-
-## Bookmarks
-
-Capture moments for future reference:
-
-- **Session bookmarks**: Snapshot the entire current review with an optional label
-- **Selection bookmarks**: Bookmark specific line ranges with optional labels
-- Reference bookmarks in annotations with `@` syntax
-- Bookmarks are **detached** — if deleted, references keep their content
 
 ---
 
@@ -149,12 +138,6 @@ Press `:` (colon) to open. Seven namespaces:
 - Press `s` to set as active
 - Press `r` to reorder (drag with arrow keys)
 
-### Bookmarks
-- Browse, edit labels, delete bookmarks
-- Search by label or content
-- Shows project context
-- Sorted by creation date (newest first)
-
 ### Copy
 - Copy content only
 - Copy annotations only
@@ -180,7 +163,7 @@ Press `:` (colon) to open. Seven namespaces:
 | Shift+Drag | Select range |
 | `/` | Slash command menu (Excalidraw, Replace) |
 | `#` | Tag autocomplete |
-| `@` | Bookmark reference autocomplete |
+| `@` | Reference autocomplete (annotations, sections, files) |
 | Tab/Shift+Tab | Cycle exit modes |
 | `Shift+C` | Session context editor |
 | `:` | Command palette |
@@ -200,9 +183,6 @@ Structured for AI consumption:
 TAGS:
   [# SECURITY] Review for security vulnerabilities
   [# TODO] Items needing follow-up
-
-BOOKMARKS:
-  [BOOKMARK abc] auth-flow (this session)
 
 CONTEXT: plan.md [embeds: src/lib.rs, src/main.rs]
 
@@ -225,7 +205,6 @@ Saved to /path/to/file.md
 
 ### Section Meanings
 - **TAGS**: Tag definitions used in annotations (only if tags are present)
-- **BOOKMARKS**: Referenced bookmarks with their snapshots
 - **CONTEXT**: What's being reviewed, with any embedded portal files
 - **GENERAL**: High-level comment about the entire review (not line-specific)
 - **NEXT**: What action the human wants (exit mode name + instruction)
@@ -264,7 +243,6 @@ All block until window closes, returning structured output with annotations, exi
 
 Persisted in the OS config directory (`~/.config/annot/` on Linux, `~/Library/Application Support/annot/` on macOS, `%APPDATA%\annot\` on Windows):
 - Tags and exit modes
-- Bookmarks with snapshots
 - Usage statistics
 - Theme preference
 - Obsidian vault paths

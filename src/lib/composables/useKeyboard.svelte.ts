@@ -1,8 +1,5 @@
 declare const __IS_MACOS__: boolean;
 
-/** Context for creating a selection bookmark (start === end for single line). */
-export type BookmarkContext = { start: number; end: number };
-
 export interface KeyboardHandlers {
   onShiftDown?: () => void;
   onShiftUp?: () => void;
@@ -14,20 +11,11 @@ export interface KeyboardHandlers {
   onCloseWindow?: () => void;
   onOpenSearch?: () => void;
   onOpenHelp?: () => void;
-  onCreateSessionBookmark?: () => void;
-  onCreateSelectionBookmark?: (context: BookmarkContext) => void;
-  onEditLastBookmark?: () => void;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onZoomReset?: () => void;
   onCommentHoveredLine?: () => void;
   onSelectAllContent?: () => void;
-  /** Called when 'c' or 'b' is pressed during 'selecting' phase (drag in progress) */
-  onDragModifierPress?: (key: 'c' | 'b') => void;
-  /** Called when 'c' or 'b' is pressed to confirm pending choice (after shift-drag-release) */
-  onConfirmChoice?: (action: 'annotate' | 'bookmark') => void;
-  /** Called when Escape is pressed to cancel pending choice */
-  onCancelChoice?: () => void;
 }
 
 export interface KeyboardState {
@@ -47,16 +35,6 @@ export interface KeyboardState {
   hasExitModes: () => boolean;
   /** Whether the hovered line is selectable */
   isHoveredLineSelectable: () => boolean;
-  /** Whether there's a last created bookmark that can be edited */
-  hasLastCreatedBookmark: () => boolean;
-  /** Get bookmark context (hover or selection), null if neither */
-  getBookmarkContext: () => BookmarkContext | null;
-  /** Get current interaction phase */
-  getPhase: () => string;
-  /** Whether shift key is currently held */
-  isShiftHeld: () => boolean;
-  /** Whether choice buttons are pending (after shift-drag-release) */
-  isPendingChoice: () => boolean;
 }
 
 export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
@@ -77,15 +55,6 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
     // Block all shortcuts when help overlay is open (it handles its own Escape)
     if (state.isHelpOverlayOpen()) return;
 
-    // Escape to cancel pending choice
-    if (e.key === 'Escape') {
-      if (state.isPendingChoice()) {
-        e.preventDefault();
-        handlers.onCancelChoice?.();
-        return;
-      }
-    }
-
     if (e.key === 'Tab') {
       e.preventDefault();
       if (state.isEditorActive() || state.isCommandPaletteOpen()) return;
@@ -98,23 +67,9 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
       return;
     }
 
-    // 'c' key handling
+    // 'c' to comment the hovered line
     if (e.key === 'c' && !e.metaKey && !e.ctrlKey) {
       if (isInEditorOrInput()) return;
-
-      // During drag (selecting phase): set as drag modifier
-      if (state.getPhase() === 'selecting') {
-        e.preventDefault();
-        handlers.onDragModifierPress?.('c');
-        return;
-      }
-
-      // Pending choice: confirm annotate (check BEFORE isEditorActive since range is still set)
-      if (state.isPendingChoice()) {
-        e.preventDefault();
-        handlers.onConfirmChoice?.('annotate');
-        return;
-      }
 
       // Block if editor is active
       if (state.isEditorActive()) return;
@@ -165,57 +120,6 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
     if (e.key === 's' && (e.metaKey || e.ctrlKey) && !state.isSaveModalOpen()) {
       e.preventDefault();
       handlers.onOpenSaveModal?.();
-      return;
-    }
-
-    // Shift+B for session bookmark (full document)
-    if (e.key === 'B' && !e.metaKey && !e.ctrlKey && !state.isEditorActive()) {
-      if (isInEditorOrInput()) return;
-      e.preventDefault();
-      handlers.onCreateSessionBookmark?.();
-      return;
-    }
-
-    // 'b' key handling
-    if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
-      if (isInEditorOrInput()) return;
-
-      // During drag (selecting phase): set as drag modifier
-      if (state.getPhase() === 'selecting') {
-        e.preventDefault();
-        handlers.onDragModifierPress?.('b');
-        return;
-      }
-
-      // Pending choice: confirm bookmark (check BEFORE isEditorActive since range is still set)
-      if (state.isPendingChoice()) {
-        e.preventDefault();
-        handlers.onConfirmChoice?.('bookmark');
-        return;
-      }
-
-      // Block if editor is active
-      if (state.isEditorActive()) return;
-
-      // Guard: Don't fire if shift is held and we're not in committed state
-      // (Trap #2 from D-Mail: prevents Shift+B+drag from creating bookmark before drag completes)
-      if (state.isShiftHeld() && state.getPhase() !== 'committed') {
-        return;
-      }
-
-      // Default: selection bookmark for hover/selection context
-      const context = state.getBookmarkContext();
-      if (!context) return;
-      e.preventDefault();
-      handlers.onCreateSelectionBookmark?.(context);
-      return;
-    }
-
-    // 'e' to edit last created bookmark
-    if (e.key === 'e' && !e.metaKey && !e.ctrlKey && state.hasLastCreatedBookmark() && !state.isEditorActive() && !state.isCommandPaletteOpen()) {
-      if (isInEditorOrInput()) return;
-      e.preventDefault();
-      handlers.onEditLastBookmark?.();
       return;
     }
 

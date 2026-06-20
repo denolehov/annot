@@ -30,7 +30,6 @@
   <div class="status-bar-right">
     <span class="kbd-hint"><kbd>:</kbd> command palette</span>
     <span class="kbd-hint"><kbd>c</kbd> <kbd>{keys.shift}+C</kbd> annotate</span>
-    <span class="kbd-hint"><kbd>b</kbd> <kbd>{keys.shift}+B</kbd> bookmark</span>
     <span class="kbd-hint"><kbd>?</kbd> help</span>
     <span class="kbd-hint"><kbd>{keys.cmd}+W</kbd> save and close</span>
   </div>
