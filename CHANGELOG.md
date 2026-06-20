@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.2](https://github.com/denolehov/annot/compare/v0.12.1...v0.12.2) (2026-06-20)
+
+
+### Bug Fixes
+
+* **docs:** use claude mcp add CLI for all platforms in Claude Code setup ([#70](https://github.com/denolehov/annot/issues/70)) ([78508e1](https://github.com/denolehov/annot/commit/78508e1f10bb851f85adabcef816ea72a46c0156)), closes [#69](https://github.com/denolehov/annot/issues/69)
+* **linux:** grant start-resize-dragging permission so borderless resize fires ([#68](https://github.com/denolehov/annot/issues/68)) ([fcc0dbc](https://github.com/denolehov/annot/commit/fcc0dbcbac6a72aa3ee1779186c5075673dddbb2))
+
 ## [0.12.1](https://github.com/denolehov/annot/compare/v0.12.0...v0.12.1) (2026-06-17)
 
 
