@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/denolehov/annot/compare/v0.12.2...v0.13.0) (2026-06-21)
+
+
+### Features
+
+* Remove "bookmark" and "terraform" features ([#75](https://github.com/denolehov/annot/issues/75)) ([8b29ba1](https://github.com/denolehov/annot/commit/8b29ba19bdc22e013d7c831dee2a68bdf5fe55e1))
+
 ## [0.12.2](https://github.com/denolehov/annot/compare/v0.12.1...v0.12.2) (2026-06-20)
 
 
