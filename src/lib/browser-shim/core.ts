@@ -10,6 +10,10 @@ export async function invoke<T = unknown>(
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify(args ?? {}),
+		// keepalive lets the request complete even if the page is unloading.
+		// This is how pending-annotation flush() survives a tab close without
+		// needing a special sendBeacon path. ~64KB body cap (Chrome).
+		keepalive: true,
 	});
 
 	if (res.status === 501) {

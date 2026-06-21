@@ -752,21 +752,31 @@
       }
 
       if (__IS_BROWSER__) {
-        // Browser mode: pagehide is one-shot and can't be awaited, so the flush
-        // contract changes shape. Snapshot the pending annotation batch
-        // synchronously and ship it together with the finish signal in a
-        // single navigator.sendBeacon, which survives page unload (a normal
-        // fetch would be cancelled). Server-side handler applies pending ops,
-        // runs format_output, prints to stdout, then exits.
-        const onPageHide = (): void => {
-          const pending = annotationState.getPendingSnapshot();
-          const payload = JSON.stringify({ pending });
-          globalThis.navigator.sendBeacon(
-            '/invoke/finish_with_pending',
-            new Blob([payload], { type: 'application/json' })
-          );
-        };
-        globalThis.addEventListener('pagehide', onPageHide);
+        // Browser mode: SSE-disconnect-with-grace shutdown contract
+        // (mirrors hl/internal/lifecycle/sse.go). Holding /events open is
+        // the server's liveness signal; dropping it for 200ms triggers
+        // format_output + process exit.
+        //
+        // EventSource auto-reconnects by default (with retry backoff),
+        // which is what we want for refresh tolerance.
+        const eventSource = new EventSource('/events');
+        eventSource.addEventListener('connected', () => {
+          // No-op; useful for debugging
+        });
+        eventSource.addEventListener('ping', () => {
+          // No-op heartbeat
+        });
+
+        // On unload: fire flush() (keepalive fetches let the writes
+        // complete after the page is gone) and close the EventSource
+        // explicitly so the server sees the disconnect immediately
+        // instead of waiting for TCP timeout.
+        globalThis.addEventListener('beforeunload', () => {
+          annotationState.flush().catch(() => {
+            // Errors here are unavoidable during unload; swallow.
+          });
+          eventSource.close();
+        });
       } else {
         // Listen for window close - this triggers output and exit
         const unlisten = await window.onCloseRequested(async (event) => {

@@ -52,6 +52,8 @@ sublime_fuzzy = "0.7"
 similar = { version = "3", features = ["inline"] }
 axum = "0.7"
 tower-http = { version = "0.6", features = ["fs"] }
+tokio-stream = "0.1"
+futures-core = "0.3"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Used only to flip the underlying WebKitGTK Settings (e.g. disable

@@ -1,22 +1,25 @@
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
 use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use axum::response::sse::{Event, Sse};
 use axum::response::{IntoResponse, Response};
-use axum::routing::post;
+use axum::routing::{get, post};
 use axum::Json;
 use axum::Router;
-use serde::Deserialize;
+use futures_core::Stream;
 use serde_json::Value;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 use tower_http::services::ServeDir;
-
-use crate::commands;
-use crate::state::ContentNode;
 
 use super::dispatch::{self, DispatchResult};
 use super::launch;
+use super::lifecycle::PING_INTERVAL;
 use super::state::BrowserState;
 
 pub async fn serve(state: Arc<BrowserState>) {
@@ -31,7 +34,7 @@ pub async fn serve(state: Arc<BrowserState>) {
     }
 
     let app = Router::new()
-        .route("/invoke/finish_with_pending", post(finish_with_pending_handler))
+        .route("/events", get(events_handler))
         .route("/invoke/:cmd", post(invoke_handler))
         .fallback_service(ServeDir::new(&dist).append_index_html_on_directories(true))
         .with_state(state);
@@ -71,10 +74,77 @@ async fn invoke_handler(
         DispatchResult::Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
         DispatchResult::NotImplemented => (
             StatusCode::NOT_IMPLEMENTED,
-            format!("command '{cmd}' not wired in browser spike"),
+            format!("command '{cmd}' not wired in browser mode"),
         )
             .into_response(),
     }
+}
+
+/// Stream wrapper that decrements the lifecycle's active-connection count
+/// when dropped. Dropping happens when axum drops the response body, which
+/// happens on client disconnect.
+struct LifecycleStream {
+    rx: ReceiverStream<Result<Event, std::convert::Infallible>>,
+    state: Arc<BrowserState>,
+}
+
+impl Stream for LifecycleStream {
+    type Item = Result<Event, std::convert::Infallible>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Pin::new(&mut self.rx).poll_next(cx)
+    }
+}
+
+impl Drop for LifecycleStream {
+    fn drop(&mut self) {
+        self.state
+            .lifecycle
+            .on_disconnect(Arc::clone(&self.state));
+    }
+}
+
+/// SSE endpoint that the browser keeps open as a liveness signal. Drop = the
+/// server schedules a grace timer (see `LifecycleHandler::on_disconnect`).
+async fn events_handler(State(state): State<Arc<BrowserState>>) -> Response {
+    // If we've already started shutdown, refuse new connections so the
+    // browser's auto-reconnect gives up instead of bouncing the counter.
+    if state.lifecycle.is_shutting_down() {
+        return (StatusCode::GONE, "session ended").into_response();
+    }
+
+    state.lifecycle.on_connect();
+
+    let (tx, rx) = mpsc::channel::<Result<Event, std::convert::Infallible>>(16);
+
+    // Greet the client so the frontend's `connected` listener fires.
+    let _ = tx.try_send(Ok(Event::default().event("connected").data("{}")));
+
+    // Background ping task: keeps the connection visible to NAT/proxies and
+    // gives the client a periodic "still alive" signal. Exits as soon as the
+    // receiver is dropped (i.e., client gone).
+    let tx_ping = tx.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(PING_INTERVAL);
+        interval.tick().await; // skip the immediate first tick
+        loop {
+            interval.tick().await;
+            if tx_ping
+                .send(Ok(Event::default().event("ping").data("{}")))
+                .await
+                .is_err()
+            {
+                break;
+            }
+        }
+    });
+
+    let stream = LifecycleStream {
+        rx: ReceiverStream::new(rx),
+        state,
+    };
+
+    Sse::new(stream).into_response()
 }
 
 fn dist_dir() -> PathBuf {
@@ -82,84 +152,4 @@ fn dist_dir() -> PathBuf {
         return PathBuf::from(p);
     }
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../build")
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "op", rename_all = "lowercase")]
-enum PendingOp {
-    #[serde(rename_all = "camelCase")]
-    Upsert {
-        path: String,
-        start_line: u32,
-        end_line: u32,
-        content: Vec<ContentNode>,
-    },
-    #[serde(rename_all = "camelCase")]
-    Delete {
-        path: String,
-        start_line: u32,
-        end_line: u32,
-    },
-}
-
-#[derive(Deserialize)]
-struct FinishPayload {
-    #[serde(default)]
-    pending: Vec<PendingOp>,
-}
-
-/// Browser-mode shutdown endpoint. Receives the last pending-annotation batch
-/// from a sendBeacon during pagehide, applies it, runs format_output, prints
-/// to stdout, and signals the shutdown channel so run_browser exits.
-async fn finish_with_pending_handler(
-    State(state): State<Arc<BrowserState>>,
-    body: Bytes,
-) -> Response {
-    let payload: FinishPayload = if body.is_empty() {
-        FinishPayload { pending: vec![] }
-    } else {
-        match serde_json::from_slice(&body) {
-            Ok(p) => p,
-            Err(e) => {
-                return (StatusCode::BAD_REQUEST, format!("bad payload: {e}")).into_response()
-            }
-        }
-    };
-
-    // Apply pending ops (swallow per-op errors so finish still runs).
-    for op in payload.pending {
-        let res = match op {
-            PendingOp::Upsert {
-                path,
-                start_line,
-                end_line,
-                content,
-            } => commands::upsert_annotation_impl(
-                &state.review,
-                path,
-                start_line,
-                end_line,
-                content,
-            ),
-            PendingOp::Delete {
-                path,
-                start_line,
-                end_line,
-            } => commands::delete_annotation_impl(&state.review, path, start_line, end_line),
-        };
-        if let Err(e) = res {
-            eprintln!("annot --browser: pending op failed: {e}");
-        }
-    }
-
-    if let Err(e) = commands::finish_review_browser_impl(&state.review, state.json) {
-        eprintln!("annot --browser: finish failed: {e}");
-    }
-
-    // Wake the run_browser select! loop.
-    if let Some(tx) = state.shutdown_tx.lock().take() {
-        let _ = tx.send(());
-    }
-
-    StatusCode::OK.into_response()
 }

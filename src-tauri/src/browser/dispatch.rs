@@ -99,6 +99,17 @@ pub fn dispatch(cmd: &str, args: Value, state: &Arc<BrowserState>) -> DispatchRe
 
         "get_theme" => map(Ok::<_, String>(commands::get_theme())),
 
+        "finish_review" => {
+            // Run format_output (prints to stdout), then signal shutdown.
+            // The SSE-disconnect grace path does the same thing — this arm
+            // is the fast path when the user clicks Done in the UI.
+            if let Err(e) = commands::finish_review_browser_impl(&state.review, state.json) {
+                return DispatchResult::Err(e);
+            }
+            state.lifecycle.trigger_shutdown();
+            DispatchResult::Ok(serde_json::Value::Null)
+        }
+
         "set_theme" => {
             #[derive(Deserialize)]
             struct A {
