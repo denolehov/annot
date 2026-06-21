@@ -41,22 +41,45 @@ macro_rules! with_review {
     }};
 }
 
+/// Body of `get_content`, parameterized by window label so it can be reused
+/// from the browser-mode HTTP dispatcher.
+pub fn get_content_impl(
+    review_state: &ActiveReview,
+    label: &str,
+    json_output: bool,
+) -> Result<ContentResponse, String> {
+    let guard = review_state.lock();
+    let review = guard.as_ref().ok_or("No active review")?;
+    let mut response = review
+        .to_response_for_window(label)
+        .ok_or_else(|| String::from("Cannot get content for this window type"))?;
+    if json_output {
+        response.allows_image_paste = true;
+    }
+    Ok(response)
+}
+
 #[tauri::command]
 pub fn get_content(
     window: WebviewWindow,
     review_state: State<ActiveReview>,
     json_output: State<crate::JsonOutputFlag>,
 ) -> Result<ContentResponse, String> {
-    let guard = review_state.lock();
-    let review = guard.as_ref().ok_or("No active review")?;
-    let mut response = review
-        .to_response_for_window(window.label())
-        .ok_or_else(|| String::from("Cannot get content for this window type"))?;
-    // JSON output mode can carry images, so allow image paste
-    if json_output.get() {
-        response.allows_image_paste = true;
-    }
-    Ok(response)
+    get_content_impl(&review_state, window.label(), json_output.get())
+}
+
+pub fn upsert_annotation_impl(
+    review_state: &ActiveReview,
+    path: String,
+    start_line: u32,
+    end_line: u32,
+    content: Vec<ContentNode>,
+) -> Result<(), String> {
+    let mut guard = review_state.lock();
+    let review = guard.as_mut().ok_or("No active review")?;
+    let target = review.resolve_target_mut(&path)?;
+    target.upsert_annotation(start_line, end_line, content);
+    Ok(())
 }
 
 #[tauri::command]
@@ -67,11 +90,20 @@ pub fn upsert_annotation(
     end_line: u32,
     content: Vec<ContentNode>,
 ) -> Result<(), String> {
-    with_review!(review_state, |review| {
-        let target = review.resolve_target_mut(&path)?;
-        target.upsert_annotation(start_line, end_line, content);
-        Ok(())
-    })
+    upsert_annotation_impl(&review_state, path, start_line, end_line, content)
+}
+
+pub fn delete_annotation_impl(
+    review_state: &ActiveReview,
+    path: String,
+    start_line: u32,
+    end_line: u32,
+) -> Result<(), String> {
+    let mut guard = review_state.lock();
+    let review = guard.as_mut().ok_or("No active review")?;
+    let target = review.resolve_target_mut(&path)?;
+    target.delete_annotation(start_line, end_line);
+    Ok(())
 }
 
 #[tauri::command]
@@ -81,11 +113,7 @@ pub fn delete_annotation(
     start_line: u32,
     end_line: u32,
 ) -> Result<(), String> {
-    with_review!(review_state, |review| {
-        let target = review.resolve_target_mut(&path)?;
-        target.delete_annotation(start_line, end_line);
-        Ok(())
-    })
+    delete_annotation_impl(&review_state, path, start_line, end_line)
 }
 
 // ========== Terraform Commands ==========
@@ -119,15 +147,22 @@ pub fn delete_terraform(
     })
 }
 
+pub fn get_terraform_regions_impl(
+    review_state: &ActiveReview,
+    path: String,
+) -> Result<Vec<TerraformRegion>, String> {
+    let mut guard = review_state.lock();
+    let review = guard.as_mut().ok_or("No active review")?;
+    let target = review.resolve_target_mut(&path)?;
+    Ok(target.terraform_regions().to_vec())
+}
+
 #[tauri::command]
 pub fn get_terraform_regions(
     review_state: State<ActiveReview>,
     path: String,
 ) -> Result<Vec<TerraformRegion>, String> {
-    with_review!(review_state, |review| {
-        let target = review.resolve_target_mut(&path)?;
-        Ok(target.terraform_regions().to_vec())
-    })
+    get_terraform_regions_impl(&review_state, path)
 }
 
 /// Get the natural language phrase for a terraform region.
@@ -135,6 +170,32 @@ pub fn get_terraform_regions(
 #[tauri::command]
 pub fn get_terraform_phrase(region: TerraformRegion) -> String {
     region.to_prose()
+}
+
+/// Browser-mode finish: runs the same `format_output` path as the WebView
+/// `finish_review` but without the Tauri-window destruction or `app.exit(0)`
+/// (the browser-mode runtime exits via its own shutdown channel after this
+/// returns). Caller is responsible for signalling shutdown.
+pub fn finish_review_browser_impl(
+    review_state: &ActiveReview,
+    json: bool,
+) -> Result<(), String> {
+    let mut guard = review_state.lock();
+    let mut review = guard.take().ok_or("No active review")?;
+
+    collect_tag_usage(&mut review);
+
+    let output_mode = if json { OutputMode::Mcp } else { OutputMode::Cli };
+    let result = format_output(&review, output_mode);
+
+    if json {
+        println!("{}", format_json(&result));
+    } else if !result.text.is_empty() {
+        print!("{}", result.text);
+        let _ = std::io::stdout().flush();
+    }
+
+    Ok(())
 }
 
 /// Unified finish command - handles both CLI and MCP modes.
@@ -578,21 +639,18 @@ pub struct SaveContentResponse {
     pub new_label: String,
 }
 
-#[tauri::command]
-pub fn save_content(
-    window: WebviewWindow,
-    review_state: State<ActiveReview>,
+pub fn save_content_impl(
+    review_state: &ActiveReview,
+    label: &str,
     path: String,
 ) -> Result<SaveContentResponse, String> {
     let mut guard = review_state.lock();
     let review = guard.as_mut().ok_or("No active review")?;
-    review.verify_window(window.label())?;
+    review.verify_window(label)?;
 
-    // Get content from root_view and export with portals embedded as code blocks
     let content = review.root_view.content();
     let raw_content = export_content(content);
 
-    // Resolve path (relative to cwd if not absolute)
     let path = PathBuf::from(&path);
     let path = if path.is_absolute() {
         path
@@ -602,19 +660,15 @@ pub fn save_content(
             .join(path)
     };
 
-    // Create parent directories if needed
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create directories: {}", e))?;
     }
 
-    // Write the file
     std::fs::write(&path, &raw_content).map_err(|e| format!("Failed to write file: {}", e))?;
 
-    // Track that we saved (for session output)
     review.saved_to = Some(path.clone());
 
-    // Extract filename for new label
     let new_label = path
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -624,6 +678,15 @@ pub fn save_content(
         saved_path: path.display().to_string(),
         new_label,
     })
+}
+
+#[tauri::command]
+pub fn save_content(
+    window: WebviewWindow,
+    review_state: State<ActiveReview>,
+    path: String,
+) -> Result<SaveContentResponse, String> {
+    save_content_impl(&review_state, window.label(), path)
 }
 
 // --- Config commands ---

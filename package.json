@@ -7,6 +7,7 @@
     "postinstall": "node scripts/copy-excalidraw-fonts.js",
     "dev": "vite dev",
     "build": "svelte-kit sync && vite build",
+    "build:browser": "svelte-kit sync && ANNOT_BROWSER=1 vite build",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri",

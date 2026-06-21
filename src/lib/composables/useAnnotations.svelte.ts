@@ -63,6 +63,9 @@ export function useAnnotations(options: UseAnnotationsOptions) {
     | { op: 'upsert'; path: string; startLine: number; endLine: number; content: ReturnType<typeof extractContentNodes> }
     | { op: 'delete'; path: string; startLine: number; endLine: number };
 
+  // Exported type for browser-mode pagehide handler.
+  // (PendingSync is structural so this is just an alias.)
+
   const pending = new Map<string, PendingSync>();
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
   const FLUSH_DELAY_MS = 250;
@@ -105,6 +108,18 @@ export function useAnnotations(options: UseAnnotationsOptions) {
       flushTimer = null;
       flush().catch((e) => console.error('Failed to sync annotations:', e));
     }, FLUSH_DELAY_MS);
+  }
+
+  // Browser-mode only. The pagehide handler in +page.svelte can't await the
+  // async flush() before the page unloads, so it snapshots the pending batch
+  // synchronously and ships it via navigator.sendBeacon as part of the
+  // finish_with_pending payload. Mirrors flush()'s snapshot-and-clear shape:
+  // cancels the timer, drains pending, returns the ops.
+  function getPendingSnapshot(): PendingSync[] {
+    cancelFlush();
+    const ops = [...pending.values()];
+    pending.clear();
+    return ops;
   }
 
   async function upsert(range: Range, content: JSONContent | null): Promise<void> {
@@ -204,6 +219,7 @@ export function useAnnotations(options: UseAnnotationsOptions) {
     getByKey,
     upsert,
     flush,
+    getPendingSnapshot,
     remove,
     getAtLine,
     hasAnnotation,

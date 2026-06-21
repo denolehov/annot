@@ -39,6 +39,11 @@ struct Cli {
     #[arg(long)]
     json: bool,
 
+    /// Serve the UI over localhost and open it in your browser instead of a
+    /// native window. Spike-quality; CLI single-file mode only.
+    #[arg(long)]
+    browser: bool,
+
     /// Add an exit mode button: "name:instruction" (repeatable)
     ///
     /// Example: --exit-mode "Apply:Apply the changes" --exit-mode "Reject:Discard"
@@ -191,7 +196,11 @@ fn main() {
 
     let state = AppState::new(content, config);
 
-    annot_lib::run(state, context, cli.json);
+    if cli.browser {
+        annot_lib::run_browser(state, cli.json);
+    } else {
+        annot_lib::run(state, context, cli.json);
+    }
 }
 
 // ════════════════════════════════════════════════════════════════════════════

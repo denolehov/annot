@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 
 use tauri::WebviewWindowBuilder;
 
+pub mod browser;
 pub mod commands;
 pub mod config;
 pub mod diff;
@@ -95,6 +96,8 @@ macro_rules! all_commands {
 }
 use review::{ActiveReview, Review};
 use state::AppState;
+
+pub use browser::run_browser;
 
 /// Apply Linux-specific WebKitGTK settings to a window's webview after
 /// creation. Currently: disable `enable-smooth-scrolling` so wheel events

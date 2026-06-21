@@ -751,21 +751,39 @@
         terraform.loadAll(firstPath);
       }
 
-      // Listen for window close - this triggers output and exit
-      const unlisten = await window.onCloseRequested(async (event) => {
-        event.preventDefault();
-        unlisten();  // Remove listener before closing to prevent re-entry
+      if (__IS_BROWSER__) {
+        // Browser mode: pagehide is one-shot and can't be awaited, so the flush
+        // contract changes shape. Snapshot the pending annotation batch
+        // synchronously and ship it together with the finish signal in a
+        // single navigator.sendBeacon, which survives page unload (a normal
+        // fetch would be cancelled). Server-side handler applies pending ops,
+        // runs format_output, prints to stdout, then exits.
+        const onPageHide = (): void => {
+          const pending = annotationState.getPendingSnapshot();
+          const payload = JSON.stringify({ pending });
+          globalThis.navigator.sendBeacon(
+            '/invoke/finish_with_pending',
+            new Blob([payload], { type: 'application/json' })
+          );
+        };
+        globalThis.addEventListener('pagehide', onPageHide);
+      } else {
+        // Listen for window close - this triggers output and exit
+        const unlisten = await window.onCloseRequested(async (event) => {
+          event.preventDefault();
+          unlisten();  // Remove listener before closing to prevent re-entry
 
-        try {
-          // Flush any debounced annotation writes before the backend reads its
-          // in-memory state — otherwise the last keystrokes never reach it.
-          await annotationState.flush();
-          await invoke('finish_review');
-        } catch (e) {
-          console.error('Failed to finish review:', e);
-          await window.destroy(); // Fallback
-        }
-      });
+          try {
+            // Flush any debounced annotation writes before the backend reads its
+            // in-memory state — otherwise the last keystrokes never reach it.
+            await annotationState.flush();
+            await invoke('finish_review');
+          } catch (e) {
+            console.error('Failed to finish review:', e);
+            await window.destroy(); // Fallback
+          }
+        });
+      }
 
       // Listen for Excalidraw results from CodeBlock origin (mermaid → excalidraw)
       interface CodeBlockExcalidrawResult {

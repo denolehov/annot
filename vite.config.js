@@ -6,6 +6,30 @@ import { svelteTesting } from "@testing-library/svelte/vite";
 const host = process.env.TAURI_DEV_HOST;
 // @ts-expect-error process is a nodejs global
 const isMacos = process.platform === 'darwin';
+// @ts-expect-error process is a nodejs global
+const isBrowser = !!process.env.ANNOT_BROWSER;
+
+// Browser-mode build: alias @tauri-apps/api/* to local shims so the page
+// runs in a plain browser tab (no Tauri runtime in the WebView).
+const browserShimAliases = isBrowser
+  ? [
+      {
+        find: "@tauri-apps/api/core",
+        replacement: new URL("./src/lib/browser-shim/core.ts", import.meta.url)
+          .pathname,
+      },
+      {
+        find: "@tauri-apps/api/event",
+        replacement: new URL("./src/lib/browser-shim/event.ts", import.meta.url)
+          .pathname,
+      },
+      {
+        find: "@tauri-apps/api/window",
+        replacement: new URL("./src/lib/browser-shim/window.ts", import.meta.url)
+          .pathname,
+      },
+    ]
+  : [];
 
 // Custom logger to filter out Svelte 5 @__PURE__ annotation warnings
 const logger = createLogger();
@@ -24,6 +48,11 @@ export default defineConfig(async () => ({
   plugins: [sveltekit(), svelteTesting()],
   define: {
     __IS_MACOS__: JSON.stringify(isMacos),
+    __IS_BROWSER__: JSON.stringify(isBrowser),
+  },
+
+  resolve: {
+    alias: browserShimAliases,
   },
 
   test: {

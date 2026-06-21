@@ -50,6 +50,8 @@ indexmap = "2.12.1"
 ignore = "0.4"
 sublime_fuzzy = "0.7"
 similar = { version = "3", features = ["inline"] }
+axum = "0.7"
+tower-http = { version = "0.6", features = ["fs"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Used only to flip the underlying WebKitGTK Settings (e.g. disable
