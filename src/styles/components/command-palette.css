@@ -8,8 +8,6 @@
 	position: fixed;
 	inset: 0;
 	background: var(--backdrop-light);
-	backdrop-filter: blur(2px);
-	-webkit-backdrop-filter: blur(2px);
 	z-index: 1000;
 }
 

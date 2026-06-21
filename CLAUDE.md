@@ -75,8 +75,9 @@ A `flake.nix` is provided. Enter the dev shell before running any build commands
 nix develop          # sets up cargo, pnpm, webkitgtk, GStreamer, pkg-config, etc.
 ```
 
-The shell hook also exports `GDK_BACKEND=x11` and `WEBKIT_DISABLE_DMABUF_RENDERER=1`
-so the dev server renders correctly under Wayland.
+The shell hook exports `XDG_DATA_DIRS` so GTK can find gsettings schemas and
+report the correct display scale under Wayland (without this, the WebView
+allocates at the wrong size).
 
 To install the binary into your Nix profile (wraps it with the required env vars):
 

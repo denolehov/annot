@@ -96,6 +96,22 @@ macro_rules! all_commands {
 use review::{ActiveReview, Review};
 use state::AppState;
 
+/// Apply Linux-specific WebKitGTK settings to a window's webview after
+/// creation. Currently: disable `enable-smooth-scrolling` so wheel events
+/// scroll instantly instead of with momentum. No-op on non-Linux.
+#[cfg(target_os = "linux")]
+pub fn configure_linux_webview<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+    use webkit2gtk::{SettingsExt, WebViewExt};
+    let _ = window.with_webview(|wv| {
+        if let Some(settings) = wv.inner().settings() {
+            settings.set_enable_smooth_scrolling(false);
+        }
+    });
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn configure_linux_webview<R: tauri::Runtime>(_window: &tauri::WebviewWindow<R>) {}
+
 /// Shared flag to prevent app exit in MCP mode.
 pub type ShouldExit = Arc<AtomicBool>;
 
@@ -154,6 +170,7 @@ pub fn run(state: AppState, context: tauri::Context, json_output: bool) {
             };
 
             let window = builder.build()?;
+            configure_linux_webview(&window);
 
             // Restore saved window position/size (or keep defaults)
             window_state::restore_window_state(&window, window_state::WindowType::Main);
