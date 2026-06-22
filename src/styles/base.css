@@ -32,10 +32,12 @@ code {
 ::-webkit-scrollbar {
 	width: 6px;
 	height: 6px;
+	-webkit-app-region: no-drag; /* Allow scrollbar interaction in borderless windows */
 }
 
 ::-webkit-scrollbar-track {
 	background: transparent;
+	-webkit-app-region: no-drag;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -43,6 +45,7 @@ code {
 	border: 1px solid transparent;
 	background-clip: content-box;
 	border-radius: 99px;
+	-webkit-app-region: no-drag;
 }
 
 ::-webkit-scrollbar-thumb:hover {
