@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/denolehov/annot/compare/v0.13.0...v0.13.1) (2026-06-22)
+
+
+### Bug Fixes
+
+* **linux:** enable scrollbar interaction in borderless window ([#78](https://github.com/denolehov/annot/issues/78)) ([532ef0b](https://github.com/denolehov/annot/commit/532ef0bd98fc351d82c11eebf811b77457959bd9))
+
 ## [0.13.0](https://github.com/denolehov/annot/compare/v0.12.2...v0.13.0) (2026-06-21)
 
 
