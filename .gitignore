@@ -32,3 +32,5 @@ src-tauri/gen/schemas
 
 # Excalidraw fonts (copied from node_modules at install time)
 static/excalidraw-assets/fonts/
+
+.direnv/

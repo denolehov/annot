@@ -334,6 +334,7 @@ fn run_session_with_state(
     let window = app_handle
         .get_webview_window(&built_label)
         .ok_or_else(|| format!("Window {} not found after build", built_label))?;
+    crate::configure_linux_webview(&window);
 
     // Restore the review window onto the monitor it was last used on. The MCP
     // window shares the "main" slot — it is the main review window, just

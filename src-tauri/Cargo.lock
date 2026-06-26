@@ -79,6 +79,7 @@ dependencies = [
  "unidiff",
  "urlencoding",
  "uuid",
+ "webkit2gtk",
 ]
 
 [[package]]

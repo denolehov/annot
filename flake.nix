@@ -28,6 +28,14 @@
             "${pkgs.gst_all_1.gst-plugins-bad}/lib/gstreamer-1.0"
           ]
         );
+
+        # Path suitable for XDG_DATA_DIRS so GTK can find gsettings schemas
+        # (needed for Wayland display-scale reporting). Mirrors what
+        # nixpkgs' gsettingsSchemaSetupHook sets up automatically as
+        # GSETTINGS_SCHEMAS_PATH from buildInputs in the dev shell.
+        gsettingsSchemasPath = pkgs.lib.optionalString isLinux (
+          "${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}"
+        );
       in
       {
         # Formatter (nixfmt)
@@ -49,11 +57,14 @@
                   makeWrapper ${./src-tauri/target/release/annot} $out/bin/annot
                 ''
               else
+                # XDG_DATA_DIRS prefixed (not set) so any existing
+                # desktop-environment entries are preserved. With this in
+                # place, the installed binary runs on Wayland correctly;
+                # no GDK_BACKEND override needed.
                 ''
                   mkdir -p $out/bin
                   makeWrapper ${./src-tauri/target/release/annot} $out/bin/annot \
-                    --set GDK_BACKEND x11 \
-                    --set WEBKIT_DISABLE_DMABUF_RENDERER 1 \
+                    --prefix XDG_DATA_DIRS : "${gsettingsSchemasPath}" \
                     --set GST_PLUGIN_SYSTEM_PATH "${gstPluginPath}" \
                     --set GIO_MODULE_DIR "${pkgs.glib-networking}/lib/gio/modules"
                 ''
@@ -113,9 +124,11 @@
               # GStreamer plugin discovery
               export GST_PLUGIN_SYSTEM_PATH="${gstPluginPath}"
 
-              # Force X11 (WebKit2GTK Wayland/DMABuf is broken on NixOS)
-              export GDK_BACKEND=x11
-              export WEBKIT_DISABLE_DMABUF_RENDERER=1
+              # Wayland needs gsettings schemas discoverable via XDG_DATA_DIRS
+              # so GTK can report the correct display scale; otherwise the
+              # WebView surface allocates at the wrong size.
+              # (wiki.nixos.org/wiki/Tauri)
+              export XDG_DATA_DIRS="$GSETTINGS_SCHEMAS_PATH''${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
 
               # GIO modules for TLS support
               export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules"

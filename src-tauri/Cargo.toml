@@ -51,6 +51,12 @@ ignore = "0.4"
 sublime_fuzzy = "0.7"
 similar = { version = "3", features = ["inline"] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# Used only to flip the underlying WebKitGTK Settings (e.g. disable
+# enable-smooth-scrolling) via window.with_webview. Match wry's version
+# to avoid pulling in a second copy.
+webkit2gtk = "2.0"
+
 [dev-dependencies]
 insta = "1.45"
 tempfile = "3.23.0"
