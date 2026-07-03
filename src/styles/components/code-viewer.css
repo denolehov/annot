@@ -122,6 +122,25 @@ header.header {
 	transform-origin: top left;
 }
 
+/* While the window is GROWING, suspend rendering of the content tree. On a
+   10k-line file the reflow can't fill the newly-exposed area fast enough so
+   content visibly trails the growing edge; content-visibility: hidden skips
+   layout/paint/style for the whole subtree (~7x cheaper per frame, measured)
+   and keeps the last-painted frame. The `.resizing` class is set on a grow
+   and cleared ~120ms after the last resize event (see +page.svelte); shrink
+   stays live (freezing it flashed blank on fast drags).
+
+   We hide the inner (whose frozen width can't fill a grown window) but keep the
+   outer scroller `.content` at full flex size with a solid themed background,
+   so growing shows themed empty space — not a stale scrollbar or torn content
+   — and the real content snaps back in on release. */
+.content.resizing {
+	background: var(--bg-main);
+}
+.content.resizing .content-inner {
+	content-visibility: hidden;
+}
+
 /* Code lines - use div.line to avoid matching syntect's .line class on spans */
 div.line {
 	position: relative;
@@ -129,12 +148,16 @@ div.line {
 	white-space: pre-wrap;
 	tab-size: 4;
 	/* Skip layout/paint for off-screen lines. On large files (10k+ lines) a
-	   window resize otherwise re-wraps every line every frame, so content and
-	   the bottom status bar visibly trail the resize. content-visibility lets
-	   the engine skip off-screen rows; contain-intrinsic-size keeps their
-	   reserved height stable so the scrollbar doesn't jump. */
+	   window resize otherwise re-wraps every line every frame, so content
+	   visibly trails the resize. content-visibility lets the engine skip
+	   off-screen rows; contain-intrinsic-size keeps their reserved height
+	   stable so the scrollbar doesn't jump. (Continuous resize is handled
+	   separately by the `.resizing` freeze above.) */
 	content-visibility: auto;
-	contain-intrinsic-size: auto 1.5em;
+	/* Match the real single-row line-height (.code/.gutter = 22px) so the
+	   reserved height for never-yet-rendered off-screen lines is accurate;
+	   `auto` then remembers each line's true (possibly wrapped) height. */
+	contain-intrinsic-size: auto 22px;
 }
 
 /* Hover highlight — CSS-driven so mouse-move never re-renders 10k lines.

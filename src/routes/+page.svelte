@@ -2,7 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen, emit } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { onMount, tick } from "svelte";
+  import { onMount, onDestroy, tick } from "svelte";
   import type { ContentResponse, ContentNode, ContentMetadata, DiffDocument, Line, JSONContent, ExitMode, Tag, MarkdownMetadata, SectionInfo, ConfigSnapshot } from "$lib/types";
   import { getLineNumber, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, isHorizontalRule } from "$lib/line-utils";
   import { type Range } from "$lib/range";
@@ -90,6 +90,31 @@
 
   // File tree sidebar (composable) — diff mode only
   const fileTree = useFileTree();
+
+  // While the window is GROWING, suspend rendering of the content tree
+  // (content-visibility: hidden via the `.resizing` class). On a 10k-line file
+  // the reflow can't fill the newly-exposed area fast enough, so content
+  // visibly trails the growing edge; freezing the last-painted frame until the
+  // drag settles hides that entirely.
+  //
+  // Only on grow, not shrink: shrinking has no trailing edge (existing content
+  // already covers the smaller window), and freezing a fast shrink outran the
+  // browser's cached paint and flashed blank. Live content on shrink is fine.
+  //
+  // No per-frame resize signal exists, so we debounce: set on a resize that
+  // grew either dimension, clear ~120ms after the last resize event.
+  let resizing = $state(false);
+  let resizeTimer: number | null = null;
+  let lastW = globalThis.innerWidth;
+  let lastH = globalThis.innerHeight;
+  function handleWindowResize() {
+    const grew = globalThis.innerWidth > lastW || globalThis.innerHeight > lastH;
+    lastW = globalThis.innerWidth;
+    lastH = globalThis.innerHeight;
+    if (grew && !resizing) resizing = true;
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => { resizing = false; resizeTimer = null; }, 120);
+  }
 
   // Current file/hunk derived from indices (diff mode)
   let currentFile = $derived(diffDisplay?.docs[contentTracking.currentFileIndex] ?? null);
@@ -728,6 +753,8 @@
   onMount(async () => {
     const window = getCurrentWindow();
 
+    globalThis.addEventListener('resize', handleWindowResize);
+
     // Apply theme before any content renders (prevents flash)
     await initTheme();
 
@@ -827,6 +854,11 @@
       }
     });
   });
+
+  onDestroy(() => {
+    globalThis.removeEventListener('resize', handleWindowResize);
+    if (resizeTimer) clearTimeout(resizeTimer);
+  });
 </script>
 
 <svelte:window onkeydown={keyboard.handleKeyDown} onkeyup={keyboard.handleKeyUp} />
@@ -899,6 +931,7 @@
     <Pane order={2} class="content-pane">
     <div
       class="content"
+      class:resizing={resizing}
       class:shift-held={interaction.isShiftHeld}
       class:phase-idle={interaction.phase === 'idle'}
       class:phase-selecting={interaction.phase === 'selecting'}
