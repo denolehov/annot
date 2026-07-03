@@ -152,6 +152,9 @@ pub async fn open_excalidraw_window(
                 .title("Excalidraw")
                 .inner_size(width, height)
                 .min_inner_size(600.0, 400.0)
+                .background_color(crate::config::window_background_color(
+                    crate::config::load_config().theme,
+                ))
                 .visible(false);
         #[cfg(target_os = "macos")]
         let b = b

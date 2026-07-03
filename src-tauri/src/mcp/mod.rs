@@ -308,6 +308,9 @@ fn run_session_with_state(
             )
             .title("annot")
             .inner_size(1000.0, 700.0)
+            .background_color(crate::config::window_background_color(
+                crate::config::load_config().theme,
+            ))
             .visible(false); // Will be shown after content loads
             #[cfg(target_os = "macos")]
             let b = b

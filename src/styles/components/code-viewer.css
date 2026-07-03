@@ -128,6 +128,13 @@ div.line {
 	display: flex;
 	white-space: pre-wrap;
 	tab-size: 4;
+	/* Skip layout/paint for off-screen lines. On large files (10k+ lines) a
+	   window resize otherwise re-wraps every line every frame, so content and
+	   the bottom status bar visibly trail the resize. content-visibility lets
+	   the engine skip off-screen rows; contain-intrinsic-size keeps their
+	   reserved height stable so the scrollbar doesn't jump. */
+	content-visibility: auto;
+	contain-intrinsic-size: auto 1.5em;
 }
 
 /* Hover highlight — CSS-driven so mouse-move never re-renders 10k lines.

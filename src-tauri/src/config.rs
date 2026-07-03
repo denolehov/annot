@@ -22,6 +22,21 @@ pub enum Theme {
     Dark,
 }
 
+/// Native window/webview background color matching the frontend's `--bg-main`.
+/// Set on every window builder so WebView2 (Windows) paints a solid background
+/// before content renders — otherwise its default white shows as a flash on
+/// window-open and as a blank strip at the growing edges during live resize.
+///
+/// System resolves to light: dark mode is an opt-in `[data-theme="dark"]`
+/// override, so light is today's effective default. Light `--bg-main` is
+/// `#fafaf9`; dark is `#1d1b16`.
+pub fn window_background_color(theme: Theme) -> tauri::webview::Color {
+    match theme {
+        Theme::Dark => tauri::webview::Color(0x1d, 0x1b, 0x16, 0xff),
+        Theme::Light | Theme::System => tauri::webview::Color(0xfa, 0xfa, 0xf9, 0xff),
+    }
+}
+
 /// Application configuration stored in config.json.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -609,6 +624,25 @@ mod tests {
     fn config_theme_defaults_to_system() {
         let config = Config::default();
         assert_eq!(config.theme, Theme::System);
+    }
+
+    #[test]
+    fn window_background_matches_css_bg_main() {
+        // Must match `--bg-main` in src/styles/tokens.css, or WebView2 flashes
+        // its default background on open/resize. System resolves to light
+        // because dark is an opt-in [data-theme="dark"] override.
+        assert_eq!(
+            window_background_color(Theme::Light),
+            tauri::webview::Color(0xfa, 0xfa, 0xf9, 0xff)
+        );
+        assert_eq!(
+            window_background_color(Theme::System),
+            window_background_color(Theme::Light)
+        );
+        assert_eq!(
+            window_background_color(Theme::Dark),
+            tauri::webview::Color(0x1d, 0x1b, 0x16, 0xff)
+        );
     }
 
     #[test]

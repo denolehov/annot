@@ -106,6 +106,9 @@ pub async fn open_mermaid_window(
             .title(format!("{}:{}-{}", filename, start_line, end_line))
             .inner_size(600.0, 500.0)
             .min_inner_size(300.0, 200.0)
+            .background_color(crate::config::window_background_color(
+                crate::config::load_config().theme,
+            ))
             .visible(false);
         #[cfg(target_os = "macos")]
         let b = b
