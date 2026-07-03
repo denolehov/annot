@@ -11,13 +11,16 @@
 		return parts.length > 1 ? parts[parts.length - 2] : null;
 	});
 
+	let chipEl: HTMLSpanElement;
+
 	async function copyPath() {
 		await navigator.clipboard.writeText(path);
-		// TODO: show toast via event
+		chipEl?.dispatchEvent(new CustomEvent('file-ref-copied', { bubbles: true, detail: { path } }));
 	}
 </script>
 
 <span
+	bind:this={chipEl}
 	class="file-ref-chip"
 	title={path}
 	onclick={copyPath}

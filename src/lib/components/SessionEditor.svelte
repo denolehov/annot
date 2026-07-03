@@ -16,6 +16,7 @@
     onClose: () => void;
     onRequestCreateTag: (text: string, from: number, to: number) => void;
     onImagePasteBlocked: () => void;
+    onFileRefCopied?: (path: string) => void;
   }
 
   let {
@@ -26,7 +27,8 @@
     onOpen,
     onClose,
     onRequestCreateTag,
-    onImagePasteBlocked
+    onImagePasteBlocked,
+    onFileRefCopied
   }: Props = $props();
 
   const ctx = getAnnotContext();
@@ -44,6 +46,7 @@
       annotationEntries={ctx.annotations.allEntries()}
       allowsImagePaste={ctx.allowsImagePaste}
       {onImagePasteBlocked}
+      {onFileRefCopied}
       {onRequestCreateTag}
       {pendingTagInsertion}
     />
