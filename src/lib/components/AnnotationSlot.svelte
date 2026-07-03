@@ -18,6 +18,7 @@
     onDismiss: () => void;
     onRequestCreateTag: (id: string, text: string, from: number, to: number) => void;
     onImagePasteBlocked: () => void;
+    onFileRefCopied?: (path: string) => void;
   }
 </script>
 
@@ -44,6 +45,7 @@
     onDismiss,
     onRequestCreateTag,
     onImagePasteBlocked,
+    onFileRefCopied,
   }: AnnotationSlotProps = $props();
 
   const ctx = getAnnotContext();
@@ -68,6 +70,7 @@
       annotationEntries={ctx.annotations.allEntries()}
       allowsImagePaste={ctx.allowsImagePaste}
       {onImagePasteBlocked}
+      {onFileRefCopied}
       onRequestCreateTag={(text, from, to) => onRequestCreateTag(s.id, text, from, to)}
       pendingTagInsertion={pendingTagInsertion?.editorKey === s.id
         ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag }

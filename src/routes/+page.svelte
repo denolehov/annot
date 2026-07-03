@@ -582,6 +582,11 @@
     return true;
   }
 
+  function handleFileRefCopied(path: string) {
+    const alreadyShowing = toastMessage != null;
+    showToast(alreadyShowing ? `New copied path: "${path}"` : `Copied: "${path}"`);
+  }
+
   // Handle reporting a mermaid syntax error as an annotation
   async function handleReportMermaidError(displayRange: Range, errorMessage: string) {
     // Check if an annotation already spans exactly this range
@@ -705,6 +710,7 @@
     onDismiss: closeCurrentEditor,
     onRequestCreateTag: handleRequestCreateTag,
     onImagePasteBlocked: handleImagePasteBlocked,
+    onFileRefCopied: handleFileRefCopied,
   });
 
   // Keyboard handling (composable)
@@ -905,6 +911,7 @@
         onClose={closeSessionEditor}
         onRequestCreateTag={(text, from, to) => handleRequestCreateTag('session', text, from, to)}
         onImagePasteBlocked={handleImagePasteBlocked}
+        onFileRefCopied={handleFileRefCopied}
       />
     </div>
   </div>

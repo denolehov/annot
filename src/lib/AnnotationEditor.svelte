@@ -108,13 +108,14 @@
     annotationEntries?: Record<string, AnnotationEntry>;
     allowsImagePaste?: boolean;
     onImagePasteBlocked?: () => void;
+    onFileRefCopied?: (path: string) => void;
     onRequestCreateTag?: (text: string, from: number, to: number) => void;
     pendingTagInsertion?: { from: number; to: number; tag: Tag } | null;
     annotationId?: string; // Annotation id (saved entry or draft); '' for the session editor
     getOriginalLines?: () => string; // Returns original lines content for /replace
   }
 
-  let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], annotationEntries = {}, allowsImagePaste = false, onImagePasteBlocked, onRequestCreateTag, pendingTagInsertion, annotationId = '', getOriginalLines }: Props = $props();
+  let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], annotationEntries = {}, allowsImagePaste = false, onImagePasteBlocked, onFileRefCopied, onRequestCreateTag, pendingTagInsertion, annotationId = '', getOriginalLines }: Props = $props();
 
   // Get zoom level from context for floating elements
   const ctx = getAnnotContext();
@@ -341,8 +342,14 @@
       openExcalidrawEdit(detail.nodeId, detail.elements);
     };
 
+    const handleFileRefCopied = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { path: string };
+      onFileRefCopied?.(detail.path);
+    };
+
     element?.addEventListener('excalidraw-create', handleExcalidrawCreate);
     element?.addEventListener('excalidraw-edit', handleExcalidrawEdit);
+    element?.addEventListener('file-ref-copied', handleFileRefCopied);
 
     // Listen for placeholder destruction (dispatched on document)
     document.addEventListener('excalidraw-placeholder-destroyed', handlePlaceholderDestroyed);
@@ -392,6 +399,7 @@
     return () => {
       element?.removeEventListener('excalidraw-create', handleExcalidrawCreate);
       element?.removeEventListener('excalidraw-edit', handleExcalidrawEdit);
+      element?.removeEventListener('file-ref-copied', handleFileRefCopied);
       document.removeEventListener('excalidraw-placeholder-destroyed', handlePlaceholderDestroyed);
     };
   });
