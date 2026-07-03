@@ -2,7 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen, emit } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { onMount, onDestroy, tick } from "svelte";
+  import { onMount, tick } from "svelte";
   import type { ContentResponse, ContentNode, ContentMetadata, DiffDocument, Line, JSONContent, ExitMode, Tag, MarkdownMetadata, SectionInfo, ConfigSnapshot } from "$lib/types";
   import { getLineNumber, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, isHorizontalRule } from "$lib/line-utils";
   import { type Range } from "$lib/range";
@@ -753,8 +753,6 @@
   onMount(async () => {
     const window = getCurrentWindow();
 
-    globalThis.addEventListener('resize', handleWindowResize);
-
     // Apply theme before any content renders (prevents flash)
     await initTheme();
 
@@ -854,14 +852,9 @@
       }
     });
   });
-
-  onDestroy(() => {
-    globalThis.removeEventListener('resize', handleWindowResize);
-    if (resizeTimer) clearTimeout(resizeTimer);
-  });
 </script>
 
-<svelte:window onkeydown={keyboard.handleKeyDown} onkeyup={keyboard.handleKeyUp} />
+<svelte:window onkeydown={keyboard.handleKeyDown} onkeyup={keyboard.handleKeyUp} onresize={handleWindowResize} />
 
 <WindowResizeHandles />
 
