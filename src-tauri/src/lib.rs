@@ -137,8 +137,13 @@ pub fn run(state: AppState, context: tauri::Context, json_output: bool) {
                 )
                 .title("annot")
                 .inner_size(1000.0, 700.0)
-                .background_color(config::window_background_color(config::load_config().theme))
-                .visible(false); // Will be shown after content loads
+                // Will be shown after content loads.
+                .visible(false);
+                // Windows-only: paint a solid themed bg so WebView2 doesn't
+                // flash its default white on open/resize (see config helper).
+                #[cfg(windows)]
+                let b = b
+                    .background_color(config::window_background_color(config::load_config().theme));
                 #[cfg(target_os = "macos")]
                 let b = b
                     .title_bar_style(tauri::TitleBarStyle::Overlay)

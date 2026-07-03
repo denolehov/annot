@@ -308,10 +308,13 @@ fn run_session_with_state(
             )
             .title("annot")
             .inner_size(1000.0, 700.0)
-            .background_color(crate::config::window_background_color(
+            // Will be shown after content loads.
+            .visible(false);
+            // Windows-only: solid themed bg so WebView2 doesn't flash white.
+            #[cfg(windows)]
+            let b = b.background_color(crate::config::window_background_color(
                 crate::config::load_config().theme,
-            ))
-            .visible(false); // Will be shown after content loads
+            ));
             #[cfg(target_os = "macos")]
             let b = b
                 .title_bar_style(tauri::TitleBarStyle::Overlay)
