@@ -137,6 +137,7 @@ pub fn run(state: AppState, context: tauri::Context, json_output: bool) {
                 )
                 .title("annot")
                 .inner_size(1000.0, 700.0)
+                .background_color(config::window_background_color(config::load_config().theme))
                 .visible(false); // Will be shown after content loads
                 #[cfg(target_os = "macos")]
                 let b = b
