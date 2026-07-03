@@ -9,9 +9,11 @@
 	justify-content: space-between;
 	gap: 24px;
 	padding: 6px 16px;
+	/* Background is opaque (bg-main has no alpha), so a backdrop-filter blurs
+	   pixels that are then fully painted over — zero visual effect, but a
+	   full-width blur pass every resize frame that made the status bar visibly
+	   trail the window edge. Dropped it. */
 	background: color-mix(in srgb, var(--mode-color, var(--bg-main)) 15%, var(--bg-main));
-	backdrop-filter: blur(16px) saturate(150%);
-	-webkit-backdrop-filter: blur(16px) saturate(150%);
 	border-top: 1px solid color-mix(in srgb, var(--mode-color, transparent) 20%, rgba(0, 0, 0, 0.06));
 	font-size: 12px;
 	z-index: 10;
