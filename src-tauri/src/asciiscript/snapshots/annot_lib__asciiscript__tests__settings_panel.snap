@@ -1,0 +1,17 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Preferences\" width:45 {\n            section \"Appearance\" {\n                row { text \"Theme:\" radio \"Dark\" selected radio \"Light\" }\n                checkbox \"Show line numbers\" checked\n                checkbox \"Word wrap\"\n            }\n            section \"Editor\" {\n                row { text \"Tab size:\" input width:5 placeholder:\"4\" }\n                row { text \"Font:\" select \"Monospace\" width:15 }\n            }\n            separator\n            row { spacer button \"Cancel\" button \"Apply\" }\n        }\n    }\"#).unwrap()"
+---
++-- Preferences ----------------------------+
+|                                           |
+| ## Appearance                             |
+|   Theme: (o) Dark ( ) Light               |
+|   [x] Show line numbers                   |
+|   [ ] Word wrap                           |
+| ## Editor                                 |
+|   Tab size: [4__]                         |
+|   Font: [Monospace    v]                  |
+| ----------------------------------------- |
+|                      [ Cancel ] [ Apply ] |
+|                                           |
++-------------------------------------------+

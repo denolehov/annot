@@ -1,0 +1,21 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Create Account\" width:50 {\n            section \"Personal Information\" {\n                row { text \"First name:\" input width:20 }\n                row { text \"Last name:\" input width:20 }\n                row { text \"Email:\" input width:30 placeholder:\"you@example.com\" }\n            }\n            section \"Password\" {\n                row { text \"Password:\" input width:25 }\n                row { text \"Confirm:\" input width:25 }\n                text \"Password must be at least 8 characters\" style:dim\n            }\n            section \"Preferences\" {\n                checkbox \"Subscribe to newsletter\"\n                checkbox \"Accept terms and conditions\"\n            }\n            separator\n            row { spacer button \"Cancel\" button \"Create Account\" }\n        }\n    }\"#).unwrap()"
+---
++-- Create Account ------------------------------+
+|                                                |
+| ## Personal Information                        |
+|   First name: [__________________]             |
+|   Last name: [__________________]              |
+|   Email: [you@example.com_____________]        |
+| ## Password                                    |
+|   Password: [_______________________]          |
+|   Confirm: [_______________________]           |
+|   Password must be at least 8 characters       |
+| ## Preferences                                 |
+|   [ ] Subscribe to newsletter                  |
+|   [ ] Accept terms and conditions              |
+| ---------------------------------------------- |
+|                  [ Cancel ] [ Create Account ] |
+|                                                |
++------------------------------------------------+

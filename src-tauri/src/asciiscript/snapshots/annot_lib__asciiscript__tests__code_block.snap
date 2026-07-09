@@ -1,0 +1,7 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        code ```\nfn main() {\n    println!(\"Hello, world!\");\n}\n```\n    }\"#).unwrap()"
+---
+fn main() {
+    println!("Hello, world!");
+}

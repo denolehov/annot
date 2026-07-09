@@ -1,0 +1,17 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Error\" width:50 {\n            alert type:error {\n                text \"Failed to save document\"\n            }\n            separator\n            section \"Details\" {\n                code \"Error: ENOSPC - No space left on device\"\n                text \"Location: /home/user/documents/file.txt\"\n            }\n            separator\n            row { checkbox \"Show technical details\" spacer button \"OK\" }\n        }\n    }\"#).unwrap()"
+---
++-- Error ---------------------------------------+
+|                                                |
+| ╔═ ERROR ════════════════════════════════════╗ |
+| ║ Failed to save document                    ║ |
+| ╚════════════════════════════════════════════╝ |
+| ---------------------------------------------- |
+| ## Details                                     |
+|   Error: ENOSPC - No space left on device      |
+|   Location: /home/user/documents/file.txt      |
+| ---------------------------------------------- |
+| [ ] Show technical details             [ OK ]  |
+|                                                |
++------------------------------------------------+

@@ -1,0 +1,5 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        row gap:5 { text \"A\" text \"B\" text \"C\" }\n    }\"#).unwrap()"
+---
+A     B     C

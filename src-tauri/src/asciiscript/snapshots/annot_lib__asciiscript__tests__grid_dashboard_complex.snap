@@ -1,0 +1,26 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Dashboard\" {\n            row gap:0 {\n                box \"Metrics\" width:30 {\n                    text \"Users: 1,234\"\n                    text \"Sessions: 5,678\"\n                    progress 75\n                }\n                box \"Status\" width:30 {\n                    text \"API: Online\" style:bold\n                    text \"DB: Online\" style:bold\n                    text \"Cache: Degraded\" style:danger\n                }\n            }\n            row gap:0 {\n                box \"A\" width:20 { text \"Widget A\" }\n                box \"B\" width:20 { text \"Widget B\" }\n                box \"C\" width:20 { text \"Widget C\" }\n            }\n            row gap:0 {\n                box \"Logs\" width:40 {\n                    code \"[10:30] Request received\"\n                    code \"[10:31] Processing...\"\n                }\n                box \"Quick Actions\" width:20 {\n                    button \"Refresh\"\n                    button \"Export\"\n                }\n            }\n        }\n    }\"#).unwrap()"
+---
++-- Dashboard --------------------------------------------------+
+|                                                               |
+| +-- Metrics -----------------++-- Status ------------------+  |
+| |                            ||                            |  |
+| | Users: 1,234               || API: Online                |  |
+| | Sessions: 5,678            || DB: Online                 |  |
+| | [██████████████░░░░░] 75%  || Cache: Degraded            |  |
+| |                            ||                            |  |
+| +----------------------------++----------------------------+  |
+| +-- A -------------++-- B -------------++-- C -------------+  |
+| |                  ||                  ||                  |  |
+| | Widget A         || Widget B         || Widget C         |  |
+| |                  ||                  ||                  |  |
+| +------------------++------------------++------------------+  |
+| +-- Logs ------------------------------++-- Quick Actions --+ |
+| |                                      ||                   | |
+| | [10:30] Request received             || [ Refresh ]       | |
+| | [10:31] Processing...                || [ Export ]        | |
+| |                                      ||                   | |
+| +--------------------------------------++-------------------+ |
+|                                                               |
++---------------------------------------------------------------+

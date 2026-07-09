@@ -1,0 +1,9 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window width:40 {\n            row { spacer button \"Cancel\" button \"OK\" }\n        }\n    }\"#).unwrap()"
+---
++--------------------------------------+
+|                                      |
+|                    [ Cancel ] [ OK ] |
+|                                      |
++--------------------------------------+

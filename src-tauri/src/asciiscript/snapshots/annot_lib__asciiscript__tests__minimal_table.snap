@@ -1,0 +1,9 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        table {\n            header { col \"X\" width:1 }\n            tr { td \"1\" }\n        }\n    }\"#).unwrap()"
+---
++---+
+| X |
++---+
+| 1 |
++---+

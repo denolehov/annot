@@ -1,0 +1,7 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        list {\n            item \"First item\"\n            item \"Second item\"\n            item \"Third item\"\n        }\n    }\"#).unwrap()"
+---
+   First item
+   Second item
+   Third item

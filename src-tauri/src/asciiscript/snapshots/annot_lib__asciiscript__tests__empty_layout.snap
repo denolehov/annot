@@ -1,0 +1,5 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout { }\"#).unwrap()"
+---
+

@@ -1,0 +1,7 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout { text \"Line one\\nLine two\\nLine three\" }\"#).unwrap()"
+---
+Line one
+Line two
+Line three

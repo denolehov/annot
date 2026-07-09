@@ -1,0 +1,25 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"Dashboard\" width:60 {\n            row {\n                box \"Stats\" {\n                    text \"Users: 1,234\"\n                    text \"Active: 567\"\n                    text \"New: 89\"\n                }\n                box \"Health\" {\n                    progress 85\n                    text \"System OK\" style:bold\n                }\n            }\n            separator\n            section \"Recent Activity\" {\n                table {\n                    header {\n                        col \"Time\" width:10\n                        col \"User\" width:15\n                        col \"Action\" width:20\n                    }\n                    tr { td \"10:30\" td \"alice\" td \"Login\" }\n                    tr { td \"10:25\" td \"bob\" td \"Upload file\" }\n                    tr { td \"10:20\" td \"charlie\" td \"Edit profile\" }\n                }\n            }\n            row { spacer button \"Refresh\" button \"Settings\" }\n        }\n    }\"#).unwrap()"
+---
++-- Dashboard ----------------------------------------------+
+|                                                           |
+| +-- Stats -----+ +-- Health ------------+                 |
+| |              | |                      |                 |
+| | Users: 1,234 | | [███████████░░] 85%  |                 |
+| | Active: 567  | | System OK            |                 |
+| | New: 89      | |                      |                 |
+| |              | +----------------------+                 |
+| +--------------+                                          |
+| --------------------------------------------------------- |
+| ## Recent Activity                                        |
+|   +------------+-----------------+----------------------+ |
+|   | Time       | User            | Action               | |
+|   +------------+-----------------+----------------------+ |
+|   | 10:30      | alice           | Login                | |
+|   | 10:25      | bob             | Upload file          | |
+|   | 10:20      | charlie         | Edit profile         | |
+|   +------------+-----------------+----------------------+ |
+|                                  [ Refresh ] [ Settings ] |
+|                                                           |
++-----------------------------------------------------------+

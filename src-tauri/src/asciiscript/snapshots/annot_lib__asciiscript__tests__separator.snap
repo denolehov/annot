@@ -1,0 +1,11 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window width:30 {\n            text \"Above\"\n            separator\n            text \"Below\"\n        }\n    }\"#).unwrap()"
+---
++----------------------------+
+|                            |
+| Above                      |
+| -------------------------- |
+| Below                      |
+|                            |
++----------------------------+

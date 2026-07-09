@@ -1,0 +1,10 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        table {\n            header {\n                col \"Item\" width:15 align:left\n                col \"Qty\" width:5 align:center\n                col \"Price\" width:10 align:right\n            }\n            tr { td \"Widget\" td \"10\" td \"$99.00\" }\n            tr { td \"Gadget\" td \"5\" td \"$149.50\" }\n        }\n    }\"#).unwrap()"
+---
++-----------------+-------+------------+
+| Item            |  Qty  |      Price |
++-----------------+-------+------------+
+| Widget          |  10   |     $99.00 |
+| Gadget          |   5   |    $149.50 |
++-----------------+-------+------------+

@@ -1,0 +1,5 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout { text \"Hello 世界! 🌍 Привет мир!\" }\"#).unwrap()"
+---
+Hello 世界! 🌍 Привет мир!

@@ -158,6 +158,99 @@ The loop: human and AI taking turns until something crystallizes.
 
 ---
 
+## AsciiScript
+
+AI can generate UI mockups using AsciiScript — a DSL that renders to ASCII box art:
+
+```asciiscript
+layout {
+  window "Login" width:40 {
+    section "Credentials" {
+      row { text "Username:" input width:20 }
+      row { text "Password:" input width:20 placeholder:"********" }
+    }
+    separator
+    row gap:2 {
+      checkbox "Remember me"
+      spacer
+      button "Cancel"
+      button "Sign In" style:bold
+    }
+  }
+}
+```
+
+A more complex example with multiple components:
+
+```asciiscript
+layout {
+  window "Dashboard" width:60 {
+    section "Build Status" {
+      row {
+        text "main"
+        progress 100
+        text "passing" style:bold
+      }
+      row {
+        text "develop"
+        progress 75
+        text "building..."
+      }
+      row {
+        text "feature/auth"
+        progress 30
+        text "failing" style:danger
+      }
+    }
+    separator
+    section "Quick Actions" {
+      row gap:2 {
+        button "New Build"
+        button "Settings"
+        spacer
+        link "View Logs"
+      }
+    }
+    alert type:info { text "Last deploy: 2 hours ago" }
+  }
+}
+```
+
+A dropdown select with options:
+
+```asciiscript
+layout {
+  window "Export Options" width:45 {
+    section "Format" {
+      row { text "Type:" select "PDF Document" width:25 }
+      row { text "Quality:" select "High (300 DPI)" width:25 }
+    }
+    separator
+    section "Destination" {
+      row {
+        radio "Local file" selected
+      }
+      row {
+        radio "Cloud storage"
+      }
+      row {
+        radio "Email attachment"
+      }
+    }
+    separator
+    row gap:2 {
+      spacer
+      button "Cancel"
+      button "Export" style:bold
+    }
+  }
+}
+```
+
+AsciiScript supports windows, boxes, sections, rows, text, inputs, buttons, checkboxes, radio buttons, progress bars, tables, alerts, and more. See the spec for full details.
+
+---
+
 ## Portals
 
 Portals embed live code from other files:

@@ -1,0 +1,9 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n        window \"My Application\" {\n            text \"Window content here\"\n        }\n    }\"#).unwrap()"
+---
++-- My Application ---+
+|                     |
+| Window content here |
+|                     |
++---------------------+

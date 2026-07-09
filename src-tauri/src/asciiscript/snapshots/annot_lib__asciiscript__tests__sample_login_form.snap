@@ -1,0 +1,13 @@
+---
+source: src/asciiscript/tests.rs
+expression: "render(r#\"layout {\n  window \"Login\" width:40 {\n    section \"Credentials\" {\n      row { text \"Username:\" input width:20 }\n      row { text \"Password:\" input width:20 placeholder:\"********\" }\n    }\n    separator\n    row gap:2 {\n      checkbox \"Remember me\"\n      spacer\n      button \"Cancel\"\n      button \"Sign In\" style:bold\n    }\n  }\n}\"#).unwrap()"
+---
++-- Login ---------------------------------+
+|                                          |
+| ## Credentials                           |
+|   Username: [__________________]         |
+|   Password: [********__________]         |
+| ---------------------------------------- |
+| [ ] Remember me [ Cancel ]  [ Sign In ]  |
+|                                          |
++------------------------------------------+
