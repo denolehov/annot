@@ -20,7 +20,7 @@
 
 <aside class="file-tree" aria-label="Changed files">
   <div class="file-tree-summary">
-    <span>{entries.length} {entries.length === 1 ? 'file' : 'files'} changed</span>
+    <span class="file-tree-summary-label">{entries.length} {entries.length === 1 ? 'file' : 'files'} changed</span>
     <span class="file-tree-counts">
       <span class="added">+{totals.added}</span>
       <span class="deleted">−{totals.deleted}</span>
