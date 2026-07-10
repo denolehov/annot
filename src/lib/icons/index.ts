@@ -25,3 +25,4 @@ export { default as ChatBubbleIcon } from './ChatBubbleIcon.svelte';
 export { default as HeadingH1Icon } from './HeadingH1Icon.svelte';
 export { default as HeadingH2Icon } from './HeadingH2Icon.svelte';
 export { default as HeadingH3Icon } from './HeadingH3Icon.svelte';
+export { default as FileIcon } from './FileIcon.svelte';

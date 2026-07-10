@@ -55,6 +55,7 @@
     {
       category: 'View',
       items: [
+        { keys: [keys.cmd, 'B'], description: 'Toggle file tree (diffs)' },
         { keys: [keys.cmd, '+'], description: 'Zoom in' },
         { keys: [keys.cmd, '-'], description: 'Zoom out' },
         { keys: [keys.cmd, '0'], description: 'Reset zoom' },

@@ -112,6 +112,7 @@ header.header {
 /* Main content area */
 .content {
 	flex: 1;
+	min-width: 0; /* shrink instead of overflowing when the file tree is open */
 	overflow: auto;
 	padding-bottom: 1rem;
 }
