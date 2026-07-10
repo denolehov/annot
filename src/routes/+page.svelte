@@ -18,6 +18,9 @@
   import Table from "$lib/components/embedded/Table.svelte";
   import RegularLines from "$lib/components/embedded/RegularLines.svelte";
   import { Header, StatusBar, SessionEditor, WindowResizeHandles } from "$lib/components";
+  import FileTree from "$lib/components/FileTree.svelte";
+  import { deriveFileEntries } from "$lib/file-tree";
+  import { useFileTree } from "$lib/composables/useFileTree.svelte";
   import { useExitModes } from "$lib/composables/useExitModes.svelte";
   import { useContentTracking } from "$lib/composables/useContentTracking.svelte";
   import { useInteraction } from "$lib/composables/useInteraction.svelte";
@@ -80,6 +83,10 @@
   const contentTracking = useContentTracking();
   let contentEl: HTMLDivElement | null = $state(null);
   let scrollRafId: number | null = null;
+
+  // File tree sidebar (composable) — diff mode only
+  const fileTree = useFileTree();
+  let fileEntries = $derived(deriveFileEntries(lines, diffMetadata));
 
   // Current file/hunk derived from indices (diff mode)
   let currentFile = $derived.by(() => {
@@ -191,10 +198,16 @@
   const lineSegmentation = useLineSegments(() => lines);
 
   // Search (composable)
-  function scrollToDisplayIndex(displayIndex: number) {
+  function scrollToDisplayIndex(displayIndex: number, block: ScrollLogicalPosition = 'center') {
     contentEl
       ?.querySelector(`[data-display-idx="${displayIndex}"]`)
-      ?.scrollIntoView({ block: 'center' });
+      ?.scrollIntoView({ block });
+  }
+
+  // File jumps land the file header at the top of the viewport. Centering it would
+  // leave the *previous* file at the top, which is what current-file tracking reads.
+  function jumpToFile(startLine: number) {
+    scrollToDisplayIndex(startLine, 'start');
   }
   const search = useSearch(() => lines, scrollToDisplayIndex);
 
@@ -376,6 +389,9 @@
     if (event === 'SET_THEME') {
       setTheme(payload as ThemePreference);
       overlay.close();
+    } else if (event === 'JUMP_TO_FILE') {
+      overlay.close();
+      jumpToFile(payload as number);
     }
   }
 
@@ -575,6 +591,7 @@
       onCloseWindow: () => getCurrentWindow().close(),
       onOpenSearch: () => search.open(),
       onOpenHelp: () => overlay.openHelp(),
+      onToggleFileTree: () => { if (diffMetadata) fileTree.toggle(); },
       onZoomIn: () => contentZoom = Math.min(contentZoom + 0.1, 3.0),
       onZoomOut: () => contentZoom = Math.max(contentZoom - 0.1, 0.5),
       onZoomReset: () => contentZoom = 1.0,
@@ -752,6 +769,15 @@
     </div>
   </div>
 
+  <div class="viewer-body">
+    {#if fileTree.isOpen && diffMetadata}
+      <FileTree
+        entries={fileEntries}
+        currentIndex={contentTracking.currentFileIndex}
+        onJump={jumpToFile}
+      />
+    {/if}
+
     <div
       class="content"
       class:shift-held={interaction.isShiftHeld}
@@ -826,6 +852,7 @@
       {/each}
       </div>
     </div>
+  </div>
 
   <!-- Footer / Status Bar -->
   <div style:zoom={contentZoom}>
@@ -843,6 +870,7 @@
   <CommandPalette
     {tags}
     exitModes={exitModeState.modes}
+    files={fileEntries}
     zoomLevel={contentZoom}
     onClose={handleCommandPaletteClose}
     onSetExitMode={handleSetExitModeFromPalette}

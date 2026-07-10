@@ -25,6 +25,8 @@ Open any source file for annotation. Syntax highlighting adapts to language. Nav
 ### Diff Review
 Review git changes (`--staged`, `main...HEAD`) or raw unified diffs. Color-coded: additions green, deletions red. Annotations capture both old and new line numbers.
 
+**File tree** — `Cmd+B` toggles a sidebar listing every changed file with its +/− counts. Clicking a file scrolls to it; the row for the file currently in view stays highlighted. The `:` palette's **Files** namespace does the same jump by fuzzy search.
+
 ### Content Review
 Review agent-generated content — plans, drafts, analysis. Markdown rendering with Mermaid diagrams and portal links that embed live code.
 
@@ -125,7 +127,7 @@ Press `Shift+C` to add a high-level comment that applies to the entire review (n
 
 ## Command Palette (`:`)
 
-Press `:` (colon) to open. Seven namespaces:
+Press `:` (colon) to open. Eight namespaces:
 
 ### Tags
 - Browse, create, edit, delete tags
@@ -137,6 +139,9 @@ Press `:` (colon) to open. Seven namespaces:
 - Examples: Apply, Revise, Reject, Discuss
 - Press `s` to set as active
 - Press `r` to reorder (drag with arrow keys)
+
+### Files
+- Fuzzy-jump to a changed file (diff review only)
 
 ### Copy
 - Copy content only
@@ -169,6 +174,7 @@ Press `:` (colon) to open. Seven namespaces:
 | `:` | Command palette |
 | `Alt+Tab` | Command palette → Exit modes |
 | Ctrl+F | Search |
+| `Cmd+B` | Toggle file tree (diffs) |
 | `e` | Edit item (in command palette) |
 | `r` | Reorder items (exit modes only) |
 | `Cmd+D` | Delete item (in command palette) |

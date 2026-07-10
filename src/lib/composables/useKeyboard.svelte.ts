@@ -16,6 +16,7 @@ export interface KeyboardHandlers {
   onZoomReset?: () => void;
   onCommentHoveredLine?: () => void;
   onSelectAllContent?: () => void;
+  onToggleFileTree?: () => void;
 }
 
 export interface KeyboardState {
@@ -127,6 +128,13 @@ export function useKeyboard(handlers: KeyboardHandlers, state: KeyboardState) {
     if (e.key === 'f' && (e.metaKey || e.ctrlKey) && !state.isSearchOpen() && !state.isEditorActive() && !state.isCommandPaletteOpen()) {
       e.preventDefault();
       handlers.onOpenSearch?.();
+      return;
+    }
+
+    // Cmd+B to toggle the file tree sidebar
+    if (e.key === 'b' && (e.metaKey || e.ctrlKey) && !e.altKey && !state.isEditorActive() && !state.isCommandPaletteOpen()) {
+      e.preventDefault();
+      handlers.onToggleFileTree?.();
       return;
     }
 

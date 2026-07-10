@@ -22,7 +22,8 @@
     ChatBubbleIcon,
     HeadingH1Icon,
     HeadingH2Icon,
-    HeadingH3Icon
+    HeadingH3Icon,
+    FileIcon
   } from '$lib/icons';
 
   interface Props {
@@ -55,7 +56,8 @@
     'chat-bubble': ChatBubbleIcon,
     'heading-h1': HeadingH1Icon,
     'heading-h2': HeadingH2Icon,
-    'heading-h3': HeadingH3Icon
+    'heading-h3': HeadingH3Icon,
+    file: FileIcon
   };
 
   const IconComponent = $derived(icons[name]);

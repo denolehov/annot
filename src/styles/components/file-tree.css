@@ -1,0 +1,103 @@
+/* ===========================================
+   FILE TREE - Changed-files sidebar (diff mode)
+   =========================================== */
+
+/* Row holding the sidebar and the scrollable content side by side */
+.viewer-body {
+	flex: 1;
+	display: flex;
+	min-height: 0;
+}
+
+.file-tree {
+	flex: 0 0 240px;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	overflow-y: auto;
+	background: var(--bg-panel);
+	border-right: 1px solid var(--border-subtle);
+	font-family: var(--font-ui);
+	font-size: 12px;
+}
+
+.file-tree-summary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 8px 12px;
+	color: var(--text-secondary);
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+.file-tree-list {
+	list-style: none;
+	margin: 0;
+	padding: 4px 0;
+}
+
+.file-row {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+	width: 100%;
+	padding: 4px 12px;
+	background: transparent;
+	border: none;
+	border-left: 2px solid transparent;
+	color: var(--text-primary);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.file-row:hover {
+	background: var(--bg-hover);
+}
+
+.file-row:focus-visible {
+	outline: none;
+	border-left-color: var(--focus-ring);
+}
+
+.file-row.current {
+	background: var(--accent-bg);
+	border-left-color: var(--accent);
+}
+
+/* The directory prefix absorbs truncation so the basename stays readable. */
+.file-row-path {
+	display: flex;
+	min-width: 0;
+	white-space: nowrap;
+}
+
+.file-row-dir {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	color: var(--text-muted);
+}
+
+.file-row-name {
+	flex-shrink: 0;
+	font-weight: 600;
+}
+
+.file-tree-counts {
+	display: flex;
+	gap: 6px;
+	flex-shrink: 0;
+	font-family: var(--font-mono);
+	font-size: 11px;
+}
+
+.file-tree-counts .added {
+	color: rgb(34, 197, 94);
+}
+
+.file-tree-counts .deleted {
+	color: rgb(239, 68, 68);
+}

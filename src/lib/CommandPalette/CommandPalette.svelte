@@ -4,10 +4,11 @@
   import { invoke } from '@tauri-apps/api/core';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { reduce, computeItemList } from './engine/reducer';
-  import { createQueryContext, setTagItems, setExitModeItems, saveTagItem, deleteTagItem, saveExitModeItem, deleteExitModeItem, reorderExitModeItems, generateTagId, generateExitModeId, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId } from './namespaces';
+  import { createQueryContext, setTagItems, setExitModeItems, setFileItems, saveTagItem, deleteTagItem, saveExitModeItem, deleteExitModeItem, reorderExitModeItems, generateTagId, generateExitModeId, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId } from './namespaces';
   import type { State, Action, Command, Item, Namespace, InitialState } from './engine/types';
   import { getFilterPlaceholder, canDelete, isItemEditable } from './engine/types';
   import type { Tag, ExitMode } from '$lib/types';
+  import type { FileEntry } from '$lib/file-tree';
   import Icon from './Icon.svelte';
 
   // Config type matching Rust
@@ -20,6 +21,7 @@
   interface Props {
     tags: Tag[];
     exitModes: ExitMode[];
+    files?: FileEntry[];
     zoomLevel?: number;
     onClose: () => void;
     onSetExitMode: (modeId: string) => void;
@@ -32,7 +34,7 @@
     onEvent?: (event: string, payload: unknown) => void;
   }
 
-  let { tags, exitModes, zoomLevel = 1, onClose, onSetExitMode, onTagsChange, onExitModesChange, showToast, onOpenSaveModal, initialState, onItemCreated, onEvent }: Props = $props();
+  let { tags, exitModes, files = [], zoomLevel = 1, onClose, onSetExitMode, onTagsChange, onExitModesChange, showToast, onOpenSaveModal, initialState, onItemCreated, onEvent }: Props = $props();
 
   // Convert domain types to Item format
   function tagToItem(tag: Tag): Item {
@@ -65,6 +67,10 @@
 
   $effect(() => {
     setExitModeItems(exitModes.map(exitModeToItem));
+  });
+
+  $effect(() => {
+    setFileItems(files);
   });
 
   // State machine

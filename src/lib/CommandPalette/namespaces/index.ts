@@ -8,11 +8,13 @@ import { copyNamespace, getCopyItems, filterCopyItems } from './copy';
 import { saveNamespace, getSaveItems, filterSaveItems } from './save';
 import { obsidianNamespace, getObsidianItems, filterObsidianItems } from './obsidian';
 import { themeNamespace, getThemeItems, filterThemeItems } from './theme';
+import { filesNamespace, getFileItems, filterFileItems } from './files';
 
-const namespaces: Namespace[] = [tagsNamespace, exitModesNamespace, copyNamespace, obsidianNamespace, saveNamespace, themeNamespace];
+const namespaces: Namespace[] = [tagsNamespace, exitModesNamespace, filesNamespace, copyNamespace, obsidianNamespace, saveNamespace, themeNamespace];
 
 const getItemsMap: Record<string, () => Item[]> = {
   tags: getTagItems,
+  files: getFileItems,
   'exit-modes': getExitModeItems,
   copy: getCopyItems,
   save: getSaveItems,
@@ -22,6 +24,7 @@ const getItemsMap: Record<string, () => Item[]> = {
 
 const filterItemsMap: Record<string, (query: string) => Item[]> = {
   tags: filterTagItems,
+  files: filterFileItems,
   'exit-modes': filterExitModeItems,
   copy: filterCopyItems,
   save: filterSaveItems,
@@ -29,12 +32,20 @@ const filterItemsMap: Record<string, (query: string) => Item[]> = {
   theme: filterThemeItems,
 };
 
+/** Files only exist in diff sessions — don't surface an empty namespace elsewhere. */
+function activeNamespaces(): Namespace[] {
+  return namespaces.filter((n) => n.id !== 'files' || getFileItems().length > 0);
+}
+
 export function createQueryContext(): QueryContext {
   return {
-    namespaces,
+    // Getter, not a snapshot: items are seeded after this context is built.
+    get namespaces() {
+      return activeNamespaces();
+    },
 
     filterNamespaces(query: string): Namespace[] {
-      return fuzzySearch(namespaces, query, [{ name: 'label', weight: 1 }]);
+      return fuzzySearch(activeNamespaces(), query, [{ name: 'label', weight: 1 }]);
     },
 
     getItems(namespace: Namespace) {
@@ -54,3 +65,4 @@ export { copyNamespace, getCopyItems, filterCopyItems } from './copy';
 export { saveNamespace, getSaveItems, filterSaveItems } from './save';
 export { obsidianNamespace, getObsidianItems, filterObsidianItems, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId, getRawVaultItems } from './obsidian';
 export { themeNamespace, getThemeItems, filterThemeItems } from './theme';
+export { filesNamespace, getFileItems, setFileItems, filterFileItems } from './files';

@@ -216,4 +216,36 @@ describe('useKeyboard', () => {
 
     expect(onCommentHoveredLine).not.toHaveBeenCalled();
   });
+
+  it('calls onToggleFileTree on Cmd+B', () => {
+    const onToggleFileTree = vi.fn();
+    const keyboard = useKeyboard({ onToggleFileTree }, defaultState);
+
+    const event = createKeyboardEvent('b', { metaKey: true });
+    keyboard.handleKeyDown(event);
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(onToggleFileTree).toHaveBeenCalled();
+  });
+
+  it('does not toggle the file tree while an editor is active', () => {
+    const onToggleFileTree = vi.fn();
+    const keyboard = useKeyboard({ onToggleFileTree }, {
+      ...defaultState,
+      isEditorActive: () => true,
+    });
+
+    keyboard.handleKeyDown(createKeyboardEvent('b', { metaKey: true }));
+
+    expect(onToggleFileTree).not.toHaveBeenCalled();
+  });
+
+  it('does not toggle the file tree on a bare b', () => {
+    const onToggleFileTree = vi.fn();
+    const keyboard = useKeyboard({ onToggleFileTree }, defaultState);
+
+    keyboard.handleKeyDown(createKeyboardEvent('b'));
+
+    expect(onToggleFileTree).not.toHaveBeenCalled();
+  });
 });

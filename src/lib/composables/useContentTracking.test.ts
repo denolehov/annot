@@ -85,6 +85,53 @@ describe('useContentTracking', () => {
     expect(tracking.currentHunkIndex).toBe(1);
   });
 
+  it('resolves a file header line to its own file, not the file above it', () => {
+    const tracking = useContentTracking();
+    const meta: DiffMetadata = {
+      files: [
+        {
+          old_name: 'lib.rs',
+          new_name: 'lib.rs',
+          language: 'rust',
+          start_line: 1,
+          end_line: 20,
+          hunks: [
+            { display_line: 5, old_start: 1, old_count: 5, new_start: 1, new_count: 6, function_context: null, function_context_html: null },
+          ],
+        },
+        {
+          old_name: 'main.rs',
+          new_name: 'main.rs',
+          language: 'rust',
+          start_line: 21,
+          end_line: 40,
+          hunks: [
+            { display_line: 25, old_start: 1, old_count: 5, new_start: 1, new_count: 5, function_context: null, function_context_html: null },
+          ],
+        },
+      ],
+    };
+
+    flushSync(() => {
+      tracking.initializeDiff(meta);
+    });
+
+    // Line 21 is main.rs's `diff --git` header — it sits above main.rs's first hunk,
+    // so hunk boundaries alone would resolve it to lib.rs.
+    flushSync(() => {
+      tracking.updateFromLine(21);
+    });
+    expect(tracking.currentFileIndex).toBe(1);
+    expect(tracking.currentHunkIndex).toBe(0);
+
+    // Inside main.rs's hunk, tracking is unchanged.
+    flushSync(() => {
+      tracking.updateFromLine(30);
+    });
+    expect(tracking.currentFileIndex).toBe(1);
+    expect(tracking.currentHunkIndex).toBe(0);
+  });
+
   it('initializes markdown tracker from metadata', () => {
     const tracking = useContentTracking();
     const meta: MarkdownMetadata = {
