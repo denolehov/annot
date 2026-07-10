@@ -51,6 +51,7 @@ function cloneSessionData(data: SessionData): SessionData {
       Object.entries(data.annotations).map(([key, entry]) => [
         key,
         {
+          id: entry.id,
           range: { ...entry.range },
           content: JSON.parse(JSON.stringify(entry.content)),
         },

@@ -105,6 +105,8 @@ describe('validateRange', () => {
       path: 'test.rs',
       startLine: 10,
       endLine: 12,
+      startSide: 'new',
+      endSide: 'new',
     });
   });
 
@@ -120,6 +122,8 @@ describe('validateRange', () => {
       path: 'file.rs',
       startLine: 5,
       endLine: 7,
+      startSide: 'new',
+      endSide: 'new',
     });
   });
 
@@ -168,6 +172,24 @@ describe('validateRange', () => {
       path: 'output.rs',
       startLine: 124,
       endLine: 126,
+      startSide: 'new',
+      endSide: 'new',
+    });
+  });
+
+  it('marks a removed-only line as old side', () => {
+    const lines: Line[] = [
+      makeLine({ type: 'diff', path: 'output.rs', old_line: 122, new_line: null }), // removed
+      makeLine({ type: 'diff', path: 'output.rs', old_line: 123, new_line: null }), // removed
+    ];
+
+    const coords = validateRange({ start: 1, end: 2 }, lines);
+    expect(coords).toEqual({
+      path: 'output.rs',
+      startLine: 122,
+      endLine: 123,
+      startSide: 'old',
+      endSide: 'old',
     });
   });
 
@@ -194,6 +216,8 @@ describe('validateRange', () => {
       path: 'test.rs',
       startLine: 14,
       endLine: 15,
+      startSide: 'new',
+      endSide: 'new',
     });
   });
 });

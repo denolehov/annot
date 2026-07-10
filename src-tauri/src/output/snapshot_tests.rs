@@ -6,17 +6,19 @@
 //! These tests validate the complete output format for various scenarios,
 //! making it easy to catch unintended format changes.
 
-use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
 
+use indexmap::IndexMap;
 use tempfile::NamedTempFile;
 
+use crate::anchor::{Anchor, Annotation, Endpoint};
 use crate::input::{CliSource, ContentSource, DiffSource, McpSource};
 use crate::review::Review;
+use crate::source::Side;
 use crate::state::{
-    AnnotationRefSnapshot, Annotation, ContentMetadata, ContentModel, ContentNode, ExitMode,
-    ExitModeSource, Line, LineOrigin, LineRange, LineSemantics, RefSnapshot, UserConfig,
+    AnnotationRefSnapshot, ContentMetadata, ContentModel, ContentNode, ExitMode, ExitModeSource,
+    Line, LineOrigin, LineSemantics, RefSnapshot, UserConfig,
 };
 
 use super::{format_output, OutputMode};
@@ -41,7 +43,39 @@ fn make_lines(path: &str, start: u32, end: u32) -> Vec<Line> {
         .collect()
 }
 
-fn make_review(label: &str, lines: Vec<Line>, annotations: HashMap<LineRange, Annotation>) -> Review {
+/// Build a (id, Annotation) fixture for a given line range. Tests are all
+/// non-diff (file/content mode), so `Side::New` everywhere is correct per
+/// the anchor spec's degenerate-case rule. The path is inert for output —
+/// formatting always resolves the file path via `FileKey`/`DiffFileView`,
+/// never via `anchor.path` — so a fixed placeholder is fine here.
+/// Shared with `mod::tests` (both are children of `output`) to avoid duplication.
+pub(super) fn ann(start: u32, end: u32, content: Vec<ContentNode>) -> (String, Annotation) {
+    ann_at("test.rs", start, end, content)
+}
+
+pub(super) fn ann_at(path: &str, start: u32, end: u32, content: Vec<ContentNode>) -> (String, Annotation) {
+    let id = format!("{start}-{end}");
+    (
+        id.clone(),
+        Annotation {
+            id,
+            anchor: Anchor {
+                path: path.to_string(),
+                start: Endpoint {
+                    side: Side::New,
+                    line: start,
+                },
+                end: Endpoint {
+                    side: Side::New,
+                    line: end,
+                },
+            },
+            content,
+        },
+    )
+}
+
+fn make_review(label: &str, lines: Vec<Line>, annotations: IndexMap<String, Annotation>) -> Review {
     let source = ContentSource::Cli(CliSource::File {
         path: PathBuf::from(label),
     });
@@ -63,7 +97,7 @@ fn make_review(label: &str, lines: Vec<Line>, annotations: HashMap<LineRange, An
 fn make_review_with_config(
     label: &str,
     lines: Vec<Line>,
-    annotations: HashMap<LineRange, Annotation>,
+    annotations: IndexMap<String, Annotation>,
     config: UserConfig,
 ) -> Review {
     let source = ContentSource::Cli(CliSource::File {
@@ -87,7 +121,7 @@ fn make_review_with_config(
 
 #[test]
 fn empty_review() {
-    let review = make_review("test.rs", vec![], HashMap::new());
+    let review = make_review("test.rs", vec![], IndexMap::new());
     let output = format_output(&review, OutputMode::Cli).text;
     insta::assert_snapshot!(output);
 }
@@ -96,17 +130,15 @@ fn empty_review() {
 
 #[test]
 fn single_line_annotation() {
-    let mut annotations = HashMap::new();
-    annotations.insert(
-        LineRange::new(5, 5),
-        Annotation {
-            start_line: 5,
-            end_line: 5,
-            content: vec![ContentNode::Text {
-                text: "Fix this bug".to_string(),
-            }],
-        },
+    let mut annotations = IndexMap::new();
+    let (id, annotation) = ann(
+        5,
+        5,
+        vec![ContentNode::Text {
+            text: "Fix this bug".to_string(),
+        }],
     );
+    annotations.insert(id, annotation);
 
     let review = make_review("src/lib.rs", make_lines("src/lib.rs", 1, 10), annotations);
     let output = format_output(&review, OutputMode::Cli).text;
@@ -115,17 +147,15 @@ fn single_line_annotation() {
 
 #[test]
 fn multi_line_annotation() {
-    let mut annotations = HashMap::new();
-    annotations.insert(
-        LineRange::new(10, 15),
-        Annotation {
-            start_line: 10,
-            end_line: 15,
-            content: vec![ContentNode::Text {
-                text: "This entire block needs refactoring".to_string(),
-            }],
-        },
+    let mut annotations = IndexMap::new();
+    let (id, annotation) = ann(
+        10,
+        15,
+        vec![ContentNode::Text {
+            text: "This entire block needs refactoring".to_string(),
+        }],
     );
+    annotations.insert(id, annotation);
 
     let review = make_review("src/main.rs", make_lines("src/main.rs", 1, 20), annotations);
     let output = format_output(&review, OutputMode::Cli).text;
@@ -134,17 +164,15 @@ fn multi_line_annotation() {
 
 #[test]
 fn annotation_multiline_content() {
-    let mut annotations = HashMap::new();
-    annotations.insert(
-        LineRange::new(5, 5),
-        Annotation {
-            start_line: 5,
-            end_line: 5,
-            content: vec![ContentNode::Text {
-                text: "First line of feedback\nSecond line continues\nThird line concludes".to_string(),
-            }],
-        },
+    let mut annotations = IndexMap::new();
+    let (id, annotation) = ann(
+        5,
+        5,
+        vec![ContentNode::Text {
+            text: "First line of feedback\nSecond line continues\nThird line concludes".to_string(),
+        }],
     );
+    annotations.insert(id, annotation);
 
     let review = make_review("file.rs", make_lines("file.rs", 1, 10), annotations);
     let output = format_output(&review, OutputMode::Cli).text;
@@ -155,28 +183,24 @@ fn annotation_multiline_content() {
 
 #[test]
 fn multiple_annotations_sorted() {
-    let mut annotations = HashMap::new();
+    let mut annotations = IndexMap::new();
     // Insert in reverse order to verify sorting
-    annotations.insert(
-        LineRange::new(20, 20),
-        Annotation {
-            start_line: 20,
-            end_line: 20,
-            content: vec![ContentNode::Text {
-                text: "Second annotation".to_string(),
-            }],
-        },
+    let (id, annotation) = ann(
+        20,
+        20,
+        vec![ContentNode::Text {
+            text: "Second annotation".to_string(),
+        }],
     );
-    annotations.insert(
-        LineRange::new(5, 5),
-        Annotation {
-            start_line: 5,
-            end_line: 5,
-            content: vec![ContentNode::Text {
-                text: "First annotation".to_string(),
-            }],
-        },
+    annotations.insert(id, annotation);
+    let (id, annotation) = ann(
+        5,
+        5,
+        vec![ContentNode::Text {
+            text: "First annotation".to_string(),
+        }],
     );
+    annotations.insert(id, annotation);
 
     let review = make_review("test.rs", make_lines("test.rs", 1, 25), annotations);
     let output = format_output(&review, OutputMode::Cli).text;
@@ -187,24 +211,22 @@ fn multiple_annotations_sorted() {
 
 #[test]
 fn single_tag() {
-    let mut annotations = HashMap::new();
-    annotations.insert(
-        LineRange::new(5, 5),
-        Annotation {
-            start_line: 5,
-            end_line: 5,
-            content: vec![
-                ContentNode::Tag {
-                    id: "sec001".to_string(),
-                    name: "SECURITY".to_string(),
-                    instruction: "Review for security vulnerabilities".to_string(),
-                },
-                ContentNode::Text {
-                    text: " Validate user input here".to_string(),
-                },
-            ],
-        },
+    let mut annotations = IndexMap::new();
+    let (id, annotation) = ann(
+        5,
+        5,
+        vec![
+            ContentNode::Tag {
+                id: "sec001".to_string(),
+                name: "SECURITY".to_string(),
+                instruction: "Review for security vulnerabilities".to_string(),
+            },
+            ContentNode::Text {
+                text: " Validate user input here".to_string(),
+            },
+        ],
     );
+    annotations.insert(id, annotation);
 
     let review = make_review("auth.rs", make_lines("auth.rs", 1, 10), annotations);
     let output = format_output(&review, OutputMode::Cli).text;
@@ -213,31 +235,29 @@ fn single_tag() {
 
 #[test]
 fn multiple_tags_alphabetized() {
-    let mut annotations = HashMap::new();
-    annotations.insert(
-        LineRange::new(5, 5),
-        Annotation {
-            start_line: 5,
-            end_line: 5,
-            content: vec![
-                ContentNode::Tag {
-                    id: "todo001".to_string(),
-                    name: "TODO".to_string(),
-                    instruction: "Mark items for follow-up".to_string(),
-                },
-                ContentNode::Tag {
-                    id: "bug001".to_string(),
-                    name: "BUG".to_string(),
-                    instruction: "Known bug to fix".to_string(),
-                },
-                ContentNode::Tag {
-                    id: "sec001".to_string(),
-                    name: "SECURITY".to_string(),
-                    instruction: "Security concern".to_string(),
-                },
-            ],
-        },
+    let mut annotations = IndexMap::new();
+    let (id, annotation) = ann(
+        5,
+        5,
+        vec![
+            ContentNode::Tag {
+                id: "todo001".to_string(),
+                name: "TODO".to_string(),
+                instruction: "Mark items for follow-up".to_string(),
+            },
+            ContentNode::Tag {
+                id: "bug001".to_string(),
+                name: "BUG".to_string(),
+                instruction: "Known bug to fix".to_string(),
+            },
+            ContentNode::Tag {
+                id: "sec001".to_string(),
+                name: "SECURITY".to_string(),
+                instruction: "Security concern".to_string(),
+            },
+        ],
     );
+    annotations.insert(id, annotation);
 
     let review = make_review("code.rs", make_lines("code.rs", 1, 10), annotations);
     let output = format_output(&review, OutputMode::Cli).text;
@@ -248,7 +268,7 @@ fn multiple_tags_alphabetized() {
 
 #[test]
 fn general_comment_only() {
-    let mut review = make_review("test.rs", vec![], HashMap::new());
+    let mut review = make_review("test.rs", vec![], IndexMap::new());
     review.session_comment = Some(vec![ContentNode::Text {
         text: "Overall the code looks good, just a few minor issues".to_string(),
     }]);
@@ -259,9 +279,10 @@ fn general_comment_only() {
 
 #[test]
 fn general_comment_multiline() {
-    let mut review = make_review("test.rs", vec![], HashMap::new());
+    let mut review = make_review("test.rs", vec![], IndexMap::new());
     review.session_comment = Some(vec![ContentNode::Text {
-        text: "First paragraph of feedback.\n\nSecond paragraph with more details.\n\nConclusion.".to_string(),
+        text: "First paragraph of feedback.\n\nSecond paragraph with more details.\n\nConclusion."
+            .to_string(),
     }]);
 
     let output = format_output(&review, OutputMode::Cli).text;
@@ -283,7 +304,7 @@ fn next_apply() {
             source: ExitModeSource::Persisted,
         }],
     );
-    let mut review = make_review_with_config("plan.md", vec![], HashMap::new(), config);
+    let mut review = make_review_with_config("plan.md", vec![], IndexMap::new(), config);
     review.selected_exit_mode_id = Some("apply".to_string());
 
     let output = format_output(&review, OutputMode::Cli).text;
@@ -303,7 +324,7 @@ fn next_reject() {
             source: ExitModeSource::Persisted,
         }],
     );
-    let mut review = make_review_with_config("proposal.md", vec![], HashMap::new(), config);
+    let mut review = make_review_with_config("proposal.md", vec![], IndexMap::new(), config);
     review.selected_exit_mode_id = Some("reject".to_string());
 
     let output = format_output(&review, OutputMode::Cli).text;
@@ -325,7 +346,7 @@ fn general_and_next() {
             source: ExitModeSource::Persisted,
         }],
     );
-    let mut review = make_review_with_config("test.rs", vec![], HashMap::new(), config);
+    let mut review = make_review_with_config("test.rs", vec![], IndexMap::new(), config);
     review.session_comment = Some(vec![ContentNode::Text {
         text: "Looks good with minor suggestions below".to_string(),
     }]);
@@ -349,43 +370,44 @@ fn tags_general_next_annotations() {
         }],
     );
 
-    let mut annotations = HashMap::new();
-    annotations.insert(
-        LineRange::new(5, 5),
-        Annotation {
-            start_line: 5,
-            end_line: 5,
-            content: vec![
-                ContentNode::Tag {
-                    id: "sec001".to_string(),
-                    name: "SECURITY".to_string(),
-                    instruction: "Security review needed".to_string(),
-                },
-                ContentNode::Text {
-                    text: " Sanitize this input".to_string(),
-                },
-            ],
-        },
+    let mut annotations = IndexMap::new();
+    let (id, annotation) = ann(
+        5,
+        5,
+        vec![
+            ContentNode::Tag {
+                id: "sec001".to_string(),
+                name: "SECURITY".to_string(),
+                instruction: "Security review needed".to_string(),
+            },
+            ContentNode::Text {
+                text: " Sanitize this input".to_string(),
+            },
+        ],
     );
-    annotations.insert(
-        LineRange::new(12, 14),
-        Annotation {
-            start_line: 12,
-            end_line: 14,
-            content: vec![
-                ContentNode::Tag {
-                    id: "perf001".to_string(),
-                    name: "PERF".to_string(),
-                    instruction: "Performance optimization".to_string(),
-                },
-                ContentNode::Text {
-                    text: " Consider caching this".to_string(),
-                },
-            ],
-        },
+    annotations.insert(id, annotation);
+    let (id, annotation) = ann(
+        12,
+        14,
+        vec![
+            ContentNode::Tag {
+                id: "perf001".to_string(),
+                name: "PERF".to_string(),
+                instruction: "Performance optimization".to_string(),
+            },
+            ContentNode::Text {
+                text: " Consider caching this".to_string(),
+            },
+        ],
     );
+    annotations.insert(id, annotation);
 
-    let mut review = make_review_with_config("handler.rs", make_lines("handler.rs", 1, 20), annotations, config);
+    let mut review = make_review_with_config(
+        "handler.rs",
+        make_lines("handler.rs", 1, 20),
+        annotations,
+        config,
+    );
     review.session_comment = Some(vec![ContentNode::Text {
         text: "Good progress, but security and performance need attention".to_string(),
     }]);
@@ -399,7 +421,7 @@ fn tags_general_next_annotations() {
 
 #[test]
 fn saved_to_only() {
-    let mut review = make_review("test.rs", vec![], HashMap::new());
+    let mut review = make_review("test.rs", vec![], IndexMap::new());
     review.saved_to = Some(PathBuf::from("/tmp/review-output.md"));
 
     let output = format_output(&review, OutputMode::Cli).text;
@@ -408,17 +430,15 @@ fn saved_to_only() {
 
 #[test]
 fn annotations_with_saved_to() {
-    let mut annotations = HashMap::new();
-    annotations.insert(
-        LineRange::new(5, 5),
-        Annotation {
-            start_line: 5,
-            end_line: 5,
-            content: vec![ContentNode::Text {
-                text: "Note here".to_string(),
-            }],
-        },
+    let mut annotations = IndexMap::new();
+    let (id, annotation) = ann(
+        5,
+        5,
+        vec![ContentNode::Text {
+            text: "Note here".to_string(),
+        }],
     );
+    annotations.insert(id, annotation);
 
     let mut review = make_review("code.rs", make_lines("code.rs", 1, 10), annotations);
     review.saved_to = Some(PathBuf::from("/home/user/reviews/code-review.md"));
@@ -454,8 +474,18 @@ fn diff_annotation_added_line() {
     let diff_file_key = crate::review::FileKey::diff_file(0);
     let target = review.files.get_mut(&diff_file_key).unwrap();
     target.upsert_annotation(
-        4, // line with more_code()
-        4,
+        "4".to_string(), // line with more_code()
+        Anchor {
+            path: "file.rs".to_string(),
+            start: Endpoint {
+                side: Side::New,
+                line: 4,
+            },
+            end: Endpoint {
+                side: Side::New,
+                line: 4,
+            },
+        },
         vec![ContentNode::Text {
             text: "Review this new addition".to_string(),
         }],
@@ -487,8 +517,18 @@ fn diff_annotation_deleted_line() {
     let diff_file_key = crate::review::FileKey::diff_file(0);
     let target = review.files.get_mut(&diff_file_key).unwrap();
     target.upsert_annotation(
-        2, // deleted line
-        2,
+        "2".to_string(), // deleted line
+        Anchor {
+            path: "file.rs".to_string(),
+            start: Endpoint {
+                side: Side::New,
+                line: 2,
+            },
+            end: Endpoint {
+                side: Side::New,
+                line: 2,
+            },
+        },
         vec![ContentNode::Text {
             text: "Why was this removed?".to_string(),
         }],
@@ -502,18 +542,16 @@ fn diff_annotation_deleted_line() {
 
 #[test]
 fn replace_block() {
-    let mut annotations = HashMap::new();
-    annotations.insert(
-        LineRange::new(5, 5),
-        Annotation {
-            start_line: 5,
-            end_line: 5,
-            content: vec![ContentNode::Replace {
-                original: "let x = dangerous_call(input);".to_string(),
-                replacement: "let x = safe_call(sanitize(input));".to_string(),
-            }],
-        },
+    let mut annotations = IndexMap::new();
+    let (id, annotation) = ann(
+        5,
+        5,
+        vec![ContentNode::Replace {
+            original: "let x = dangerous_call(input);".to_string(),
+            replacement: "let x = safe_call(sanitize(input));".to_string(),
+        }],
     );
+    annotations.insert(id, annotation);
 
     let review = make_review("security.rs", make_lines("security.rs", 1, 10), annotations);
     let output = format_output(&review, OutputMode::Cli).text;
@@ -524,18 +562,16 @@ fn replace_block() {
 
 #[test]
 fn error_node() {
-    let mut annotations = HashMap::new();
-    annotations.insert(
-        LineRange::new(5, 5),
-        Annotation {
-            start_line: 5,
-            end_line: 5,
-            content: vec![ContentNode::Error {
-                source: "parser".to_string(),
-                message: "Failed to parse embedded code block".to_string(),
-            }],
-        },
+    let mut annotations = IndexMap::new();
+    let (id, annotation) = ann(
+        5,
+        5,
+        vec![ContentNode::Error {
+            source: "parser".to_string(),
+            message: "Failed to parse embedded code block".to_string(),
+        }],
     );
+    annotations.insert(id, annotation);
 
     let review = make_review("broken.rs", make_lines("broken.rs", 1, 10), annotations);
     let output = format_output(&review, OutputMode::Cli).text;
@@ -550,17 +586,15 @@ fn large_line_numbers() {
         .map(|n| make_line("large_file.rs", n, &format!("    content at line {}", n)))
         .collect();
 
-    let mut annotations = HashMap::new();
-    annotations.insert(
-        LineRange::new(1000, 1005),
-        Annotation {
-            start_line: 1000,
-            end_line: 1005,
-            content: vec![ContentNode::Text {
-                text: "Wide line numbers should align properly".to_string(),
-            }],
-        },
+    let mut annotations = IndexMap::new();
+    let (id, annotation) = ann(
+        1000,
+        1005,
+        vec![ContentNode::Text {
+            text: "Wide line numbers should align properly".to_string(),
+        }],
     );
+    annotations.insert(id, annotation);
 
     let review = make_review("large_file.rs", lines, annotations);
     let output = format_output(&review, OutputMode::Cli).text;
@@ -571,17 +605,15 @@ fn large_line_numbers() {
 
 #[test]
 fn annotation_at_line_one() {
-    let mut annotations = HashMap::new();
-    annotations.insert(
-        LineRange::new(1, 1),
-        Annotation {
-            start_line: 1,
-            end_line: 1,
-            content: vec![ContentNode::Text {
-                text: "No context line above".to_string(),
-            }],
-        },
+    let mut annotations = IndexMap::new();
+    let (id, annotation) = ann(
+        1,
+        1,
+        vec![ContentNode::Text {
+            text: "No context line above".to_string(),
+        }],
     );
+    annotations.insert(id, annotation);
 
     let review = make_review("first.rs", make_lines("first.rs", 1, 5), annotations);
     let output = format_output(&review, OutputMode::Cli).text;
@@ -593,17 +625,15 @@ fn context_line_whitespace_only() {
     let mut lines = make_lines("whitespace.rs", 1, 5);
     lines[1].content = "   ".to_string(); // Line 2 is whitespace only
 
-    let mut annotations = HashMap::new();
-    annotations.insert(
-        LineRange::new(3, 3),
-        Annotation {
-            start_line: 3,
-            end_line: 3,
-            content: vec![ContentNode::Text {
-                text: "Context line 2 should be skipped".to_string(),
-            }],
-        },
+    let mut annotations = IndexMap::new();
+    let (id, annotation) = ann(
+        3,
+        3,
+        vec![ContentNode::Text {
+            text: "Context line 2 should be skipped".to_string(),
+        }],
     );
+    annotations.insert(id, annotation);
 
     let review = make_review("whitespace.rs", lines, annotations);
     let output = format_output(&review, OutputMode::Cli).text;
@@ -641,134 +671,124 @@ fn kitchen_sink_everything() {
         }],
     );
 
-    let mut annotations = HashMap::new();
+    let mut annotations = IndexMap::new();
 
     // Annotation 1: Tags + text
-    annotations.insert(
-        LineRange::new(10, 12),
-        Annotation {
-            start_line: 10,
-            end_line: 12,
-            content: vec![
-                ContentNode::Tag {
-                    id: "sec001".to_string(),
-                    name: "SECURITY".to_string(),
-                    instruction: "Review for security vulnerabilities".to_string(),
-                },
-                ContentNode::Text {
-                    text: " This authentication logic needs review.".to_string(),
-                },
-            ],
-        },
+    let (id, annotation) = ann(
+        10,
+        12,
+        vec![
+            ContentNode::Tag {
+                id: "sec001".to_string(),
+                name: "SECURITY".to_string(),
+                instruction: "Review for security vulnerabilities".to_string(),
+            },
+            ContentNode::Text {
+                text: " This authentication logic needs review.".to_string(),
+            },
+        ],
     );
+    annotations.insert(id, annotation);
 
     // Annotation 2: Replace block
-    annotations.insert(
-        LineRange::new(25, 25),
-        Annotation {
-            start_line: 25,
-            end_line: 25,
-            content: vec![
-                ContentNode::Tag {
-                    id: "refactor001".to_string(),
-                    name: "REFACTOR".to_string(),
-                    instruction: "Code improvement suggestion".to_string(),
-                },
-                ContentNode::Text {
-                    text: " ".to_string(),
-                },
-                ContentNode::Replace {
-                    original: "let result = unsafe_operation(input);".to_string(),
-                    replacement: "let result = safe_operation(sanitize(input))?;".to_string(),
-                },
-            ],
-        },
+    let (id, annotation) = ann(
+        25,
+        25,
+        vec![
+            ContentNode::Tag {
+                id: "refactor001".to_string(),
+                name: "REFACTOR".to_string(),
+                instruction: "Code improvement suggestion".to_string(),
+            },
+            ContentNode::Text {
+                text: " ".to_string(),
+            },
+            ContentNode::Replace {
+                original: "let result = unsafe_operation(input);".to_string(),
+                replacement: "let result = safe_operation(sanitize(input))?;".to_string(),
+            },
+        ],
     );
+    annotations.insert(id, annotation);
 
     // Annotation 3: Annotation ref + file ref
-    annotations.insert(
-        LineRange::new(40, 42),
-        Annotation {
-            start_line: 40,
-            end_line: 42,
-            content: vec![
-                ContentNode::Tag {
-                    id: "todo001".to_string(),
-                    name: "TODO".to_string(),
-                    instruction: "Action item for follow-up".to_string(),
-                },
-                ContentNode::Text {
-                    text: " Cross-reference: see ".to_string(),
-                },
-                ContentNode::Ref {
-                    ref_type: "annotation".to_string(),
-                    snapshot: RefSnapshot::Annotation(AnnotationRefSnapshot {
-                        source_key: "10-12".to_string(),
-                        source_file: None,
-                        preview: "[# SECURITY] This authentication...".to_string(),
-                        content: vec![ContentNode::Text {
-                            text: "Referenced annotation content".to_string(),
-                        }],
-                    }),
-                },
-                ContentNode::Text {
-                    text: " and ".to_string(),
-                },
-                ContentNode::File {
-                    path: "src/handlers/api.rs".to_string(),
-                },
-                ContentNode::Text {
-                    text: ".".to_string(),
-                },
-            ],
-        },
+    let (id, annotation) = ann(
+        40,
+        42,
+        vec![
+            ContentNode::Tag {
+                id: "todo001".to_string(),
+                name: "TODO".to_string(),
+                instruction: "Action item for follow-up".to_string(),
+            },
+            ContentNode::Text {
+                text: " Cross-reference: see ".to_string(),
+            },
+            ContentNode::Ref {
+                ref_type: "annotation".to_string(),
+                snapshot: RefSnapshot::Annotation(AnnotationRefSnapshot {
+                    source_key: "10-12".to_string(),
+                    source_file: None,
+                    preview: "[# SECURITY] This authentication...".to_string(),
+                    content: vec![ContentNode::Text {
+                        text: "Referenced annotation content".to_string(),
+                    }],
+                }),
+            },
+            ContentNode::Text {
+                text: " and ".to_string(),
+            },
+            ContentNode::File {
+                path: "src/handlers/api.rs".to_string(),
+            },
+            ContentNode::Text {
+                text: ".".to_string(),
+            },
+        ],
     );
+    annotations.insert(id, annotation);
 
     // Annotation 4: Error node + paste
-    annotations.insert(
-        LineRange::new(55, 55),
-        Annotation {
-            start_line: 55,
-            end_line: 55,
-            content: vec![
-                ContentNode::Error {
-                    source: "mermaid".to_string(),
-                    message: "Failed to parse diagram syntax".to_string(),
-                },
-                ContentNode::Text {
-                    text: " Intended diagram:\n".to_string(),
-                },
-                ContentNode::Paste {
-                    content: "graph LR\n    A --> B --> C".to_string(),
-                },
-            ],
-        },
+    let (id, annotation) = ann(
+        55,
+        55,
+        vec![
+            ContentNode::Error {
+                source: "mermaid".to_string(),
+                message: "Failed to parse diagram syntax".to_string(),
+            },
+            ContentNode::Text {
+                text: " Intended diagram:\n".to_string(),
+            },
+            ContentNode::Paste {
+                content: "graph LR\n    A --> B --> C".to_string(),
+            },
+        ],
     );
+    annotations.insert(id, annotation);
 
     // Annotation 5: Excalidraw + Media
-    annotations.insert(
-        LineRange::new(70, 70),
-        Annotation {
-            start_line: 70,
-            end_line: 70,
-            content: vec![
-                ContentNode::Text {
-                    text: "Architecture diagram: ".to_string(),
-                },
-                ContentNode::Excalidraw {
-                    elements: r#"[{"type":"rectangle","x":0,"y":0}]"#.to_string(),
-                    image: Some("data:image/png;base64,iVBORw0KGgo=".to_string()),
-                },
-                ContentNode::Text {
-                    text: "\nScreenshot of expected UI: ".to_string(),
-                },
-                ContentNode::Media {
-                    image: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==".to_string(),
-                    mime_type: "image/png".to_string(),
-                },
-            ],
-        },
+    let (id, annotation) = ann(
+        70,
+        70,
+        vec![
+            ContentNode::Text {
+                text: "Architecture diagram: ".to_string(),
+            },
+            ContentNode::Excalidraw {
+                elements: r#"[{"type":"rectangle","x":0,"y":0}]"#.to_string(),
+                image: Some("data:image/png;base64,iVBORw0KGgo=".to_string()),
+            },
+            ContentNode::Text {
+                text: "\nScreenshot of expected UI: ".to_string(),
+            },
+            ContentNode::Media {
+                image: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==".to_string(),
+                mime_type: "image/png".to_string(),
+            },
+        ],
     );
+    annotations.insert(id, annotation);
 
     // Build the review
     let mut review = make_review_with_config(
@@ -861,24 +881,22 @@ description: "Create a well-structured git commit"
         }],
     );
 
-    let mut annotations = HashMap::new();
-    annotations.insert(
-        LineRange::new(10, 12),
-        Annotation {
-            start_line: 10,
-            end_line: 12,
-            content: vec![
-                ContentNode::Tag {
-                    id: "commit001".to_string(),
-                    name: "COMMIT".to_string(),
-                    instruction: "Include in commit message".to_string(),
-                },
-                ContentNode::Text {
-                    text: " This refactors the auth module for clarity".to_string(),
-                },
-            ],
-        },
+    let mut annotations = IndexMap::new();
+    let (id, annotation) = ann(
+        10,
+        12,
+        vec![
+            ContentNode::Tag {
+                id: "commit001".to_string(),
+                name: "COMMIT".to_string(),
+                instruction: "Include in commit message".to_string(),
+            },
+            ContentNode::Text {
+                text: " This refactors the auth module for clarity".to_string(),
+            },
+        ],
     );
+    annotations.insert(id, annotation);
 
     let mut review = make_review_with_config(
         "src/auth.rs",
@@ -908,7 +926,7 @@ description: "Create a well-structured git commit"
 
 #[test]
 fn json_output_empty_review() {
-    let review = make_review("test.rs", vec![], HashMap::new());
+    let review = make_review("test.rs", vec![], IndexMap::new());
     let result = format_output(&review, OutputMode::Mcp);
     let json_str = super::format_json(&result);
     let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
@@ -919,17 +937,15 @@ fn json_output_empty_review() {
 
 #[test]
 fn json_output_text_only() {
-    let mut annotations = HashMap::new();
-    annotations.insert(
-        LineRange::new(5, 5),
-        Annotation {
-            start_line: 5,
-            end_line: 5,
-            content: vec![ContentNode::Text {
-                text: "Fix this".to_string(),
-            }],
-        },
+    let mut annotations = IndexMap::new();
+    let (id, annotation) = ann(
+        5,
+        5,
+        vec![ContentNode::Text {
+            text: "Fix this".to_string(),
+        }],
     );
+    annotations.insert(id, annotation);
 
     let lines = make_lines("handler.rs", 1, 10);
     let review = make_review("handler.rs", lines, annotations);
@@ -939,8 +955,14 @@ fn json_output_text_only() {
 
     // Text should contain the annotation
     let text = parsed["text"].as_str().unwrap();
-    assert!(text.contains("Fix this"), "JSON text should contain annotation");
-    assert!(text.contains("handler.rs:5"), "JSON text should contain file location");
+    assert!(
+        text.contains("Fix this"),
+        "JSON text should contain annotation"
+    );
+    assert!(
+        text.contains("handler.rs:5"),
+        "JSON text should contain file location"
+    );
 
     // No images
     assert_eq!(parsed["images"].as_array().unwrap().len(), 0);
@@ -1009,17 +1031,15 @@ fn json_output_with_multiple_images() {
 #[test]
 fn json_output_is_valid_json() {
     // Test with a realistic review containing special characters
-    let mut annotations = HashMap::new();
-    annotations.insert(
-        LineRange::new(3, 3),
-        Annotation {
-            start_line: 3,
-            end_line: 3,
-            content: vec![ContentNode::Text {
-                text: "Contains \"quotes\" and\nnewlines and <html>".to_string(),
-            }],
-        },
+    let mut annotations = IndexMap::new();
+    let (id, annotation) = ann(
+        3,
+        3,
+        vec![ContentNode::Text {
+            text: "Contains \"quotes\" and\nnewlines and <html>".to_string(),
+        }],
     );
+    annotations.insert(id, annotation);
 
     let lines = make_lines("test.rs", 1, 5);
     let review = make_review("test.rs", lines, annotations);
@@ -1039,23 +1059,21 @@ fn json_output_is_valid_json() {
 #[test]
 fn json_output_mcp_mode_collects_media_as_images() {
     // When a Media node is in an annotation, MCP mode collects it as an image
-    let mut annotations = HashMap::new();
-    annotations.insert(
-        LineRange::new(5, 5),
-        Annotation {
-            start_line: 5,
-            end_line: 5,
-            content: vec![
-                ContentNode::Text {
-                    text: "Screenshot: ".to_string(),
-                },
-                ContentNode::Media {
-                    image: "data:image/png;base64,AAAA".to_string(),
-                    mime_type: "image/png".to_string(),
-                },
-            ],
-        },
+    let mut annotations = IndexMap::new();
+    let (id, annotation) = ann(
+        5,
+        5,
+        vec![
+            ContentNode::Text {
+                text: "Screenshot: ".to_string(),
+            },
+            ContentNode::Media {
+                image: "data:image/png;base64,AAAA".to_string(),
+                mime_type: "image/png".to_string(),
+            },
+        ],
     );
+    annotations.insert(id, annotation);
 
     let lines = make_lines("app.rs", 1, 10);
     let review = make_review("app.rs", lines, annotations);
@@ -1074,4 +1092,3 @@ fn json_output_mcp_mode_collects_media_as_images() {
     assert!(parsed["text"].as_str().unwrap().contains("[Figure 1]"));
     assert_eq!(parsed["images"].as_array().unwrap().len(), 1);
 }
-

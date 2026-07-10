@@ -75,7 +75,11 @@ impl std::fmt::Display for PortalError {
             PortalError::InvalidUtf8 => write!(f, "File is not valid UTF-8"),
             PortalError::TooManyPortals => write!(f, "Too many portals (max {})", MAX_PORTALS),
             PortalError::TooManyLines => {
-                write!(f, "Portal exceeds line limit (max {})", MAX_LINES_PER_PORTAL)
+                write!(
+                    f,
+                    "Portal exceeds line limit (max {})",
+                    MAX_LINES_PER_PORTAL
+                )
             }
             PortalError::IoError(msg) => write!(f, "I/O error: {}", msg),
         }
@@ -144,7 +148,9 @@ pub fn validate_portal(raw_path: &str, base_dir: &Path) -> Result<PathBuf, Porta
     // Check for binary content (read first 8KB)
     let mut file = fs::File::open(&resolved).map_err(|e| PortalError::IoError(e.to_string()))?;
     let mut buffer = [0u8; 8192];
-    let bytes_read = file.read(&mut buffer).map_err(|e| PortalError::IoError(e.to_string()))?;
+    let bytes_read = file
+        .read(&mut buffer)
+        .map_err(|e| PortalError::IoError(e.to_string()))?;
 
     if buffer[..bytes_read].contains(&0) {
         return Err(PortalError::Binary);
@@ -185,16 +191,13 @@ pub fn load_portal(info: &PortalInfo, base_dir: &Path) -> Result<LoadedPortal, P
     }
 
     // Resolve label (use filename if not provided)
-    let label = info
-        .label
-        .clone()
-        .unwrap_or_else(|| {
-            source_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("file")
-                .to_string()
-        });
+    let label = info.label.clone().unwrap_or_else(|| {
+        source_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("file")
+            .to_string()
+    });
 
     // Build lines: header + content + footer
     let mut lines = Vec::new();

@@ -1,5 +1,5 @@
 import type { Line } from './types';
-import { getLineNumber, getFilePath } from './line-utils';
+import { getLineNumber, getFilePath, getSide } from './line-utils';
 
 /**
  * A range of display indices (1-indexed positions in the lines array).
@@ -65,7 +65,7 @@ export function isLineInRange(displayIdx: number, range: Range): boolean {
 export function validateRange(
   range: Range,
   lines: Line[]
-): { path: string; startLine: number; endLine: number } | null {
+): { path: string; startLine: number; endLine: number; startSide: 'old' | 'new'; endSide: 'old' | 'new' } | null {
   const min = Math.min(range.start, range.end);
   const max = Math.max(range.start, range.end);
 
@@ -102,12 +102,19 @@ export function validateRange(
     prevLineNum = lineNum;
   }
 
-  const startSource = getLineNumber(startLine)!;
-  const endSource = getLineNumber(endLine)!;
+  const startPoint = { line: getLineNumber(startLine)!, side: getSide(startLine) };
+  const endPoint = { line: getLineNumber(endLine)!, side: getSide(endLine) };
+
+  // startLine/endLine (display order) can number in reverse of source order
+  // within a diff hunk (old vs new numbering) — swap the pair as a unit so
+  // each endpoint's line and side stay paired together.
+  const [lo, hi] = endPoint.line < startPoint.line ? [endPoint, startPoint] : [startPoint, endPoint];
 
   return {
     path,
-    startLine: Math.min(startSource, endSource),
-    endLine: Math.max(startSource, endSource),
+    startLine: lo.line,
+    endLine: hi.line,
+    startSide: lo.side,
+    endSide: hi.side,
   };
 }

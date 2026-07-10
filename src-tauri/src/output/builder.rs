@@ -127,16 +127,24 @@ impl OutputBuilder {
     /// Format code line: "  42 | content"
     pub fn code_line(&mut self, num: u32, content: &str) -> &mut Self {
         let width = self.line_num_width();
-        self.buffer
-            .push_str(&format!("{:>width$} | {}\n", num, content, width = width + 3));
+        self.buffer.push_str(&format!(
+            "{:>width$} | {}\n",
+            num,
+            content,
+            width = width + 3
+        ));
         self
     }
 
     /// Format selected code line with ">" prefix: ">  42 | content"
     pub fn selected_code_line(&mut self, num: u32, content: &str) -> &mut Self {
         let width = self.line_num_width();
-        self.buffer
-            .push_str(&format!("> {:>width$} | {}\n", num, content, width = width + 1));
+        self.buffer.push_str(&format!(
+            "> {:>width$} | {}\n",
+            num,
+            content,
+            width = width + 1
+        ));
         self
     }
 

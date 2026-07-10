@@ -15,6 +15,7 @@ describe('useHistory', () => {
       ...emptySessionData(),
       annotations: {
         '10-15': {
+          id: 'a1',
           range: { start: 10, end: 15 },
           content: { type: 'doc', content: [] },
         },
@@ -33,15 +34,15 @@ describe('useHistory', () => {
     // Push first change
     history.push({
       ...emptySessionData(),
-      annotations: { '10-15': { range: { start: 10, end: 15 }, content: { type: 'doc' } } },
+      annotations: { '10-15': { id: 'a1', range: { start: 10, end: 15 }, content: { type: 'doc' } } },
     }, 'First');
 
     // Push second change
     history.push({
       ...emptySessionData(),
       annotations: {
-        '10-15': { range: { start: 10, end: 15 }, content: { type: 'doc' } },
-        '20-25': { range: { start: 20, end: 25 }, content: { type: 'doc' } },
+        '10-15': { id: 'a1', range: { start: 10, end: 15 }, content: { type: 'doc' } },
+        '20-25': { id: 'a2', range: { start: 20, end: 25 }, content: { type: 'doc' } },
       },
     }, 'Second');
 
@@ -134,7 +135,7 @@ describe('useHistory', () => {
     const original: SessionData = {
       ...emptySessionData(),
       annotations: {
-        '10-15': { range: { start: 10, end: 15 }, content: { type: 'doc' } },
+        '10-15': { id: 'a1', range: { start: 10, end: 15 }, content: { type: 'doc' } },
       },
     };
 

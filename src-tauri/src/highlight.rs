@@ -9,8 +9,11 @@ use syntect::util::LinesWithEndings;
 /// Pre-compiled SyntaxSet loaded from build-time generated dump.
 /// This avoids the ~120ms cost of loading/parsing grammars at runtime.
 static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(|| {
-    from_uncompressed_data(include_bytes!(concat!(env!("OUT_DIR"), "/syntaxes.packdump")))
-        .expect("Failed to load embedded syntax set")
+    from_uncompressed_data(include_bytes!(concat!(
+        env!("OUT_DIR"),
+        "/syntaxes.packdump"
+    )))
+    .expect("Failed to load embedded syntax set")
 });
 
 /// Syntax highlighter using syntect with embedded grammars.
@@ -82,7 +85,10 @@ impl Highlighter {
         let syntax = self
             .syntax_set
             .find_syntax_by_extension(ext)
-            .or_else(|| self.syntax_set.find_syntax_by_extension(Self::extension_fallback(ext)))
+            .or_else(|| {
+                self.syntax_set
+                    .find_syntax_by_extension(Self::extension_fallback(ext))
+            })
             .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
 
         let mut html_generator = ClassedHTMLGenerator::new_with_class_style(
@@ -303,10 +309,17 @@ fn main() {
         println!("=== END ===\n");
 
         // Should produce exactly 1 line of output
-        assert_eq!(lines.len(), 1, "Single line input should produce single line output");
+        assert_eq!(
+            lines.len(),
+            1,
+            "Single line input should produce single line output"
+        );
 
         // The output should not contain literal newlines
-        assert!(!lines[0].contains('\n'), "Output should not contain newline characters");
+        assert!(
+            !lines[0].contains('\n'),
+            "Output should not contain newline characters"
+        );
     }
 
     /// Documents HTML output for JavaScript to show class naming patterns
@@ -329,7 +342,10 @@ function greet(name) {
         println!("=== END ===\n");
 
         // Verify we get highlighted output
-        assert!(lines[1].contains("class="), "Function should be highlighted");
+        assert!(
+            lines[1].contains("class="),
+            "Function should be highlighted"
+        );
     }
 
     // ========== MERMAID SYNTAX HIGHLIGHTING TESTS ==========

@@ -392,8 +392,15 @@ index 0000000..9b710f3
             .map(|(_, info)| info)
             .unwrap();
 
-        assert_eq!(deleted.old_line_num, Some(2), "Deleted line should have old line num");
-        assert_eq!(deleted.new_line_num, None, "Deleted line should not have new line num");
+        assert_eq!(
+            deleted.old_line_num,
+            Some(2),
+            "Deleted line should have old line num"
+        );
+        assert_eq!(
+            deleted.new_line_num, None,
+            "Deleted line should not have new line num"
+        );
 
         // Find an added line
         let added = meta
@@ -403,8 +410,14 @@ index 0000000..9b710f3
             .map(|(_, info)| info)
             .unwrap();
 
-        assert_eq!(added.old_line_num, None, "Added line should not have old line num");
-        assert!(added.new_line_num.is_some(), "Added line should have new line num");
+        assert_eq!(
+            added.old_line_num, None,
+            "Added line should not have old line num"
+        );
+        assert!(
+            added.new_line_num.is_some(),
+            "Added line should have new line num"
+        );
     }
 
     #[test]
@@ -418,8 +431,14 @@ index 0000000..9b710f3
             .map(|(_, info)| info)
             .unwrap();
 
-        assert!(context.old_line_num.is_some(), "Context should have old line num");
-        assert!(context.new_line_num.is_some(), "Context should have new line num");
+        assert!(
+            context.old_line_num.is_some(),
+            "Context should have old line num"
+        );
+        assert!(
+            context.new_line_num.is_some(),
+            "Context should have new line num"
+        );
     }
 
     const MULTI_FILE_DIFF: &str = r#"diff --git a/src/main.rs b/src/main.rs
@@ -574,7 +593,10 @@ index abcdef..0000000
             .filter_map(|(_, info)| info.old_line_num)
             .collect();
         assert!(old_line_nums.contains(&2), "Should have deletion at line 2");
-        assert!(old_line_nums.contains(&11), "Should have deletion at line 11");
+        assert!(
+            old_line_nums.contains(&11),
+            "Should have deletion at line 11"
+        );
     }
 
     #[test]
@@ -594,11 +616,7 @@ index abcdef..0000000
         // All display line numbers should be present from 1 to max
         let max_line = *meta.lines.keys().max().unwrap();
         for i in 1..=max_line {
-            assert!(
-                meta.lines.contains_key(&i),
-                "Missing display line {}",
-                i
-            );
+            assert!(meta.lines.contains_key(&i), "Missing display line {}", i);
         }
     }
 
@@ -693,7 +711,10 @@ index abcdef..0000000
         assert_eq!(hunk.old_count, 5);
         assert_eq!(hunk.new_start, 10);
         assert_eq!(hunk.new_count, 6);
-        assert_eq!(hunk.function_context, Some("fn calculate_total()".to_string()));
+        assert_eq!(
+            hunk.function_context,
+            Some("fn calculate_total()".to_string())
+        );
     }
 
     #[test]
@@ -715,8 +736,16 @@ index abcdef..0000000
     fn parse_multi_file_diff_extracts_hunks_per_file() {
         let meta = parse_diff(MULTI_FILE_DIFF).unwrap();
 
-        assert_eq!(meta.files[0].hunks.len(), 1, "First file should have 1 hunk");
-        assert_eq!(meta.files[1].hunks.len(), 1, "Second file should have 1 hunk");
+        assert_eq!(
+            meta.files[0].hunks.len(),
+            1,
+            "First file should have 1 hunk"
+        );
+        assert_eq!(
+            meta.files[1].hunks.len(),
+            1,
+            "Second file should have 1 hunk"
+        );
     }
 
     #[test]

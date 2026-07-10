@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 
 use tauri::WebviewWindowBuilder;
 
+pub mod anchor;
 pub mod commands;
 pub mod config;
 pub mod diff;
@@ -155,8 +156,10 @@ pub fn run(state: AppState, context: tauri::Context, json_output: bool) {
             let window_for_save = window.clone();
             window.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { .. } = event {
-                    let _ =
-                        window_state::save_window_state(&window_for_save, window_state::WindowType::Main);
+                    let _ = window_state::save_window_state(
+                        &window_for_save,
+                        window_state::WindowType::Main,
+                    );
                 }
             });
 

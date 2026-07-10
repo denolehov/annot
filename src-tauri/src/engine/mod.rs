@@ -144,9 +144,8 @@ fn apply_word_diffs(rows: &mut [DiffRow], old_lines: &[&str], new_lines: &[&str]
     let deleted: Vec<usize> = positions(rows, |r| matches!(r, DiffRow::Deleted { .. }));
     let added: Vec<usize> = positions(rows, |r| matches!(r, DiffRow::Added { .. }));
 
-    let gated = !deleted.is_empty()
-        && deleted.len() == added.len()
-        && deleted.len() <= WORD_DIFF_MAX_LINES;
+    let gated =
+        !deleted.is_empty() && deleted.len() == added.len() && deleted.len() <= WORD_DIFF_MAX_LINES;
     if !gated {
         return;
     }
@@ -336,8 +335,7 @@ mod tests {
         let mut out = String::new();
         let mut next_old = 1u32;
         for hunk in &diff.hunks {
-            (next_old..hunk.old_range.start)
-                .for_each(|l| out.push_str(old_raw[(l - 1) as usize]));
+            (next_old..hunk.old_range.start).for_each(|l| out.push_str(old_raw[(l - 1) as usize]));
             for row in &hunk.rows {
                 match row {
                     DiffRow::Context { old_line, new_line } => {
@@ -455,7 +453,15 @@ mod tests {
     /// entries keep char-boundary handling honest.
     fn arb_text() -> impl Strategy<Value = String> {
         let line = prop::sample::select(vec![
-            "alpha", "beta", "gamma", "délta", "εψιλον", "fn x() {", "}", "", "  indented",
+            "alpha",
+            "beta",
+            "gamma",
+            "délta",
+            "εψιλον",
+            "fn x() {",
+            "}",
+            "",
+            "  indented",
         ]);
         (prop::collection::vec(line, 0..12), any::<bool>()).prop_map(|(lines, trailing)| {
             let mut text = lines.join("\n");

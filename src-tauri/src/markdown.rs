@@ -88,7 +88,9 @@ pub struct PortalInfo {
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum MarkdownSemantics {
-    Header { level: u8 },
+    Header {
+        level: u8,
+    },
     CodeBlockStart {
         language: Option<String>,
         color: Option<String>,
@@ -96,7 +98,9 @@ pub enum MarkdownSemantics {
     CodeBlockContent,
     CodeBlockEnd,
     TableRow,
-    ListItem { ordered: bool },
+    ListItem {
+        ordered: bool,
+    },
     BlockQuote,
     HorizontalRule,
 }
@@ -116,14 +120,31 @@ pub struct RenderedLine {
 /// A parsing context we're currently inside.
 #[derive(Debug, Clone)]
 enum ParseContext {
-    Heading { line: u32, level: u8, text: String },
-    CodeBlock { line: u32, lang: Option<String> },
-    Table { start_line: u32 },
+    Heading {
+        line: u32,
+        level: u8,
+        text: String,
+    },
+    CodeBlock {
+        line: u32,
+        lang: Option<String>,
+    },
+    Table {
+        start_line: u32,
+    },
     /// Accumulates cells for a table row.
-    TableRow { cells: Vec<String> },
+    TableRow {
+        cells: Vec<String>,
+    },
     /// Accumulates text for a single table cell.
-    TableCell { text: String },
-    PortalLink { line: u32, url: String, text: String },
+    TableCell {
+        text: String,
+    },
+    PortalLink {
+        line: u32,
+        url: String,
+        text: String,
+    },
 }
 
 /// Stack-based parser state tracker.
@@ -191,12 +212,16 @@ impl ParseState {
 
     /// Check if we're inside a code block.
     fn in_code_block(&self) -> bool {
-        self.stack.iter().any(|ctx| matches!(ctx, ParseContext::CodeBlock { .. }))
+        self.stack
+            .iter()
+            .any(|ctx| matches!(ctx, ParseContext::CodeBlock { .. }))
     }
 
     /// Check if we're inside a table.
     fn in_table(&self) -> bool {
-        self.stack.iter().any(|ctx| matches!(ctx, ParseContext::Table { .. }))
+        self.stack
+            .iter()
+            .any(|ctx| matches!(ctx, ParseContext::Table { .. }))
     }
 
     /// Get mutable reference to current heading's text accumulator.
@@ -329,7 +354,10 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
                     }
                     CodeBlockKind::Indented => None,
                 };
-                state.push(ParseContext::CodeBlock { line, lang: language });
+                state.push(ParseContext::CodeBlock {
+                    line,
+                    lang: language,
+                });
             }
             Event::End(TagEnd::CodeBlock) => {
                 if let Some((start_line, language)) = state.pop_code_block() {
@@ -367,17 +395,16 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
             Event::End(TagEnd::TableHead) | Event::End(TagEnd::TableRow) => {
                 if let Some(cells) = state.pop_table_row() {
                     // Render each cell's content via render_inline
-                    let html_cells: Vec<String> = cells
-                        .iter()
-                        .map(|c| render_inline(c))
-                        .collect();
+                    let html_cells: Vec<String> = cells.iter().map(|c| render_inline(c)).collect();
                     current_table_rows.push(html_cells);
                 }
             }
 
             // Table cell tracking
             Event::Start(Tag::TableCell) => {
-                state.push(ParseContext::TableCell { text: String::new() });
+                state.push(ParseContext::TableCell {
+                    text: String::new(),
+                });
             }
             Event::End(TagEnd::TableCell) => {
                 if let Some(cell_text) = state.pop_table_cell() {
@@ -387,7 +414,9 @@ pub fn parse_markdown(content: &str) -> MarkdownMetadata {
 
             // Portal link detection: [label](path#L42-L58)
             // Portals are forbidden in code blocks (literal text) and tables (can't expand inline)
-            Event::Start(Tag::Link { dest_url, .. }) if !state.in_code_block() && !state.in_table() => {
+            Event::Start(Tag::Link { dest_url, .. })
+                if !state.in_code_block() && !state.in_table() =>
+            {
                 if parse_line_anchor(&dest_url).is_some() {
                     state.push(ParseContext::PortalLink {
                         line,
@@ -613,10 +642,7 @@ pub fn format_table(lines: &[String]) -> Vec<String> {
     let is_separator = |row: &Vec<String>| {
         row.iter().all(|cell| {
             let trimmed = cell.trim();
-            !trimmed.is_empty()
-                && trimmed
-                    .chars()
-                    .all(|c| c == '-' || c == ':' || c == ' ')
+            !trimmed.is_empty() && trimmed.chars().all(|c| c == '-' || c == ':' || c == ' ')
         })
     };
 
@@ -634,9 +660,15 @@ pub fn format_table(lines: &[String]) -> Vec<String> {
                         let has_right = cell.ends_with(':');
                         let dashes = "-".repeat(width.max(3));
                         match (has_left, has_right) {
-                            (true, true) => format!(":{:-<width$}:", "", width = width.saturating_sub(2).max(1)),
-                            (true, false) => format!(":{:-<width$}", "", width = width.saturating_sub(1).max(1)),
-                            (false, true) => format!("{:-<width$}:", "", width = width.saturating_sub(1).max(1)),
+                            (true, true) => {
+                                format!(":{:-<width$}:", "", width = width.saturating_sub(2).max(1))
+                            }
+                            (true, false) => {
+                                format!(":{:-<width$}", "", width = width.saturating_sub(1).max(1))
+                            }
+                            (false, true) => {
+                                format!("{:-<width$}:", "", width = width.saturating_sub(1).max(1))
+                            }
                             (false, false) => dashes,
                         }
                     } else {
@@ -836,11 +868,11 @@ pub fn render_inline(text: &str) -> String {
 
     // Token types for two-pass rendering
     enum Token {
-        Text(String),                // Raw text (will be HTML-escaped on render)
-        Code(String),                // Inline code content
-        Html(&'static str),          // Static HTML fragment
-        HtmlOwned(String),           // Owned HTML fragment
-        HighlightMarker,             // == marker (paired during render)
+        Text(String),       // Raw text (will be HTML-escaped on render)
+        Code(String),       // Inline code content
+        Html(&'static str), // Static HTML fragment
+        HtmlOwned(String),  // Owned HTML fragment
+        HighlightMarker,    // == marker (paired during render)
     }
 
     let options = markdown_options();
@@ -1100,7 +1132,8 @@ mod tests {
 
     #[test]
     fn parse_markdown_extracts_code_blocks() {
-        let content = "# Title\n\n```rust\nfn main() {}\n```\n\nText\n\n```python\nprint('hi')\n```\n";
+        let content =
+            "# Title\n\n```rust\nfn main() {}\n```\n\nText\n\n```python\nprint('hi')\n```\n";
         let meta = parse_markdown(content);
 
         assert_eq!(meta.code_blocks.len(), 2);
@@ -1172,7 +1205,11 @@ mod tests {
         let formatted = format_table(&lines);
 
         // Separator row should preserve alignment markers
-        assert!(formatted[1].contains(":"), "Should preserve colons: {:?}", formatted[1]);
+        assert!(
+            formatted[1].contains(":"),
+            "Should preserve colons: {:?}",
+            formatted[1]
+        );
     }
 
     #[test]
@@ -1267,7 +1304,10 @@ mod tests {
     #[test]
     fn render_line_heading() {
         let result = render_line("# Title");
-        assert!(matches!(result.semantics, Some(MarkdownSemantics::Header { level: 1 })));
+        assert!(matches!(
+            result.semantics,
+            Some(MarkdownSemantics::Header { level: 1 })
+        ));
         assert!(result.html.contains("md-h1"));
         assert!(result.html.contains("Title"));
     }
@@ -1275,35 +1315,50 @@ mod tests {
     #[test]
     fn render_line_heading_level_2() {
         let result = render_line("## Subtitle");
-        assert!(matches!(result.semantics, Some(MarkdownSemantics::Header { level: 2 })));
+        assert!(matches!(
+            result.semantics,
+            Some(MarkdownSemantics::Header { level: 2 })
+        ));
         assert!(result.html.contains("md-h2"));
     }
 
     #[test]
     fn render_line_blockquote() {
         let result = render_line("> quoted text");
-        assert!(matches!(result.semantics, Some(MarkdownSemantics::BlockQuote)));
+        assert!(matches!(
+            result.semantics,
+            Some(MarkdownSemantics::BlockQuote)
+        ));
         assert!(result.html.contains("md-blockquote"));
     }
 
     #[test]
     fn render_line_unordered_list() {
         let result = render_line("- list item");
-        assert!(matches!(result.semantics, Some(MarkdownSemantics::ListItem { ordered: false })));
+        assert!(matches!(
+            result.semantics,
+            Some(MarkdownSemantics::ListItem { ordered: false })
+        ));
         assert!(result.html.contains("md-list"));
     }
 
     #[test]
     fn render_line_ordered_list() {
         let result = render_line("1. first item");
-        assert!(matches!(result.semantics, Some(MarkdownSemantics::ListItem { ordered: true })));
+        assert!(matches!(
+            result.semantics,
+            Some(MarkdownSemantics::ListItem { ordered: true })
+        ));
         assert!(result.html.contains("md-list"));
     }
 
     #[test]
     fn render_line_horizontal_rule() {
         let result = render_line("---");
-        assert!(matches!(result.semantics, Some(MarkdownSemantics::HorizontalRule)));
+        assert!(matches!(
+            result.semantics,
+            Some(MarkdownSemantics::HorizontalRule)
+        ));
         assert!(result.html.contains("md-hr"));
     }
 
@@ -1318,7 +1373,11 @@ mod tests {
     fn render_line_with_2_space_indent() {
         // 4 spaces triggers code block in markdown, so use 2 spaces
         let result = render_line("  indented text");
-        assert!(result.html.contains("indented text"), "HTML should contain 'indented text': {}", result.html);
+        assert!(
+            result.html.contains("indented text"),
+            "HTML should contain 'indented text': {}",
+            result.html
+        );
     }
 
     #[test]
@@ -1459,7 +1518,8 @@ mod tests {
 
     #[test]
     fn parse_markdown_portal_in_table_cell_is_forbidden() {
-        let content = "| Module | Entry Point |\n|---|---|\n| Auth | [auth](src/auth.rs#L42-L55) |\n";
+        let content =
+            "| Module | Entry Point |\n|---|---|\n| Auth | [auth](src/auth.rs#L42-L55) |\n";
         let meta = parse_markdown(content);
 
         // Portal inside table cell should be ignored (tables can't expand portals)
@@ -1478,21 +1538,33 @@ mod tests {
     #[test]
     fn render_portal_ref_with_label() {
         let result = render_line("See [auth](src/auth.rs#L10-L20) for details");
-        assert!(result.html.contains("portal-ref"), "Should have portal-ref class");
+        assert!(
+            result.html.contains("portal-ref"),
+            "Should have portal-ref class"
+        );
         assert!(result.html.contains("auth"), "Should contain label text");
     }
 
     #[test]
     fn render_portal_ref_without_label_uses_filename() {
         let result = render_line("See [](src/auth.rs#L10-L20) for details");
-        assert!(result.html.contains("portal-ref"), "Should have portal-ref class");
-        assert!(result.html.contains("auth.rs"), "Should contain filename as fallback label");
+        assert!(
+            result.html.contains("portal-ref"),
+            "Should have portal-ref class"
+        );
+        assert!(
+            result.html.contains("auth.rs"),
+            "Should contain filename as fallback label"
+        );
     }
 
     #[test]
     fn render_portal_ref_without_label_nested_path() {
         let result = render_line("[](deeply/nested/path/file.go#L1-L5)");
-        assert!(result.html.contains("file.go"), "Should extract just the filename from nested path");
+        assert!(
+            result.html.contains("file.go"),
+            "Should extract just the filename from nested path"
+        );
     }
 
     // =========================================================================
