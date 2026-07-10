@@ -524,15 +524,15 @@ fn diff_annotation_deleted_line() {
     let diff_file_key = crate::review::FileKey::diff_file(0);
     let target = review.files.get_mut(&diff_file_key).unwrap();
     target.upsert_annotation(
-        "2".to_string(), // deleted line
+        "2".to_string(), // deleted line — lives on the old side
         Anchor {
             path: "file.rs".to_string(),
             start: Endpoint {
-                side: Side::New,
+                side: Side::Old,
                 line: 2,
             },
             end: Endpoint {
-                side: Side::New,
+                side: Side::Old,
                 line: 2,
             },
         },
@@ -543,6 +543,106 @@ fn diff_annotation_deleted_line() {
 
     let output = format_output(&review, OutputMode::Cli).text;
     insta::assert_snapshot!(output);
+}
+
+// ========== Diff Mode: side-aware range corpus ==========
+//
+// One replacement hunk, annotated from every side combination. Display rows:
+//   fn main() {      (old:1 new:1)
+//   -    old_one();  (old:2)
+//   -    old_two();  (old:3)
+//   +    new_one();  (new:2)
+//   +    new_two();  (new:3)
+//        shared();   (old:4 new:4)
+//   }                (old:5 new:5)
+
+const REPLACEMENT_DIFF: &str = r#"diff --git a/file.rs b/file.rs
+--- a/file.rs
++++ b/file.rs
+@@ -1,5 +1,5 @@
+ fn main() {
+-    old_one();
+-    old_two();
++    new_one();
++    new_two();
+     shared();
+ }
+"#;
+
+fn replacement_review(start: (Side, u32), end: (Side, u32), text: &str) -> Review {
+    let source = ContentSource::Mcp(McpSource::Diff {
+        label: Some("test.diff".to_string()),
+        source: DiffSource::Raw,
+    });
+    let content = ContentModel::from_diff(REPLACEMENT_DIFF, source).unwrap();
+    let mut review = Review::cli(content, UserConfig::empty(), "main".to_string());
+
+    let target = review
+        .files
+        .get_mut(&crate::review::FileKey::diff_file(0))
+        .unwrap();
+    target.upsert_annotation(
+        "corpus".to_string(),
+        Anchor {
+            path: "file.rs".to_string(),
+            start: Endpoint {
+                side: start.0,
+                line: start.1,
+            },
+            end: Endpoint {
+                side: end.0,
+                line: end.1,
+            },
+        },
+        vec![ContentNode::Text {
+            text: text.to_string(),
+        }],
+    );
+    review
+}
+
+#[test]
+fn diff_annotation_old_only_single() {
+    let review = replacement_review((Side::Old, 2), (Side::Old, 2), "Why drop old_one?");
+    insta::assert_snapshot!(format_output(&review, OutputMode::Cli).text);
+}
+
+#[test]
+fn diff_annotation_old_only_multiline() {
+    let review = replacement_review((Side::Old, 2), (Side::Old, 3), "Both of these were dropped");
+    insta::assert_snapshot!(format_output(&review, OutputMode::Cli).text);
+}
+
+#[test]
+fn diff_annotation_new_only_single() {
+    let review = replacement_review((Side::New, 2), (Side::New, 2), "Name this better");
+    insta::assert_snapshot!(format_output(&review, OutputMode::Cli).text);
+}
+
+#[test]
+fn diff_annotation_new_only_multiline() {
+    let review = replacement_review((Side::New, 2), (Side::New, 3), "Review the replacement pair");
+    insta::assert_snapshot!(format_output(&review, OutputMode::Cli).text);
+}
+
+#[test]
+fn diff_annotation_mixed_replacement() {
+    let review = replacement_review(
+        (Side::Old, 2),
+        (Side::New, 3),
+        "This replacement changes behavior",
+    );
+    insta::assert_snapshot!(format_output(&review, OutputMode::Cli).text);
+}
+
+#[test]
+fn diff_annotation_mixed_multiline() {
+    let review = replacement_review(
+        (Side::Old, 3),
+        (Side::New, 4),
+        "From the second deletion through the shared context",
+    );
+    insta::assert_snapshot!(format_output(&review, OutputMode::Cli).text);
 }
 
 // ========== Replace Blocks ==========

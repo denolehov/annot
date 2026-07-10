@@ -1,0 +1,9 @@
+---
+source: src/output/snapshot_tests.rs
+expression: "format_output(&review, OutputMode::Cli).text"
+---
+file.rs (old:2-3):
+  1:1 |  fn main() {
+> 2:  | -    old_one();
+> 3:  | -    old_two();
+      └──> Both of these were dropped

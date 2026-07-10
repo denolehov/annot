@@ -7,7 +7,8 @@ use std::collections::BTreeMap;
 
 use crate::anchor::Annotation;
 use crate::mcp::tools::SessionImage;
-use crate::state::{ContentMetadata, ContentModel, LineOrigin};
+use crate::source::Side;
+use crate::state::{ContentMetadata, ContentModel, Line, LineOrigin};
 
 use super::builder::{BuilderMode, OutputBuilder};
 use super::render::render_content;
@@ -32,46 +33,34 @@ pub fn format_annotation(
 ) {
     let is_diff = matches!(content_model.metadata, ContentMetadata::Diff(_));
 
-    // File header
     if is_diff {
-        format_diff_header(out, content_model, ann, file_path);
-    } else if ann.start_line() == ann.end_line() {
-        out.raw_line(&format!("{}:{}", file_path, ann.start_line()));
+        format_diff_block(out, content_model, ann, file_path);
     } else {
-        out.raw_line(&format!(
-            "{}:{}-{}",
-            file_path,
-            ann.start_line(),
-            ann.end_line()
-        ));
-    }
+        // File header
+        if ann.start_line() == ann.end_line() {
+            out.raw_line(&format!("{}:{}", file_path, ann.start_line()));
+        } else {
+            out.raw_line(&format!(
+                "{}:{}-{}",
+                file_path,
+                ann.start_line(),
+                ann.end_line()
+            ));
+        }
 
-    // Context line (1 line before, if exists and non-empty)
-    if ann.start_line() > 1 {
-        let context_line_num = ann.start_line() - 1;
-        if let Some(line) = content_model.find_line(file_path, context_line_num) {
-            if !line.content.trim().is_empty() {
-                if is_diff {
-                    format_diff_context_line(
-                        out,
-                        content_model,
-                        file_path,
-                        context_line_num,
-                        &line.content,
-                    );
-                } else {
+        // Context line (1 line before, if exists and non-empty)
+        if ann.start_line() > 1 {
+            let context_line_num = ann.start_line() - 1;
+            if let Some(line) = content_model.find_line(file_path, context_line_num) {
+                if !line.content.trim().is_empty() {
                     out.code_line(context_line_num, &line.content);
                 }
             }
         }
-    }
 
-    // Selected lines
-    for line_num in ann.start_line()..=ann.end_line() {
-        if let Some(line) = content_model.find_line(file_path, line_num) {
-            if is_diff {
-                format_diff_selected_line(out, content_model, file_path, line_num, &line.content);
-            } else {
+        // Selected lines
+        for line_num in ann.start_line()..=ann.end_line() {
+            if let Some(line) = content_model.find_line(file_path, line_num) {
                 out.selected_code_line(line_num, &line.content);
             }
         }
@@ -89,34 +78,77 @@ pub fn format_annotation(
     }
 }
 
-/// Format diff header with file info from annotation range.
-fn format_diff_header(
+/// Format the header, context row, and selected rows for a diff annotation.
+///
+/// Both anchor endpoints resolve to display-row indices (side-aware), and the
+/// contiguous row slice between them is what renders — for a mixed-side range
+/// that slice covers a deletion and its added replacement.
+fn format_diff_block(
     out: &mut OutputBuilder,
     content: &ContentModel,
     ann: &Annotation,
     file_path: &str,
 ) {
-    // Collect old/new line ranges from the annotated lines
-    let mut old_lines: Vec<u32> = Vec::new();
-    let mut new_lines: Vec<u32> = Vec::new();
+    let start = content.find_row(file_path, &ann.anchor.start);
+    let end = content.find_row(file_path, &ann.anchor.end);
 
-    for line_num in ann.start_line()..=ann.end_line() {
-        if let Some(line) = content.find_line(file_path, line_num) {
-            if let LineOrigin::Diff {
-                old_line, new_line, ..
-            } = &line.origin
-            {
-                if let Some(old) = old_line {
-                    old_lines.push(*old);
-                }
-                if let Some(new) = new_line {
-                    new_lines.push(*new);
-                }
+    let Some((first, last)) = start.zip(end).map(|(s, e)| (s.min(e), s.max(e))) else {
+        // Anchor doesn't resolve against this diff: header only.
+        out.raw_line(&format!("{}:", file_path));
+        return;
+    };
+
+    format_diff_header(out, content, ann, file_path, (first, last));
+
+    // Context: the display row immediately above the slice, if renderable.
+    if first > 0 {
+        let row = &content.lines[first - 1];
+        if let Some((old, new)) = diff_line_nums(row, file_path) {
+            if !row.content.trim().is_empty() {
+                out.diff_line(old, new, &row.content, false);
             }
         }
     }
 
-    // Format header with available line info
+    // Selected rows
+    for row in &content.lines[first..=last] {
+        if let Some((old, new)) = diff_line_nums(row, file_path) {
+            out.diff_line(old, new, &row.content, true);
+        }
+    }
+}
+
+/// Format diff header with file info from the resolved row slice.
+fn format_diff_header(
+    out: &mut OutputBuilder,
+    content: &ContentModel,
+    ann: &Annotation,
+    file_path: &str,
+    (first, last): (usize, usize),
+) {
+    // Mixed-side range: name the endpoints with their sides. This shape is
+    // additive — no single-side or context annotation can produce it.
+    let (start, end) = (&ann.anchor.start, &ann.anchor.end);
+    if start.side != end.side {
+        out.raw_line(&format!(
+            "{} ({}:{} → {}:{}):",
+            file_path,
+            side_label(start.side),
+            start.line,
+            side_label(end.side),
+            end.line
+        ));
+        return;
+    }
+
+    // Single-side: collect old/new line ranges from the rendered rows.
+    let nums: Vec<(Option<u32>, Option<u32>)> = content.lines[first..=last]
+        .iter()
+        .filter_map(|row| diff_line_nums(row, file_path))
+        .collect();
+    let old_lines: Vec<u32> = nums.iter().filter_map(|(old, _)| *old).collect();
+    let new_lines: Vec<u32> = nums.iter().filter_map(|(_, new)| *new).collect();
+
     let old_range = format_line_range(&old_lines);
     let new_range = format_line_range(&new_lines);
 
@@ -127,6 +159,25 @@ fn format_diff_header(
         (old, new) => format!("{} (old:{} new:{}):", file_path, old, new),
     };
     out.raw_line(&header);
+}
+
+fn side_label(side: Side) -> &'static str {
+    match side {
+        Side::Old => "old",
+        Side::New => "new",
+    }
+}
+
+/// Old/new line numbers of a diff row, if it belongs to `file_path`.
+fn diff_line_nums(row: &Line, file_path: &str) -> Option<(Option<u32>, Option<u32>)> {
+    match &row.origin {
+        LineOrigin::Diff {
+            path,
+            old_line,
+            new_line,
+        } if path == file_path => Some((*old_line, *new_line)),
+        _ => None,
+    }
 }
 
 /// Format a line range like "10" or "10-15".
@@ -141,51 +192,6 @@ fn format_line_range(lines: &[u32]) -> String {
     } else {
         format!("{}-{}", min, max)
     }
-}
-
-/// Format a diff context line (not selected).
-fn format_diff_context_line(
-    out: &mut OutputBuilder,
-    content_model: &ContentModel,
-    file_path: &str,
-    line_num: u32,
-    content: &str,
-) {
-    let (old, new) = extract_diff_line_nums(content_model, file_path, line_num);
-    out.diff_line(old, new, content, false);
-}
-
-/// Format a diff selected line.
-fn format_diff_selected_line(
-    out: &mut OutputBuilder,
-    content_model: &ContentModel,
-    file_path: &str,
-    line_num: u32,
-    content: &str,
-) {
-    let (old, new) = extract_diff_line_nums(content_model, file_path, line_num);
-    out.diff_line(old, new, content, true);
-}
-
-/// Extract old/new line numbers from a diff line.
-fn extract_diff_line_nums(
-    content_model: &ContentModel,
-    file_path: &str,
-    line_num: u32,
-) -> (Option<u32>, Option<u32>) {
-    content_model
-        .find_line(file_path, line_num)
-        .and_then(|line| {
-            if let LineOrigin::Diff {
-                old_line, new_line, ..
-            } = &line.origin
-            {
-                Some((*old_line, *new_line))
-            } else {
-                None
-            }
-        })
-        .unwrap_or((None, None))
 }
 
 /// Calculate the BuilderMode from annotations.

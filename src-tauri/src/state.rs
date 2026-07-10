@@ -1060,6 +1060,29 @@ impl ContentModel {
             LineOrigin::Virtual => false,
         })
     }
+
+    /// Resolve an anchor endpoint to its display-row index, side-aware.
+    ///
+    /// Old endpoints match a row's `old_line`, New endpoints its `new_line`;
+    /// context rows carry both numbers and match either side. Source rows
+    /// (file/content mode) have no side and match by line alone.
+    pub fn find_row(&self, path: &str, endpoint: &crate::anchor::Endpoint) -> Option<usize> {
+        self.lines.iter().position(|l| match &l.origin {
+            LineOrigin::Source { path: p, line } => p == path && *line == endpoint.line,
+            LineOrigin::Diff {
+                path: p,
+                old_line,
+                new_line,
+            } => {
+                p == path
+                    && match endpoint.side {
+                        crate::source::Side::Old => *old_line == Some(endpoint.line),
+                        crate::source::Side::New => *new_line == Some(endpoint.line),
+                    }
+            }
+            LineOrigin::Virtual => false,
+        })
+    }
 }
 
 impl AppState {

@@ -1,0 +1,8 @@
+---
+source: src/output/snapshot_tests.rs
+expression: "format_output(&review, OutputMode::Cli).text"
+---
+file.rs (old:2):
+  1:1 |  fn main() {
+> 2:  | -    old_one();
+      └──> Why drop old_one?

@@ -1,0 +1,11 @@
+---
+source: src/output/snapshot_tests.rs
+expression: "format_output(&review, OutputMode::Cli).text"
+---
+file.rs (old:3 → new:4):
+  2:  | -    old_one();
+> 3:  | -    old_two();
+>  :2 | +    new_one();
+>  :3 | +    new_two();
+> 4:4 |      shared();
+      └──> From the second deletion through the shared context
