@@ -4,6 +4,7 @@
    * Uses LineRow for shared line-rendering logic and adds codeblock-specific styling.
    */
   import type { Snippet } from 'svelte';
+  import type { SlotRef } from '$lib/anchor';
   import type { Line } from '$lib/types';
   import { getLineNumber, isCodeBlockFence } from '$lib/line-utils';
   import { computePosition, offset, flip, shift } from '@floating-ui/dom';
@@ -21,7 +22,7 @@
     excalidrawSupported?: boolean;
     mermaidError?: string | null;
     onReportMermaidError?: (error: string) => void;
-    annotationSlot: Snippet<[displayIndex: number, rangeKey: string | null]>;
+    annotationSlot: Snippet<[displayIndex: number, slot: SlotRef | null]>;
   }
 
   let {
@@ -186,7 +187,7 @@
 <div class="codeblock-group">
   {#each lines as { line, displayIndex }}
     {@const sourceLineNum = getLineNumber(line)}
-    {@const rangeKey = ctx.getRangeKeyForLine(displayIndex)}
+    {@const slot = ctx.slotForRow(displayIndex)}
     {@const fence = isFence(line)}
     {@const startFence = isStartFence(line)}
     {@const endFence = isEndFence(line)}
@@ -298,7 +299,7 @@
     {#if !fence}
       <div class="annotation-row">
         <span class="annotation-gutter"></span>
-        {@render annotationSlot(displayIndex, rangeKey)}
+        {@render annotationSlot(displayIndex, slot)}
       </div>
     {/if}
   {/each}

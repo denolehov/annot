@@ -2,68 +2,100 @@ import { invoke } from '@tauri-apps/api/core';
 import type { JSONContent } from '@tiptap/core';
 import type { Range } from '$lib/range';
 import type { Line } from '$lib/types';
-import { rangeToKey, validateRange } from '$lib/range';
+import { type Anchor, anchorKeys, endpointKeys } from '$lib/anchor';
 import { extractContentNodes, isContentEmpty } from '$lib/tiptap';
 
 export interface AnnotationEntry {
   id: string;
-  range: Range;
+  anchor: Anchor;
   content: JSONContent;
 }
 
-interface Endpoint {
-  side: 'old' | 'new';
-  line: number;
+/** Deep-clone an entry for immutable storage (history stack, restore snapshots). */
+export function cloneAnnotationEntry(entry: AnnotationEntry): AnnotationEntry {
+  return {
+    id: entry.id,
+    anchor: JSON.parse(JSON.stringify(entry.anchor)),
+    content: JSON.parse(JSON.stringify(entry.content)),
+  };
 }
 
-/** Mirrors the backend `Anchor` enum: sides only exist where a diff does. */
-type Anchor =
-  | { type: 'source'; path: string; start: number; end: number }
-  | { type: 'diff'; path: string; start: Endpoint; end: Endpoint };
-
 export interface UseAnnotationsOptions {
-  /** Lines array for validating ranges and resolving paths */
+  /** Lines array for resolving anchors to display rows */
   getLines: () => Line[];
 }
 
 export function useAnnotations(options: UseAnnotationsOptions) {
   let annotations: Record<string, AnnotationEntry> = $state({});
 
-  // Display indices covered by any annotation. Rebuilt once when `annotations`
+  // Anchors live in source coordinates; display rows are resolved through this
+  // map, rebuilt only when the lines array changes. Each line registers every
+  // coordinate it answers to (diff context lines carry both sides).
+  const endpointToRow = $derived.by(() => {
+    const map = new Map<string, number>();
+    options.getLines().forEach((line, i) => {
+      for (const key of endpointKeys(line)) map.set(key, i + 1);
+    });
+    return map;
+  });
+
+  function resolveAnchor(anchor: Anchor): Range | null {
+    const [startKey, endKey] = anchorKeys(anchor);
+    const start = endpointToRow.get(startKey);
+    const end = endpointToRow.get(endKey);
+    if (start === undefined || end === undefined) return null;
+    return { start: Math.min(start, end), end: Math.max(start, end) };
+  }
+
+  // Resolved display span per annotation id. Reads only entry anchors, so
+  // in-place content edits (the per-keystroke case) don't invalidate it —
+  // same contract as the row sets below.
+  const spans = $derived.by(() => {
+    const map = new Map<string, Range>();
+    for (const entry of Object.values(annotations)) {
+      const span = resolveAnchor(entry.anchor);
+      if (span) {
+        map.set(entry.id, span);
+      } else {
+        // Impossible pre-unfold/per-file-docs; defined fold-away behavior:
+        // the annotation is hidden, not crashed on.
+        console.warn('Annotation anchor does not resolve against current lines:', entry.id, entry.anchor);
+      }
+    }
+    return map;
+  });
+
+  // Display rows covered by any annotation. Rebuilt once when the entry set
   // changes, so per-line `hasAnnotation` is an O(1) Set lookup. Without this,
   // adding one annotation re-scans every entry for all ~10k lines (O(N·A)) and
   // stalls the reactive flush — the dominant cost while annotating large files.
-  const annotatedLines = $derived.by(() => {
+  const annotatedRows = $derived.by(() => {
     const set = new Set<number>();
-    for (const entry of Object.values(annotations)) {
-      for (let i = entry.range.start; i <= entry.range.end; i++) {
+    for (const span of spans.values()) {
+      for (let i = span.start; i <= span.end; i++) {
         set.add(i);
       }
     }
     return set;
   });
 
-  // Maps each annotation's end line to its entry. `getAtLine` is called per
-  // line render (via getRangeKeyForLine), so a linear scan is O(N·A) across a
-  // full render — same shape as the hasAnnotation cost above. In-place content
-  // edits don't change which end lines exist, so this stays valid while typing.
-  const byEndLine = $derived.by(() => {
-    const map = new Map<number, { key: string; content: JSONContent }>();
-    for (const [key, entry] of Object.entries(annotations)) {
-      map.set(entry.range.end, { key, content: entry.content });
+  // Maps each annotation's resolved end row to its entry — the end row hosts
+  // the editor slot. One annotation per end row (invariant). `atEndRow` is
+  // called per line render, so this must stay an O(1) lookup.
+  const byEndRow = $derived.by(() => {
+    const map = new Map<number, AnnotationEntry>();
+    for (const [id, span] of spans) {
+      const entry = annotations[id];
+      if (entry) map.set(span.end, entry);
     }
     return map;
   });
 
-  function get(range: Range): JSONContent | undefined {
-    return annotations[rangeToKey(range)]?.content;
+  function getById(id: string): AnnotationEntry | undefined {
+    return annotations[id];
   }
 
-  function getByKey(key: string): AnnotationEntry | undefined {
-    return annotations[key];
-  }
-
-  // Backend syncs pending a flush, coalesced per annotation key. The editor's
+  // Backend syncs pending a flush, coalesced per annotation id. The editor's
   // onUpdate fires once per keystroke; local `annotations` state updates
   // immediately (so the UI stays reactive), but the IPC — which serializes the
   // whole content tree across the JS↔Rust bridge every call — is debounced.
@@ -117,85 +149,66 @@ export function useAnnotations(options: UseAnnotationsOptions) {
     }, FLUSH_DELAY_MS);
   }
 
-  async function upsert(range: Range, content: JSONContent | null): Promise<void> {
-    const key = rangeToKey(range);
-    const lines = options.getLines();
-    const coords = validateRange(range, lines);
-
-    if (!coords) {
-      console.warn('Invalid range for annotation:', range);
-      return;
-    }
-
+  function upsert(id: string, anchor: Anchor, content: JSONContent | null): void {
     if (content && !isContentEmpty(content)) {
-      // Store display indices (from range param), not source line numbers (from coords)
-      // Display indices are used for UI lookups (getAtLine, hasAnnotation)
-      // Source coords are only for the backend API call
-      const normalizedRange = {
-        start: Math.min(range.start, range.end),
-        end: Math.max(range.start, range.end)
-      };
-      // Mutate content in place for an existing annotation, so editing (which fires
-      // per keystroke) doesn't change the `annotations` key set — `annotatedLines`
-      // only reads ranges, so it stays valid and hasAnnotation doesn't re-run on all
-      // ~10k lines. Only creating a new annotation changes the key set.
-      // The id is minted once at creation and reused on every subsequent edit —
-      // it's the annotation's identity, independent of the anchor it's synced with.
-      const existing = annotations[key];
-      const id = existing?.id ?? crypto.randomUUID();
+      // Mutate content in place for an existing annotation, so editing (which
+      // fires per keystroke) neither changes the store's key set nor touches
+      // the anchor — the resolution maps above stay valid while typing.
+      const existing = annotations[id];
       if (existing) {
         existing.content = content;
       } else {
-        annotations[key] = { id, range: normalizedRange, content };
+        annotations[id] = { id, anchor, content };
       }
-      const anchor: Anchor =
-        coords.kind === 'diff'
-          ? {
-              type: 'diff',
-              path: coords.path,
-              start: { side: coords.startSide, line: coords.startLine },
-              end: { side: coords.endSide, line: coords.endLine }
-            }
-          : { type: 'source', path: coords.path, start: coords.startLine, end: coords.endLine };
-      pending.set(key, {
+      pending.set(id, {
         op: 'upsert',
         id,
-        path: coords.path,
+        path: anchor.path,
         anchor,
         content: extractContentNodes(content)
       });
     } else {
-      const existing = annotations[key];
-      delete annotations[key];
+      const existing = annotations[id];
+      delete annotations[id];
       if (existing) {
-        pending.set(key, { op: 'delete', path: coords.path, id: existing.id });
+        pending.set(id, { op: 'delete', path: anchor.path, id });
       } else {
-        // Never synced (no id was ever minted) — nothing to delete on the
-        // backend, and this cancels any not-yet-flushed pending upsert.
-        pending.delete(key);
+        // Never synced — nothing to delete on the backend, and this cancels
+        // any not-yet-flushed pending upsert.
+        pending.delete(id);
       }
     }
     scheduleFlush();
   }
 
-  function remove(key: string): void {
-    delete annotations[key];
+  function remove(id: string): void {
+    delete annotations[id];
   }
 
-  function getAtLine(displayIdx: number): { key: string; content: JSONContent } | null {
-    return byEndLine.get(displayIdx) ?? null;
+  function atEndRow(displayIdx: number): AnnotationEntry | null {
+    return byEndRow.get(displayIdx) ?? null;
+  }
+
+  /** The entry whose resolved span exactly matches `range`, if any. */
+  function atSpan(range: Range): AnnotationEntry | null {
+    const start = Math.min(range.start, range.end);
+    const end = Math.max(range.start, range.end);
+    for (const [id, span] of spans) {
+      if (span.start === start && span.end === end) return annotations[id] ?? null;
+    }
+    return null;
   }
 
   function hasAnnotation(displayIdx: number): boolean {
-    return annotatedLines.has(displayIdx);
+    return annotatedRows.has(displayIdx);
   }
 
-  function allRanges(): Array<{ key: string; start: number; end: number }> {
-    return Object.entries(annotations).map(([key, entry]) => ({
-      key,
-      start: entry.range.start,
-      end: entry.range.end,
-    }));
+  function spanOf(id: string): Range | null {
+    return spans.get(id) ?? null;
+  }
+
+  function spanOfAnchor(anchor: Anchor): Range | null {
+    return resolveAnchor(anchor);
   }
 
   function allEntries(): Record<string, AnnotationEntry> {
@@ -203,37 +216,46 @@ export function useAnnotations(options: UseAnnotationsOptions) {
   }
 
   /**
-   * Replace all annotations with new data (used for undo/redo).
-   * Does NOT sync to backend - caller is responsible for that.
+   * Replace all annotations (undo/redo). Diffs by id against the current
+   * store and syncs the backend through the pending queue: ids that vanish
+   * are deleted, every snapshot entry is re-upserted (idempotent, debounced).
    */
-  function replaceAll(newAnnotations: Record<string, AnnotationEntry>): void {
-    // Clear existing
-    for (const key of Object.keys(annotations)) {
-      delete annotations[key];
+  function restore(snapshot: Record<string, AnnotationEntry>): void {
+    for (const [id, entry] of Object.entries(annotations)) {
+      if (!snapshot[id]) {
+        pending.set(id, { op: 'delete', path: entry.anchor.path, id });
+      }
     }
-    // Add new
-    for (const [key, entry] of Object.entries(newAnnotations)) {
-      annotations[key] = {
-        id: entry.id,
-        range: { ...entry.range },
-        content: JSON.parse(JSON.stringify(entry.content)),
-      };
+    for (const id of Object.keys(annotations)) {
+      delete annotations[id];
     }
+    for (const [id, entry] of Object.entries(snapshot)) {
+      annotations[id] = cloneAnnotationEntry(entry);
+      pending.set(id, {
+        op: 'upsert',
+        id,
+        path: entry.anchor.path,
+        anchor: entry.anchor,
+        content: extractContentNodes(entry.content)
+      });
+    }
+    scheduleFlush();
   }
 
   return {
     get annotations() { return annotations; },
     /** Alias for annotations getter (for history system) */
     get all() { return annotations; },
-    get,
-    getByKey,
+    getById,
     upsert,
     flush,
     remove,
-    getAtLine,
+    atEndRow,
+    atSpan,
     hasAnnotation,
-    allRanges,
+    spanOf,
+    spanOfAnchor,
     allEntries,
-    replaceAll,
+    restore,
   };
 }

@@ -26,7 +26,7 @@ vi.mock('$lib/context', () => ({
     },
     annotations: {
       hasAnnotation: () => false,
-      getAtLine: () => null,
+      atEndRow: () => null,
     },
     search: {
       matches: [],
@@ -34,8 +34,7 @@ vi.mock('$lib/context', () => ({
     },
     selection: null,
     isDragging: false,
-    lastSelectedLine: null,
-    getRangeKeyForLine: () => null,
+    slotForRow: () => null,
   }),
 }));
 

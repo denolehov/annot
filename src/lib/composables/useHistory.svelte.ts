@@ -1,12 +1,12 @@
 import type { JSONContent } from '@tiptap/core';
-import type { AnnotationEntry } from './useAnnotations.svelte';
+import { cloneAnnotationEntry, type AnnotationEntry } from './useAnnotations.svelte';
 
 /**
  * SessionData represents the undoable state of a session.
  * This is what gets stored in the history stack.
  */
 export interface SessionData {
-  /** Annotations keyed by range string (e.g., "10-15") */
+  /** Annotations keyed by id; entries carry their anchor (source coordinates) */
   annotations: Record<string, AnnotationEntry>;
   /** Session-level comment (TipTap JSON) */
   sessionComment: JSONContent | null;
@@ -48,14 +48,7 @@ function generateId(index: number): string {
 function cloneSessionData(data: SessionData): SessionData {
   return {
     annotations: Object.fromEntries(
-      Object.entries(data.annotations).map(([key, entry]) => [
-        key,
-        {
-          id: entry.id,
-          range: { ...entry.range },
-          content: JSON.parse(JSON.stringify(entry.content)),
-        },
-      ])
+      Object.entries(data.annotations).map(([id, entry]) => [id, cloneAnnotationEntry(entry)])
     ),
     sessionComment: data.sessionComment ? JSON.parse(JSON.stringify(data.sessionComment)) : null,
     selectedExitMode: data.selectedExitMode,

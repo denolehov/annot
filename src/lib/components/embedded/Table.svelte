@@ -9,6 +9,7 @@
    * changes are needed here.
    */
   import type { Snippet } from 'svelte';
+  import type { SlotRef } from '$lib/anchor';
   import type { Line } from '$lib/types';
   import { getLineNumber } from '$lib/line-utils';
   import {
@@ -21,7 +22,7 @@
 
   interface Props {
     lines: Array<{ line: Line; displayIndex: number }>;
-    annotationSlot: Snippet<[displayIndex: number, rangeKey: string | null]>;
+    annotationSlot: Snippet<[displayIndex: number, slot: SlotRef | null]>;
   }
 
   let { lines, annotationSlot }: Props = $props();
@@ -197,7 +198,7 @@
       <tbody>
         {#each visibleLines as { line, displayIndex, lineIndex }, rowIdx}
           {@const sourceLineNum = getLineNumber(line)}
-          {@const rangeKey = ctx.getRangeKeyForLine(displayIndex)}
+          {@const slot = ctx.slotForRow(displayIndex)}
           {@const cells = splitTableRow(line.content)}
           {@const isHeader = isHeaderRow(lineIndex)}
           {@const isFirst = displayIndex === firstDisplayIndex}
@@ -254,11 +255,11 @@
             {/each}
           </tr>
 
-          {#if rangeKey}
+          {#if slot}
             <tr class="annotation-row">
               <td class="gutter-cell annotation-gutter"></td>
               <td colspan={columnCount - 1} class="annotation-cell">
-                {@render annotationSlot(displayIndex, rangeKey)}
+                {@render annotationSlot(displayIndex, slot)}
               </td>
             </tr>
           {/if}

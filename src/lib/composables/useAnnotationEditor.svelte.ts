@@ -45,6 +45,7 @@ import {
   ExcalidrawPlaceholder,
 } from '../tiptap/extensions';
 import type { Tag, RefSnapshot, AnnotationRefSnapshot, ContentNode, SectionInfo } from '../types';
+import { anchorLabel } from '../anchor';
 import type { AnnotationEntry } from './useAnnotations.svelte';
 import { fuzzySearch } from '../fuzzy';
 
@@ -59,8 +60,8 @@ export interface AnnotationEditorOptions {
   getTags: () => Tag[];
   /** Returns all annotation entries for @ autocomplete (reactive) */
   getAnnotationEntries: () => Record<string, AnnotationEntry>;
-  /** Returns the current annotation's range key (to exclude from suggestions) */
-  getCurrentRangeKey: () => string;
+  /** Returns the current annotation's id (to exclude from suggestions) */
+  getCurrentId: () => string;
   /** Returns whether image paste is allowed */
   getAllowsImagePaste: () => boolean;
   /** Returns the onUpdate callback (reactive) */
@@ -193,7 +194,7 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
     const el = options.element();
     if (!el) return;
 
-    const { getSealed, getTags, getAnnotationEntries, getCurrentRangeKey, getOnUpdate, getOnDismiss, getSections } = options;
+    const { getSealed, getTags, getAnnotationEntries, getCurrentId, getOnUpdate, getOnDismiss, getSections } = options;
 
     editor = new Editor({
       element: el,
@@ -251,19 +252,20 @@ export function useAnnotationEditor(options: AnnotationEditorOptions) {
           suggestion: {
             char: '@',
             items: async ({ query }: { query: string }): Promise<RefSuggestionItem[]> => {
-              const currentKey = getCurrentRangeKey();
+              const currentId = getCurrentId();
               const annotations = getAnnotationEntries();
               const sections = getSections?.() ?? null;
 
-              // Build annotation items (exclude current annotation)
-              const annotationItems: RefSuggestionItem[] = Object.entries(annotations)
-                .filter(([key, entry]) => key !== currentKey && entry.content)
-                .map(([key, entry]) => {
+              // Build annotation items (exclude current annotation).
+              // `key` is the display label derived from the anchor ("50-55").
+              const annotationItems: RefSuggestionItem[] = Object.values(annotations)
+                .filter((entry) => entry.id !== currentId && entry.content)
+                .map((entry) => {
                   const nodes = extractContentNodes(entry.content);
                   const preview = extractPreviewFromContent(nodes);
                   return {
                     type: 'annotation' as const,
-                    key,
+                    key: anchorLabel(entry.anchor),
                     preview,
                     content: nodes,
                   };

@@ -13,7 +13,7 @@
 
   interface ExcalidrawContext {
     elements: string;
-    range_key: string;
+    annotation_id: string;
     node_ref: NodeRef;
     parent_label: string;
   }

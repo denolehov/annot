@@ -14,9 +14,9 @@ describe('useHistory', () => {
     const newState: SessionData = {
       ...emptySessionData(),
       annotations: {
-        '10-15': {
+        a1: {
           id: 'a1',
-          range: { start: 10, end: 15 },
+          anchor: { type: 'source', path: 'f.ts', start: 10, end: 15 },
           content: { type: 'doc', content: [] },
         },
       },
@@ -24,7 +24,7 @@ describe('useHistory', () => {
 
     history.push(newState, 'Created annotation');
 
-    expect(history.current.annotations['10-15']).toBeDefined();
+    expect(history.current.annotations['a1']).toBeDefined();
     expect(history.getHistoryLength()).toBe(2);
   });
 
@@ -34,15 +34,15 @@ describe('useHistory', () => {
     // Push first change
     history.push({
       ...emptySessionData(),
-      annotations: { '10-15': { id: 'a1', range: { start: 10, end: 15 }, content: { type: 'doc' } } },
+      annotations: { a1: { id: 'a1', anchor: { type: 'source', path: 'f.ts', start: 10, end: 15 }, content: { type: 'doc' } } },
     }, 'First');
 
     // Push second change
     history.push({
       ...emptySessionData(),
       annotations: {
-        '10-15': { id: 'a1', range: { start: 10, end: 15 }, content: { type: 'doc' } },
-        '20-25': { id: 'a2', range: { start: 20, end: 25 }, content: { type: 'doc' } },
+        a1: { id: 'a1', anchor: { type: 'source', path: 'f.ts', start: 10, end: 15 }, content: { type: 'doc' } },
+        a2: { id: 'a2', anchor: { type: 'source', path: 'f.ts', start: 20, end: 25 }, content: { type: 'doc' } },
       },
     }, 'Second');
 
@@ -135,17 +135,17 @@ describe('useHistory', () => {
     const original: SessionData = {
       ...emptySessionData(),
       annotations: {
-        '10-15': { id: 'a1', range: { start: 10, end: 15 }, content: { type: 'doc' } },
+        a1: { id: 'a1', anchor: { type: 'source', path: 'f.ts', start: 10, end: 15 }, content: { type: 'doc' } },
       },
     };
 
     history.push(original, 'Push');
 
-    // Modify original
-    original.annotations['10-15'].range.start = 999;
+    // Modify original (deep field of the anchor)
+    (original.annotations['a1'].anchor as { start: number }).start = 999;
 
     // History should not be affected
-    expect(history.current.annotations['10-15'].range.start).toBe(10);
+    expect((history.current.annotations['a1'].anchor as { start: number }).start).toBe(10);
   });
 
   it('initialize resets history', () => {

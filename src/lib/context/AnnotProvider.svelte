@@ -9,9 +9,9 @@
    * then passes them here to be set as context for child components.
    */
   import type { Snippet } from 'svelte';
-  import type { Line, ContentMetadata, Tag, JSONContent, MarkdownMetadata } from '$lib/types';
+  import type { Line, ContentMetadata, Tag, MarkdownMetadata } from '$lib/types';
   import type { Range } from '$lib/range';
-  import { rangeToKey } from '$lib/range';
+  import type { SlotRef } from '$lib/anchor';
   import { setAnnotContext, type AnnotContext } from './annot-context.svelte';
   import type { useInteraction } from '$lib/composables/useInteraction.svelte';
   import type { useAnnotations } from '$lib/composables/useAnnotations.svelte';
@@ -33,6 +33,8 @@
     // Composables (created by page)
     interaction: ReturnType<typeof useInteraction>;
     annotations: ReturnType<typeof useAnnotations>;
+    /** Draft slot for a new annotation (id minted, no content yet). */
+    draft: SlotRef | null;
     exitModes: ReturnType<typeof useExitModes>;
     search: ReturnType<typeof useSearch>;
     mermaid: ReturnType<typeof useMermaid>;
@@ -55,6 +57,7 @@
     fileEntries,
     interaction,
     annotations,
+    draft,
     exitModes,
     search,
     mermaid,
@@ -75,38 +78,29 @@
   const isDragging = $derived(interaction.phase === 'selecting');
   const hoveredIdx = $derived(interaction.hoverLine);
 
-  const annotationsMap = $derived.by(() => {
-    const map = new Map<string, JSONContent>();
-    for (const [key, entry] of Object.entries(annotations.annotations)) {
-      map.set(key, entry.content);
-    }
-    return map;
-  });
-
-  const lastSelectedLine = $derived.by(() => {
-    const sel = interaction.range;
-    if (!sel) return null;
-    return Math.max(sel.start, sel.end);
+  // Draft's resolved span, computed once per render rather than once per row
+  // (slotForRow below is called for every rendered line).
+  const draftSpan = $derived.by(() => {
+    if (!draft || !selection || isDragging) return null;
+    return annotations.spanOfAnchor(draft.anchor);
   });
 
   /**
-   * Get the range key for a line. Used by embedded components to connect
-   * annotation slots to their content.
+   * The annotation slot hosted by a row, if any. Used by embedded components
+   * to connect annotation slots to their content.
    *
-   * Always returns existing annotation keys, plus the new selection key for
-   * the last selected line once a selection is committed.
+   * An existing annotation whose resolved span ends on this row always claims
+   * it; otherwise the draft slot renders here once its anchor resolves to
+   * this row and the selection is committed (never mid-drag).
    */
-  function getRangeKeyForLine(displayIndex: number): string | null {
-    // Always show existing annotations
-    const annotationAtLine = annotations.getAtLine(displayIndex);
-    if (annotationAtLine) {
-      return annotationAtLine.key;
-    }
+  function slotForRow(displayIndex: number): SlotRef | null {
+    // Entries and the draft are identity-stable objects (content is mutated
+    // in place), so returning them directly keeps the slot prop referentially
+    // stable — rows don't re-render just because this re-evaluates.
+    const existing = annotations.atEndRow(displayIndex);
+    if (existing) return existing;
 
-    const isLast = displayIndex === lastSelectedLine && selection && !isDragging;
-    if (isLast && selection) {
-      return rangeToKey(selection);
-    }
+    if (draftSpan?.end === displayIndex) return draft;
 
     return null;
   }
@@ -123,8 +117,6 @@
     get selection() { return selection; },
     get isDragging() { return isDragging; },
     get hoveredIdx() { return hoveredIdx; },
-    get annotationsMap() { return annotationsMap; },
-    get lastSelectedLine() { return lastSelectedLine; },
 
     get lines() { return lines; },
     get metadata() { return metadata; },
@@ -137,7 +129,7 @@
     get showToast() { return showToast; },
     get isLineSelectable() { return isLineSelectable; },
     get getOriginalLinesForRange() { return getOriginalLinesForRange; },
-    getRangeKeyForLine,
+    slotForRow,
   });
 </script>
 

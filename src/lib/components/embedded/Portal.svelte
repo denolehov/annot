@@ -4,6 +4,7 @@
    * Uses LineRow for shared line-rendering logic and adds portal-specific styling.
    */
   import type { Snippet } from 'svelte';
+  import type { SlotRef } from '$lib/anchor';
   import type { Line, PortalSemantics } from '$lib/types';
   import { getLineNumber } from '$lib/line-utils';
   import { getAnnotContext } from '$lib/context';
@@ -12,7 +13,7 @@
 
   interface Props {
     lines: Array<{ line: Line; displayIndex: number }>;
-    annotationSlot: Snippet<[displayIndex: number, rangeKey: string | null]>;
+    annotationSlot: Snippet<[displayIndex: number, slot: SlotRef | null]>;
   }
 
   let { lines, annotationSlot }: Props = $props();
@@ -65,7 +66,7 @@
   {#each lines as { line, displayIndex }}
     {@const sourceLineNum = getLineNumber(line)}
     {@const portalSemantics = getPortalSemantics(line)}
-    {@const rangeKey = ctx.getRangeKeyForLine(displayIndex)}
+    {@const slot = ctx.slotForRow(displayIndex)}
     <LineRow
       {line}
       {displayIndex}
@@ -108,7 +109,7 @@
         </span>
       {/snippet}
     </LineRow>
-    {@render annotationSlot(displayIndex, rangeKey)}
+    {@render annotationSlot(displayIndex, slot)}
   {/each}
 </div>
 

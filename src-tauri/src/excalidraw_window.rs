@@ -32,8 +32,8 @@ pub enum ExcalidrawOrigin {
 pub struct ExcalidrawContext {
     /// JSON array of Excalidraw elements
     pub elements: String,
-    /// Annotation identifier (e.g., "45-52")
-    pub range_key: String,
+    /// Annotation id (opaque to the backend; unused for CodeBlock origin)
+    pub annotation_id: String,
     /// Reference to the TipTap node being edited
     pub node_ref: NodeRef,
     /// Parent window label for emitting results
@@ -55,8 +55,8 @@ pub enum ExcalidrawOutcome {
 /// Result emitted back to the main window (for Annotation origin).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExcalidrawResult {
-    /// Annotation identifier
-    pub range_key: String,
+    /// Annotation id
+    pub annotation_id: String,
     /// Reference to the node that was edited
     pub node_ref: NodeRef,
     /// Outcome of the session
@@ -108,7 +108,7 @@ pub async fn open_excalidraw_window(
     window: WebviewWindow,
     excalidraw_state: State<'_, Mutex<ExcalidrawWindowState>>,
     elements: String,
-    range_key: String,
+    annotation_id: String,
     node_ref: NodeRef,
     origin: Option<ExcalidrawOrigin>,
 ) -> Result<String, String> {
@@ -120,7 +120,7 @@ pub async fn open_excalidraw_window(
 
     let context = ExcalidrawContext {
         elements,
-        range_key,
+        annotation_id,
         node_ref,
         parent_label,
         origin: origin.unwrap_or(ExcalidrawOrigin::Annotation),
@@ -197,7 +197,7 @@ pub async fn open_excalidraw_window(
                             let _ = parent.emit(
                                 "excalidraw-result",
                                 ExcalidrawResult {
-                                    range_key: ctx.range_key,
+                                    annotation_id: ctx.annotation_id,
                                     node_ref: ctx.node_ref,
                                     outcome: ExcalidrawOutcome::Cancelled,
                                 },
@@ -257,7 +257,7 @@ pub fn excalidraw_save(
                     .emit(
                         "excalidraw-result",
                         ExcalidrawResult {
-                            range_key: ctx.range_key,
+                            annotation_id: ctx.annotation_id,
                             node_ref: ctx.node_ref,
                             outcome: ExcalidrawOutcome::Saved { elements, png },
                         },
@@ -315,7 +315,7 @@ pub fn excalidraw_cancel(
             .emit(
                 "excalidraw-result",
                 ExcalidrawResult {
-                    range_key: ctx.range_key,
+                    annotation_id: ctx.annotation_id,
                     node_ref: ctx.node_ref,
                     outcome: ExcalidrawOutcome::Cancelled,
                 },
