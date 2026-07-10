@@ -1527,17 +1527,17 @@ mod tests {
         let diff_file_key = FileKey::diff_file(0);
         let target = review.files.get_mut(&diff_file_key).unwrap();
 
-        // Add annotation at line 2
+        // Add annotation at old-side line 2
         target.upsert_annotation(
             "2".to_string(),
             Anchor {
                 path: "file.rs".to_string(),
                 start: Endpoint {
-                    side: Side::New,
+                    side: Side::Old,
                     line: 2,
                 },
                 end: Endpoint {
-                    side: Side::New,
+                    side: Side::Old,
                     line: 2,
                 },
             },

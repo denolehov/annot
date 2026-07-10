@@ -1,0 +1,9 @@
+---
+source: src/output/snapshot_tests.rs
+expression: "format_output(&review, OutputMode::Cli).text"
+---
+file.rs (new:2-3):
+  3:  | -    old_two();
+>  :2 | +    new_one();
+>  :3 | +    new_two();
+      └──> Review the replacement pair
