@@ -1,0 +1,9 @@
+---
+source: src/engine.rs
+expression: "render(old, new, &compute_hunks(old, new, 3))"
+---
+@@ old 1..4 new 1..4 @@
+ctx   1   1 |fn main() {
+del   2     |    »old_code();«
+add       2 |    »new_code();«
+ctx   3   3 |}

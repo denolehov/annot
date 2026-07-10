@@ -1,0 +1,17 @@
+---
+source: src/engine.rs
+expression: "render(old, new, &compute_hunks(old, new, 3))"
+---
+@@ old 1..7 new 1..7 @@
+del   1     |one
+del   2     |two
+del   3     |three
+del   4     |four
+del   5     |five
+del   6     |six
+add       1 |uno
+add       2 |dos
+add       3 |tres
+add       4 |cuatro
+add       5 |cinco
+add       6 |seis

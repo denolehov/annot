@@ -1,0 +1,7 @@
+---
+source: src/engine.rs
+expression: "render(old, new, &compute_hunks(old, new, 3))"
+---
+@@ old 1..1 new 1..3 @@
+add       1 |hello
+add       2 |world

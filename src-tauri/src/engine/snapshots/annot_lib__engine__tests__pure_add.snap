@@ -1,0 +1,10 @@
+---
+source: src/engine.rs
+expression: "render(old, new, &compute_hunks(old, new, 3))"
+---
+@@ old 1..4 new 1..6 @@
+ctx   1   1 |alpha
+ctx   2   2 |beta
+add       3 |inserted one
+add       4 |inserted two
+ctx   3   5 |gamma
