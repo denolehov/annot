@@ -107,7 +107,7 @@ impl AnnotServer {
         Ok(build_mcp_response(output))
     }
 
-    #[tool(description = "Opens a diff for human review. Blocks until the window closes. Supports git_diff_args (e.g. [\"--staged\"], [\"main...HEAD\"]) or raw diff_content. Returns annotations anchored to diff lines for targeted feedback on changes.")]
+    #[tool(description = "Opens a diff for human review. Blocks until the window closes. `target` selects what to diff: working_tree (default; staged + unstaged + untracked vs HEAD), staged, or a range {from, to, merge_base}. Optional `pathspecs` limit files. Or pass raw diff_content. Returns annotations anchored to diff lines for targeted feedback on changes.")]
     async fn review_diff(
         &self,
         params: Parameters<ReviewDiffInput>,
@@ -167,13 +167,36 @@ fn run_diff_session(
 ) -> Result<SessionOutput, String> {
     use std::process::Command;
 
+    if params.diff_content.is_some() && (params.target.is_some() || params.pathspecs.is_some()) {
+        return Err("Provide either target/pathspecs or diff_content, not both".to_string());
+    }
+
     // Get diff content and derive label + source based on which input was provided
-    let (diff_text, derived_label, diff_source) = match (&params.git_diff_args, &params.diff_content) {
-        (Some(args), None) => {
-            // Git diff mode
-            let output = Command::new("git")
-                .arg("diff")
-                .args(args)
+    let (diff_text, derived_label, diff_source) = match &params.diff_content {
+        Some(content) => {
+            // Raw diff mode
+            (content.clone(), "diff".to_string(), DiffSource::Raw)
+        }
+        None => {
+            // Structured target mode. The patch text still comes from the git
+            // CLI until the in-process pipeline lands — but the args are
+            // composed from the target, never caller-provided strings.
+            let target = params
+                .target
+                .clone()
+                .unwrap_or(crate::vcs::DiffTarget::WorkingTree);
+            let pathspecs = params.pathspecs.clone().unwrap_or_default();
+            let args = crate::vcs::to_git_args(&target, &pathspecs);
+
+            let mut cmd = Command::new("git");
+            cmd.arg("diff").args(&args);
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+                cmd.creation_flags(CREATE_NO_WINDOW);
+            }
+            let output = cmd
                 .output()
                 .map_err(|e| format!("Failed to run git: {}", e))?;
 
@@ -183,22 +206,8 @@ fn run_diff_session(
             }
 
             let diff = String::from_utf8_lossy(&output.stdout).to_string();
-            let label = args
-                .first()
-                .map(|s| s.trim_start_matches('-').to_string())
-                .unwrap_or_else(|| "diff".to_string());
-            let source = DiffSource::Git { args: args.clone() };
-            (diff, label, source)
-        }
-        (None, Some(content)) => {
-            // Raw diff mode
-            (content.clone(), "diff".to_string(), DiffSource::Raw)
-        }
-        (Some(_), Some(_)) => {
-            return Err("Provide either git_diff_args or diff_content, not both".to_string());
-        }
-        (None, None) => {
-            return Err("Provide either git_diff_args or diff_content".to_string());
+            let label = target.label();
+            (diff, label, DiffSource::Target(target))
         }
     };
 

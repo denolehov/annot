@@ -22,7 +22,11 @@ pub mod mermaid_window;
 pub mod output;
 pub mod portal;
 pub mod review;
+pub mod source;
 pub mod state;
+#[cfg(test)]
+pub mod testutil;
+pub mod vcs;
 pub mod window_state;
 
 use commands::{

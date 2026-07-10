@@ -27,10 +27,15 @@ pub struct ReviewContentInput {
 /// Input for the review_diff tool.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ReviewDiffInput {
-    #[schemars(description = "git diff arguments (e.g. [\"--staged\"])")]
-    pub git_diff_args: Option<Vec<String>>,
+    #[schemars(
+        description = "what to diff: working_tree (default; worktree vs HEAD, includes staged + unstaged + untracked), staged (index vs HEAD), or range {from, to, merge_base}"
+    )]
+    pub target: Option<crate::vcs::DiffTarget>,
 
-    #[schemars(description = "raw unified diff content")]
+    #[schemars(description = "optional git pathspecs limiting the diff (e.g. [\"src/\", \"*.rs\"])")]
+    pub pathspecs: Option<Vec<String>>,
+
+    #[schemars(description = "raw unified diff content (mutually exclusive with target/pathspecs)")]
     pub diff_content: Option<String>,
 
     #[schemars(description = "display name (default: diff)")]
