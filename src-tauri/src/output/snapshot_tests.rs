@@ -44,10 +44,10 @@ fn make_lines(path: &str, start: u32, end: u32) -> Vec<Line> {
 }
 
 /// Build a (id, Annotation) fixture for a given line range. Tests are all
-/// non-diff (file/content mode), so `Side::New` everywhere is correct per
-/// the anchor spec's degenerate-case rule. The path is inert for output —
+/// non-diff (file/content mode), so the side-less `Anchor::Source` variant is
+/// the correct shape. The path is inert for output —
 /// formatting always resolves the file path via `FileKey`/`DiffFileView`,
-/// never via `anchor.path` — so a fixed placeholder is fine here.
+/// never via the anchor's path — so a fixed placeholder is fine here.
 /// Shared with `mod::tests` (both are children of `output`) to avoid duplication.
 pub(super) fn ann(start: u32, end: u32, content: Vec<ContentNode>) -> (String, Annotation) {
     ann_at("test.rs", start, end, content)
@@ -64,16 +64,10 @@ pub(super) fn ann_at(
         id.clone(),
         Annotation {
             id,
-            anchor: Anchor {
+            anchor: Anchor::Source {
                 path: path.to_string(),
-                start: Endpoint {
-                    side: Side::New,
-                    line: start,
-                },
-                end: Endpoint {
-                    side: Side::New,
-                    line: end,
-                },
+                start,
+                end,
             },
             content,
         },
@@ -482,7 +476,7 @@ fn diff_annotation_added_line() {
     let target = review.files.get_mut(&diff_file_key).unwrap();
     target.upsert_annotation(
         "4".to_string(), // line with more_code()
-        Anchor {
+        Anchor::Diff {
             path: "file.rs".to_string(),
             start: Endpoint {
                 side: Side::New,
@@ -525,7 +519,7 @@ fn diff_annotation_deleted_line() {
     let target = review.files.get_mut(&diff_file_key).unwrap();
     target.upsert_annotation(
         "2".to_string(), // deleted line — lives on the old side
-        Anchor {
+        Anchor::Diff {
             path: "file.rs".to_string(),
             start: Endpoint {
                 side: Side::Old,
@@ -583,7 +577,7 @@ fn replacement_review(start: (Side, u32), end: (Side, u32), text: &str) -> Revie
         .unwrap();
     target.upsert_annotation(
         "corpus".to_string(),
-        Anchor {
+        Anchor::Diff {
             path: "file.rs".to_string(),
             start: Endpoint {
                 side: start.0,

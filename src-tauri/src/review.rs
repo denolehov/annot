@@ -537,20 +537,11 @@ pub type ActiveReview = parking_lot::Mutex<Option<Review>>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::anchor::Endpoint;
-    use crate::source::Side;
-
     fn anchor(line: u32) -> Anchor {
-        Anchor {
+        Anchor::Source {
             path: "test.rs".to_string(),
-            start: Endpoint {
-                side: Side::New,
-                line,
-            },
-            end: Endpoint {
-                side: Side::New,
-                line,
-            },
+            start: line,
+            end: line,
         }
     }
 
@@ -573,8 +564,8 @@ mod tests {
         target.upsert_annotation("a".to_string(), anchor(20), vec![]);
 
         assert_eq!(target.annotations.len(), 2);
-        assert_eq!(target.annotations["a"].anchor.start.line, 20);
-        assert_eq!(target.annotations["b"].anchor.start.line, 10);
+        assert_eq!(target.annotations["a"].anchor.start_line(), 20);
+        assert_eq!(target.annotations["b"].anchor.start_line(), 10);
     }
 
     #[test]

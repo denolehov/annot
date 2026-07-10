@@ -52,9 +52,10 @@ describe('useAnnotations', () => {
       id: expect.any(String),
       path: '/test/file.ts',
       anchor: {
+        type: 'source',
         path: '/test/file.ts',
-        start: { side: 'new', line: 5 },
-        end: { side: 'new', line: 10 },
+        start: 5,
+        end: 10,
       },
       content: expect.any(Array),
     });
@@ -78,9 +79,10 @@ describe('useAnnotations', () => {
       'upsert_annotation',
       expect.objectContaining({
         anchor: {
+          type: 'source',
           path: '/test/file.ts',
-          start: { side: 'new', line: 5 },
-          end: { side: 'new', line: 10 },
+          start: 5,
+          end: 10,
         },
       })
     );

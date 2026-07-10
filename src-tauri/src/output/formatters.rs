@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::anchor::Annotation;
+use crate::anchor::{Anchor, Annotation, Endpoint};
 use crate::mcp::tools::SessionImage;
 use crate::source::Side;
 use crate::state::{ContentMetadata, ContentModel, Line, LineOrigin};
@@ -89,16 +89,22 @@ fn format_diff_block(
     ann: &Annotation,
     file_path: &str,
 ) {
-    let start = content.find_row(file_path, &ann.anchor.start);
-    let end = content.find_row(file_path, &ann.anchor.end);
+    let Anchor::Diff { start, end, .. } = &ann.anchor else {
+        // A side-less anchor can't resolve against a diff: header only.
+        out.raw_line(&format!("{}:", file_path));
+        return;
+    };
 
-    let Some((first, last)) = start.zip(end).map(|(s, e)| (s.min(e), s.max(e))) else {
+    let start_row = content.find_row(file_path, start);
+    let end_row = content.find_row(file_path, end);
+
+    let Some((first, last)) = start_row.zip(end_row).map(|(s, e)| (s.min(e), s.max(e))) else {
         // Anchor doesn't resolve against this diff: header only.
         out.raw_line(&format!("{}:", file_path));
         return;
     };
 
-    format_diff_header(out, content, ann, file_path, (first, last));
+    format_diff_header(out, content, (start, end), file_path, (first, last));
 
     // Context: the display row immediately above the slice, if renderable.
     if first > 0 {
@@ -122,13 +128,12 @@ fn format_diff_block(
 fn format_diff_header(
     out: &mut OutputBuilder,
     content: &ContentModel,
-    ann: &Annotation,
+    (start, end): (&Endpoint, &Endpoint),
     file_path: &str,
     (first, last): (usize, usize),
 ) {
     // Mixed-side range: name the endpoints with their sides. This shape is
     // additive — no single-side or context annotation can produce it.
-    let (start, end) = (&ann.anchor.start, &ann.anchor.end);
     if start.side != end.side {
         out.raw_line(&format!(
             "{} ({}:{} → {}:{}):",

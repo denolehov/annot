@@ -1460,7 +1460,7 @@ mod tests {
         // Add annotation at line 3
         target.upsert_annotation(
             "3".to_string(),
-            Anchor {
+            Anchor::Diff {
                 path: "file.rs".to_string(),
                 start: Endpoint {
                     side: Side::New,
@@ -1530,7 +1530,7 @@ mod tests {
         // Add annotation at old-side line 2
         target.upsert_annotation(
             "2".to_string(),
-            Anchor {
+            Anchor::Diff {
                 path: "file.rs".to_string(),
                 start: Endpoint {
                     side: Side::Old,
@@ -1587,7 +1587,7 @@ mod tests {
         // Add annotation at line 1
         target.upsert_annotation(
             "1".to_string(),
-            Anchor {
+            Anchor::Diff {
                 path: "file.rs".to_string(),
                 start: Endpoint {
                     side: Side::New,
