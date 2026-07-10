@@ -597,6 +597,7 @@ mod tests {
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
+            file_source: std::sync::Arc::new(crate::source::RawPatchSource),
         };
         let config = UserConfig::empty();
         let mut review = Review::cli(content, config, "main".to_string());
@@ -775,6 +776,7 @@ mod tests {
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
+            file_source: std::sync::Arc::new(crate::source::RawPatchSource),
         };
         let mut review = Review::cli(content, config, "main".to_string());
         review.selected_exit_mode_id = Some("apply".to_string());
@@ -821,6 +823,7 @@ mod tests {
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
+            file_source: std::sync::Arc::new(crate::source::RawPatchSource),
         };
         let mut review = Review::cli(content, config, "main".to_string());
         review.selected_exit_mode_id = Some("reject".to_string());
@@ -850,6 +853,7 @@ mod tests {
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
+            file_source: std::sync::Arc::new(crate::source::RawPatchSource),
         };
         let mut review = Review::cli(content, UserConfig::empty(), "main".to_string());
         review.session_comment = Some(vec![ContentNode::Text {
@@ -884,6 +888,7 @@ mod tests {
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
+            file_source: std::sync::Arc::new(crate::source::RawPatchSource),
         };
         let mut review = Review::cli(content, config, "main".to_string());
         review.session_comment = Some(vec![ContentNode::Text {
@@ -910,6 +915,7 @@ mod tests {
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
+            file_source: std::sync::Arc::new(crate::source::RawPatchSource),
         };
         let mut review = Review::cli(content, UserConfig::empty(), "main".to_string());
         review.session_comment = Some(vec![]);
@@ -1079,6 +1085,7 @@ mod tests {
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
+            file_source: std::sync::Arc::new(crate::source::RawPatchSource),
         };
         let config = UserConfig::empty();
         let mut review = Review::cli(content, config, "main".to_string());
@@ -1147,6 +1154,7 @@ mod tests {
             }),
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
+            file_source: std::sync::Arc::new(crate::source::RawPatchSource),
         };
 
         let output = export_content(&content);
@@ -1215,6 +1223,7 @@ mod tests {
             }),
             metadata: ContentMetadata::Plain,
             portals: vec![portal],
+            file_source: std::sync::Arc::new(crate::source::RawPatchSource),
         };
 
         let output = export_content(&content);
@@ -1289,6 +1298,7 @@ mod tests {
             }),
             metadata: ContentMetadata::Plain,
             portals: vec![portal],
+            file_source: std::sync::Arc::new(crate::source::RawPatchSource),
         };
 
         let output = export_content(&content);
@@ -1386,6 +1396,7 @@ mod tests {
             }),
             metadata: ContentMetadata::Plain,
             portals: vec![portal1, portal2],
+            file_source: std::sync::Arc::new(crate::source::RawPatchSource),
         };
 
         let output = export_content(&content);
@@ -1660,6 +1671,7 @@ mod tests {
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
+            file_source: std::sync::Arc::new(crate::source::RawPatchSource),
         };
         let mut review = Review::cli(content, UserConfig::empty(), "main".to_string());
         review.session_comment = Some(vec![ContentNode::Text {
@@ -1692,6 +1704,7 @@ mod tests {
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
+            file_source: std::sync::Arc::new(crate::source::RawPatchSource),
         };
         let mut review = Review::cli(content, UserConfig::empty(), "main".to_string());
         review.session_comment = Some(vec![ContentNode::Text {
@@ -1793,6 +1806,7 @@ Do something useful.
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
+            file_source: std::sync::Arc::new(crate::source::RawPatchSource),
         };
         let mut review = Review::cli(content, config, "main".to_string());
         review.selected_exit_mode_id = Some("cmd-test".to_string());
@@ -1845,6 +1859,7 @@ Do something useful.
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
+            file_source: std::sync::Arc::new(crate::source::RawPatchSource),
         };
         let mut review = Review::cli(content, config, "main".to_string());
         review.selected_exit_mode_id = Some("apply".to_string());

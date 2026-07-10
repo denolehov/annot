@@ -1,4 +1,6 @@
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
+use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -62,6 +64,8 @@ use crate::highlight::Highlighter;
 use crate::input::ContentSource;
 use crate::markdown::{self, html_escape, MarkdownMetadata, MarkdownSemantics};
 use crate::portal::{self, LoadedPortal, MAX_PORTALS};
+use crate::source::{FileSource, GixSource, RawPatchSource};
+use crate::vcs::DiffTarget;
 
 // =============================================================================
 // Unified line model (LineOrigin + LineSemantics)
@@ -369,6 +373,10 @@ pub struct ContentModel {
     pub metadata: ContentMetadata,
     /// Loaded portals for file registration (empty for non-markdown content).
     pub portals: Vec<LoadedPortal>,
+    /// Source of full file texts backing the lines. `RawPatchSource` (always
+    /// `None`) except git-mode diffs, whose `GixSource` must stay alive for
+    /// the session — unfold slices it; `Ok(None)` is the capability signal.
+    pub file_source: Arc<dyn FileSource>,
 }
 
 /// Type-safe representation of content-specific metadata.
@@ -673,6 +681,7 @@ impl ContentModel {
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
+            file_source: Arc::new(RawPatchSource),
         }
     }
 
@@ -688,10 +697,8 @@ impl ContentModel {
             let fake_path = format!("file.{}", file.language);
             for hunk in &mut file.hunks {
                 if let Some(ref ctx) = hunk.function_context {
-                    let html = highlighter.highlight_snippet(ctx, &fake_path);
-                    if !html.is_empty() {
-                        hunk.function_context_html = Some(html);
-                    }
+                    hunk.function_context_html =
+                        highlighter.highlight_function_context(ctx, &fake_path);
                 }
             }
         }
@@ -731,8 +738,7 @@ impl ContentModel {
                     };
 
                     let fake_path = format!("file.{}", language);
-                    let highlighted = highlighter.highlight_lines(code, &fake_path);
-                    highlighted.first().map(|h| format!("{}{}", prefix, h))
+                    highlighter.highlight_diff_row(prefix, code, &fake_path)
                 } else {
                     None
                 };
@@ -794,6 +800,48 @@ impl ContentModel {
             source,
             metadata: ContentMetadata::Diff(diff_metadata),
             portals: Vec::new(),
+            file_source: Arc::new(RawPatchSource),
+        })
+    }
+
+    /// Render a git diff in-process: enumerate → `GixSource`
+    /// full texts → computed hunks → the same flat line stream `from_diff`
+    /// produces from patch text. The model retains the `GixSource` so the
+    /// session keeps the full texts (unfold and re-diff need them).
+    pub fn from_git(
+        cwd: &Path,
+        target: &DiffTarget,
+        pathspecs: &[String],
+        source: ContentSource,
+    ) -> Result<Self, AnnotError> {
+        let repo = crate::vcs::discover(cwd)?;
+        let entries = crate::vcs::enumerate_in(&repo, target, pathspecs)?;
+        if entries.is_empty() {
+            return Err(AnnotError::Diff(format!(
+                "no changes to review for {}",
+                target.label()
+            )));
+        }
+        let file_source = Arc::new(GixSource::new(
+            repo,
+            crate::pipeline::build_oid_map(&entries),
+        ));
+        let highlighter = Highlighter::new();
+        let (lines, metadata) = crate::pipeline::render(
+            &entries,
+            file_source.as_ref(),
+            &highlighter,
+            crate::pipeline::CONTEXT_LINES,
+        )?;
+
+        let label = source.label().to_string();
+        Ok(Self {
+            label,
+            lines,
+            source,
+            metadata: ContentMetadata::Diff(metadata),
+            portals: Vec::new(),
+            file_source,
         })
     }
 
@@ -989,6 +1037,7 @@ impl ContentModel {
             source,
             metadata: ContentMetadata::Markdown(md_metadata),
             portals: loaded_portals,
+            file_source: Arc::new(RawPatchSource),
         }
     }
 
@@ -1035,6 +1084,7 @@ impl AppState {
                 }),
                 metadata: ContentMetadata::Plain,
                 portals: Vec::new(),
+                file_source: Arc::new(RawPatchSource),
             },
             session: SessionState::default(),
             config: UserConfig::empty(),

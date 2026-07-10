@@ -11,7 +11,7 @@ export interface FileCollapseOptions {
  * Per-file collapse state for diff views.
  *
  * Presentation state only — collapse never touches the lines array; the render
- * layer skips collapsed sections. When collapse becomes structural (C1), only
+ * layer skips collapsed sections. If collapse ever becomes structural, only
  * that render-skip mechanism gets replaced.
  */
 export function useFileCollapse(getEntries: () => FileEntry[], options: FileCollapseOptions = {}) {

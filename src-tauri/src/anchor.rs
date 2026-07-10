@@ -50,8 +50,14 @@ mod tests {
     fn mixed_side_anchor_round_trips_through_serde() {
         let anchor = Anchor {
             path: "test.rs".to_string(),
-            start: Endpoint { side: Side::Old, line: 10 },
-            end: Endpoint { side: Side::New, line: 12 },
+            start: Endpoint {
+                side: Side::Old,
+                line: 10,
+            },
+            end: Endpoint {
+                side: Side::New,
+                line: 12,
+            },
         };
 
         let json = serde_json::to_string(&anchor).unwrap();

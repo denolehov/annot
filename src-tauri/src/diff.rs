@@ -78,6 +78,17 @@ pub struct DiffMetadata {
     pub lines: HashMap<u32, DiffLineInfo>,
 }
 
+/// Language identifier for a diff file: the extension of the new name (old
+/// for deleted files). Feeds syntax highlighting for both the patch parser
+/// and the git pipeline.
+pub fn language_for(new_name: Option<&str>, old_name: Option<&str>) -> String {
+    new_name
+        .or(old_name)
+        .and_then(|name| std::path::Path::new(name).extension()?.to_str())
+        .map(String::from)
+        .unwrap_or_default()
+}
+
 /// Check if content appears to be a unified diff.
 pub fn is_diff(content: &str) -> bool {
     if content.is_empty() {
@@ -124,16 +135,7 @@ pub fn parse_diff(content: &str) -> Result<DiffMetadata, AnnotError> {
             Some(file.source_file.trim_start_matches("a/").to_string())
         };
 
-        let language = new_name
-            .as_ref()
-            .or(old_name.as_ref())
-            .and_then(|name| {
-                std::path::Path::new(name)
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .map(|s| s.to_string())
-            })
-            .unwrap_or_default();
+        let language = language_for(new_name.as_deref(), old_name.as_deref());
 
         metadata.files.push(DiffFileInfo {
             old_name,

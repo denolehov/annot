@@ -53,7 +53,12 @@ pub(super) fn ann(start: u32, end: u32, content: Vec<ContentNode>) -> (String, A
     ann_at("test.rs", start, end, content)
 }
 
-pub(super) fn ann_at(path: &str, start: u32, end: u32, content: Vec<ContentNode>) -> (String, Annotation) {
+pub(super) fn ann_at(
+    path: &str,
+    start: u32,
+    end: u32,
+    content: Vec<ContentNode>,
+) -> (String, Annotation) {
     let id = format!("{start}-{end}");
     (
         id.clone(),
@@ -85,6 +90,7 @@ fn make_review(label: &str, lines: Vec<Line>, annotations: IndexMap<String, Anno
         source,
         metadata: ContentMetadata::Plain,
         portals: Vec::new(),
+        file_source: std::sync::Arc::new(crate::source::RawPatchSource),
     };
     let config = UserConfig::empty();
     let mut review = Review::cli(content, config, "main".to_string());
@@ -109,6 +115,7 @@ fn make_review_with_config(
         source,
         metadata: ContentMetadata::Plain,
         portals: Vec::new(),
+        file_source: std::sync::Arc::new(crate::source::RawPatchSource),
     };
     let mut review = Review::cli(content, config, "main".to_string());
     if let Some(file) = review.files.values_mut().next() {
