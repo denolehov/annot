@@ -18,6 +18,7 @@
   import Table from "$lib/components/embedded/Table.svelte";
   import RegularLines from "$lib/components/embedded/RegularLines.svelte";
   import { Header, StatusBar, SessionEditor, WindowResizeHandles } from "$lib/components";
+  import { PaneGroup, Pane, PaneResizer } from "paneforge";
   import FileTree from "$lib/components/FileTree.svelte";
   import { deriveFileEntries } from "$lib/file-tree";
   import { useFileTree } from "$lib/composables/useFileTree.svelte";
@@ -816,15 +817,19 @@
     </div>
   </div>
 
-  <div class="viewer-body">
+  <PaneGroup direction="horizontal" class="viewer-body">
     {#if fileTree.isOpen && diffMetadata}
-      <FileTree
-        entries={fileEntries}
-        currentIndex={contentTracking.currentFileIndex}
-        onJump={jumpToFile}
-      />
+      <Pane order={1} defaultSize={22} minSize={12} maxSize={45} class="file-tree-pane">
+        <FileTree
+          entries={fileEntries}
+          currentIndex={contentTracking.currentFileIndex}
+          onJump={jumpToFile}
+        />
+      </Pane>
+      <PaneResizer class="file-tree-resizer" />
     {/if}
 
+    <Pane order={2} class="content-pane">
     <div
       class="content"
       class:shift-held={interaction.isShiftHeld}
@@ -899,7 +904,8 @@
       {/each}
       </div>
     </div>
-  </div>
+    </Pane>
+  </PaneGroup>
 
   <!-- Footer / Status Bar -->
   <div style:zoom={contentZoom}>
