@@ -51,28 +51,6 @@ impl DiffTarget {
     }
 }
 
-/// Compose `git diff` CLI arguments equivalent to a target — the legacy
-/// patch-text path uses these until the in-process pipeline (B4) lands.
-pub fn to_git_args(target: &DiffTarget, pathspecs: &[String]) -> Vec<String> {
-    let mut args = match target {
-        DiffTarget::WorkingTree => vec!["HEAD".to_string()],
-        DiffTarget::Staged => vec!["--staged".to_string()],
-        DiffTarget::Range {
-            from,
-            to,
-            merge_base,
-        } => vec![format!(
-            "{from}{}{to}",
-            if *merge_base { "..." } else { ".." }
-        )],
-    };
-    if !pathspecs.is_empty() {
-        args.push("--".into());
-        args.extend(pathspecs.iter().cloned());
-    }
-    args
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FileStatus {
     Modified,
@@ -102,22 +80,35 @@ pub struct FileEntry {
     pub new_oid: Option<BlobRef>,
 }
 
+/// Locate the enclosing git repository for `cwd`.
+pub fn discover(cwd: &Path) -> Result<gix::Repository, AnnotError> {
+    gix::discover(cwd).map_err(|e| AnnotError::Diff(format!("failed to open git repository: {e}")))
+}
+
 /// Enumerate changed files for `target` in the repository containing `cwd`.
 pub fn enumerate(
     cwd: &Path,
     target: &DiffTarget,
     pathspecs: &[String],
 ) -> Result<Vec<FileEntry>, AnnotError> {
-    let repo = gix::discover(cwd)
-        .map_err(|e| AnnotError::Diff(format!("failed to open git repository: {e}")))?;
+    enumerate_in(&discover(cwd)?, target, pathspecs)
+}
+
+/// Enumerate against an already-discovered repository — callers that also
+/// read blobs (the render pipeline) discover once and reuse it.
+pub fn enumerate_in(
+    repo: &gix::Repository,
+    target: &DiffTarget,
+    pathspecs: &[String],
+) -> Result<Vec<FileEntry>, AnnotError> {
     let mut entries = match target {
         DiffTarget::Range {
             from,
             to,
             merge_base,
-        } => range_entries(&repo, from, to, *merge_base, pathspecs)?,
-        DiffTarget::Staged => staged_entries(&repo, pathspecs)?,
-        DiffTarget::WorkingTree => working_tree_entries(&repo, pathspecs)?,
+        } => range_entries(repo, from, to, *merge_base, pathspecs)?,
+        DiffTarget::Staged => staged_entries(repo, pathspecs)?,
+        DiffTarget::WorkingTree => working_tree_entries(repo, pathspecs)?,
     };
     // Status items arrive interleaved from two producer threads — the sort is
     // mandatory for deterministic output, not cosmetic.
@@ -1061,29 +1052,7 @@ mod tests {
             .unwrap_or_else(|| panic!("no entry for {path}: {entries:?}"))
     }
 
-    // --- DiffTarget / to_git_args ---
-
-    #[test]
-    fn to_git_args_table() {
-        assert_eq!(to_git_args(&WT, &[]), vec!["HEAD"]);
-        assert_eq!(to_git_args(&STAGED, &[]), vec!["--staged"]);
-        assert_eq!(to_git_args(&range("main", "HEAD"), &[]), vec!["main..HEAD"]);
-        assert_eq!(
-            to_git_args(
-                &DiffTarget::Range {
-                    from: "main".into(),
-                    to: "HEAD".into(),
-                    merge_base: true,
-                },
-                &[]
-            ),
-            vec!["main...HEAD"]
-        );
-        assert_eq!(
-            to_git_args(&WT, &strs(&["src/", "*.rs"])),
-            vec!["HEAD", "--", "src/", "*.rs"]
-        );
-    }
+    // --- DiffTarget ---
 
     #[test]
     fn diff_target_serde_roundtrip() {

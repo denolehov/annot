@@ -56,6 +56,21 @@ impl Highlighter {
         lines.into_iter().next().unwrap_or_default()
     }
 
+    /// Highlighted hunk-header function context; `None` when highlighting
+    /// yields nothing. Shared by the patch parser and the git pipeline.
+    pub fn highlight_function_context(&self, ctx: &str, path: &str) -> Option<String> {
+        let html = self.highlight_snippet(ctx, path);
+        (!html.is_empty()).then_some(html)
+    }
+
+    /// Highlight one diff row's code and re-attach its `+`/`-`/` ` prefix.
+    /// Shared by the patch parser and the git pipeline.
+    pub fn highlight_diff_row(&self, prefix: &str, code: &str, path: &str) -> Option<String> {
+        self.highlight_lines(code, path)
+            .first()
+            .map(|h| format!("{prefix}{h}"))
+    }
+
     /// Map file extensions that syntect doesn't support to ones it does.
     fn extension_fallback(ext: &str) -> &str {
         match ext {

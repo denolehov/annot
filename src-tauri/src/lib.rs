@@ -21,6 +21,7 @@ pub mod markdown;
 pub mod mcp;
 pub mod mermaid_window;
 pub mod output;
+pub mod pipeline;
 pub mod portal;
 pub mod review;
 pub mod source;

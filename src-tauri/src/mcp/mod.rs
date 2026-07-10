@@ -171,57 +171,41 @@ fn run_diff_session(
     app_handle: &AppHandle,
     params: ReviewDiffInput,
 ) -> Result<SessionOutput, String> {
-    use std::process::Command;
-
     if params.diff_content.is_some() && (params.target.is_some() || params.pathspecs.is_some()) {
         return Err("Provide either target/pathspecs or diff_content, not both".to_string());
     }
 
-    // Get diff content and derive label + source based on which input was provided
-    let (diff_text, derived_label, diff_source) = match &params.diff_content {
-        Some(content) => {
-            // Raw diff mode
-            (content.clone(), "diff".to_string(), DiffSource::Raw)
+    // Build the content model per input mode: raw patch text goes through
+    // the legacy parser (no full texts exist); a structured target renders
+    // in-process via the git pipeline.
+    let mcp_diff = |label: String, source: DiffSource| {
+        ContentSource::Mcp(McpSource::Diff {
+            label: Some(label),
+            source,
+        })
+    };
+    let content = match &params.diff_content {
+        Some(diff_text) => {
+            let label = params.label.clone().unwrap_or_else(|| "diff".to_string());
+            crate::state::ContentModel::from_diff(diff_text, mcp_diff(label, DiffSource::Raw))
+                .map_err(|e| format!("Invalid diff: {}", e))?
         }
         None => {
-            // Structured target mode. The patch text still comes from the git
-            // CLI until the in-process pipeline lands — but the args are
-            // composed from the target, never caller-provided strings.
             let target = params
                 .target
                 .clone()
                 .unwrap_or(crate::vcs::DiffTarget::WorkingTree);
             let pathspecs = params.pathspecs.clone().unwrap_or_default();
-            let args = crate::vcs::to_git_args(&target, &pathspecs);
-
-            let mut cmd = Command::new("git");
-            cmd.arg("diff").args(&args);
-            #[cfg(windows)]
-            {
-                use std::os::windows::process::CommandExt;
-                const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-                cmd.creation_flags(CREATE_NO_WINDOW);
-            }
-            let output = cmd
-                .output()
-                .map_err(|e| format!("Failed to run git: {}", e))?;
-
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(format!("git diff failed: {}", stderr));
-            }
-
-            let diff = String::from_utf8_lossy(&output.stdout).to_string();
-            let label = target.label();
-            (diff, label, DiffSource::Target(target))
+            let label = params.label.clone().unwrap_or_else(|| target.label());
+            let content_source = mcp_diff(label, DiffSource::Target(target.clone()));
+            // Same cwd semantics as the git CLI this replaced: the server
+            // process's working directory.
+            let cwd = std::env::current_dir()
+                .map_err(|e| format!("Failed to resolve working directory: {}", e))?;
+            crate::state::ContentModel::from_git(&cwd, &target, &pathspecs, content_source)
+                .map_err(|e| e.to_string())?
         }
     };
-
-    let label = params.label.clone().unwrap_or(derived_label);
-    let content_source = ContentSource::Mcp(McpSource::Diff {
-        label: Some(label),
-        source: diff_source,
-    });
 
     // Load config
     let mut config = crate::state::UserConfig::load();
@@ -236,11 +220,7 @@ fn run_diff_session(
         config.prepend_transient_modes(transient);
     }
 
-    // Create state using from_diff
-    let content = crate::state::ContentModel::from_diff(&diff_text, content_source)
-        .map_err(|e| format!("Invalid diff: {}", e))?;
     let state = AppState::new(content, config);
-
     run_session_with_state(app_handle, state)
 }
 

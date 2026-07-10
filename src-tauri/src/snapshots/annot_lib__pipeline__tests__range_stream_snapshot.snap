@@ -1,0 +1,28 @@
+---
+source: src/pipeline.rs
+expression: dump(&lines)
+---
+   ·    · file |diff --git a/added.txt b/added.txt
+   ·    · hunk |@@ -0,0 +1,2 @@
+   ·    1  add |+fresh
+   ·    2  add |+file
+   ·    · file |diff --git a/deleted.txt b/deleted.txt
+   ·    · hunk |@@ -1,2 +0,0 @@
+   1    ·  del |-doomed
+   2    ·  del |-content
+   ·    · file |diff --git a/main.rs b/main.rs
+   ·    · hunk |@@ -2,7 +2,7 @@ fn main() {
+   2    2  ctx |     let a = 1;
+   3    3  ctx |     let b = 2;
+   4    4  ctx |     let c = 3;
+   5    ·  del |-    let d = 4;
+   ·    5  add |+    let d = 40;
+   6    6  ctx |     let e = 5;
+   7    7  ctx |     println!("{}", a + b);
+   8    8  ctx | }
+   ·    · file |diff --git a/old_name.txt b/new_name.txt
+   ·    · file |diff --git a/noeol.txt b/noeol.txt
+   ·    · hunk |@@ -1,2 +1,2 @@
+   1    1  ctx | alpha
+   2    ·  del |-beta
+   ·    2  add |+beta
