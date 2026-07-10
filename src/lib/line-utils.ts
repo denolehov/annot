@@ -136,10 +136,10 @@ export function isSelectable(line: Line): boolean {
   if (line.origin.type === 'virtual') {
     return false;
   }
-  // Diff file headers and hunk headers cannot be selected
+  // Diff file headers, hunk headers, and meta lines cannot be selected
   if (line.semantics.type === 'diff') {
     const kind = line.semantics.kind;
-    if (kind === 'file_header' || kind === 'hunk_header') {
+    if (kind === 'file_header' || kind === 'hunk_header' || kind === 'meta') {
       return false;
     }
   }

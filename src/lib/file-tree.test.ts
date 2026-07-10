@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deriveFileEntries } from './file-tree';
+import { deriveFileEntries, diffTotals } from './file-tree';
 import type { DiffFileInfo, DiffMetadata, Line } from './types';
 
 function diffLine(kind: 'file_header' | 'added' | 'deleted' | 'context', path = 'a'): Line {
@@ -67,7 +67,27 @@ describe('deriveFileEntries', () => {
 
     const entries = deriveFileEntries(lines, meta);
 
-    expect(entries[0]).toMatchObject({ index: 0, added: 1, deleted: 1, startLine: 1 });
-    expect(entries[1]).toMatchObject({ index: 1, added: 1, deleted: 0, startLine: 5 });
+    expect(entries[0]).toMatchObject({ index: 0, added: 1, deleted: 1, startLine: 1, endLine: 4 });
+    expect(entries[1]).toMatchObject({ index: 1, added: 1, deleted: 0, startLine: 5, endLine: 6 });
+  });
+});
+
+describe('diffTotals', () => {
+  it('sums added/deleted across entries', () => {
+    const lines = [
+      diffLine('file_header'),
+      diffLine('added'),
+      diffLine('deleted'),
+      diffLine('file_header'),
+      diffLine('added'),
+    ];
+    const meta: DiffMetadata = {
+      files: [
+        file({ new_name: 'a.ts', start_line: 1, end_line: 3 }),
+        file({ new_name: 'b.ts', start_line: 4, end_line: 5 }),
+      ],
+    };
+
+    expect(diffTotals(deriveFileEntries(lines, meta))).toEqual({ added: 2, deleted: 1 });
   });
 });

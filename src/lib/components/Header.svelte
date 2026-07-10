@@ -1,7 +1,9 @@
 <script lang="ts">
   import CopyDropdown from '$lib/CopyDropdown.svelte';
   import Icon from '$lib/CommandPalette/Icon.svelte';
+  import { ChevronUpDownIcon, ChevronDownUpIcon } from '$lib/icons';
   import { getAnnotContext } from '$lib/context';
+  import { diffTotals } from '$lib/file-tree';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import type { DiffFileInfo, HunkInfo, SectionInfo } from '$lib/types';
 
@@ -40,6 +42,15 @@
 
   // Extract filename from path for display (label is full path for consistency with LineOrigin)
   const displayLabel = $derived(label.includes('/') ? label.split('/').pop() ?? label : label);
+
+  // Changeset summary (diff mode)
+  const totals = $derived(diffTotals(ctx.fileEntries));
+
+  function toggleAllFiles(e: MouseEvent) {
+    (ctx.fileCollapse.anyCollapsed ? ctx.fileCollapse.expandAll : ctx.fileCollapse.collapseAll)();
+    // Give focus back to the window so line shortcuts (c, :, ?) keep working.
+    (e.currentTarget as HTMLButtonElement).blur();
+  }
 </script>
 
 <header class="header" data-tauri-drag-region="deep">
@@ -113,6 +124,25 @@
     {/if}
   </div>
   <div class="header-right">
+    {#if diffMetadata && ctx.fileEntries.length > 0}
+      <span class="diff-header-summary" data-tauri-drag-region="false">
+        <span class="file-tree-counts">
+          <span class="added">+{totals.added}</span>
+          <span class="deleted">−{totals.deleted}</span>
+        </span>
+        <button
+          class="header-btn"
+          onclick={toggleAllFiles}
+          title={ctx.fileCollapse.anyCollapsed ? 'Expand all files' : 'Collapse all files'}
+        >
+          {#if ctx.fileCollapse.anyCollapsed}
+            <ChevronUpDownIcon />
+          {:else}
+            <ChevronDownUpIcon />
+          {/if}
+        </button>
+      </span>
+    {/if}
     {#if zoomLevel !== 1.0}
       <span class="zoom-indicator">{Math.round(zoomLevel * 100)}%</span>
     {/if}

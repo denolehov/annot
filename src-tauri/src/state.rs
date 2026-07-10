@@ -111,6 +111,8 @@ pub enum LineSemantics {
 pub enum DiffSemantics {
     FileHeader,
     HunkHeader { context: Option<String> },
+    /// Non-content plumbing lines (index, ---/+++, mode changes) — never rendered.
+    Meta,
     Added,
     Deleted,
     Context,
@@ -763,7 +765,17 @@ impl ContentModel {
                             diff::DiffLineKind::Context => DiffSemantics::Context,
                             diff::DiffLineKind::Added => DiffSemantics::Added,
                             diff::DiffLineKind::Deleted => DiffSemantics::Deleted,
-                            diff::DiffLineKind::Header => DiffSemantics::FileHeader,
+                            diff::DiffLineKind::FileHeader => DiffSemantics::FileHeader,
+                            diff::DiffLineKind::HunkHeader => DiffSemantics::HunkHeader {
+                                context: diff_metadata
+                                    .files
+                                    .get(info.file_index)
+                                    .and_then(|f| {
+                                        f.hunks.iter().find(|h| h.display_line == line_num)
+                                    })
+                                    .and_then(|h| h.function_context.clone()),
+                            },
+                            diff::DiffLineKind::Meta => DiffSemantics::Meta,
                         });
                         (origin, semantics)
                     }

@@ -16,6 +16,8 @@ export { default as ExcalidrawIcon } from './ExcalidrawIcon.svelte';
 export { default as WarningIcon } from './WarningIcon.svelte';
 export { default as ChevronUpIcon } from './ChevronUpIcon.svelte';
 export { default as ChevronDownIcon } from './ChevronDownIcon.svelte';
+export { default as ChevronUpDownIcon } from './ChevronUpDownIcon.svelte';
+export { default as ChevronDownUpIcon } from './ChevronDownUpIcon.svelte';
 export { default as XMarkIcon } from './XMarkIcon.svelte';
 export { default as ImageIcon } from './ImageIcon.svelte';
 export { default as ClipboardIcon } from './ClipboardIcon.svelte';

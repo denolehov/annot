@@ -13,6 +13,7 @@ function entry(index: number, path: string, startLine: number): FileEntry {
     added: 1,
     deleted: 0,
     startLine,
+    endLine: startLine + 5,
   };
 }
 

@@ -21,6 +21,7 @@
 @import './components/kbd.css';
 @import './components/code-viewer.css';
 @import './components/file-tree.css';
+@import './components/diff-file-header.css';
 @import './components/status-bar.css';
 @import './components/chips.css';
 @import './components/annotation-editor.css';

@@ -25,7 +25,9 @@ Open any source file for annotation. Syntax highlighting adapts to language. Nav
 ### Diff Review
 Review git changes (`--staged`, `main...HEAD`) or raw unified diffs. Color-coded: additions green, deletions red. Annotations capture both old and new line numbers.
 
-**File tree** — `Cmd+B` toggles a sidebar listing every changed file with its +/− counts. Clicking a file scrolls to it; the row for the file currently in view stays highlighted. The `:` palette's **Files** namespace does the same jump by fuzzy search.
+**File tree** — `Cmd+B` toggles a sidebar listing every changed file with its +/− counts. Clicking a file scrolls to it (expanding it if collapsed); the row for the file currently in view stays highlighted. The `:` palette's **Files** namespace does the same jump by fuzzy search.
+
+**Per-file collapse** — every file gets a header bar (chevron, path, +/− counts) that sticks to the top while its lines scroll. Clicking the bar collapses the file to just its header; the titlebar shows the changeset's +A −D totals with a fold-all/unfold-all toggle. Files with more than 500 changed lines start collapsed. Search hits and file jumps auto-expand collapsed files. Collapse is pure presentation — annotations keep resolving to the same lines.
 
 ### Content Review
 Review agent-generated content — plans, drafts, analysis. Markdown rendering with Mermaid diagrams and portal links that embed live code.

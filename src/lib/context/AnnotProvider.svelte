@@ -18,6 +18,8 @@
   import type { useExitModes } from '$lib/composables/useExitModes.svelte';
   import type { useSearch } from '$lib/composables/useSearch.svelte';
   import type { useMermaid } from '$lib/composables/useMermaid.svelte';
+  import type { FileCollapse } from '$lib/composables/useFileCollapse.svelte';
+  import type { FileEntry } from '$lib/file-tree';
 
   interface Props {
     // Reactive data
@@ -26,6 +28,7 @@
     tags: Tag[];
     allowsImagePaste: boolean;
     contentZoom: number;
+    fileEntries: FileEntry[];
 
     // Composables (created by page)
     interaction: ReturnType<typeof useInteraction>;
@@ -33,6 +36,7 @@
     exitModes: ReturnType<typeof useExitModes>;
     search: ReturnType<typeof useSearch>;
     mermaid: ReturnType<typeof useMermaid>;
+    fileCollapse: FileCollapse;
 
     // Utilities
     showToast: (message: string, duration?: number) => void;
@@ -48,11 +52,13 @@
     tags,
     allowsImagePaste,
     contentZoom,
+    fileEntries,
     interaction,
     annotations,
     exitModes,
     search,
     mermaid,
+    fileCollapse,
     showToast,
     isLineSelectable,
     getOriginalLinesForRange,
@@ -112,6 +118,7 @@
     get exitModes() { return exitModes; },
     get search() { return search; },
     get mermaid() { return mermaid; },
+    get fileCollapse() { return fileCollapse; },
 
     get selection() { return selection; },
     get isDragging() { return isDragging; },
@@ -125,6 +132,7 @@
     get allowsImagePaste() { return allowsImagePaste; },
     get markdownMetadata() { return markdownMetadata; },
     get contentZoom() { return contentZoom; },
+    get fileEntries() { return fileEntries; },
 
     get showToast() { return showToast; },
     get isLineSelectable() { return isLineSelectable; },
