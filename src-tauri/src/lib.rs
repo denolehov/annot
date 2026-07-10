@@ -8,6 +8,7 @@ use tauri::WebviewWindowBuilder;
 pub mod commands;
 pub mod config;
 pub mod diff;
+pub mod engine;
 pub mod error;
 pub mod excalidraw_window;
 pub mod files;

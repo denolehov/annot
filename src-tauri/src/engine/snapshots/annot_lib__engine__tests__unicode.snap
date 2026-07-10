@@ -1,0 +1,9 @@
+---
+source: src/engine.rs
+expression: "render(old, new, &compute_hunks(old, new, 3))"
+---
+@@ old 1..3 new 1..3 @@
+del   1     |café »au« lait ☕
+del   2     |вітаю »світ«
+add       1 |café »du« lait ☕
+add       2 |вітаю »всесвіт«

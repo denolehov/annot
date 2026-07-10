@@ -1,0 +1,14 @@
+---
+source: src/engine.rs
+expression: "render(old, new, &compute_hunks(old, new, 3))"
+---
+@@ old 1..8 new 1..8 @@
+ctx   1   1 |l1
+del   2     |l2 »old«
+add       2 |l2 »new«
+ctx   3   3 |l3
+ctx   4   4 |l4
+ctx   5   5 |l5
+del   6     |l6 »old«
+add       6 |l6 »new«
+ctx   7   7 |l7

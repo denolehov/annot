@@ -53,5 +53,6 @@ similar = { version = "3", features = ["inline"] }
 
 [dev-dependencies]
 insta = "1.45"
+proptest = "1"
 tempfile = "3.23.0"
 
