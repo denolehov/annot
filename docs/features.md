@@ -224,7 +224,7 @@ Saved to /path/to/file.md
 Three tools exposed via Model Context Protocol:
 
 1. **review_file** — Open file at path
-2. **review_diff** — Review git or raw diffs
+2. **review_diff** — Review git diffs (structured target: working tree / staged / rev range) or raw diff content
 3. **review_content** — Review agent-generated content
 
 All block until window closes, returning structured output with annotations, exit mode, and any images.

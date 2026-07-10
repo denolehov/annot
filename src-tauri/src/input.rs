@@ -74,8 +74,8 @@ pub enum McpSource {
 /// How a diff was obtained.
 #[derive(Debug, Clone)]
 pub enum DiffSource {
-    /// Generated from git with these args (e.g., `["--staged"]`).
-    Git { args: Vec<String> },
+    /// Generated via git from a structured target.
+    Target(crate::vcs::DiffTarget),
     /// Raw diff content provided directly.
     Raw,
 }

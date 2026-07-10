@@ -209,12 +209,13 @@ Press `Shift+C` to add comments that apply to the entire review — framing cont
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `git_diff_args` | array | no* | Git diff arguments (e.g., `["--staged"]`) |
-| `diff_content` | string | no* | Raw unified diff content |
+| `target` | object | no* | What to diff: `{"kind": "working_tree"}` (default), `{"kind": "staged"}`, or `{"kind": "range", "from": "main", "to": "HEAD", "merge_base": true}` |
+| `pathspecs` | array | no | Git pathspecs limiting the diff (e.g., `["src/", "*.rs"]`) |
+| `diff_content` | string | no* | Raw unified diff content (mutually exclusive with `target`/`pathspecs`) |
 | `label` | string | no | Display name (default: "diff") |
 | `exit_modes` | array | no | Ephemeral exit modes for this session |
 
-*Either `git_diff_args` or `diff_content` must be provided.
+*`target` defaults to `working_tree` — worktree vs HEAD, staged + unstaged combined, untracked files included. `range` with `merge_base: true` diffs from `merge_base(from, to)` to `to`, like `from...to`.
 
 ### `review_content`
 
