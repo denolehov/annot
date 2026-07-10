@@ -2,23 +2,48 @@
    FILE TREE - Changed-files sidebar (diff mode)
    =========================================== */
 
-/* Row holding the sidebar and the scrollable content side by side */
+/* Row holding the sidebar and the scrollable content side by side.
+   Sizing/layout (display: flex, height: 100%) comes from the PaneGroup
+   itself; this only governs how it sits in the outer page column. */
 .viewer-body {
 	flex: 1;
-	display: flex;
 	min-height: 0;
 }
 
 .file-tree {
-	flex: 0 0 240px;
+	height: 100%;
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
 	overflow-y: auto;
 	background: var(--bg-panel);
-	border-right: 1px solid var(--border-subtle);
 	font-family: var(--font-ui);
 	font-size: 12px;
+}
+
+/* Draggable border between the file tree and content panes. */
+.file-tree-resizer {
+	flex: 0 0 4px;
+	width: 4px;
+	position: relative;
+	cursor: col-resize;
+}
+
+.file-tree-resizer::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 50%;
+	width: 1px;
+	background: var(--border-subtle);
+	transform: translateX(-50%);
+}
+
+.file-tree-resizer:hover::after,
+.file-tree-resizer[data-active]::after {
+	width: 2px;
+	background: var(--border-active);
 }
 
 .file-tree-summary {

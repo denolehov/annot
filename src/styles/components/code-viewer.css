@@ -109,10 +109,10 @@ header.header {
 	text-underline-offset: 3px;
 }
 
-/* Main content area */
+/* Main content area — sits inside the paneforge content pane */
 .content {
-	flex: 1;
-	min-width: 0; /* shrink instead of overflowing when the file tree is open */
+	width: 100%;
+	height: 100%;
 	overflow: auto;
 	padding-bottom: 1rem;
 }
