@@ -209,7 +209,7 @@ export interface PasteNode {
 /** Snapshot for annotation references (self-contained). */
 export interface AnnotationRefSnapshot {
   type: 'annotation';
-  /** Line range key, e.g., "50-55" */
+  /** Anchor-derived line label, e.g., "50-55" (display only) */
   source_key: string;
   /** File path (for cross-file display, null for same-file) */
   source_file: string | null;

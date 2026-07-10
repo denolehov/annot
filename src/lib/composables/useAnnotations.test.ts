@@ -6,8 +6,9 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-import { useAnnotations } from './useAnnotations.svelte';
+import { useAnnotations, type AnnotationEntry } from './useAnnotations.svelte';
 import { invoke } from '@tauri-apps/api/core';
+import type { Anchor } from '$lib/anchor';
 import type { Line } from '$lib/types';
 
 /**
@@ -23,6 +24,13 @@ function createMockLines(count: number, path = '/test/file.ts'): Line[] {
   }));
 }
 
+/** Source anchor into the mock lines (line numbers == display rows there). */
+function anchor(start: number, end: number, path = '/test/file.ts'): Anchor {
+  return { type: 'source', path, start, end };
+}
+
+const CONTENT = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Test' }] }] };
+
 describe('useAnnotations', () => {
   const mockLines = createMockLines(30);
   const getLines = () => mockLines;
@@ -34,160 +42,112 @@ describe('useAnnotations', () => {
   it('starts with empty annotations', () => {
     const state = useAnnotations({ getLines });
     expect(state.annotations).toEqual({});
-    expect(state.allRanges()).toEqual([]);
+    expect(state.atEndRow(10)).toBeNull();
   });
 
   it('upserts an annotation and syncs to backend', async () => {
     const state = useAnnotations({ getLines });
-    const content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Test' }] }] };
 
-    await state.upsert({ start: 5, end: 10 }, content);
+    state.upsert('a1', anchor(5, 10), CONTENT);
 
     // Local state updates synchronously; backend sync is debounced until flush.
-    expect(state.annotations['5-10']).toBeDefined();
-    expect(state.annotations['5-10'].content).toEqual(content);
+    expect(state.annotations['a1']).toBeDefined();
+    expect(state.annotations['a1'].content).toEqual(CONTENT);
 
     await state.flush();
     expect(invoke).toHaveBeenCalledWith('upsert_annotation', {
-      id: expect.any(String),
+      id: 'a1',
       path: '/test/file.ts',
-      anchor: {
-        type: 'source',
-        path: '/test/file.ts',
-        start: 5,
-        end: 10,
-      },
+      anchor: { type: 'source', path: '/test/file.ts', start: 5, end: 10 },
       content: expect.any(Array),
     });
   });
 
   it('debounces backend sync and coalesces repeated edits', async () => {
     const state = useAnnotations({ getLines });
-    const content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Test' }] }] };
 
-    // Rapid edits to the same range (the per-keystroke case) update local state
-    // immediately but must not each fire an IPC.
-    await state.upsert({ start: 5, end: 10 }, content);
-    await state.upsert({ start: 5, end: 10 }, content);
-    await state.upsert({ start: 5, end: 10 }, content);
+    // Rapid edits to the same annotation (the per-keystroke case) update local
+    // state immediately but must not each fire an IPC.
+    state.upsert('a1', anchor(5, 10), CONTENT);
+    state.upsert('a1', anchor(5, 10), CONTENT);
+    state.upsert('a1', anchor(5, 10), CONTENT);
     expect(invoke).not.toHaveBeenCalled();
 
     // Flush sends a single coalesced upsert for the three edits.
     await state.flush();
     expect(invoke).toHaveBeenCalledTimes(1);
-    expect(invoke).toHaveBeenCalledWith(
-      'upsert_annotation',
-      expect.objectContaining({
-        anchor: {
-          type: 'source',
-          path: '/test/file.ts',
-          start: 5,
-          end: 10,
-        },
-      })
-    );
   });
 
   it('deletes annotation when content is null', async () => {
     const state = useAnnotations({ getLines });
-    const content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Test' }] }] };
 
-    // First add an annotation
-    await state.upsert({ start: 5, end: 10 }, content);
-    expect(state.annotations['5-10']).toBeDefined();
+    // First add an annotation and sync it
+    state.upsert('a1', anchor(5, 10), CONTENT);
+    await state.flush();
+    expect(state.annotations['a1']).toBeDefined();
 
-    // Then remove it — coalesces with the pending upsert to a single delete.
-    await state.upsert({ start: 5, end: 10 }, null);
-    expect(state.annotations['5-10']).toBeUndefined();
+    // Then remove it
+    state.upsert('a1', anchor(5, 10), null);
+    expect(state.annotations['a1']).toBeUndefined();
 
     await state.flush();
     expect(invoke).toHaveBeenCalledWith('delete_annotation', {
       path: '/test/file.ts',
-      id: expect.any(String),
+      id: 'a1',
     });
   });
 
-  it('reuses the same id across edits to the same annotation', async () => {
+  it('cancels a never-flushed upsert instead of deleting on the backend', async () => {
     const state = useAnnotations({ getLines });
-    const content1 = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'First' }] }] };
-    const content2 = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Second' }] }] };
 
-    await state.upsert({ start: 5, end: 10 }, content1);
+    // Create locally, then empty it before any flush — but the local entry
+    // exists, so a delete is enqueued... unless the entry never existed:
+    state.upsert('a1', anchor(5, 10), null);
     await state.flush();
-    const firstId = (invoke as ReturnType<typeof vi.fn>).mock.calls[0][1].id;
-
-    await state.upsert({ start: 5, end: 10 }, content2);
-    await state.flush();
-    const secondId = (invoke as ReturnType<typeof vi.fn>).mock.calls[1][1].id;
-
-    expect(secondId).toBe(firstId);
-    expect(state.annotations['5-10'].id).toBe(firstId);
+    expect(invoke).not.toHaveBeenCalled();
   });
 
-  it('deletes annotation when content is empty', async () => {
+  it('deletes annotation when content is empty', () => {
     const state = useAnnotations({ getLines });
-    const content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Test' }] }] };
     const emptyContent = { type: 'doc', content: [{ type: 'paragraph' }] };
 
-    await state.upsert({ start: 5, end: 10 }, content);
-    expect(state.annotations['5-10']).toBeDefined();
+    state.upsert('a1', anchor(5, 10), CONTENT);
+    expect(state.annotations['a1']).toBeDefined();
 
-    await state.upsert({ start: 5, end: 10 }, emptyContent);
-
-    expect(state.annotations['5-10']).toBeUndefined();
+    state.upsert('a1', anchor(5, 10), emptyContent);
+    expect(state.annotations['a1']).toBeUndefined();
   });
 
-  it('gets annotation by range', async () => {
+  it('typing does not change the store key set', () => {
     const state = useAnnotations({ getLines });
-    const content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Test' }] }] };
 
-    await state.upsert({ start: 5, end: 10 }, content);
+    state.upsert('a1', anchor(5, 10), CONTENT);
+    const before = Object.keys(state.annotations);
 
-    const result = state.get({ start: 5, end: 10 });
-    expect(result).toEqual(content);
+    const edited = { ...CONTENT, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Edited' }] }] };
+    state.upsert('a1', anchor(5, 10), edited);
 
-    const missing = state.get({ start: 1, end: 2 });
-    expect(missing).toBeUndefined();
+    expect(Object.keys(state.annotations)).toEqual(before);
+    expect(state.annotations['a1'].content).toEqual(edited);
   });
 
-  it('gets annotation by key', async () => {
+  it('resolves entries at their end row', () => {
     const state = useAnnotations({ getLines });
-    const content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Test' }] }] };
 
-    await state.upsert({ start: 5, end: 10 }, content);
+    state.upsert('a1', anchor(5, 10), CONTENT);
 
-    const entry = state.getByKey('5-10');
-    expect(entry?.content).toEqual(content);
-
-    const missing = state.getByKey('1-2');
-    expect(missing).toBeUndefined();
+    // Annotation's resolved span ends at row 10
+    expect(state.atEndRow(10)?.id).toBe('a1');
+    // Row 5 is not the end row
+    expect(state.atEndRow(5)).toBeNull();
+    // Row 15 has no annotation
+    expect(state.atEndRow(15)).toBeNull();
   });
 
-  it('gets annotation at line (by end line)', async () => {
+  it('checks if a row is covered by an annotation', () => {
     const state = useAnnotations({ getLines });
-    const content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Test' }] }] };
 
-    await state.upsert({ start: 5, end: 10 }, content);
-
-    // Annotation ends at line 10
-    const result = state.getAtLine(10);
-    expect(result?.key).toBe('5-10');
-    expect(result?.content).toEqual(content);
-
-    // Line 5 is not the end line
-    const notEnd = state.getAtLine(5);
-    expect(notEnd).toBeNull();
-
-    // Line 15 has no annotation
-    const missing = state.getAtLine(15);
-    expect(missing).toBeNull();
-  });
-
-  it('checks if line has annotation', async () => {
-    const state = useAnnotations({ getLines });
-    const content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Test' }] }] };
-
-    await state.upsert({ start: 5, end: 10 }, content);
+    state.upsert('a1', anchor(5, 10), CONTENT);
 
     expect(state.hasAnnotation(5)).toBe(true);
     expect(state.hasAnnotation(7)).toBe(true);
@@ -196,59 +156,107 @@ describe('useAnnotations', () => {
     expect(state.hasAnnotation(11)).toBe(false);
   });
 
-  it('returns all ranges', async () => {
+  it('finds an entry by exact span', () => {
     const state = useAnnotations({ getLines });
-    const content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Test' }] }] };
 
-    await state.upsert({ start: 5, end: 10 }, content);
-    await state.upsert({ start: 20, end: 25 }, content);
+    state.upsert('a1', anchor(5, 10), CONTENT);
 
-    const ranges = state.allRanges();
-    expect(ranges.length).toBe(2);
-    expect(ranges).toContainEqual({ key: '5-10', start: 5, end: 10 });
-    expect(ranges).toContainEqual({ key: '20-25', start: 20, end: 25 });
+    expect(state.atSpan({ start: 5, end: 10 })?.id).toBe('a1');
+    expect(state.atSpan({ start: 10, end: 5 })?.id).toBe('a1'); // normalized
+    expect(state.atSpan({ start: 5, end: 9 })).toBeNull();
   });
 
-  it('removes annotation by key', async () => {
+  it('resolves spans of ids and raw anchors', () => {
     const state = useAnnotations({ getLines });
-    const content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Test' }] }] };
 
-    await state.upsert({ start: 5, end: 10 }, content);
-    expect(state.annotations['5-10']).toBeDefined();
+    state.upsert('a1', anchor(5, 10), CONTENT);
+
+    expect(state.spanOf('a1')).toEqual({ start: 5, end: 10 });
+    expect(state.spanOf('missing')).toBeNull();
+    expect(state.spanOfAnchor(anchor(20, 25))).toEqual({ start: 20, end: 25 });
+    expect(state.spanOfAnchor(anchor(20, 99))).toBeNull(); // beyond the lines
+  });
+
+  it('resolves diff anchors side-aware, including mixed-side spans', () => {
+    // Replacement hunk: context, two removed, two added, context.
+    const diffLines: Line[] = [
+      { old_line: 1, new_line: 1 },
+      { old_line: 2, new_line: null },
+      { old_line: 3, new_line: null },
+      { old_line: null, new_line: 2 },
+      { old_line: null, new_line: 3 },
+      { old_line: 4, new_line: 4 },
+    ].map(({ old_line, new_line }, i) => ({
+      content: `row ${i + 1}`,
+      html: null,
+      origin: { type: 'diff' as const, path: 'file.rs', old_line, new_line },
+      semantics: { type: 'plain' as const },
+    }));
+    const state = useAnnotations({ getLines: () => diffLines });
+
+    // Mixed-side anchor: old:2 (row 2) → new:3 (row 5)
+    const mixed: Anchor = {
+      type: 'diff',
+      path: 'file.rs',
+      start: { side: 'old', line: 2 },
+      end: { side: 'new', line: 3 },
+    };
+    state.upsert('m1', mixed, CONTENT);
+
+    expect(state.spanOf('m1')).toEqual({ start: 2, end: 5 });
+    expect(state.atEndRow(5)?.id).toBe('m1');
+    expect(state.hasAnnotation(3)).toBe(true);
+    expect(state.hasAnnotation(1)).toBe(false);
+
+    // Context lines answer on both sides: old:4 and new:4 both hit row 6.
+    expect(
+      state.spanOfAnchor({ type: 'diff', path: 'file.rs', start: { side: 'old', line: 4 }, end: { side: 'new', line: 4 } })
+    ).toEqual({ start: 6, end: 6 });
+  });
+
+  it('removes annotation locally by id', () => {
+    const state = useAnnotations({ getLines });
+
+    state.upsert('a1', anchor(5, 10), CONTENT);
+    expect(state.annotations['a1']).toBeDefined();
 
     flushSync(() => {
-      state.remove('5-10');
+      state.remove('a1');
     });
 
-    expect(state.annotations['5-10']).toBeUndefined();
+    expect(state.annotations['a1']).toBeUndefined();
   });
 
-  it('rejects annotation on invalid range (missing lines)', async () => {
+  it('restore diffs by id and syncs deletions and upserts', async () => {
     const state = useAnnotations({ getLines });
-    const content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Test' }] }] };
 
-    // Range extends beyond available lines
-    await state.upsert({ start: 25, end: 35 }, content);
+    state.upsert('keep', anchor(1, 2), CONTENT);
+    state.upsert('gone', anchor(5, 6), CONTENT);
+    await state.flush();
+    vi.clearAllMocks();
 
-    // Should not create annotation
-    expect(state.annotations['25-35']).toBeUndefined();
-    expect(invoke).not.toHaveBeenCalled();
+    const snapshot: Record<string, AnnotationEntry> = {
+      keep: { id: 'keep', anchor: anchor(1, 2), content: CONTENT },
+      fresh: { id: 'fresh', anchor: anchor(9, 9), content: CONTENT },
+    };
+    state.restore(snapshot);
+
+    expect(Object.keys(state.annotations).sort()).toEqual(['fresh', 'keep']);
+
+    await state.flush();
+    const calls = (invoke as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls).toContainEqual(['delete_annotation', { path: '/test/file.ts', id: 'gone' }]);
+    expect(calls.filter(([cmd]) => cmd === 'upsert_annotation').map(([, args]) => args.id).sort())
+      .toEqual(['fresh', 'keep']);
   });
 
-  it('rejects annotation on virtual lines', async () => {
-    const linesWithVirtual: Line[] = [
-      ...createMockLines(5),
-      { content: 'virtual', html: null, origin: { type: 'virtual' }, semantics: { type: 'plain' } },
-      ...createMockLines(5, '/test/file.ts'),
-    ];
-    const state = useAnnotations({ getLines: () => linesWithVirtual });
-    const content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Test' }] }] };
+  it('restore deep-clones the snapshot', () => {
+    const state = useAnnotations({ getLines });
 
-    // Range includes virtual line
-    await state.upsert({ start: 5, end: 7 }, content);
+    const entry: AnnotationEntry = { id: 'a1', anchor: anchor(5, 10), content: JSON.parse(JSON.stringify(CONTENT)) };
+    state.restore({ a1: entry });
 
-    // Should not create annotation
-    expect(state.annotations['5-7']).toBeUndefined();
-    expect(invoke).not.toHaveBeenCalled();
+    (entry.anchor as { start: number }).start = 999;
+    expect((state.annotations['a1'].anchor as { start: number }).start).toBe(5);
   });
 });

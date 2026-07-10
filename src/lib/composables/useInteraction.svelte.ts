@@ -1,11 +1,12 @@
 import type { Range } from '$lib/range';
-import { isLineInRange, keyToRange } from '$lib/range';
+import { isLineInRange } from '$lib/range';
 
 /**
  * Editor identification - which editor is currently active.
+ * Annotations are referenced by id (saved entry or draft).
  */
 export type EditorKind =
-  | { kind: 'annotation'; rangeKey: string }
+  | { kind: 'annotation'; id: string }
   | { kind: 'session' };
 
 /**
@@ -94,6 +95,17 @@ export interface UseInteractionOptions {
   isLineSelectable: (displayIdx: number) => boolean;
   /** Constrain selection to bounds (e.g., hunk bounds in diff mode) */
   constrainToBounds: (displayIdx: number, anchorIdx: number) => number;
+  /** Resolve an annotation's display span (editing-phase highlight). */
+  spanForAnnotation: (id: string) => Range | null;
+  /**
+   * Which editor a just-committed selection opens; null blocks (unanchorable
+   * selection). Reads the draft onSelectionChange already minted for the
+   * committed range — no range param needed, dispatch() calls
+   * onSelectionChange before this.
+   */
+  editorForSelection: () => EditorKind | null;
+  /** Fired on selection state changes: the committed range, or null when idle. */
+  onSelectionChange: (range: Range | null) => void;
 }
 
 export function useInteraction(options: UseInteractionOptions) {
@@ -123,6 +135,14 @@ export function useInteraction(options: UseInteractionOptions) {
       }
     }
     state = uiReducer(state, action);
+    // Notify on the committed range / return to idle — the page keys its
+    // draft-annotation lifecycle off this. Editing keeps the last-committed
+    // state alive; selecting is transient (the slot is hidden while dragging).
+    if (state.phase === 'committed') {
+      options.onSelectionChange(state.range);
+    } else if (state.phase === 'idle') {
+      options.onSelectionChange(null);
+    }
     return { blocked: false };
   }
 
@@ -135,9 +155,9 @@ export function useInteraction(options: UseInteractionOptions) {
       case 'committed':
         return state.range;
       case 'editing':
-        // Editing phase: derive range from editor kind
+        // Editing phase: resolve the annotation's span from its anchor
         if (state.editor.kind === 'annotation') {
-          return keyToRange(state.editor.rangeKey);
+          return options.spanForAnnotation(state.editor.id);
         }
         return null; // Session editor has no range
       default:
@@ -216,12 +236,12 @@ export function useInteraction(options: UseInteractionOptions) {
   function commitSelection() {
     if (state.phase !== 'selecting') return;
 
-    const range = normalizeRange(state.anchor, state.current);
-    const rangeKey = `${range.start}-${range.end}`;
-
-    // Releasing a selection opens the annotation editor directly.
+    // Releasing a selection opens the annotation editor directly. COMMIT_SELECT
+    // fires onSelectionChange first, so the page has minted a draft (or found
+    // the existing annotation) by the time we ask which editor to open.
     dispatch({ type: 'COMMIT_SELECT' });
-    dispatch({ type: 'OPEN_EDITOR', editor: { kind: 'annotation', rangeKey } });
+    const editor = options.editorForSelection();
+    if (editor) dispatch({ type: 'OPEN_EDITOR', editor });
   }
 
   function handleContentPointerDown(e: PointerEvent) {
@@ -285,10 +305,10 @@ export function useInteraction(options: UseInteractionOptions) {
   }
 
   /** Check if an annotation is sealed (not being edited) */
-  function isAnnotationSealed(rangeKey: string): boolean {
+  function isAnnotationSealed(id: string): boolean {
     if (state.phase !== 'editing') return true;
     if (state.editor.kind !== 'annotation') return true;
-    return state.editor.rangeKey !== rangeKey;
+    return state.editor.id !== id;
   }
 
   /** Check if the session editor is open */

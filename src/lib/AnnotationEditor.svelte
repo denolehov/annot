@@ -22,7 +22,7 @@
     | { type: 'Cancelled' };
 
   interface ExcalidrawResult {
-    range_key: string;
+    annotation_id: string;
     node_ref: NodeRef;
     outcome: ExcalidrawOutcome;
   }
@@ -110,11 +110,11 @@
     onImagePasteBlocked?: () => void;
     onRequestCreateTag?: (text: string, from: number, to: number) => void;
     pendingTagInsertion?: { from: number; to: number; tag: Tag } | null;
-    rangeKey?: string; // Annotation line range key like "45-52"
+    annotationId?: string; // Annotation id (saved entry or draft); '' for the session editor
     getOriginalLines?: () => string; // Returns original lines content for /replace
   }
 
-  let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], annotationEntries = {}, allowsImagePaste = false, onImagePasteBlocked, onRequestCreateTag, pendingTagInsertion, rangeKey = '', getOriginalLines }: Props = $props();
+  let { content, onUpdate, sealed = false, onUnseal, onDismiss, tags = [], annotationEntries = {}, allowsImagePaste = false, onImagePasteBlocked, onRequestCreateTag, pendingTagInsertion, annotationId = '', getOriginalLines }: Props = $props();
 
   // Get zoom level from context for floating elements
   const ctx = getAnnotContext();
@@ -134,7 +134,7 @@
     getSealed: () => sealed,
     getTags: () => tags,
     getAnnotationEntries: () => annotationEntries,
-    getCurrentRangeKey: () => rangeKey,
+    getCurrentId: () => annotationId,
     getAllowsImagePaste: () => allowsImagePaste,
     getOnUpdate: () => onUpdate,
     getOnDismiss: () => () => onDismiss?.(),
@@ -163,7 +163,7 @@
   // Derive excalidraw open state from modal lock
   const isExcalidrawOpen = $derived(
     ctx.interaction.modalLock?.kind === 'excalidraw' &&
-    ctx.interaction.modalLock.editorKey === rangeKey
+    ctx.interaction.modalLock.editorKey === annotationId
   );
 
   // Sync Excalidraw window state with composable (prevents blur dismiss)
@@ -216,11 +216,11 @@
 
   // Open Excalidraw window for creating new diagram
   async function openExcalidrawCreate(placeholderId: string) {
-    ctx.interaction.setModalLock({ kind: 'excalidraw', editorKey: rangeKey });
+    ctx.interaction.setModalLock({ kind: 'excalidraw', editorKey: annotationId });
     try {
       await invoke('open_excalidraw_window', {
         elements: '[]',
-        rangeKey: rangeKey,
+        annotationId,
         nodeRef: { type: 'Placeholder', id: placeholderId },
       });
     } catch (e) {
@@ -231,11 +231,11 @@
 
   // Open Excalidraw window for editing existing diagram
   async function openExcalidrawEdit(nodeId: string, elements: string) {
-    ctx.interaction.setModalLock({ kind: 'excalidraw', editorKey: rangeKey });
+    ctx.interaction.setModalLock({ kind: 'excalidraw', editorKey: annotationId });
     try {
       await invoke('open_excalidraw_window', {
         elements: elements || '[]',
-        rangeKey: rangeKey,
+        annotationId,
         nodeRef: { type: 'Chip', id: nodeId },
       });
     } catch (e) {
@@ -247,7 +247,7 @@
   // Handle Excalidraw result from window
   function handleExcalidrawResult(result: ExcalidrawResult) {
     // Only handle results for our annotation
-    if (result.range_key !== rangeKey) return;
+    if (result.annotation_id !== annotationId) return;
 
     ctx.interaction.setModalLock(null);
 
@@ -315,7 +315,7 @@
 
     // Check if we have an active excalidraw modal for this editor
     if (ctx.interaction.modalLock?.kind === 'excalidraw' &&
-        ctx.interaction.modalLock.editorKey === rangeKey) {
+        ctx.interaction.modalLock.editorKey === annotationId) {
       // Close the orphaned excalidraw window
       try {
         await invoke('close_excalidraw_by_placeholder', {
@@ -356,8 +356,8 @@
 
     // Listen for mermaid button requests to open excalidraw
     // This allows mermaid to tap into TipTap's fresh state instead of stale annotationState
-    listen<{ rangeKey: string }>('mermaid-open-excalidraw', (event) => {
-      if (event.payload.rangeKey !== rangeKey) return;
+    listen<{ annotationId: string }>('mermaid-open-excalidraw', (event) => {
+      if (event.payload.annotationId !== annotationId) return;
 
       // Find excalidraw chip in TipTap's current state
       if (!ann.editor) return;
@@ -430,6 +430,15 @@
       }
 
       selectionDebounceTimer = setTimeout(() => {
+        // The doc may have changed under the debounce (e.g. select-all →
+        // delete) — the captured positions can point past the end of the
+        // current doc. Re-read the live selection instead.
+        if (editor.isDestroyed) return;
+        const { from, to, empty } = editor.state.selection;
+        if (empty || to - from < 2) {
+          selectionPopover = null;
+          return;
+        }
         const text = editor.state.doc.textBetween(from, to, ' ');
         const coords = editor.view.coordsAtPos(from);
         const endCoords = editor.view.coordsAtPos(to);

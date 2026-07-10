@@ -5,7 +5,8 @@
   import { onMount, tick } from "svelte";
   import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo, ConfigSnapshot } from "$lib/types";
   import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, isHorizontalRule } from "$lib/line-utils";
-  import { rangeToKey, keyToRange, isLineInRange, validateRange, type Range } from "$lib/range";
+  import { type Range } from "$lib/range";
+  import { selectionToAnchor, type Anchor, type SlotRef } from "$lib/anchor";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap, findExcalidrawChip } from "$lib/tiptap";
   import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
   import AnnotationSlot from "$lib/components/AnnotationSlot.svelte";
@@ -26,7 +27,7 @@
   import { fileContaining } from "$lib/file-collapse";
   import { useExitModes } from "$lib/composables/useExitModes.svelte";
   import { useContentTracking } from "$lib/composables/useContentTracking.svelte";
-  import { useInteraction } from "$lib/composables/useInteraction.svelte";
+  import { useInteraction, type EditorKind } from "$lib/composables/useInteraction.svelte";
   import { useAnnotations } from "$lib/composables/useAnnotations.svelte";
   import { useKeyboard } from "$lib/composables/useKeyboard.svelte";
   import { useSelectionBounds } from "$lib/composables/useSelectionBounds.svelte";
@@ -54,11 +55,11 @@
   // =============================================================================
   // Coordinate System (Display Index)
   // =============================================================================
-  // All selection coordinates use display indices (1-indexed positions in the
-  // lines array). Display indices are inherently unique across all files/content.
-  //
-  // Source coordinates (path + line numbers) are extracted at the backend
-  // boundary via validateRange() when calling Tauri commands.
+  // Selection coordinates use display indices (1-indexed positions in the
+  // lines array) — ephemeral UI state only. Annotation identity is an id; its
+  // position is an Anchor in source coordinates, computed from the selection
+  // at creation (selectionToAnchor) and resolved back to display rows at
+  // render time (useAnnotations). No display index is ever persisted.
   // =============================================================================
 
   let markdownMetadata = $derived(metadata.type === 'markdown' ? metadata : null);
@@ -190,10 +191,63 @@
     getHunkTracker: () => contentTracking.hunkTracker,
   });
 
+  // Draft slot: a new annotation's identity, minted the moment its slot comes
+  // into existence (selection commit, gutter click, hover-comment, …) so the
+  // draft→saved transition never changes the slot's id — the editor must not
+  // remount on the first keystroke. Cleared when interaction returns to idle.
+  let draft = $state<SlotRef | null>(null);
+
+  function handleSelectionChange(range: Range | null) {
+    if (!range) {
+      draft = null;
+      return;
+    }
+    // An existing annotation at the selection's end row claims the slot. The
+    // draft shadows it anyway: emptying the editor deletes the entry mid-edit,
+    // and the shadow is what keeps the slot (and the live editor) mounted
+    // until the editor is dismissed.
+    const existing = annotationState.atEndRow(range.end);
+    if (existing) {
+      draft = { id: existing.id, anchor: existing.anchor };
+      return;
+    }
+    const anchor = selectionToAnchor(range, lines);
+    draft = anchor ? { id: crypto.randomUUID(), anchor } : null;
+  }
+
+  /** Open an annotation's editor, shadowing it as the active draft (see above). */
+  function openAnnotationEditor(slot: SlotRef) {
+    draft = { id: slot.id, anchor: slot.anchor };
+    interaction.openEditor({ kind: 'annotation', id: slot.id });
+  }
+
+  // dispatch() calls onSelectionChange synchronously before this runs, so the
+  // draft already reflects the just-committed selection by the time this reads it.
+  function editorForSelection(): EditorKind | null {
+    return draft ? { kind: 'annotation', id: draft.id } : null;
+  }
+
+  /** The id's anchor: a saved entry's if it has one, else the shadowing draft's. */
+  function anchorForId(id: string): Anchor | null {
+    return annotationState.getById(id)?.anchor ?? (draft?.id === id ? draft.anchor : null);
+  }
+
+  function spanForAnnotation(id: string): Range | null {
+    // Prefer the store's memoized span; only a not-yet-saved draft needs
+    // resolving here.
+    const saved = annotationState.spanOf(id);
+    if (saved) return saved;
+    const anchor = anchorForId(id);
+    return anchor ? annotationState.spanOfAnchor(anchor) : null;
+  }
+
   // Interaction state (composable) — unified hover/selection state machine
   const interaction = useInteraction({
     isLineSelectable,
     constrainToBounds: selectionBounds.constrainToSelectionBounds,
+    spanForAnnotation,
+    editorForSelection,
+    onSelectionChange: handleSelectionChange,
   });
 
   // Per-file collapse (composable) — diff mode only
@@ -282,7 +336,7 @@
 
   // Tag creation from selection state
   let pendingTagCreation = $state<{
-    editorKey: string;  // 'session' or rangeKey
+    editorKey: string;  // 'session' or annotation id
     from: number;
     to: number;
     text: string;
@@ -318,8 +372,8 @@
    * Called on undo/redo.
    */
   async function restoreSessionData(data: SessionData): Promise<void> {
-    // Restore annotations
-    annotationState.replaceAll(data.annotations);
+    // Restore annotations (diffs by id and syncs the backend)
+    annotationState.restore(data.annotations);
 
     // Restore session comment
     sessionComment = data.sessionComment ? JSON.parse(JSON.stringify(data.sessionComment)) : undefined;
@@ -330,8 +384,6 @@
     } else {
       exitModeState.clearSelection();
     }
-
-    // Note: Backend sync will be handled by restore_session_state IPC in a later milestone
   }
 
   // History composable for undo/redo
@@ -359,46 +411,19 @@
     document.documentElement.style.setProperty('--content-zoom', String(contentZoom));
   });
 
-  // Get all annotation ranges for overlay rendering
-  let annotationRanges = $derived(annotationState.allRanges());
-
-  // Active editor range (for positioning the editor overlay)
-  let activeEditorRange = $derived.by(() => {
-    const sel = interaction.range;
-    if (!sel || interaction.phase === 'selecting') return null;
-    // Check if there's an existing annotation at the last selected line
-    const lastLine = Math.max(sel.start, sel.end);
-    const existing = annotationState.getAtLine(lastLine);
-    if (existing) {
-      const range = keyToRange(existing.key);
-      return { key: existing.key, start: range.start, end: range.end };
-    }
-    // New annotation at selection
-    const start = Math.min(sel.start, sel.end);
-    const end = Math.max(sel.start, sel.end);
-    return { key: rangeToKey({ start, end }), start, end };
-  });
-
-  async function updateAnnotation(rangeKey: string, content: JSONContent | null) {
-    const range = keyToRange(rangeKey);
-    await annotationState.upsert(range, content);
+  async function updateAnnotation(id: string, content: JSONContent | null) {
+    const anchor = anchorForId(id);
+    if (!anchor) return;
+    annotationState.upsert(id, anchor, content);
   }
 
   function closeCurrentEditor() {
     // Don't close if we're creating a tag from this editor - user will return after CP closes
     if (pendingTagCreation) return;
+    if (interaction.phase !== 'editing') return;
 
-    const state = interaction.state;
-    if (state.phase !== 'editing') return;
-
-    // If closing an annotation editor, remove empty annotations
-    if (state.editor.kind === 'annotation') {
-      const entry = annotationState.getByKey(state.editor.rangeKey);
-      if (!entry) {
-        annotationState.remove(state.editor.rangeKey);
-      }
-    }
-
+    // An empty draft simply dies with the slot: no entry was ever created and
+    // the draft itself clears via onSelectionChange when we return to idle.
     interaction.closeEditor();
   }
 
@@ -515,11 +540,22 @@
     showToast('Image paste is only supported in MCP mode');
   }
 
+  /**
+   * Upsert `content` under whichever annotation already spans `range` exactly,
+   * or a freshly minted one. Returns false if the range isn't anchorable.
+   */
+  function upsertAtSpan(range: Range, content: JSONContent): boolean {
+    const existing = annotationState.atSpan(range);
+    const anchor = existing?.anchor ?? selectionToAnchor(range, lines);
+    if (!anchor) return false;
+    annotationState.upsert(existing?.id ?? crypto.randomUUID(), anchor, content);
+    return true;
+  }
+
   // Handle reporting a mermaid syntax error as an annotation
   async function handleReportMermaidError(displayRange: Range, errorMessage: string) {
-    // Check if annotation already exists at this range
-    const rangeKey = rangeToKey(displayRange);
-    const existing = annotationState.getByKey(rangeKey);
+    // Check if an annotation already spans exactly this range
+    const existing = annotationState.atSpan(displayRange);
 
     if (existing?.content) {
       // Check if error node already exists (TipTap uses 'errorChip' type)
@@ -552,7 +588,7 @@
       ]
     };
 
-    await annotationState.upsert(displayRange, newContent);
+    if (!upsertAtSpan(displayRange, newContent)) return;
     showToast('Error added to feedback');
   }
 
@@ -588,13 +624,12 @@
   ) {
     // sourceBlock has source line numbers for extracting mermaid content
     // annotationRange has display indices for creating the annotation
-    const rangeKey = `${annotationRange.start}-${annotationRange.end}`;
-    const existing = annotationState.getByKey(rangeKey);
+    const existing = annotationState.atSpan(annotationRange);
 
     // If annotation exists with a chip, ask AnnotationEditor to open it
     // This reads from TipTap directly, avoiding stale annotationState reads
     if (existing?.content && findExcalidrawChip(existing.content)) {
-      await emit('mermaid-open-excalidraw', { rangeKey });
+      await emit('mermaid-open-excalidraw', { annotationId: existing.id });
       return;
     }
 
@@ -604,7 +639,9 @@
       const elements = await convertMermaidToExcalidraw(source);
       await invoke('open_excalidraw_window', {
         elements,
-        rangeKey,
+        // Unread for CodeBlock origin — results route back via `origin`, and the
+        // annotation (with its id) is only created when the result arrives.
+        annotationId: '',
         nodeRef: { type: 'Placeholder', id: `mermaid-${Date.now()}` },
         origin: { type: 'CodeBlock', start_line: annotationRange.start, end_line: annotationRange.end },
       });
@@ -631,6 +668,7 @@
   let annotationSlotProps = $derived({
     pendingTagInsertion,
     onUpdate: updateAnnotation,
+    onUnseal: openAnnotationEditor,
     onDismiss: closeCurrentEditor,
     onRequestCreateTag: handleRequestCreateTag,
     onImagePasteBlocked: handleImagePasteBlocked,
@@ -659,10 +697,11 @@
       onCommentHoveredLine: () => {
         if (interaction.hoverLine !== null) {
           const line = interaction.hoverLine;
+          // selectLine transitions to committed, which mints the draft (or
+          // binds the existing annotation) via onSelectionChange.
           interaction.selectLine(line);
-          // Open editor after selecting (selectLine transitions to committed)
-          const rangeKey = `${line}-${line}`;
-          interaction.openEditor({ kind: 'annotation', rangeKey });
+          const editor = editorForSelection();
+          if (editor) interaction.openEditor(editor);
         }
       },
     },
@@ -736,7 +775,6 @@
       await listen<CodeBlockExcalidrawResult>('codeblock-excalidraw-result', (event) => {
         const { start_line, end_line, elements, png } = event.payload;
         const range = { start: start_line, end: end_line };
-        const rangeKey = rangeToKey(range);
 
         // Create excalidraw chip node
         const chipNode = {
@@ -751,7 +789,7 @@
             { type: 'paragraph', content: [chipNode] }
           ]
         };
-        annotationState.upsert(range, newContent);
+        if (!upsertAtSpan(range, newContent)) return;
         showToast('Diagram saved as annotation');
       });
     } catch (e) {
@@ -798,6 +836,7 @@
     {fileEntries}
     interaction={interaction}
     annotations={annotationState}
+    {draft}
     exitModes={exitModeState}
     {fileCollapse}
     {search}
@@ -869,8 +908,8 @@
       {#each lineSegmentation.segments as segment}
         {#if segment.type === 'portal'}
           <Portal lines={segment.lines}>
-            {#snippet annotationSlot(displayIndex, rangeKey)}
-              <AnnotationSlot {rangeKey} {...annotationSlotProps} />
+            {#snippet annotationSlot(displayIndex, slot)}
+              <AnnotationSlot slotRef={slot} {...annotationSlotProps} />
             {/snippet}
           </Portal>
         {:else if segment.type === 'codeblock'}
@@ -896,14 +935,14 @@
             {mermaidError}
             onReportMermaidError={annotationRange ? (error) => handleReportMermaidError(annotationRange, error) : undefined}
           >
-            {#snippet annotationSlot(displayIndex, rangeKey)}
-              <AnnotationSlot {rangeKey} {...annotationSlotProps} />
+            {#snippet annotationSlot(displayIndex, slot)}
+              <AnnotationSlot slotRef={slot} {...annotationSlotProps} />
             {/snippet}
           </CodeBlock>
         {:else if segment.type === 'table'}
           <Table lines={segment.lines}>
-            {#snippet annotationSlot(displayIndex, rangeKey)}
-              <AnnotationSlot {rangeKey} {...annotationSlotProps} />
+            {#snippet annotationSlot(displayIndex, slot)}
+              <AnnotationSlot slotRef={slot} {...annotationSlotProps} />
             {/snippet}
           </Table>
         {:else if segment.type === 'separator'}

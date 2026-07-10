@@ -1,6 +1,7 @@
 import { getContext, setContext } from 'svelte';
-import type { Line, ContentMetadata, Tag, JSONContent, MarkdownMetadata } from '$lib/types';
+import type { Line, ContentMetadata, Tag, MarkdownMetadata } from '$lib/types';
 import type { Range } from '$lib/range';
+import type { SlotRef } from '$lib/anchor';
 import type { useInteraction } from '$lib/composables/useInteraction.svelte';
 import type { useAnnotations } from '$lib/composables/useAnnotations.svelte';
 import type { useExitModes } from '$lib/composables/useExitModes.svelte';
@@ -28,8 +29,6 @@ export interface AnnotContext {
   readonly selection: Range | null;
   readonly isDragging: boolean;
   readonly hoveredIdx: number | null;
-  readonly annotationsMap: Map<string, JSONContent>;
-  readonly lastSelectedLine: number | null;
 
   // Static/reactive data
   readonly lines: Line[];
@@ -47,11 +46,11 @@ export interface AnnotContext {
   getOriginalLinesForRange: (range: Range) => string;
 
   /**
-   * Get the range key for a line, used to connect annotation slots to their content.
-   * Returns the annotation key if line has an annotation, or the selection key if
-   * this is the last selected line, or null otherwise.
+   * The annotation slot a row hosts, used to connect annotation slots to
+   * their content: the annotation whose span ends on this row, or the draft
+   * slot for a committed selection ending here, or null.
    */
-  getRangeKeyForLine: (displayIndex: number) => string | null;
+  slotForRow: (displayIndex: number) => SlotRef | null;
 }
 
 const ANNOT_CONTEXT = Symbol('annot');

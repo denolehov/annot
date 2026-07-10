@@ -20,7 +20,7 @@
 
   interface Props {
     lines: DisplayLine[];
-    annotationSlotProps: Omit<AnnotationSlotProps, 'rangeKey'>;
+    annotationSlotProps: Omit<AnnotationSlotProps, 'slotRef'>;
   }
 
   let {
@@ -159,8 +159,8 @@
       {/if}
     {/snippet}
   </LineRow>
-  {@const rangeKey = ctx.getRangeKeyForLine(displayIndex)}
-  <AnnotationSlot {rangeKey} {...annotationSlotProps} />
+  {@const slot = ctx.slotForRow(displayIndex)}
+  <AnnotationSlot slotRef={slot} {...annotationSlotProps} />
 {/snippet}
 
 {#if grouped}
