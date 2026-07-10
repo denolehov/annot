@@ -6,8 +6,20 @@ import { rangeToKey, validateRange } from '$lib/range';
 import { extractContentNodes, isContentEmpty } from '$lib/tiptap';
 
 export interface AnnotationEntry {
+  id: string;
   range: Range;
   content: JSONContent;
+}
+
+interface Endpoint {
+  side: 'old' | 'new';
+  line: number;
+}
+
+interface Anchor {
+  path: string;
+  start: Endpoint;
+  end: Endpoint;
 }
 
 export interface UseAnnotationsOptions {
@@ -60,8 +72,8 @@ export function useAnnotations(options: UseAnnotationsOptions) {
   // finish_review, so `flush()` MUST run before the window closes or the last
   // keystrokes are lost (wired in +page.svelte's onCloseRequested).
   type PendingSync =
-    | { op: 'upsert'; path: string; startLine: number; endLine: number; content: ReturnType<typeof extractContentNodes> }
-    | { op: 'delete'; path: string; startLine: number; endLine: number };
+    | { op: 'upsert'; id: string; path: string; anchor: Anchor; content: ReturnType<typeof extractContentNodes> }
+    | { op: 'delete'; path: string; id: string };
 
   const pending = new Map<string, PendingSync>();
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -85,15 +97,14 @@ export function useAnnotations(options: UseAnnotationsOptions) {
       ops.map((op) =>
         op.op === 'upsert'
           ? invoke('upsert_annotation', {
+              id: op.id,
               path: op.path,
-              startLine: op.startLine,
-              endLine: op.endLine,
+              anchor: op.anchor,
               content: op.content
             })
           : invoke('delete_annotation', {
               path: op.path,
-              startLine: op.startLine,
-              endLine: op.endLine
+              id: op.id
             })
       )
     );
@@ -129,27 +140,37 @@ export function useAnnotations(options: UseAnnotationsOptions) {
       // per keystroke) doesn't change the `annotations` key set — `annotatedLines`
       // only reads ranges, so it stays valid and hasAnnotation doesn't re-run on all
       // ~10k lines. Only creating a new annotation changes the key set.
+      // The id is minted once at creation and reused on every subsequent edit —
+      // it's the annotation's identity, independent of the anchor it's synced with.
       const existing = annotations[key];
+      const id = existing?.id ?? crypto.randomUUID();
       if (existing) {
         existing.content = content;
       } else {
-        annotations[key] = { range: normalizedRange, content };
+        annotations[key] = { id, range: normalizedRange, content };
       }
+      const anchor: Anchor = {
+        path: coords.path,
+        start: { side: coords.startSide, line: coords.startLine },
+        end: { side: coords.endSide, line: coords.endLine }
+      };
       pending.set(key, {
         op: 'upsert',
+        id,
         path: coords.path,
-        startLine: coords.startLine,
-        endLine: coords.endLine,
+        anchor,
         content: extractContentNodes(content)
       });
     } else {
+      const existing = annotations[key];
       delete annotations[key];
-      pending.set(key, {
-        op: 'delete',
-        path: coords.path,
-        startLine: coords.startLine,
-        endLine: coords.endLine
-      });
+      if (existing) {
+        pending.set(key, { op: 'delete', path: coords.path, id: existing.id });
+      } else {
+        // Never synced (no id was ever minted) — nothing to delete on the
+        // backend, and this cancels any not-yet-flushed pending upsert.
+        pending.delete(key);
+      }
     }
     scheduleFlush();
   }
@@ -190,6 +211,7 @@ export function useAnnotations(options: UseAnnotationsOptions) {
     // Add new
     for (const [key, entry] of Object.entries(newAnnotations)) {
       annotations[key] = {
+        id: entry.id,
         range: { ...entry.range },
         content: JSON.parse(JSON.stringify(entry.content)),
       };

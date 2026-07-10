@@ -20,6 +20,18 @@ export function getLineNumber(line: Line): number | null {
 }
 
 /**
+ * Get which side of a diff a line's source position belongs to.
+ * Non-diff lines (source/virtual) are always 'new' — file/content/markdown
+ * modes have no old side.
+ */
+export function getSide(line: Line): 'old' | 'new' {
+  if (line.origin.type === 'diff' && line.origin.old_line !== null && line.origin.new_line === null) {
+    return 'old';
+  }
+  return 'new';
+}
+
+/**
  * Get a unique identifier for a line (for keying, data attributes, etc).
  * For virtual lines, returns a synthetic ID.
  */

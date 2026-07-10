@@ -96,16 +96,14 @@ fn render_node(
             // Output pasted content as plain text
             content.clone()
         }
-        ContentNode::Ref { snapshot, .. } => {
-            match snapshot {
-                RefSnapshot::Annotation(snap) => {
-                    format!("[ANNOTATION L{}]", snap.source_key)
-                }
-                RefSnapshot::Heading(snap) => {
-                    format!("[H{} {}]", snap.level, snap.title)
-                }
+        ContentNode::Ref { snapshot, .. } => match snapshot {
+            RefSnapshot::Annotation(snap) => {
+                format!("[ANNOTATION L{}]", snap.source_key)
             }
-        }
+            RefSnapshot::Heading(snap) => {
+                format!("[H{} {}]", snap.level, snap.title)
+            }
+        },
         ContentNode::File { path } => {
             // File reference format: @ref:file:path/to/file.ts
             format!("@ref:file:{}", path)

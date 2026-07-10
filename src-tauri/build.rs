@@ -24,8 +24,7 @@ fn main() {
     let syntax_set = builder.build();
 
     // Dump to file for include_bytes! at runtime
-    dump_to_uncompressed_file(&syntax_set, &syntax_dump_path)
-        .expect("Failed to dump syntax set");
+    dump_to_uncompressed_file(&syntax_set, &syntax_dump_path).expect("Failed to dump syntax set");
 
     // Standard Tauri build
     tauri_build::build()

@@ -32,10 +32,14 @@ pub struct ReviewDiffInput {
     )]
     pub target: Option<crate::vcs::DiffTarget>,
 
-    #[schemars(description = "optional git pathspecs limiting the diff (e.g. [\"src/\", \"*.rs\"])")]
+    #[schemars(
+        description = "optional git pathspecs limiting the diff (e.g. [\"src/\", \"*.rs\"])"
+    )]
     pub pathspecs: Option<Vec<String>>,
 
-    #[schemars(description = "raw unified diff content (mutually exclusive with target/pathspecs)")]
+    #[schemars(
+        description = "raw unified diff content (mutually exclusive with target/pathspecs)"
+    )]
     pub diff_content: Option<String>,
 
     #[schemars(description = "display name (default: diff)")]
@@ -54,7 +58,9 @@ pub struct ExitModeInput {
     #[schemars(description = "context/instruction for downstream processing")]
     pub instruction: String,
 
-    #[schemars(description = "color name: green, yellow, red, blue, purple, orange (auto-assigned if empty)")]
+    #[schemars(
+        description = "color name: green, yellow, red, blue, purple, orange (auto-assigned if empty)"
+    )]
     pub color: Option<String>,
 }
 
@@ -80,7 +86,9 @@ pub struct SessionOutput {
 impl ExitModeInput {
     /// Map color name to CSS hex color.
     fn color_to_hex(color: &Option<String>, index: usize) -> String {
-        let default_colors = ["#22c55e", "#eab308", "#ef4444", "#3b82f6", "#a855f7", "#f97316"];
+        let default_colors = [
+            "#22c55e", "#eab308", "#ef4444", "#3b82f6", "#a855f7", "#f97316",
+        ];
 
         match color.as_deref() {
             Some("green") => "#22c55e".to_string(),

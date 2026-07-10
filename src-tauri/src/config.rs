@@ -159,7 +159,10 @@ pub fn config_dir() -> Option<PathBuf> {
 /// Ensures the config directory exists.
 fn ensure_config_dir() -> io::Result<PathBuf> {
     let dir = config_dir().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::NotFound, "Could not determine config directory")
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "Could not determine config directory",
+        )
     })?;
     fs::create_dir_all(&dir)?;
     Ok(dir)
@@ -344,7 +347,7 @@ pub fn discover_commands() -> Vec<ExitMode> {
     // Assign order values (after transient and persisted modes)
     for (i, mode) in commands.iter_mut().enumerate() {
         mode.order = 1000 + i as u32; // High order to appear after persisted modes
-        // Assign color from palette
+                                      // Assign color from palette
         mode.color = COMMAND_COLORS[i % COMMAND_COLORS.len()].to_string();
     }
 
@@ -400,7 +403,9 @@ fn parse_command_file(path: &Path) -> Option<ExitMode> {
     let name = path.file_stem()?.to_string_lossy().to_string();
 
     // Description becomes instruction
-    let description = frontmatter.get("description").cloned()
+    let description = frontmatter
+        .get("description")
+        .cloned()
         .unwrap_or_else(|| format!("Run /{} command", name));
 
     Some(ExitMode {
@@ -409,7 +414,9 @@ fn parse_command_file(path: &Path) -> Option<ExitMode> {
         color: String::new(), // Will be assigned later
         instruction: description,
         order: 0, // Will be assigned later
-        source: ExitModeSource::Command { path: path.to_path_buf() },
+        source: ExitModeSource::Command {
+            path: path.to_path_buf(),
+        },
     })
 }
 
@@ -646,7 +653,10 @@ description: My command without quotes
 Content
 "#;
         let fm = extract_yaml_frontmatter(content).unwrap();
-        assert_eq!(fm.get("description"), Some(&"My command without quotes".to_string()));
+        assert_eq!(
+            fm.get("description"),
+            Some(&"My command without quotes".to_string())
+        );
     }
 
     #[test]
@@ -690,12 +700,16 @@ Content
     fn discover_commands_parses_command_file() {
         let temp = TempDir::new().unwrap();
         let cmd_file = temp.path().join("test-cmd.md");
-        fs::write(&cmd_file, r#"---
+        fs::write(
+            &cmd_file,
+            r#"---
 description: "Test command description"
 ---
 # Test Command
 Instructions here
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let modes = discover_commands_in_dir(temp.path()).unwrap();
         assert_eq!(modes.len(), 1);
@@ -708,7 +722,11 @@ Instructions here
     #[test]
     fn discover_commands_skips_files_without_frontmatter() {
         let temp = TempDir::new().unwrap();
-        fs::write(temp.path().join("no-fm.md"), "# Just a file\nNo frontmatter").unwrap();
+        fs::write(
+            temp.path().join("no-fm.md"),
+            "# Just a file\nNo frontmatter",
+        )
+        .unwrap();
 
         let modes = discover_commands_in_dir(temp.path()).unwrap();
         assert!(modes.is_empty());
@@ -720,8 +738,9 @@ Instructions here
         for i in 0..3 {
             fs::write(
                 temp.path().join(format!("cmd{}.md", i)),
-                format!("---\ndescription: Cmd {}\n---\nContent", i)
-            ).unwrap();
+                format!("---\ndescription: Cmd {}\n---\nContent", i),
+            )
+            .unwrap();
         }
 
         // Use discover_commands with explicit dir

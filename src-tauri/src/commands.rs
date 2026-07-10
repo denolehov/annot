@@ -5,6 +5,7 @@ use std::sync::atomic::Ordering;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 
+use crate::anchor::Anchor;
 use crate::config::{self, Config, Theme};
 use crate::lang::extension_to_fence_language;
 use crate::output::{export_content, export_section, format_json, format_output, OutputMode};
@@ -57,14 +58,14 @@ pub fn get_content(
 #[tauri::command]
 pub fn upsert_annotation(
     review_state: State<ActiveReview>,
+    id: String,
     path: String,
-    start_line: u32,
-    end_line: u32,
+    anchor: Anchor,
     content: Vec<ContentNode>,
 ) -> Result<(), String> {
     with_review!(review_state, |review| {
         let target = review.resolve_target_mut(&path)?;
-        target.upsert_annotation(start_line, end_line, content);
+        target.upsert_annotation(id, anchor, content);
         Ok(())
     })
 }
@@ -73,12 +74,11 @@ pub fn upsert_annotation(
 pub fn delete_annotation(
     review_state: State<ActiveReview>,
     path: String,
-    start_line: u32,
-    end_line: u32,
+    id: String,
 ) -> Result<(), String> {
     with_review!(review_state, |review| {
         let target = review.resolve_target_mut(&path)?;
-        target.delete_annotation(start_line, end_line);
+        target.delete_annotation(&id);
         Ok(())
     })
 }
@@ -488,7 +488,9 @@ pub fn export_to_obsidian(
 /// Sanitize a filename for Obsidian by removing characters that are invalid in filenames.
 /// Obsidian (and most filesystems) don't allow: \ / :
 fn sanitize_obsidian_filename(name: &str) -> String {
-    name.chars().filter(|c| !matches!(c, '\\' | '/' | ':')).collect()
+    name.chars()
+        .filter(|c| !matches!(c, '\\' | '/' | ':'))
+        .collect()
 }
 
 // --- Replace diff (word-level) ---

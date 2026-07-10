@@ -61,7 +61,10 @@ pub fn to_git_args(target: &DiffTarget, pathspecs: &[String]) -> Vec<String> {
             from,
             to,
             merge_base,
-        } => vec![format!("{from}{}{to}", if *merge_base { "..." } else { ".." })],
+        } => vec![format!(
+            "{from}{}{to}",
+            if *merge_base { "..." } else { ".." }
+        )],
     };
     if !pathspecs.is_empty() {
         args.push("--".into());
@@ -186,10 +189,7 @@ fn rename_similarity(
 // Range: tree vs tree
 // ---------------------------------------------------------------------------
 
-fn peel_to_tree<'r>(
-    id: gix::Id<'r>,
-    rev: &str,
-) -> Result<gix::Tree<'r>, AnnotError> {
+fn peel_to_tree<'r>(id: gix::Id<'r>, rev: &str) -> Result<gix::Tree<'r>, AnnotError> {
     id.object()
         .map_err(|e| AnnotError::Diff(format!("failed to load '{rev}': {e}")))?
         .peel_to_tree()
@@ -211,7 +211,9 @@ fn range_entries(
     let to_id = resolve(to)?;
     if merge_base {
         from_id = repo.merge_base(from_id, to_id).map_err(|e| {
-            AnnotError::Diff(format!("failed to compute merge base of '{from}' and '{to}': {e}"))
+            AnnotError::Diff(format!(
+                "failed to compute merge base of '{from}' and '{to}': {e}"
+            ))
         })?;
     }
     let old_tree = peel_to_tree(from_id, from)?;
@@ -403,15 +405,16 @@ mod merge {
     /// layers into one HEAD-vs-worktree entry for `path`. `None` = no row.
     pub(super) fn merge(path: &str, staged: Option<Staged>, wt: Option<Wt>) -> Option<FileEntry> {
         let p = || Some(path.to_string());
-        let entry = |status, old_path: Option<String>, old_oid, new_path: Option<String>, new_oid| {
-            Some(FileEntry {
-                status,
-                old_path,
-                new_path,
-                old_oid,
-                new_oid,
-            })
-        };
+        let entry =
+            |status, old_path: Option<String>, old_oid, new_path: Option<String>, new_oid| {
+                Some(FileEntry {
+                    status,
+                    old_path,
+                    new_path,
+                    old_oid,
+                    new_oid,
+                })
+            };
         match (staged, wt) {
             (None, None) => None,
 
@@ -948,12 +951,9 @@ fn working_tree_entries(
                                 IwChange::SubmoduleModification(_) => continue,
                             },
                         };
-                        let index_oid = (kind != merge::WtKind::IntentToAdd)
-                            .then(|| entry.id.to_string());
-                        worktree.insert(
-                            path,
-                            merge::Wt { kind, index_oid },
-                        );
+                        let index_oid =
+                            (kind != merge::WtKind::IntentToAdd).then(|| entry.id.to_string());
+                        worktree.insert(path, merge::Wt { kind, index_oid });
                     }
                     Item::DirectoryContents { entry, .. } => {
                         if entry.status == gix::dir::entry::Status::Untracked
@@ -1057,9 +1057,7 @@ mod tests {
     fn find<'a>(entries: &'a [FileEntry], path: &str) -> &'a FileEntry {
         entries
             .iter()
-            .find(|e| {
-                e.new_path.as_deref() == Some(path) || e.old_path.as_deref() == Some(path)
-            })
+            .find(|e| e.new_path.as_deref() == Some(path) || e.old_path.as_deref() == Some(path))
             .unwrap_or_else(|| panic!("no entry for {path}: {entries:?}"))
     }
 
@@ -1069,10 +1067,7 @@ mod tests {
     fn to_git_args_table() {
         assert_eq!(to_git_args(&WT, &[]), vec!["HEAD"]);
         assert_eq!(to_git_args(&STAGED, &[]), vec!["--staged"]);
-        assert_eq!(
-            to_git_args(&range("main", "HEAD"), &[]),
-            vec!["main..HEAD"]
-        );
+        assert_eq!(to_git_args(&range("main", "HEAD"), &[]), vec!["main..HEAD"]);
         assert_eq!(
             to_git_args(
                 &DiffTarget::Range {
@@ -1103,10 +1098,7 @@ mod tests {
         }
         // wire shape + merge_base default
         assert_eq!(
-            serde_json::from_str::<DiffTarget>(
-                r#"{"kind":"range","from":"a","to":"b"}"#
-            )
-            .unwrap(),
+            serde_json::from_str::<DiffTarget>(r#"{"kind":"range","from":"a","to":"b"}"#).unwrap(),
             DiffTarget::Range {
                 from: "a".into(),
                 to: "b".into(),

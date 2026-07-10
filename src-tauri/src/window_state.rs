@@ -242,8 +242,13 @@ fn is_position_on_monitor(app: &AppHandle, x: i32, y: i32) -> bool {
     monitors.iter().any(|monitor| {
         let pos = monitor.position();
         let size = monitor.size();
-        let (left, top, right, bottom) =
-            monitor_compare_bounds(pos.x, pos.y, size.width, size.height, monitor.scale_factor());
+        let (left, top, right, bottom) = monitor_compare_bounds(
+            pos.x,
+            pos.y,
+            size.width,
+            size.height,
+            monitor.scale_factor(),
+        );
         point_in_rect(x, y, left, top, right, bottom)
     })
 }
@@ -306,8 +311,13 @@ fn saved_monitor(app: &AppHandle, window_type: WindowType) -> Option<Monitor> {
     monitors.into_iter().find(|monitor| {
         let pos = monitor.position();
         let size = monitor.size();
-        let (left, top, right, bottom) =
-            monitor_compare_bounds(pos.x, pos.y, size.width, size.height, monitor.scale_factor());
+        let (left, top, right, bottom) = monitor_compare_bounds(
+            pos.x,
+            pos.y,
+            size.width,
+            size.height,
+            monitor.scale_factor(),
+        );
         point_in_rect(state.x, state.y, left, top, right, bottom)
     })
 }
@@ -396,8 +406,8 @@ fn load_state(app: &AppHandle, window_type: WindowType) -> Option<WindowState> {
 
 /// Save state for a window type under the current display configuration.
 fn save_state(app: &AppHandle, window_type: WindowType, state: &WindowState) -> Result<(), String> {
-    let config_id =
-        display_config_id(app).ok_or_else(|| "no connected monitors to key state under".to_string())?;
+    let config_id = display_config_id(app)
+        .ok_or_else(|| "no connected monitors to key state under".to_string())?;
 
     let mut file = load_state_file(app);
     file.configs
@@ -515,7 +525,10 @@ mod tests {
     #[test]
     fn center_in_centers() {
         // 1000x700 window on a 1512x982 monitor at the origin.
-        assert_eq!(center_in(0.0, 0.0, 1512.0, 982.0, 1000.0, 700.0), (256.0, 141.0));
+        assert_eq!(
+            center_in(0.0, 0.0, 1512.0, 982.0, 1000.0, 700.0),
+            (256.0, 141.0)
+        );
         // Same window on a monitor offset to logical x=1512.
         assert_eq!(
             center_in(1512.0, 0.0, 2560.0, 1440.0, 1000.0, 700.0),

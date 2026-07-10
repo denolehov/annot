@@ -147,15 +147,12 @@ pub async fn open_excalidraw_window(
 
     // Create new window (hidden until frontend renders)
     let builder = {
-        let b = WebviewWindowBuilder::new(
-            &app,
-            &label,
-            tauri::WebviewUrl::App("excalidraw".into()),
-        )
-        .title("Excalidraw")
-        .inner_size(width, height)
-        .min_inner_size(600.0, 400.0)
-        .visible(false);
+        let b =
+            WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("excalidraw".into()))
+                .title("Excalidraw")
+                .inner_size(width, height)
+                .min_inner_size(600.0, 400.0)
+                .visible(false);
         #[cfg(target_os = "macos")]
         let b = b
             .title_bar_style(tauri::TitleBarStyle::Overlay)
@@ -262,15 +259,15 @@ pub fn excalidraw_save(
                         ExcalidrawResult {
                             range_key: ctx.range_key,
                             node_ref: ctx.node_ref,
-                            outcome: ExcalidrawOutcome::Saved {
-                                elements,
-                                png,
-                            },
+                            outcome: ExcalidrawOutcome::Saved { elements, png },
                         },
                     )
                     .map_err(|e| format!("Failed to emit result: {}", e))?;
             }
-            ExcalidrawOrigin::CodeBlock { start_line, end_line } => {
+            ExcalidrawOrigin::CodeBlock {
+                start_line,
+                end_line,
+            } => {
                 parent
                     .emit(
                         "codeblock-excalidraw-result",

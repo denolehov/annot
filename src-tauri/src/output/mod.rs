@@ -13,11 +13,12 @@ mod snapshot_tests;
 
 use std::collections::{BTreeMap, HashMap};
 
+use crate::anchor::Annotation;
 use crate::lang;
 use crate::mcp::tools::SessionImage;
 use crate::portal::LoadedPortal;
 use crate::review::{FileKey, Review};
-use crate::state::{Annotation, ContentModel, ContentNode, LineSemantics, PortalSemantics};
+use crate::state::{ContentModel, ContentNode, LineSemantics, PortalSemantics};
 
 pub use builder::{BuilderMode, OutputBuilder, SECTION_DIVIDER, SEPARATOR};
 pub use render::render_content;
@@ -138,7 +139,10 @@ fn format_portal_code_block(portal: &LoadedPortal) -> String {
         .lines
         .iter()
         .filter_map(|line| {
-            if matches!(line.semantics, LineSemantics::Portal(PortalSemantics::Content)) {
+            if matches!(
+                line.semantics,
+                LineSemantics::Portal(PortalSemantics::Content)
+            ) {
                 Some(line.content.as_str())
             } else {
                 None
@@ -367,7 +371,12 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
             if comment.is_empty() {
                 None
             } else {
-                Some(render_content(comment, &mut images, &mut figure_counter, mode))
+                Some(render_content(
+                    comment,
+                    &mut images,
+                    &mut figure_counter,
+                    mode,
+                ))
             }
         });
 
@@ -425,7 +434,7 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
         for (display_path, target) in &files_with_annotations {
             // Sort annotations within this file by start line
             let mut sorted_annotations: Vec<&Annotation> = target.annotations.values().collect();
-            sorted_annotations.sort_by_key(|a| a.start_line);
+            sorted_annotations.sort_by_key(|a| a.start_line());
 
             for ann in sorted_annotations {
                 if !first_block {
@@ -460,15 +469,27 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
         .map(|target| target.annotations.len())
         .sum();
 
-    let general_comment_count = if review.session_comment.as_ref()
+    let general_comment_count = if review
+        .session_comment
+        .as_ref()
         .map(|c| !c.is_empty())
-        .unwrap_or(false) { 1 } else { 0 };
+        .unwrap_or(false)
+    {
+        1
+    } else {
+        0
+    };
 
     let general_comment = review.session_comment.as_ref().and_then(|comment| {
         if comment.is_empty() {
             None
         } else {
-            Some(render_content(comment, &mut Vec::new(), &mut 0usize, OutputMode::Cli))
+            Some(render_content(
+                comment,
+                &mut Vec::new(),
+                &mut 0usize,
+                OutputMode::Cli,
+            ))
         }
     });
 
@@ -499,13 +520,15 @@ fn calculate_max_line(review: &Review) -> u32 {
         .files
         .values()
         .flat_map(|target| target.annotations.values())
-        .map(|a| a.end_line)
+        .map(|a| a.end_line())
         .max()
         .unwrap_or(0)
 }
 
 /// Collect files with annotations in display order.
-fn collect_files_with_annotations(review: &Review) -> Vec<(String, &crate::review::AnnotationTarget)> {
+fn collect_files_with_annotations(
+    review: &Review,
+) -> Vec<(String, &crate::review::AnnotationTarget)> {
     if let Some(diff_files) = review.root_view.diff_files() {
         // Diff mode: use DiffFileView for display paths, enumerate for index
         diff_files
@@ -540,9 +563,12 @@ fn collect_files_with_annotations(review: &Review) -> Vec<(String, &crate::revie
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::anchor::{Anchor, Endpoint};
     use crate::input::{CliSource, ContentSource};
-    use crate::state::{ContentMetadata, ContentModel, ExitMode, ExitModeSource, Line, LineRange, UserConfig};
-    use std::collections::HashMap;
+    use crate::output::snapshot_tests::ann;
+    use crate::source::Side;
+    use crate::state::{ContentMetadata, ContentModel, ExitMode, ExitModeSource, Line, UserConfig};
+    use indexmap::IndexMap;
     use std::path::PathBuf;
 
     fn make_line(number: u32, content: &str) -> Line {
@@ -557,7 +583,11 @@ mod tests {
         }
     }
 
-    fn make_review(label: &str, lines: Vec<Line>, annotations: HashMap<LineRange, Annotation>) -> Review {
+    fn make_review(
+        label: &str,
+        lines: Vec<Line>,
+        annotations: IndexMap<String, Annotation>,
+    ) -> Review {
         let source = ContentSource::Cli(CliSource::File {
             path: PathBuf::from(label),
         });
@@ -579,23 +609,21 @@ mod tests {
 
     #[test]
     fn empty_annotations_returns_empty_string() {
-        let review = make_review("test.rs", vec![], HashMap::new());
+        let review = make_review("test.rs", vec![], IndexMap::new());
         assert_eq!(format_output(&review, OutputMode::Cli).text, "");
     }
 
     #[test]
     fn single_line_annotation() {
-        let mut annotations = HashMap::new();
-        annotations.insert(
-            LineRange::new(5, 5),
-            Annotation {
-                start_line: 5,
-                end_line: 5,
-                content: vec![ContentNode::Text {
-                    text: "Fix this".to_string(),
-                }],
-            },
+        let mut annotations = IndexMap::new();
+        let (id, annotation) = ann(
+            5,
+            5,
+            vec![ContentNode::Text {
+                text: "Fix this".to_string(),
+            }],
         );
+        annotations.insert(id, annotation);
 
         let lines: Vec<Line> = (1..=10)
             .map(|n| make_line(n, &format!("line {}", n)))
@@ -612,17 +640,15 @@ mod tests {
 
     #[test]
     fn multi_line_annotation() {
-        let mut annotations = HashMap::new();
-        annotations.insert(
-            LineRange::new(10, 15),
-            Annotation {
-                start_line: 10,
-                end_line: 15,
-                content: vec![ContentNode::Text {
-                    text: "Review these lines".to_string(),
-                }],
-            },
+        let mut annotations = IndexMap::new();
+        let (id, annotation) = ann(
+            10,
+            15,
+            vec![ContentNode::Text {
+                text: "Review these lines".to_string(),
+            }],
         );
+        annotations.insert(id, annotation);
 
         let lines: Vec<Line> = (1..=20)
             .map(|n| make_line(n, &format!("line {}", n)))
@@ -642,27 +668,23 @@ mod tests {
 
     #[test]
     fn multiple_annotations_sorted_by_line() {
-        let mut annotations = HashMap::new();
-        annotations.insert(
-            LineRange::new(20, 20),
-            Annotation {
-                start_line: 20,
-                end_line: 20,
-                content: vec![ContentNode::Text {
-                    text: "Second".to_string(),
-                }],
-            },
+        let mut annotations = IndexMap::new();
+        let (id, annotation) = ann(
+            20,
+            20,
+            vec![ContentNode::Text {
+                text: "Second".to_string(),
+            }],
         );
-        annotations.insert(
-            LineRange::new(5, 5),
-            Annotation {
-                start_line: 5,
-                end_line: 5,
-                content: vec![ContentNode::Text {
-                    text: "First".to_string(),
-                }],
-            },
+        annotations.insert(id, annotation);
+        let (id, annotation) = ann(
+            5,
+            5,
+            vec![ContentNode::Text {
+                text: "First".to_string(),
+            }],
         );
+        annotations.insert(id, annotation);
 
         let lines: Vec<Line> = (1..=25)
             .map(|n| make_line(n, &format!("line {}", n)))
@@ -682,17 +704,15 @@ mod tests {
 
     #[test]
     fn context_line_excluded_when_empty() {
-        let mut annotations = HashMap::new();
-        annotations.insert(
-            LineRange::new(3, 3),
-            Annotation {
-                start_line: 3,
-                end_line: 3,
-                content: vec![ContentNode::Text {
-                    text: "Note".to_string(),
-                }],
-            },
+        let mut annotations = IndexMap::new();
+        let (id, annotation) = ann(
+            3,
+            3,
+            vec![ContentNode::Text {
+                text: "Note".to_string(),
+            }],
         );
+        annotations.insert(id, annotation);
 
         let lines = vec![
             make_line(1, "first"),
@@ -709,17 +729,15 @@ mod tests {
 
     #[test]
     fn multiline_content_properly_indented() {
-        let mut annotations = HashMap::new();
-        annotations.insert(
-            LineRange::new(5, 5),
-            Annotation {
-                start_line: 5,
-                end_line: 5,
-                content: vec![ContentNode::Text {
-                    text: "Line one\nLine two\nLine three".to_string(),
-                }],
-            },
+        let mut annotations = IndexMap::new();
+        let (id, annotation) = ann(
+            5,
+            5,
+            vec![ContentNode::Text {
+                text: "Line one\nLine two\nLine three".to_string(),
+            }],
         );
+        annotations.insert(id, annotation);
 
         let lines: Vec<Line> = (1..=10)
             .map(|n| make_line(n, &format!("line {}", n)))
@@ -783,17 +801,15 @@ mod tests {
             }],
         );
 
-        let mut annotations = HashMap::new();
-        annotations.insert(
-            LineRange::new(5, 5),
-            Annotation {
-                start_line: 5,
-                end_line: 5,
-                content: vec![ContentNode::Text {
-                    text: "Note".to_string(),
-                }],
-            },
+        let mut annotations = IndexMap::new();
+        let (id, annotation) = ann(
+            5,
+            5,
+            vec![ContentNode::Text {
+                text: "Note".to_string(),
+            }],
         );
+        annotations.insert(id, annotation);
 
         let lines: Vec<Line> = (1..=10)
             .map(|n| make_line(n, &format!("line {}", n)))
@@ -906,24 +922,22 @@ mod tests {
 
     #[test]
     fn legend_block_with_tags() {
-        let mut annotations = HashMap::new();
-        annotations.insert(
-            LineRange::new(5, 5),
-            Annotation {
-                start_line: 5,
-                end_line: 5,
-                content: vec![
-                    ContentNode::Tag {
-                        id: "sec001".to_string(),
-                        name: "SECURITY".to_string(),
-                        instruction: "Review for vulnerabilities".to_string(),
-                    },
-                    ContentNode::Text {
-                        text: " Use constant-time comparison".to_string(),
-                    },
-                ],
-            },
+        let mut annotations = IndexMap::new();
+        let (id, annotation) = ann(
+            5,
+            5,
+            vec![
+                ContentNode::Tag {
+                    id: "sec001".to_string(),
+                    name: "SECURITY".to_string(),
+                    instruction: "Review for vulnerabilities".to_string(),
+                },
+                ContentNode::Text {
+                    text: " Use constant-time comparison".to_string(),
+                },
+            ],
         );
+        annotations.insert(id, annotation);
 
         let lines: Vec<Line> = (1..=10)
             .map(|n| make_line(n, &format!("line {}", n)))
@@ -942,26 +956,24 @@ mod tests {
 
     #[test]
     fn tags_alphabetically_sorted() {
-        let mut annotations = HashMap::new();
-        annotations.insert(
-            LineRange::new(5, 5),
-            Annotation {
-                start_line: 5,
-                end_line: 5,
-                content: vec![
-                    ContentNode::Tag {
-                        id: "sec001".to_string(),
-                        name: "SECURITY".to_string(),
-                        instruction: "Security check".to_string(),
-                    },
-                    ContentNode::Tag {
-                        id: "bug001".to_string(),
-                        name: "BUG".to_string(),
-                        instruction: "Bug fix".to_string(),
-                    },
-                ],
-            },
+        let mut annotations = IndexMap::new();
+        let (id, annotation) = ann(
+            5,
+            5,
+            vec![
+                ContentNode::Tag {
+                    id: "sec001".to_string(),
+                    name: "SECURITY".to_string(),
+                    instruction: "Security check".to_string(),
+                },
+                ContentNode::Tag {
+                    id: "bug001".to_string(),
+                    name: "BUG".to_string(),
+                    instruction: "Bug fix".to_string(),
+                },
+            ],
         );
+        annotations.insert(id, annotation);
 
         let lines: Vec<Line> = (1..=10)
             .map(|n| make_line(n, &format!("line {}", n)))
@@ -978,31 +990,27 @@ mod tests {
 
     #[test]
     fn tag_deduplication_in_legend() {
-        let mut annotations = HashMap::new();
-        annotations.insert(
-            LineRange::new(5, 5),
-            Annotation {
-                start_line: 5,
-                end_line: 5,
-                content: vec![ContentNode::Tag {
-                    id: "sec001".to_string(),
-                    name: "SECURITY".to_string(),
-                    instruction: "Security check".to_string(),
-                }],
-            },
+        let mut annotations = IndexMap::new();
+        let (id, annotation) = ann(
+            5,
+            5,
+            vec![ContentNode::Tag {
+                id: "sec001".to_string(),
+                name: "SECURITY".to_string(),
+                instruction: "Security check".to_string(),
+            }],
         );
-        annotations.insert(
-            LineRange::new(10, 10),
-            Annotation {
-                start_line: 10,
-                end_line: 10,
-                content: vec![ContentNode::Tag {
-                    id: "sec001".to_string(),
-                    name: "SECURITY".to_string(),
-                    instruction: "Security check".to_string(),
-                }],
-            },
+        annotations.insert(id, annotation);
+        let (id, annotation) = ann(
+            10,
+            10,
+            vec![ContentNode::Tag {
+                id: "sec001".to_string(),
+                name: "SECURITY".to_string(),
+                instruction: "Security check".to_string(),
+            }],
         );
+        annotations.insert(id, annotation);
 
         let lines: Vec<Line> = (1..=15)
             .map(|n| make_line(n, &format!("line {}", n)))
@@ -1077,29 +1085,38 @@ mod tests {
 
         // Register the portal file as an annotation target
         let portal_key = FileKey::path("/path/to/portal.rs");
-        review.files.insert(portal_key.clone(), crate::review::AnnotationTarget::new());
+        review
+            .files
+            .insert(portal_key.clone(), crate::review::AnnotationTarget::new());
 
         // Add annotation on portal line 101 (which is at array index 6, not 100)
         let portal_target = review.files.get_mut(&portal_key).unwrap();
-        portal_target.annotations.insert(
-            LineRange::new(101, 101),
-            Annotation {
-                start_line: 101,
-                end_line: 101,
-                content: vec![ContentNode::Text {
-                    text: "Check this portal line".to_string(),
-                }],
-            },
+        let (id, annotation) = ann(
+            101,
+            101,
+            vec![ContentNode::Text {
+                text: "Check this portal line".to_string(),
+            }],
         );
+        portal_target.annotations.insert(id, annotation);
 
         let output = format_output(&review, OutputMode::Cli).text;
 
         // The output should contain the portal file path and line number
-        assert!(output.contains("/path/to/portal.rs:101"), "Should have portal file header");
+        assert!(
+            output.contains("/path/to/portal.rs:101"),
+            "Should have portal file header"
+        );
         // The output should contain the actual portal line content (found via find_line)
-        assert!(output.contains("portal code line 101"), "Should have portal line content");
+        assert!(
+            output.contains("portal code line 101"),
+            "Should have portal line content"
+        );
         // The annotation should be present
-        assert!(output.contains("Check this portal line"), "Should have annotation text");
+        assert!(
+            output.contains("Check this portal line"),
+            "Should have annotation text"
+        );
     }
 
     // ========== export_content tests ==========
@@ -1159,7 +1176,10 @@ mod tests {
             },
         ));
         lines.push(make_portal_line("fn hello() {", PortalSemantics::Content));
-        lines.push(make_portal_line("    println!(\"hi\");", PortalSemantics::Content));
+        lines.push(make_portal_line(
+            "    println!(\"hi\");",
+            PortalSemantics::Content,
+        ));
         lines.push(make_portal_line("}", PortalSemantics::Content));
         lines.push(make_portal_line("", PortalSemantics::Footer));
 
@@ -1201,8 +1221,14 @@ mod tests {
 
         // Should contain original markdown lines
         assert!(output.contains("# Title"), "Should have title");
-        assert!(output.contains("Check [code](src/lib.rs#L10-L12)"), "Should have portal link");
-        assert!(output.contains("More text"), "Should have text after portal");
+        assert!(
+            output.contains("Check [code](src/lib.rs#L10-L12)"),
+            "Should have portal link"
+        );
+        assert!(
+            output.contains("More text"),
+            "Should have text after portal"
+        );
 
         // Should contain portal comment and code fence
         assert!(
@@ -1210,7 +1236,10 @@ mod tests {
             "Should have portal comment"
         );
         assert!(output.contains("```rust"), "Should have rust code fence");
-        assert!(output.contains("fn hello() {"), "Should have portal code content");
+        assert!(
+            output.contains("fn hello() {"),
+            "Should have portal code content"
+        );
         assert!(output.contains("```\n"), "Should close code fence");
     }
 
@@ -1265,23 +1294,29 @@ mod tests {
         let output = export_content(&content);
 
         // Should NOT contain portal code block for empty portal
-        assert!(!output.contains("<!-- portal:"), "Should not have portal comment for empty portal");
-        assert!(!output.contains("```"), "Should not have code fence for empty portal");
+        assert!(
+            !output.contains("<!-- portal:"),
+            "Should not have portal comment for empty portal"
+        );
+        assert!(
+            !output.contains("```"),
+            "Should not have code fence for empty portal"
+        );
     }
 
     #[test]
     fn export_content_with_multiple_portals() {
-        let mut lines = vec![
-            make_line(1, "# Title"),
-            make_line(2, "[first](a.rs#L1-L2)"),
-        ];
+        let mut lines = vec![make_line(1, "# Title"), make_line(2, "[first](a.rs#L1-L2)")];
 
         // First portal lines
-        lines.push(make_portal_line("a.rs#L1-L2", PortalSemantics::Header {
-            label: "first".to_string(),
-            path: "a.rs".to_string(),
-            range: "L1-L2".to_string(),
-        }));
+        lines.push(make_portal_line(
+            "a.rs#L1-L2",
+            PortalSemantics::Header {
+                label: "first".to_string(),
+                path: "a.rs".to_string(),
+                range: "L1-L2".to_string(),
+            },
+        ));
         lines.push(make_portal_line("line1", PortalSemantics::Content));
         lines.push(make_portal_line("line2", PortalSemantics::Content));
         lines.push(make_portal_line("", PortalSemantics::Footer));
@@ -1289,11 +1324,14 @@ mod tests {
         lines.push(make_line(3, "[second](b.go#L5-L6)"));
 
         // Second portal lines
-        lines.push(make_portal_line("b.go#L5-L6", PortalSemantics::Header {
-            label: "second".to_string(),
-            path: "b.go".to_string(),
-            range: "L5-L6".to_string(),
-        }));
+        lines.push(make_portal_line(
+            "b.go#L5-L6",
+            PortalSemantics::Header {
+                label: "second".to_string(),
+                path: "b.go".to_string(),
+                range: "L5-L6".to_string(),
+            },
+        ));
         lines.push(make_portal_line("func main() {", PortalSemantics::Content));
         lines.push(make_portal_line("}", PortalSemantics::Content));
         lines.push(make_portal_line("", PortalSemantics::Footer));
@@ -1305,11 +1343,14 @@ mod tests {
             end_line: 2,
             insert_at: 2,
             lines: vec![
-                make_portal_line("a.rs#L1-L2", PortalSemantics::Header {
-                    label: "first".to_string(),
-                    path: "a.rs".to_string(),
-                    range: "L1-L2".to_string(),
-                }),
+                make_portal_line(
+                    "a.rs#L1-L2",
+                    PortalSemantics::Header {
+                        label: "first".to_string(),
+                        path: "a.rs".to_string(),
+                        range: "L1-L2".to_string(),
+                    },
+                ),
                 make_portal_line("line1", PortalSemantics::Content),
                 make_portal_line("line2", PortalSemantics::Content),
                 make_portal_line("", PortalSemantics::Footer),
@@ -1323,11 +1364,14 @@ mod tests {
             end_line: 6,
             insert_at: 3,
             lines: vec![
-                make_portal_line("b.go#L5-L6", PortalSemantics::Header {
-                    label: "second".to_string(),
-                    path: "b.go".to_string(),
-                    range: "L5-L6".to_string(),
-                }),
+                make_portal_line(
+                    "b.go#L5-L6",
+                    PortalSemantics::Header {
+                        label: "second".to_string(),
+                        path: "b.go".to_string(),
+                        range: "L5-L6".to_string(),
+                    },
+                ),
                 make_portal_line("func main() {", PortalSemantics::Content),
                 make_portal_line("}", PortalSemantics::Content),
                 make_portal_line("", PortalSemantics::Footer),
@@ -1349,8 +1393,14 @@ mod tests {
         // Both portals should be present with correct language hints
         assert!(output.contains("```rust"), "Should have rust code fence");
         assert!(output.contains("```go"), "Should have go code fence");
-        assert!(output.contains("<!-- portal: a.rs#L1-L2 -->"), "Should have first portal comment");
-        assert!(output.contains("<!-- portal: b.go#L5-L6 -->"), "Should have second portal comment");
+        assert!(
+            output.contains("<!-- portal: a.rs#L1-L2 -->"),
+            "Should have first portal comment"
+        );
+        assert!(
+            output.contains("<!-- portal: b.go#L5-L6 -->"),
+            "Should have second portal comment"
+        );
     }
 
     #[test]
@@ -1398,8 +1448,18 @@ mod tests {
 
         // Add annotation at line 3
         target.upsert_annotation(
-            3,
-            3,
+            "3".to_string(),
+            Anchor {
+                path: "file.rs".to_string(),
+                start: Endpoint {
+                    side: Side::New,
+                    line: 3,
+                },
+                end: Endpoint {
+                    side: Side::New,
+                    line: 3,
+                },
+            },
             vec![ContentNode::Text {
                 text: "Review this change".to_string(),
             }],
@@ -1458,8 +1518,18 @@ mod tests {
 
         // Add annotation at line 2
         target.upsert_annotation(
-            2,
-            2,
+            "2".to_string(),
+            Anchor {
+                path: "file.rs".to_string(),
+                start: Endpoint {
+                    side: Side::New,
+                    line: 2,
+                },
+                end: Endpoint {
+                    side: Side::New,
+                    line: 2,
+                },
+            },
             vec![ContentNode::Text {
                 text: "This was removed".to_string(),
             }],
@@ -1505,8 +1575,18 @@ mod tests {
 
         // Add annotation at line 1
         target.upsert_annotation(
-            1,
-            1,
+            "1".to_string(),
+            Anchor {
+                path: "file.rs".to_string(),
+                start: Endpoint {
+                    side: Side::New,
+                    line: 1,
+                },
+                end: Endpoint {
+                    side: Side::New,
+                    line: 1,
+                },
+            },
             vec![ContentNode::Text {
                 text: "Check function signature".to_string(),
             }],
@@ -1526,7 +1606,7 @@ mod tests {
 
     #[test]
     fn saved_to_only_produces_output() {
-        let mut review = make_review("test.rs", vec![], HashMap::new());
+        let mut review = make_review("test.rs", vec![], IndexMap::new());
         review.saved_to = Some(PathBuf::from("/tmp/saved-file.md"));
 
         let output = format_output(&review, OutputMode::Cli).text;
@@ -1536,17 +1616,15 @@ mod tests {
 
     #[test]
     fn saved_to_with_annotations() {
-        let mut annotations = HashMap::new();
-        annotations.insert(
-            LineRange::new(5, 5),
-            Annotation {
-                start_line: 5,
-                end_line: 5,
-                content: vec![ContentNode::Text {
-                    text: "Fix this".to_string(),
-                }],
-            },
+        let mut annotations = IndexMap::new();
+        let (id, annotation) = ann(
+            5,
+            5,
+            vec![ContentNode::Text {
+                text: "Fix this".to_string(),
+            }],
         );
+        annotations.insert(id, annotation);
 
         let lines: Vec<Line> = (1..=10)
             .map(|n| make_line(n, &format!("line {}", n)))
@@ -1558,7 +1636,10 @@ mod tests {
         let output = format_output(&review, OutputMode::Cli).text;
 
         // Should have annotation content
-        assert!(output.contains("test.rs:5"), "Should have annotation header");
+        assert!(
+            output.contains("test.rs:5"),
+            "Should have annotation header"
+        );
         assert!(output.contains("Fix this"), "Should have annotation text");
         // Should end with saved_to line
         assert!(
@@ -1589,7 +1670,10 @@ mod tests {
         let output = format_output(&review, OutputMode::Cli).text;
 
         assert!(output.contains("GENERAL:"), "Should have GENERAL block");
-        assert!(output.contains("Overall looks good"), "Should have session comment");
+        assert!(
+            output.contains("Overall looks good"),
+            "Should have session comment"
+        );
         assert!(
             output.ends_with("Saved to /tmp/review.md\n"),
             "Should end with saved_to. Got:\n{}",
@@ -1617,7 +1701,10 @@ mod tests {
 
         let output = format_output(&review, OutputMode::Cli).text;
 
-        assert!(!output.contains("Saved to"), "Should not have saved_to line");
+        assert!(
+            !output.contains("Saved to"),
+            "Should not have saved_to line"
+        );
     }
 
     #[test]
@@ -1666,19 +1753,23 @@ mod tests {
 
     #[test]
     fn command_exit_mode_includes_path_and_content() {
-        use tempfile::TempDir;
         use std::fs;
+        use tempfile::TempDir;
 
         // Create a temp command file
         let temp = TempDir::new().unwrap();
         let cmd_path = temp.path().join("test-cmd.md");
-        fs::write(&cmd_path, r#"---
+        fs::write(
+            &cmd_path,
+            r#"---
 description: "Test command"
 ---
 ## Instructions
 
 Do something useful.
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let source = ContentSource::Cli(CliSource::File {
             path: PathBuf::from("test.rs"),
@@ -1691,7 +1782,9 @@ Do something useful.
                 color: "#8b5cf6".to_string(),
                 instruction: "Test command".to_string(),
                 order: 0,
-                source: crate::state::ExitModeSource::Command { path: cmd_path.clone() },
+                source: crate::state::ExitModeSource::Command {
+                    path: cmd_path.clone(),
+                },
             }],
         );
         let content = ContentModel {
@@ -1707,13 +1800,25 @@ Do something useful.
         let output = format_output(&review, OutputMode::Cli).text;
 
         // Should include NEXT with exit mode name and instruction
-        assert!(output.contains("NEXT: /test-cmd — Test command"), "Should have NEXT header");
+        assert!(
+            output.contains("NEXT: /test-cmd — Test command"),
+            "Should have NEXT header"
+        );
         // Should include the command path
         assert!(output.contains("Command:"), "Should have Command: line");
-        assert!(output.contains("test-cmd.md"), "Should include command file name");
+        assert!(
+            output.contains("test-cmd.md"),
+            "Should include command file name"
+        );
         // Should include the command content
-        assert!(output.contains("## Instructions"), "Should include command content heading");
-        assert!(output.contains("Do something useful"), "Should include command content body");
+        assert!(
+            output.contains("## Instructions"),
+            "Should include command content heading"
+        );
+        assert!(
+            output.contains("Do something useful"),
+            "Should include command content body"
+        );
         // Should have separator lines
         assert!(output.contains(SEPARATOR), "Should have content separators");
     }
@@ -1747,8 +1852,17 @@ Do something useful.
         let output = format_output(&review, OutputMode::Cli).text;
 
         // Should have NEXT but NOT command-specific content
-        assert!(output.contains("NEXT: Apply — Apply changes"), "Should have NEXT");
-        assert!(!output.contains("Command:"), "Should NOT have Command: line for regular exit mode");
-        assert!(!output.contains(SEPARATOR), "Should NOT have content separators");
+        assert!(
+            output.contains("NEXT: Apply — Apply changes"),
+            "Should have NEXT"
+        );
+        assert!(
+            !output.contains("Command:"),
+            "Should NOT have Command: line for regular exit mode"
+        );
+        assert!(
+            !output.contains(SEPARATOR),
+            "Should NOT have content separators"
+        );
     }
 }

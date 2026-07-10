@@ -17,10 +17,14 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
+use indexmap::IndexMap;
 use serde::Serialize;
 
+use crate::anchor::{Anchor, Annotation};
 use crate::output::FormatResult;
-use crate::state::{Annotation, ContentMetadata, ContentModel, ContentNode, ContentResponse, FileMetadata, LineRange, UserConfig};
+use crate::state::{
+    ContentMetadata, ContentModel, ContentNode, ContentResponse, FileMetadata, UserConfig,
+};
 
 /// Key for annotation targets in Review.files.
 /// Distinguishes real file paths from ephemeral/synthetic content.
@@ -48,7 +52,9 @@ impl FileKey {
 
     /// Create a key for ephemeral content.
     pub fn ephemeral(label: impl Into<String>) -> Self {
-        FileKey::Ephemeral { label: label.into() }
+        FileKey::Ephemeral {
+            label: label.into(),
+        }
     }
 
     /// Get the routing path string for this key.
@@ -111,8 +117,8 @@ pub struct Review {
 /// Contains annotations and file-specific metadata, but NOT content.
 /// Content lives in `View` (the root_view field on Review).
 pub struct AnnotationTarget {
-    /// Annotations keyed by normalized line range.
-    pub annotations: HashMap<LineRange, Annotation>,
+    /// Annotations keyed by id, in insertion order.
+    pub annotations: IndexMap<String, Annotation>,
     /// File-specific metadata (language, etc.).
     pub metadata: FileMetadata,
 }
@@ -121,7 +127,7 @@ impl AnnotationTarget {
     /// Create an empty annotation target.
     pub fn new() -> Self {
         Self {
-            annotations: HashMap::new(),
+            annotations: IndexMap::new(),
             metadata: FileMetadata::default(),
         }
     }
@@ -388,20 +394,28 @@ impl Review {
     /// Get the annotation target for a single-file window with detailed errors.
     /// For diff windows, use resolve_target_mut() which accepts explicit file_index.
     pub fn target_for_window(&self, window_label: &str) -> Result<&AnnotationTarget, String> {
-        let view = self.windows.get(window_label)
+        let view = self
+            .windows
+            .get(window_label)
             .ok_or_else(|| format!("Unknown window: {}", window_label))?;
         match view {
-            WindowView::File { key } => {
-                self.files.get(key).ok_or_else(|| "Target not loaded".into())
+            WindowView::File { key } => self
+                .files
+                .get(key)
+                .ok_or_else(|| "Target not loaded".into()),
+            WindowView::Diff { .. } => {
+                Err("Diff window: use resolve_target_mut with file_index".into())
             }
-            WindowView::Diff { .. } => Err("Diff window: use resolve_target_mut with file_index".into()),
             _ => Err("Window type does not have a single target".into()),
         }
     }
 
     /// Get mutable annotation target for a single-file window.
     /// Returns None for diff/mermaid windows — use resolve_target_mut() for commands.
-    pub fn get_target_for_window_mut(&mut self, window_label: &str) -> Option<&mut AnnotationTarget> {
+    pub fn get_target_for_window_mut(
+        &mut self,
+        window_label: &str,
+    ) -> Option<&mut AnnotationTarget> {
         let view = self.windows.get(window_label)?;
         match view {
             WindowView::File { key } => {
@@ -488,22 +502,25 @@ impl Review {
 }
 
 impl AnnotationTarget {
-    /// Insert or update an annotation.
-    pub fn upsert_annotation(&mut self, start_line: u32, end_line: u32, content: Vec<ContentNode>) {
-        let key = LineRange::new(start_line, end_line);
+    /// Insert or update an annotation by id. An anchor can only be claimed by
+    /// one id at a time — upserting a new id at an anchor already held by a
+    /// different id displaces the old one.
+    pub fn upsert_annotation(&mut self, id: String, anchor: Anchor, content: Vec<ContentNode>) {
+        self.annotations
+            .retain(|existing_id, ann| *existing_id == id || ann.anchor != anchor);
         self.annotations.insert(
-            key,
+            id.clone(),
             Annotation {
-                start_line: key.start,
-                end_line: key.end,
+                id,
+                anchor,
                 content,
             },
         );
     }
 
-    /// Delete an annotation by range.
-    pub fn delete_annotation(&mut self, start_line: u32, end_line: u32) {
-        self.annotations.remove(&LineRange::new(start_line, end_line));
+    /// Delete an annotation by id.
+    pub fn delete_annotation(&mut self, id: &str) {
+        self.annotations.shift_remove(id);
     }
 }
 
@@ -516,3 +533,56 @@ impl ContentModel {
 
 /// Type alias for the managed state.
 pub type ActiveReview = parking_lot::Mutex<Option<Review>>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::anchor::Endpoint;
+    use crate::source::Side;
+
+    fn anchor(line: u32) -> Anchor {
+        Anchor {
+            path: "test.rs".to_string(),
+            start: Endpoint {
+                side: Side::New,
+                line,
+            },
+            end: Endpoint {
+                side: Side::New,
+                line,
+            },
+        }
+    }
+
+    #[test]
+    fn upserting_a_new_id_at_an_existing_anchor_displaces_the_old_one() {
+        let mut target = AnnotationTarget::new();
+        target.upsert_annotation("a".to_string(), anchor(5), vec![]);
+        target.upsert_annotation("b".to_string(), anchor(5), vec![]);
+
+        assert_eq!(target.annotations.len(), 1);
+        assert!(target.annotations.contains_key("b"));
+        assert!(!target.annotations.contains_key("a"));
+    }
+
+    #[test]
+    fn upserting_the_same_id_at_a_new_anchor_moves_it_without_displacing_others() {
+        let mut target = AnnotationTarget::new();
+        target.upsert_annotation("a".to_string(), anchor(5), vec![]);
+        target.upsert_annotation("b".to_string(), anchor(10), vec![]);
+        target.upsert_annotation("a".to_string(), anchor(20), vec![]);
+
+        assert_eq!(target.annotations.len(), 2);
+        assert_eq!(target.annotations["a"].anchor.start.line, 20);
+        assert_eq!(target.annotations["b"].anchor.start.line, 10);
+    }
+
+    #[test]
+    fn delete_annotation_removes_by_id() {
+        let mut target = AnnotationTarget::new();
+        target.upsert_annotation("a".to_string(), anchor(5), vec![]);
+        target.delete_annotation("a");
+
+        assert!(target.annotations.is_empty());
+    }
+}

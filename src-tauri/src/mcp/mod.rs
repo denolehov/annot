@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{CallToolResult, Content, ServerInfo, ServerCapabilities};
+use rmcp::model::{CallToolResult, Content, ServerCapabilities, ServerInfo};
 use rmcp::{tool, tool_handler, tool_router, ErrorData as McpError, ServerHandler, ServiceExt};
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 
@@ -17,9 +17,7 @@ use crate::review::{ActiveReview, Review};
 use crate::state::AppState;
 use crate::window_state::{self, WindowType};
 use crate::SessionLock;
-use tools::{
-    ReviewContentInput, ReviewDiffInput, ReviewFileInput, SessionImage, SessionOutput,
-};
+use tools::{ReviewContentInput, ReviewDiffInput, ReviewFileInput, SessionImage, SessionOutput};
 
 /// Instructions for AI agents using the MCP server.
 const MCP_INSTRUCTIONS: &str = r#"Human-in-the-loop annotation for AI workflows. Pull the human into the loop to provide located, specific feedback on content.
@@ -71,7 +69,9 @@ impl AnnotServer {
         Self { app_handle }
     }
 
-    #[tool(description = "Opens a file for human review and annotation. Blocks until the window closes. The user can select line ranges to annotate, apply semantic tags (like [# SECURITY], [# TODO]), and add freeform comments. Returns line-anchored annotations with tags for systematic processing.")]
+    #[tool(
+        description = "Opens a file for human review and annotation. Blocks until the window closes. The user can select line ranges to annotate, apply semantic tags (like [# SECURITY], [# TODO]), and add freeform comments. Returns line-anchored annotations with tags for systematic processing."
+    )]
     async fn review_file(
         &self,
         params: Parameters<ReviewFileInput>,
@@ -79,17 +79,17 @@ impl AnnotServer {
         let app_handle = self.app_handle.clone();
         let input = params.0;
 
-        let output = tokio::task::spawn_blocking(move || {
-            run_file_session(&app_handle, input)
-        })
-        .await
-        .map_err(|e| McpError::internal_error(format!("Task join error: {}", e), None))?
-        .map_err(|e| McpError::internal_error(e, None))?;
+        let output = tokio::task::spawn_blocking(move || run_file_session(&app_handle, input))
+            .await
+            .map_err(|e| McpError::internal_error(format!("Task join error: {}", e), None))?
+            .map_err(|e| McpError::internal_error(e, None))?;
 
         Ok(build_mcp_response(output))
     }
 
-    #[tool(description = "Opens agent-generated content (plans, drafts, analysis) for human review. Blocks until the window closes. Best for content you've generated that needs human steering before proceeding. Supports portal links to embed live code (`[label](path#L1-L20)`), highlights (`==important==`), and Mermaid diagrams. Returns line-anchored annotations for iterative refinement.")]
+    #[tool(
+        description = "Opens agent-generated content (plans, drafts, analysis) for human review. Blocks until the window closes. Best for content you've generated that needs human steering before proceeding. Supports portal links to embed live code (`[label](path#L1-L20)`), highlights (`==important==`), and Mermaid diagrams. Returns line-anchored annotations for iterative refinement."
+    )]
     async fn review_content(
         &self,
         params: Parameters<ReviewContentInput>,
@@ -97,17 +97,17 @@ impl AnnotServer {
         let app_handle = self.app_handle.clone();
         let input = params.0;
 
-        let output = tokio::task::spawn_blocking(move || {
-            run_content_session(&app_handle, input)
-        })
-        .await
-        .map_err(|e| McpError::internal_error(format!("Task join error: {}", e), None))?
-        .map_err(|e| McpError::internal_error(e, None))?;
+        let output = tokio::task::spawn_blocking(move || run_content_session(&app_handle, input))
+            .await
+            .map_err(|e| McpError::internal_error(format!("Task join error: {}", e), None))?
+            .map_err(|e| McpError::internal_error(e, None))?;
 
         Ok(build_mcp_response(output))
     }
 
-    #[tool(description = "Opens a diff for human review. Blocks until the window closes. `target` selects what to diff: working_tree (default; staged + unstaged + untracked vs HEAD), staged, or a range {from, to, merge_base}. Optional `pathspecs` limit files. Or pass raw diff_content. Returns annotations anchored to diff lines for targeted feedback on changes.")]
+    #[tool(
+        description = "Opens a diff for human review. Blocks until the window closes. `target` selects what to diff: working_tree (default; staged + unstaged + untracked vs HEAD), staged, or a range {from, to, merge_base}. Optional `pathspecs` limit files. Or pass raw diff_content. Returns annotations anchored to diff lines for targeted feedback on changes."
+    )]
     async fn review_diff(
         &self,
         params: Parameters<ReviewDiffInput>,
@@ -115,12 +115,10 @@ impl AnnotServer {
         let app_handle = self.app_handle.clone();
         let input = params.0;
 
-        let output = tokio::task::spawn_blocking(move || {
-            run_diff_session(&app_handle, input)
-        })
-        .await
-        .map_err(|e| McpError::internal_error(format!("Task join error: {}", e), None))?
-        .map_err(|e| McpError::internal_error(e, None))?;
+        let output = tokio::task::spawn_blocking(move || run_diff_session(&app_handle, input))
+            .await
+            .map_err(|e| McpError::internal_error(format!("Task join error: {}", e), None))?
+            .map_err(|e| McpError::internal_error(e, None))?;
 
         Ok(build_mcp_response(output))
     }
@@ -135,7 +133,10 @@ impl ServerHandler for AnnotServer {
 }
 
 /// Run a file review session.
-fn run_file_session(app_handle: &AppHandle, params: ReviewFileInput) -> Result<SessionOutput, String> {
+fn run_file_session(
+    app_handle: &AppHandle,
+    params: ReviewFileInput,
+) -> Result<SessionOutput, String> {
     // Read file content
     let path = Path::new(&params.file_path);
     let content = fs::read_to_string(path)
@@ -157,7 +158,12 @@ fn run_content_session(
         label: params.label,
     });
 
-    run_session(app_handle, params.content, params.exit_modes, content_source)
+    run_session(
+        app_handle,
+        params.content,
+        params.exit_modes,
+        content_source,
+    )
 }
 
 /// Run a diff review session.
@@ -364,7 +370,9 @@ fn run_session_with_state(
     });
 
     // Block until result received
-    let result = rx.recv().map_err(|e| format!("Failed to receive result: {}", e))?;
+    let result = rx
+        .recv()
+        .map_err(|e| format!("Failed to receive result: {}", e))?;
 
     // Hide dock icon after window closes
     #[cfg(target_os = "macos")]
@@ -375,11 +383,15 @@ fn run_session_with_state(
 
     Ok(SessionOutput {
         text: result.text,
-        images: result.images.into_iter().map(|img| SessionImage {
-            figure: img.figure,
-            data: img.data,
-            mime_type: img.mime_type,
-        }).collect(),
+        images: result
+            .images
+            .into_iter()
+            .map(|img| SessionImage {
+                figure: img.figure,
+                data: img.data,
+                mime_type: img.mime_type,
+            })
+            .collect(),
     })
 }
 

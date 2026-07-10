@@ -104,7 +104,9 @@ fn main() {
 
     // Parse CLI exit modes and prepend as transient
     if !cli.exit_modes.is_empty() {
-        let default_colors = ["#22c55e", "#eab308", "#ef4444", "#3b82f6", "#a855f7", "#f97316"];
+        let default_colors = [
+            "#22c55e", "#eab308", "#ef4444", "#3b82f6", "#a855f7", "#f97316",
+        ];
         let transient_modes: Vec<annot_lib::state::ExitMode> = cli
             .exit_modes
             .iter()

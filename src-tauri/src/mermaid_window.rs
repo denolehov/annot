@@ -96,15 +96,11 @@ pub async fn open_mermaid_window(
     // Note: We don't use .parent() because macOS child windows can't be
     // dragged to other displays. Instead, mermaid windows are independent.
     let builder = {
-        let b = WebviewWindowBuilder::new(
-            &app,
-            &label,
-            tauri::WebviewUrl::App("mermaid".into()),
-        )
-        .title(format!("{}:{}-{}", filename, start_line, end_line))
-        .inner_size(600.0, 500.0)
-        .min_inner_size(300.0, 200.0)
-        .visible(false);
+        let b = WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("mermaid".into()))
+            .title(format!("{}:{}-{}", filename, start_line, end_line))
+            .inner_size(600.0, 500.0)
+            .min_inner_size(300.0, 200.0)
+            .visible(false);
         #[cfg(target_os = "macos")]
         let b = b
             .title_bar_style(tauri::TitleBarStyle::Overlay)

@@ -18,8 +18,8 @@ use std::path::PathBuf;
 
 use crate::diff;
 use crate::error::AnnotError;
-use crate::review::FileKey;
 use crate::markdown;
+use crate::review::FileKey;
 
 /// How the content should be rendered/processed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,14 +99,10 @@ impl ContentSource {
     pub fn label(&self) -> &str {
         match self {
             ContentSource::Cli(CliSource::File { path })
-            | ContentSource::Mcp(McpSource::File { path }) => path
-                .to_str()
-                .unwrap_or("file"),
+            | ContentSource::Mcp(McpSource::File { path }) => path.to_str().unwrap_or("file"),
             ContentSource::Cli(CliSource::Stdin { label })
             | ContentSource::Mcp(McpSource::Content { label }) => label,
-            ContentSource::Mcp(McpSource::Diff { label, .. }) => {
-                label.as_deref().unwrap_or("diff")
-            }
+            ContentSource::Mcp(McpSource::Diff { label, .. }) => label.as_deref().unwrap_or("diff"),
         }
     }
 
@@ -128,11 +124,10 @@ impl ContentSource {
     pub fn base_dir(&self) -> PathBuf {
         match self {
             ContentSource::Cli(CliSource::File { path })
-            | ContentSource::Mcp(McpSource::File { path }) => {
-                path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| {
-                    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-                })
-            }
+            | ContentSource::Mcp(McpSource::File { path }) => path
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))),
             _ => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
         }
     }
@@ -234,7 +229,10 @@ impl InputMode {
     ///
     /// Returns the input mode and optionally a warning message.
     /// File argument takes priority over stdin when both are present.
-    pub fn detect(file: Option<PathBuf>, label: String) -> Result<(InputMode, Option<String>), AnnotError> {
+    pub fn detect(
+        file: Option<PathBuf>,
+        label: String,
+    ) -> Result<(InputMode, Option<String>), AnnotError> {
         let has_stdin = !io::stdin().is_terminal();
 
         if let Some(path) = file {
@@ -248,7 +246,8 @@ impl InputMode {
             Ok((InputMode::Stdin { label }, None))
         } else {
             Err(AnnotError::Validation(
-                "no input provided\nUsage: annot <file> or <command> | annot\nTry: annot --help".into(),
+                "no input provided\nUsage: annot <file> or <command> | annot\nTry: annot --help"
+                    .into(),
             ))
         }
     }
@@ -264,13 +263,19 @@ mod tests {
         let file_path = dir.path().join("test.rs");
         std::fs::write(&file_path, "fn main() {}").unwrap();
 
-        let mode = InputMode::File { path: file_path.clone() };
+        let mode = InputMode::File {
+            path: file_path.clone(),
+        };
         let resolved = mode.resolve().unwrap();
 
         // Label is full path (matches LineOrigin.path for consistency)
         assert_eq!(resolved.content_source.label(), file_path.to_str().unwrap());
         assert_eq!(resolved.content, "fn main() {}");
-        assert!(resolved.content_source.path_hint().unwrap().ends_with("test.rs"));
+        assert!(resolved
+            .content_source
+            .path_hint()
+            .unwrap()
+            .ends_with("test.rs"));
     }
 
     #[test]
@@ -293,7 +298,9 @@ mod tests {
         std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
         std::fs::write(&file_path, "package main").unwrap();
 
-        let mode = InputMode::File { path: file_path.clone() };
+        let mode = InputMode::File {
+            path: file_path.clone(),
+        };
         let resolved = mode.resolve().unwrap();
 
         // Label is full path (matches LineOrigin.path for consistency)

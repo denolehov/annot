@@ -64,11 +64,11 @@ impl FileCache {
         let root_path = Path::new(root);
 
         let walker = WalkBuilder::new(root_path)
-            .hidden(true)           // Skip hidden files
-            .git_ignore(true)       // Respect .gitignore
-            .git_global(true)       // Respect global gitignore
-            .git_exclude(true)      // Respect .git/info/exclude
-            .max_depth(Some(15))    // Reasonable depth limit
+            .hidden(true) // Skip hidden files
+            .git_ignore(true) // Respect .gitignore
+            .git_global(true) // Respect global gitignore
+            .git_exclude(true) // Respect .git/info/exclude
+            .max_depth(Some(15)) // Reasonable depth limit
             .build();
 
         self.files = walker
@@ -102,13 +102,20 @@ fn is_excluded_file(path: &str) -> bool {
     let name = path.rsplit('/').next().unwrap_or(path);
 
     // Exclude lock files, build artifacts, etc.
-    matches!(name,
-        "package-lock.json" | "yarn.lock" | "pnpm-lock.yaml" |
-        "Cargo.lock" | "go.sum" | "poetry.lock" | "composer.lock" |
-        ".DS_Store" | "Thumbs.db"
+    matches!(
+        name,
+        "package-lock.json"
+            | "yarn.lock"
+            | "pnpm-lock.yaml"
+            | "Cargo.lock"
+            | "go.sum"
+            | "poetry.lock"
+            | "composer.lock"
+            | ".DS_Store"
+            | "Thumbs.db"
     ) || name.ends_with(".min.js")
-      || name.ends_with(".min.css")
-      || name.ends_with(".map")
+        || name.ends_with(".min.css")
+        || name.ends_with(".map")
 }
 
 /// Fuzzy filter files with filename-first ranking.
@@ -192,8 +199,8 @@ mod tests {
         // When query matches filename directly, it should rank higher
         // than matching only in the path
         let files = vec![
-            "src/types/utils.ts".to_string(),  // "types" only in path
-            "types.ts".to_string(),             // "types" in filename
+            "src/types/utils.ts".to_string(), // "types" only in path
+            "types.ts".to_string(),           // "types" in filename
         ];
         let result = fuzzy_filter(&files, "types", 10);
         // Filename match (2x boost) should beat path-only match

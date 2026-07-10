@@ -173,11 +173,17 @@ mod tests {
         let p = dir.path();
         let oid = |rev_path: &str| BlobRef::Oid(git(p, &["rev-parse", rev_path]));
         let mut oids = HashMap::new();
-        oids.insert(("modified.txt".into(), Side::Old), oid("HEAD~1:modified.txt"));
+        oids.insert(
+            ("modified.txt".into(), Side::Old),
+            oid("HEAD~1:modified.txt"),
+        );
         oids.insert(("modified.txt".into(), Side::New), oid("HEAD:modified.txt"));
         oids.insert(("deleted.txt".into(), Side::Old), oid("HEAD~1:deleted.txt"));
         oids.insert(("added.txt".into(), Side::New), oid("HEAD:added.txt"));
-        oids.insert(("old_name.txt".into(), Side::Old), oid("HEAD~1:old_name.txt"));
+        oids.insert(
+            ("old_name.txt".into(), Side::Old),
+            oid("HEAD~1:old_name.txt"),
+        );
         oids.insert(("new_name.txt".into(), Side::New), oid("HEAD:new_name.txt"));
         oids.insert(("big.txt".into(), Side::Old), oid("HEAD~1:big.txt"));
         oids.insert(("bin.dat".into(), Side::Old), oid("HEAD~1:bin.dat"));
@@ -209,7 +215,10 @@ mod tests {
         let src = source(&dir);
 
         assert!(text(&src, "added.txt", Side::Old).is_none());
-        assert_eq!(text(&src, "added.txt", Side::New).as_deref(), Some("fresh\n"));
+        assert_eq!(
+            text(&src, "added.txt", Side::New).as_deref(),
+            Some("fresh\n")
+        );
 
         assert_eq!(
             text(&src, "deleted.txt", Side::Old).as_deref(),

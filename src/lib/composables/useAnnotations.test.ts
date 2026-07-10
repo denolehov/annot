@@ -49,9 +49,13 @@ describe('useAnnotations', () => {
 
     await state.flush();
     expect(invoke).toHaveBeenCalledWith('upsert_annotation', {
+      id: expect.any(String),
       path: '/test/file.ts',
-      startLine: 5,
-      endLine: 10,
+      anchor: {
+        path: '/test/file.ts',
+        start: { side: 'new', line: 5 },
+        end: { side: 'new', line: 10 },
+      },
       content: expect.any(Array),
     });
   });
@@ -72,7 +76,13 @@ describe('useAnnotations', () => {
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(invoke).toHaveBeenCalledWith(
       'upsert_annotation',
-      expect.objectContaining({ startLine: 5, endLine: 10 })
+      expect.objectContaining({
+        anchor: {
+          path: '/test/file.ts',
+          start: { side: 'new', line: 5 },
+          end: { side: 'new', line: 10 },
+        },
+      })
     );
   });
 
@@ -91,9 +101,25 @@ describe('useAnnotations', () => {
     await state.flush();
     expect(invoke).toHaveBeenCalledWith('delete_annotation', {
       path: '/test/file.ts',
-      startLine: 5,
-      endLine: 10,
+      id: expect.any(String),
     });
+  });
+
+  it('reuses the same id across edits to the same annotation', async () => {
+    const state = useAnnotations({ getLines });
+    const content1 = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'First' }] }] };
+    const content2 = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Second' }] }] };
+
+    await state.upsert({ start: 5, end: 10 }, content1);
+    await state.flush();
+    const firstId = (invoke as ReturnType<typeof vi.fn>).mock.calls[0][1].id;
+
+    await state.upsert({ start: 5, end: 10 }, content2);
+    await state.flush();
+    const secondId = (invoke as ReturnType<typeof vi.fn>).mock.calls[1][1].id;
+
+    expect(secondId).toBe(firstId);
+    expect(state.annotations['5-10'].id).toBe(firstId);
   });
 
   it('deletes annotation when content is empty', async () => {

@@ -5,8 +5,9 @@
 
 use std::collections::BTreeMap;
 
+use crate::anchor::Annotation;
 use crate::mcp::tools::SessionImage;
-use crate::state::{Annotation, ContentMetadata, ContentModel, LineOrigin};
+use crate::state::{ContentMetadata, ContentModel, LineOrigin};
 
 use super::builder::{BuilderMode, OutputBuilder};
 use super::render::render_content;
@@ -34,22 +35,30 @@ pub fn format_annotation(
     // File header
     if is_diff {
         format_diff_header(out, content_model, ann, file_path);
-    } else if ann.start_line == ann.end_line {
-        out.raw_line(&format!("{}:{}", file_path, ann.start_line));
+    } else if ann.start_line() == ann.end_line() {
+        out.raw_line(&format!("{}:{}", file_path, ann.start_line()));
     } else {
         out.raw_line(&format!(
             "{}:{}-{}",
-            file_path, ann.start_line, ann.end_line
+            file_path,
+            ann.start_line(),
+            ann.end_line()
         ));
     }
 
     // Context line (1 line before, if exists and non-empty)
-    if ann.start_line > 1 {
-        let context_line_num = ann.start_line - 1;
+    if ann.start_line() > 1 {
+        let context_line_num = ann.start_line() - 1;
         if let Some(line) = content_model.find_line(file_path, context_line_num) {
             if !line.content.trim().is_empty() {
                 if is_diff {
-                    format_diff_context_line(out, content_model, file_path, context_line_num, &line.content);
+                    format_diff_context_line(
+                        out,
+                        content_model,
+                        file_path,
+                        context_line_num,
+                        &line.content,
+                    );
                 } else {
                     out.code_line(context_line_num, &line.content);
                 }
@@ -58,7 +67,7 @@ pub fn format_annotation(
     }
 
     // Selected lines
-    for line_num in ann.start_line..=ann.end_line {
+    for line_num in ann.start_line()..=ann.end_line() {
         if let Some(line) = content_model.find_line(file_path, line_num) {
             if is_diff {
                 format_diff_selected_line(out, content_model, file_path, line_num, &line.content);
@@ -91,9 +100,12 @@ fn format_diff_header(
     let mut old_lines: Vec<u32> = Vec::new();
     let mut new_lines: Vec<u32> = Vec::new();
 
-    for line_num in ann.start_line..=ann.end_line {
+    for line_num in ann.start_line()..=ann.end_line() {
         if let Some(line) = content.find_line(file_path, line_num) {
-            if let LineOrigin::Diff { old_line, new_line, .. } = &line.origin {
+            if let LineOrigin::Diff {
+                old_line, new_line, ..
+            } = &line.origin
+            {
                 if let Some(old) = old_line {
                     old_lines.push(*old);
                 }
@@ -164,7 +176,10 @@ fn extract_diff_line_nums(
     content_model
         .find_line(file_path, line_num)
         .and_then(|line| {
-            if let LineOrigin::Diff { old_line, new_line, .. } = &line.origin {
+            if let LineOrigin::Diff {
+                old_line, new_line, ..
+            } = &line.origin
+            {
                 Some((*old_line, *new_line))
             } else {
                 None
@@ -174,10 +189,7 @@ fn extract_diff_line_nums(
 }
 
 /// Calculate the BuilderMode from annotations.
-pub fn calculate_builder_mode(
-    content: &ContentModel,
-    max_line: u32,
-) -> BuilderMode {
+pub fn calculate_builder_mode(content: &ContentModel, max_line: u32) -> BuilderMode {
     let is_diff = matches!(content.metadata, ContentMetadata::Diff(_));
     let line_num_width = max_line.to_string().len();
 
