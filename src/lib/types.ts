@@ -30,6 +30,7 @@ export type MarkdownSemantics =
 export type DiffSemantics =
   | { kind: 'file_header' }
   | { kind: 'hunk_header'; context: string | null }
+  | { kind: 'meta' }
   | { kind: 'added' }
   | { kind: 'deleted' }
   | { kind: 'context' };

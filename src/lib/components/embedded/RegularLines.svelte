@@ -5,7 +5,7 @@
    * Handles regular markdown lines, diff lines, and their annotations.
    * Uses LineRow for shared line-rendering logic and adds search highlighting via codeWrapper.
    */
-  import type { Line, SectionInfo } from '$lib/types';
+  import type { SectionInfo } from '$lib/types';
   import { getLineNumber, getDiffKind } from '$lib/line-utils';
   import { highlightMatches, clearHighlights } from '$lib/search-highlight';
   import { injectColorSwatches, clearColorSwatches } from '$lib/color-preview';
@@ -13,12 +13,10 @@
   import CopyButton from '$lib/components/CopyButton.svelte';
   import AnnotationSlot, { type AnnotationSlotProps } from '$lib/components/AnnotationSlot.svelte';
   import LineRow from './LineRow.svelte';
+  import FileHeaderRow from './FileHeaderRow.svelte';
   import { getAnnotContext } from '$lib/context';
-
-  interface DisplayLine {
-    line: Line;
-    displayIndex: number;
-  }
+  import { groupByFile } from '$lib/file-collapse';
+  import type { DisplayLine } from '$lib/composables/useLineSegments.svelte';
 
   interface Props {
     lines: DisplayLine[];
@@ -35,6 +33,10 @@
   // Convenience derived values
   const markdownMetadata = $derived(ctx.markdownMetadata);
   const searchMatches = $derived(ctx.search.matches);
+
+  // Diff mode: group lines into per-file sections for collapse + sticky headers.
+  // Null for non-diff content — the flat render path below stays untouched.
+  const grouped = $derived(groupByFile(lines, ctx.fileEntries));
 
   // Map of display indices to code element refs for search highlighting
   let codeRefs: Map<number, HTMLElement> = new Map();
@@ -101,7 +103,7 @@
   });
 </script>
 
-{#each lines as { line, displayIndex }}
+{#snippet row({ line, displayIndex }: DisplayLine)}
   {@const sourceLineNum = getLineNumber(line)}
   {@const diffKind = getDiffKind(line)}
   {@const mermaidBlock = sourceLineNum !== null ? ctx.mermaid.getMermaidBlockAt(sourceLineNum) : null}
@@ -159,7 +161,33 @@
   </LineRow>
   {@const rangeKey = ctx.getRangeKeyForLine(displayIndex)}
   <AnnotationSlot {rangeKey} {...annotationSlotProps} />
-{/each}
+{/snippet}
+
+{#if grouped}
+  {#each grouped.leading as dl (dl.displayIndex)}
+    {@render row(dl)}
+  {/each}
+  {#each grouped.sections as section (section.entry.index)}
+    {@const collapsed = ctx.fileCollapse.isCollapsed(section.entry.index)}
+    <section class="file-section">
+      <FileHeaderRow
+        entry={section.entry}
+        displayIndex={section.header.displayIndex}
+        {collapsed}
+        onToggle={() => ctx.fileCollapse.toggle(section.entry.index)}
+      />
+      {#if !collapsed}
+        {#each section.body as dl (dl.displayIndex)}
+          {@render row(dl)}
+        {/each}
+      {/if}
+    </section>
+  {/each}
+{:else}
+  {#each lines as dl (dl.displayIndex)}
+    {@render row(dl)}
+  {/each}
+{/if}
 
 <style>
   /* Mermaid button - extends .line-action */

@@ -2,7 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen, emit } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo, ConfigSnapshot } from "$lib/types";
   import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, isHorizontalRule } from "$lib/line-utils";
   import { rangeToKey, keyToRange, isLineInRange, validateRange, type Range } from "$lib/range";
@@ -21,6 +21,8 @@
   import FileTree from "$lib/components/FileTree.svelte";
   import { deriveFileEntries } from "$lib/file-tree";
   import { useFileTree } from "$lib/composables/useFileTree.svelte";
+  import { useFileCollapse } from "$lib/composables/useFileCollapse.svelte";
+  import { fileContaining } from "$lib/file-collapse";
   import { useExitModes } from "$lib/composables/useExitModes.svelte";
   import { useContentTracking } from "$lib/composables/useContentTracking.svelte";
   import { useInteraction } from "$lib/composables/useInteraction.svelte";
@@ -133,11 +135,25 @@
     const rect = contentEl.getBoundingClientRect();
     const x = rect.left + 12;
     let lineEl: HTMLElement | null = null;
+    let headerEl: HTMLElement | null = null;
     // Probe a few rows down to clear separators / inter-segment gaps at the top edge.
     for (let dy = 1; dy <= 48 && !lineEl; dy += 8) {
-      const el = document.elementFromPoint(x, rect.top + dy);
-      lineEl = (el?.closest('[data-display-idx]') as HTMLElement | null) ?? null;
+      // Pierce the whole stack: a stuck sticky file header is the topmost element
+      // for its entire file's scroll extent — reading it would freeze tracking on
+      // the file's first hunk. Prefer the covered line row underneath; fall back
+      // to the header only when no row is beneath (i.e. we're at the file start).
+      for (const el of document.elementsFromPoint(x, rect.top + dy)) {
+        const row = el.closest('[data-display-idx]') as HTMLElement | null;
+        if (!row) continue;
+        if (row.classList.contains('file-header-line')) {
+          headerEl ??= row;
+        } else {
+          lineEl = row;
+          break;
+        }
+      }
     }
+    lineEl ??= headerEl;
     if (!lineEl) return;
 
     const displayIdx = parseInt(lineEl.dataset.displayIdx ?? '1', 10);
@@ -179,6 +195,23 @@
     constrainToBounds: selectionBounds.constrainToSelectionBounds,
   });
 
+  // Per-file collapse (composable) — diff mode only
+  const fileCollapse = useFileCollapse(() => fileEntries, {
+    // Spec says "move selection to the header row", but header rows are not
+    // selectable — clear instead (GitHub behavior).
+    onCollapse: (entry) => {
+      const r = interaction.range;
+      if (r && r.end >= entry.startLine && r.start <= entry.endLine) {
+        if (interaction.phase === 'editing') interaction.closeEditor();
+        interaction.clearSelection();
+      }
+      const h = interaction.hoverLine;
+      if (h !== null && h > entry.startLine && h <= entry.endLine) {
+        interaction.handleLineLeave();
+      }
+    },
+  });
+
   // Annotation state (composable)
   const annotationState = useAnnotations({
     getLines: () => lines,
@@ -198,15 +231,26 @@
   const lineSegmentation = useLineSegments(() => lines);
 
   // Search (composable)
-  function scrollToDisplayIndex(displayIndex: number, block: ScrollLogicalPosition = 'center') {
-    contentEl
-      ?.querySelector(`[data-display-idx="${displayIndex}"]`)
-      ?.scrollIntoView({ block });
+  async function scrollToDisplayIndex(displayIndex: number, block: ScrollLogicalPosition = 'center') {
+    // Jumps into a collapsed file expand it first (GitHub behavior); the header
+    // row itself is always rendered, so it never triggers an expand.
+    const entry = fileContaining(fileEntries, displayIndex);
+    if (entry && displayIndex > entry.startLine && fileCollapse.isCollapsed(entry.index)) {
+      fileCollapse.expand(entry.index);
+      await tick();
+    }
+    const target =
+      contentEl?.querySelector(`[data-display-idx="${displayIndex}"]`) ??
+      // Meta lines are never rendered — land on their file's header instead.
+      (entry ? contentEl?.querySelector(`[data-display-idx="${entry.startLine}"]`) : null);
+    target?.scrollIntoView({ block });
   }
 
   // File jumps land the file header at the top of the viewport. Centering it would
   // leave the *previous* file at the top, which is what current-file tracking reads.
   function jumpToFile(startLine: number) {
+    const entry = fileEntries.find((e) => e.startLine === startLine);
+    if (entry) fileCollapse.expand(entry.index);
     scrollToDisplayIndex(startLine, 'start');
   }
   const search = useSearch(() => lines, scrollToDisplayIndex);
@@ -635,6 +679,7 @@
       // Build content trackers for scroll tracking
       if (res.metadata.type === 'diff') {
         contentTracking.initializeDiff(res.metadata);
+        fileCollapse.init();
       }
       if (res.metadata.type === 'markdown') {
         contentTracking.initializeMarkdown(res.metadata);
@@ -733,9 +778,11 @@
     {tags}
     {allowsImagePaste}
     {contentZoom}
+    {fileEntries}
     interaction={interaction}
     annotations={annotationState}
     exitModes={exitModeState}
+    {fileCollapse}
     {search}
     {mermaid}
     {showToast}

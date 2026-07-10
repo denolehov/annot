@@ -9,12 +9,17 @@ use crate::error::AnnotError;
 
 /// Line type in a diff.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum DiffLineKind {
     Context,
     Added,
     Deleted,
-    Header,
+    /// The `diff --git` line — exactly one per file.
+    FileHeader,
+    /// An `@@` hunk header line.
+    HunkHeader,
+    /// Non-content plumbing: index, ---/+++, mode, rename, Binary files.
+    Meta,
 }
 
 /// Metadata for a hunk within a file.
@@ -158,7 +163,7 @@ pub fn parse_diff(content: &str) -> Result<DiffMetadata, AnnotError> {
                 f.start_line = line_num;
             }
             in_hunk = false;
-            (DiffLineKind::Header, None, None)
+            (DiffLineKind::FileHeader, None, None)
         } else if line_content.starts_with("index ")
             || line_content.starts_with("--- ")
             || line_content.starts_with("+++ ")
@@ -171,7 +176,7 @@ pub fn parse_diff(content: &str) -> Result<DiffMetadata, AnnotError> {
             || line_content.starts_with("rename to")
             || line_content.starts_with("Binary files")
         {
-            (DiffLineKind::Header, None, None)
+            (DiffLineKind::Meta, None, None)
         } else if line_content.starts_with("@@ ") {
             // Hunk header - parse line numbers and function context
             in_hunk = true;
@@ -183,7 +188,7 @@ pub fn parse_diff(content: &str) -> Result<DiffMetadata, AnnotError> {
                     f.hunks.push(hunk_info);
                 }
             }
-            (DiffLineKind::Header, None, None)
+            (DiffLineKind::HunkHeader, None, None)
         } else if in_hunk {
             // Inside a hunk - determine line type
             if line_content.starts_with('+') {
@@ -209,8 +214,8 @@ pub fn parse_diff(content: &str) -> Result<DiffMetadata, AnnotError> {
                 (DiffLineKind::Context, Some(old_num), Some(new_num))
             }
         } else {
-            // Outside hunk - treat as header
-            (DiffLineKind::Header, None, None)
+            // Outside hunk - unrecognized plumbing
+            (DiffLineKind::Meta, None, None)
         };
 
         metadata.lines.insert(
@@ -472,6 +477,26 @@ index abcdef..0000000
     }
 
     #[test]
+    fn parse_multi_file_diff_one_file_header_per_file() {
+        let meta = parse_diff(MULTI_FILE_DIFF).unwrap();
+
+        // Exactly one FileHeader per file, sitting on its start_line
+        for file in &meta.files {
+            let headers: Vec<_> = meta
+                .lines
+                .iter()
+                .filter(|(line_num, info)| {
+                    info.kind == DiffLineKind::FileHeader
+                        && **line_num >= file.start_line
+                        && **line_num <= file.end_line
+                })
+                .collect();
+            assert_eq!(headers.len(), 1, "one diff --git line per file");
+            assert_eq!(*headers[0].0, file.start_line);
+        }
+    }
+
+    #[test]
     fn parse_multi_file_diff_tracks_file_index() {
         let meta = parse_diff(MULTI_FILE_DIFF).unwrap();
 
@@ -515,13 +540,25 @@ index abcdef..0000000
 
         assert_eq!(meta.files.len(), 1);
 
-        // Should have 5 header lines: diff --git, ---, +++, @@ (hunk1), @@ (hunk2)
-        let headers: Vec<_> = meta
+        // diff --git → FileHeader; --- and +++ → Meta; the two @@ → HunkHeader
+        let file_headers = meta
             .lines
-            .iter()
-            .filter(|(_, info)| info.kind == DiffLineKind::Header)
-            .collect();
-        assert_eq!(headers.len(), 5, "Should have 5 header lines (3 file headers + 2 hunk headers)");
+            .values()
+            .filter(|info| info.kind == DiffLineKind::FileHeader)
+            .count();
+        let hunk_headers = meta
+            .lines
+            .values()
+            .filter(|info| info.kind == DiffLineKind::HunkHeader)
+            .count();
+        let meta_lines = meta
+            .lines
+            .values()
+            .filter(|info| info.kind == DiffLineKind::Meta)
+            .count();
+        assert_eq!(file_headers, 1, "Exactly one diff --git line");
+        assert_eq!(hunk_headers, 2, "One per @@ hunk");
+        assert_eq!(meta_lines, 2, "--- and +++ lines");
 
         // First hunk changes line 2, second hunk changes line 11
         let deleted: Vec<_> = meta
@@ -583,8 +620,14 @@ index abcdef..0000000
         let json = serde_json::to_string(&DiffLineKind::Context).unwrap();
         assert_eq!(json, "\"context\"");
 
-        let json = serde_json::to_string(&DiffLineKind::Header).unwrap();
-        assert_eq!(json, "\"header\"");
+        let json = serde_json::to_string(&DiffLineKind::FileHeader).unwrap();
+        assert_eq!(json, "\"file_header\"");
+
+        let json = serde_json::to_string(&DiffLineKind::HunkHeader).unwrap();
+        assert_eq!(json, "\"hunk_header\"");
+
+        let json = serde_json::to_string(&DiffLineKind::Meta).unwrap();
+        assert_eq!(json, "\"meta\"");
     }
 
     #[test]

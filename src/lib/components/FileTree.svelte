@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { FileEntry } from '$lib/file-tree';
+  import { diffTotals, type FileEntry } from '$lib/file-tree';
 
   interface Props {
     entries: FileEntry[];
@@ -9,8 +9,7 @@
 
   let { entries, currentIndex, onJump }: Props = $props();
 
-  let totalAdded = $derived(entries.reduce((sum, e) => sum + e.added, 0));
-  let totalDeleted = $derived(entries.reduce((sum, e) => sum + e.deleted, 0));
+  let totals = $derived(diffTotals(entries));
 
   function jump(e: MouseEvent, entry: FileEntry) {
     onJump(entry.startLine);
@@ -23,8 +22,8 @@
   <div class="file-tree-summary">
     <span>{entries.length} {entries.length === 1 ? 'file' : 'files'} changed</span>
     <span class="file-tree-counts">
-      <span class="added">+{totalAdded}</span>
-      <span class="deleted">−{totalDeleted}</span>
+      <span class="added">+{totals.added}</span>
+      <span class="deleted">−{totals.deleted}</span>
     </span>
   </div>
   <ul class="file-tree-list">

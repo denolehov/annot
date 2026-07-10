@@ -59,6 +59,9 @@ export function useSearch(
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
+      // Diff meta lines (index, ---/+++, mode changes) are never rendered —
+      // a match there would be a dead jump.
+      if (line.semantics.type === 'diff' && line.semantics.kind === 'meta') continue;
       // Search rendered text to match DOM text node offsets
       const textLower = getRenderedText(line).toLowerCase();
       const ranges: Array<{ start: number; end: number }> = [];

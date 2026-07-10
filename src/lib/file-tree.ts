@@ -15,6 +15,16 @@ export interface FileEntry {
   deleted: number;
   /** Display index of the file header row */
   startLine: number;
+  /** Display index of the file's last row */
+  endLine: number;
+}
+
+/** Sum added/deleted counts across entries. */
+export function diffTotals(entries: FileEntry[]): { added: number; deleted: number } {
+  return {
+    added: entries.reduce((sum, e) => sum + e.added, 0),
+    deleted: entries.reduce((sum, e) => sum + e.deleted, 0),
+  };
 }
 
 /**
@@ -42,6 +52,7 @@ export function deriveFileEntries(lines: Line[], meta: DiffMetadata | null): Fil
       added: kinds.filter((k) => k === 'added').length,
       deleted: kinds.filter((k) => k === 'deleted').length,
       startLine: file.start_line,
+      endLine: file.end_line,
     };
   });
 }

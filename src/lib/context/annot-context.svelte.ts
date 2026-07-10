@@ -6,6 +6,8 @@ import type { useAnnotations } from '$lib/composables/useAnnotations.svelte';
 import type { useExitModes } from '$lib/composables/useExitModes.svelte';
 import type { useSearch } from '$lib/composables/useSearch.svelte';
 import type { useMermaid } from '$lib/composables/useMermaid.svelte';
+import type { FileCollapse } from '$lib/composables/useFileCollapse.svelte';
+import type { FileEntry } from '$lib/file-tree';
 
 /**
  * AnnotContext - Shared state and utilities for annot components.
@@ -20,6 +22,7 @@ export interface AnnotContext {
   exitModes: ReturnType<typeof useExitModes>;
   search: ReturnType<typeof useSearch>;
   mermaid: ReturnType<typeof useMermaid>;
+  fileCollapse: FileCollapse;
 
   // Derived values (computed once in provider)
   readonly selection: Range | null;
@@ -35,6 +38,8 @@ export interface AnnotContext {
   readonly allowsImagePaste: boolean;
   readonly markdownMetadata: MarkdownMetadata | null;
   readonly contentZoom: number;
+  /** Changed files in a diff; [] for non-diff content. */
+  readonly fileEntries: FileEntry[];
 
   // Utilities
   showToast: (message: string, duration?: number) => void;
