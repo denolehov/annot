@@ -65,7 +65,14 @@ export function isLineInRange(displayIdx: number, range: Range): boolean {
 export function validateRange(
   range: Range,
   lines: Line[]
-): { path: string; startLine: number; endLine: number; startSide: 'old' | 'new'; endSide: 'old' | 'new' } | null {
+): {
+  kind: 'source' | 'diff';
+  path: string;
+  startLine: number;
+  endLine: number;
+  startSide: 'old' | 'new';
+  endSide: 'old' | 'new';
+} | null {
   const min = Math.min(range.start, range.end);
   const max = Math.max(range.start, range.end);
 
@@ -111,6 +118,7 @@ export function validateRange(
   const [lo, hi] = endPoint.line < startPoint.line ? [endPoint, startPoint] : [startPoint, endPoint];
 
   return {
+    kind: startLine.origin.type === 'diff' ? 'diff' : 'source',
     path,
     startLine: lo.line,
     endLine: hi.line,

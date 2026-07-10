@@ -102,6 +102,7 @@ describe('validateRange', () => {
 
     const coords = validateRange({ start: 1, end: 3 }, lines);
     expect(coords).toEqual({
+      kind: 'source',
       path: 'test.rs',
       startLine: 10,
       endLine: 12,
@@ -119,6 +120,7 @@ describe('validateRange', () => {
 
     const coords = validateRange({ start: 1, end: 3 }, lines);
     expect(coords).toEqual({
+      kind: 'diff',
       path: 'file.rs',
       startLine: 5,
       endLine: 7,
@@ -169,6 +171,7 @@ describe('validateRange', () => {
 
     const coords = validateRange({ start: 1, end: 4 }, lines);
     expect(coords).toEqual({
+      kind: 'diff',
       path: 'output.rs',
       startLine: 124,
       endLine: 126,
@@ -185,6 +188,7 @@ describe('validateRange', () => {
 
     const coords = validateRange({ start: 1, end: 2 }, lines);
     expect(coords).toEqual({
+      kind: 'diff',
       path: 'output.rs',
       startLine: 122,
       endLine: 123,
@@ -213,6 +217,7 @@ describe('validateRange', () => {
 
     const coords = validateRange({ start: 1, end: 2 }, lines);
     expect(coords).toEqual({
+      kind: 'source',
       path: 'test.rs',
       startLine: 14,
       endLine: 15,

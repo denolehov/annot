@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 use crate::source::Side;
 use crate::state::ContentNode;
 
-/// One endpoint of an anchor: which side of a diff, and the 1-indexed source line.
+/// One endpoint of a diff anchor: which side of the diff, and the 1-indexed
+/// source line on that side.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Endpoint {
     pub side: Side,
@@ -16,12 +17,35 @@ pub struct Endpoint {
 }
 
 /// A position in a file. `start == end` for single-line annotations.
-/// File/content/markdown modes use `side: Side::New` everywhere.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Anchor {
-    pub path: String,
-    pub start: Endpoint,
-    pub end: Endpoint,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Anchor {
+    /// File/content/markdown modes: plain line coordinates. Sides only exist
+    /// where a diff does.
+    Source { path: String, start: u32, end: u32 },
+    /// Diff mode: each endpoint carries its side; mixed sides span a deletion
+    /// and its added replacement.
+    Diff {
+        path: String,
+        start: Endpoint,
+        end: Endpoint,
+    },
+}
+
+impl Anchor {
+    pub fn start_line(&self) -> u32 {
+        match self {
+            Anchor::Source { start, .. } => *start,
+            Anchor::Diff { start, .. } => start.line,
+        }
+    }
+
+    pub fn end_line(&self) -> u32 {
+        match self {
+            Anchor::Source { end, .. } => *end,
+            Anchor::Diff { end, .. } => end.line,
+        }
+    }
 }
 
 /// An annotation: a stable id plus the (mutable) anchor and content it carries.
@@ -34,11 +58,11 @@ pub struct Annotation {
 
 impl Annotation {
     pub fn start_line(&self) -> u32 {
-        self.anchor.start.line
+        self.anchor.start_line()
     }
 
     pub fn end_line(&self) -> u32 {
-        self.anchor.end.line
+        self.anchor.end_line()
     }
 }
 
@@ -48,7 +72,7 @@ mod tests {
 
     #[test]
     fn mixed_side_anchor_round_trips_through_serde() {
-        let anchor = Anchor {
+        let anchor = Anchor::Diff {
             path: "test.rs".to_string(),
             start: Endpoint {
                 side: Side::Old,
@@ -64,7 +88,28 @@ mod tests {
         let round_tripped: Anchor = serde_json::from_str(&json).unwrap();
 
         assert_eq!(anchor, round_tripped);
-        assert_eq!(round_tripped.start.side, Side::Old);
-        assert_eq!(round_tripped.end.side, Side::New);
+        let Anchor::Diff { start, end, .. } = round_tripped else {
+            panic!("variant changed in round trip");
+        };
+        assert_eq!(start.side, Side::Old);
+        assert_eq!(end.side, Side::New);
+    }
+
+    #[test]
+    fn source_anchor_wire_shape_is_tagged_and_sideless() {
+        let anchor = Anchor::Source {
+            path: "notes.md".to_string(),
+            start: 3,
+            end: 7,
+        };
+
+        let json = serde_json::to_value(&anchor).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({ "type": "source", "path": "notes.md", "start": 3, "end": 7 })
+        );
+
+        let round_tripped: Anchor = serde_json::from_value(json).unwrap();
+        assert_eq!(anchor, round_tripped);
     }
 }

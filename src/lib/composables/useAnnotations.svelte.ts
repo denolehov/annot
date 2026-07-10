@@ -16,11 +16,10 @@ interface Endpoint {
   line: number;
 }
 
-interface Anchor {
-  path: string;
-  start: Endpoint;
-  end: Endpoint;
-}
+/** Mirrors the backend `Anchor` enum: sides only exist where a diff does. */
+type Anchor =
+  | { type: 'source'; path: string; start: number; end: number }
+  | { type: 'diff'; path: string; start: Endpoint; end: Endpoint };
 
 export interface UseAnnotationsOptions {
   /** Lines array for validating ranges and resolving paths */
@@ -149,11 +148,15 @@ export function useAnnotations(options: UseAnnotationsOptions) {
       } else {
         annotations[key] = { id, range: normalizedRange, content };
       }
-      const anchor: Anchor = {
-        path: coords.path,
-        start: { side: coords.startSide, line: coords.startLine },
-        end: { side: coords.endSide, line: coords.endLine }
-      };
+      const anchor: Anchor =
+        coords.kind === 'diff'
+          ? {
+              type: 'diff',
+              path: coords.path,
+              start: { side: coords.startSide, line: coords.startLine },
+              end: { side: coords.endSide, line: coords.endLine }
+            }
+          : { type: 'source', path: coords.path, start: coords.startLine, end: coords.endLine };
       pending.set(key, {
         op: 'upsert',
         id,
