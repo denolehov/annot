@@ -244,14 +244,30 @@
       contentEl?.querySelector(`[data-display-idx="${displayIndex}"]`) ??
       // Meta lines are never rendered — land on their file's header instead.
       (entry ? contentEl?.querySelector(`[data-display-idx="${entry.startLine}"]`) : null);
-    target?.scrollIntoView({ block });
+    if (!target || !contentEl) return;
+    if (block === 'start') {
+      // Native scrollIntoView misjudges targets that are `position: sticky`
+      // (file header rows) against their sticky siblings, especially when
+      // jumping backward — compute the delta ourselves instead.
+      const delta = target.getBoundingClientRect().top - contentEl.getBoundingClientRect().top;
+      contentEl.scrollTop += delta;
+    } else {
+      target.scrollIntoView({ block });
+    }
   }
 
   // File jumps land the file header at the top of the viewport. Centering it would
   // leave the *previous* file at the top, which is what current-file tracking reads.
-  function jumpToFile(startLine: number) {
+  async function jumpToFile(startLine: number) {
     const entry = fileEntries.find((e) => e.startLine === startLine);
-    if (entry) fileCollapse.expand(entry.index);
+    if (entry && fileCollapse.isCollapsed(entry.index)) {
+      fileCollapse.expand(entry.index);
+      await tick();
+    }
+    // Set current-file tracking directly rather than waiting on the scroll-driven
+    // hit-test to re-derive it — expanding a collapsed file churns the DOM right as
+    // we scroll, which can race that heuristic onto stale state.
+    contentTracking.updateFromLine(startLine);
     scrollToDisplayIndex(startLine, 'start');
   }
   const search = useSearch(() => lines, scrollToDisplayIndex);
