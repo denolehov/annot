@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.14.0](https://github.com/denolehov/annot/compare/v0.13.1...v0.14.0) (2026-07-10)
+
+
+### Features
+
+* **diff:** file tree sidebar + palette fuzzy-jump ([#86](https://github.com/denolehov/annot/issues/86)) ([bf07f1d](https://github.com/denolehov/annot/commit/bf07f1d1a3fb88694e372cb0d1b086228702e43b))
+* **diff:** per-file collapse with sticky headers + changeset summary ([#88](https://github.com/denolehov/annot/issues/88)) ([7a60c25](https://github.com/denolehov/annot/commit/7a60c25bdf48d3ecf42a73ecbde7bff52bc2892d))
+* **sidebar:** make filetree pane resizable via paneforge ([fddef9f](https://github.com/denolehov/annot/commit/fddef9f8fe19eb4aeeb64f50712c71257cb3498e))
+
+
+### Bug Fixes
+
+* **diff:** accept annotation ranges spanning removed and added lines ([dad0c9b](https://github.com/denolehov/annot/commit/dad0c9bd8ba79663da77993a19314e4df31391e5))
+* **diff:** fix file-tree jump-to-file scroll and highlight tracking ([ca85b92](https://github.com/denolehov/annot/commit/ca85b922554359dd532ca80659734132212d882d))
+* **sidebar:** truncate the changed-files summary label like paths ([7a72bf8](https://github.com/denolehov/annot/commit/7a72bf8e2490bee38bff23772e8d756505a8ae34))
+
 ## [0.13.1](https://github.com/denolehov/annot/compare/v0.13.0...v0.13.1) (2026-06-22)
 
 
