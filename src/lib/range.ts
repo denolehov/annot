@@ -90,8 +90,13 @@ export function validateRange(
     // All lines must have line numbers (non-virtual)
     if (lineNum === null) return null;
 
-    // Check for line number discontinuity (gap > 1 indicates portal boundary)
-    if (prevLineNum !== null && Math.abs(lineNum - prevLineNum) > 1) {
+    // Check for line number discontinuity (gap > 1 indicates portal boundary).
+    // Skip for diff lines: removed lines number in old-file coordinates while
+    // added/context lines use new-file coordinates, so adjacent rows in a hunk
+    // legitimately jump (e.g. context new=124, removed old=123, added new=125).
+    // Diffs have no portals; hunk/file boundaries are already rejected above
+    // because their header lines have no line numbers.
+    if (line.origin.type !== 'diff' && prevLineNum !== null && Math.abs(lineNum - prevLineNum) > 1) {
       return null;
     }
     prevLineNum = lineNum;

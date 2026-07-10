@@ -153,6 +153,24 @@ describe('validateRange', () => {
     expect(coords).toBeNull();
   });
 
+  it('accepts diff ranges mixing removed and added lines', () => {
+    // Real hunk shape: removed lines carry old-file numbers, added/context
+    // lines carry new-file numbers, so consecutive rows "jump" numerically.
+    const lines: Line[] = [
+      makeLine({ type: 'diff', path: 'output.rs', old_line: 122, new_line: 124 }), // context
+      makeLine({ type: 'diff', path: 'output.rs', old_line: 123, new_line: null }), // removed
+      makeLine({ type: 'diff', path: 'output.rs', old_line: null, new_line: 125 }), // added
+      makeLine({ type: 'diff', path: 'output.rs', old_line: null, new_line: 126 }), // added
+    ];
+
+    const coords = validateRange({ start: 1, end: 4 }, lines);
+    expect(coords).toEqual({
+      path: 'output.rs',
+      startLine: 124,
+      endLine: 126,
+    });
+  });
+
   it('returns null when line numbers have gap > 1', () => {
     const lines: Line[] = [
       makeLine({ type: 'source', path: 'test.rs', line: 10 }),
