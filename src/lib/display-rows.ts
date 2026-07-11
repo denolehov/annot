@@ -136,7 +136,7 @@ export function deriveDisplay(docs: DiffDocument[]): DiffDisplay {
       added,
       deleted,
       headerDisplayIndex,
-      endDisplayIndex: rows[rows.length - 1].displayIndex,
+      endDisplayIndex: pos,
       hunks: hunkViews,
     });
   });

@@ -919,7 +919,7 @@
       >
       {#if diffDisplay}
         <!-- Diff mode: RegularLines renders the walk; there are no flat lines. -->
-        <RegularLines lines={[]} {annotationSlotProps} />
+        <RegularLines {annotationSlotProps} />
       {:else}
       {#each lineSegmentation.segments as segment}
         {#if segment.type === 'portal'}

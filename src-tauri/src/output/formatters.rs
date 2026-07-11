@@ -132,8 +132,8 @@ fn format_diff_block(out: &mut OutputBuilder, doc: &DiffDocument, ann: &Annotati
 
 /// A row's emit form: the `+`/`-`/` ` sign — derived from the line-number
 /// pattern — re-prepended to the raw content. Byte-identical to what the
-/// flattened wire used to carry.
-fn prefixed(row: &Row) -> String {
+/// flattened wire used to carry. Shared with the patch-shaped content export.
+pub(super) fn prefixed(row: &Row) -> String {
     let prefix = match (row.old_line, row.new_line) {
         (Some(_), Some(_)) => ' ',
         (Some(_), None) => '-',

@@ -64,18 +64,8 @@ fn render_file(
     highlighter: &Highlighter,
     context: u32,
 ) -> Result<DiffDocument, AnnotError> {
-    // Display identity: new name wins (old for deleted files) — mirrors
-    // parse_diff. `old_path` only when the name actually changed.
-    let display_path = entry
-        .new_path
-        .as_ref()
-        .or(entry.old_path.as_ref())
-        .cloned()
-        .unwrap_or_default();
-    let old_path = match (&entry.old_path, &entry.new_path) {
-        (Some(old), Some(new)) if old != new => Some(old.clone()),
-        _ => None,
-    };
+    let (display_path, old_path) =
+        crate::diff::display_identity(entry.old_path.as_deref(), entry.new_path.as_deref());
     let language = crate::diff::language_for(entry.new_path.as_deref(), entry.old_path.as_deref());
 
     // A side the entry says exists but yields no text is binary/oversize/

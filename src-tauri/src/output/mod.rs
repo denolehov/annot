@@ -75,8 +75,13 @@ pub fn format_json(result: &FormatResult) -> String {
 ///
 /// When content contains portal links (e.g., `[label](file.rs#L10-L20)`),
 /// the exported text includes the portal content as fenced code blocks
-/// immediately after the source line containing the link.
+/// immediately after the source line containing the link. Diff content
+/// exports as patch-shaped text synthesized from the documents.
 pub fn export_content(content: &ContentModel) -> String {
+    if let crate::state::ContentView::Diff { documents } = &content.view {
+        return export_diff(documents);
+    }
+
     // If no portals, just join all lines
     if content.portals.is_empty() {
         return content
@@ -130,6 +135,49 @@ pub fn export_content(content: &ContentModel) -> String {
     }
 
     result
+}
+
+/// Patch-shaped text for a diff view — clipboard copy and save. Headers and
+/// `+`/`-` signs are presentation synthesized at this edge, like the
+/// annotation emit; ranges arrive in git-printed convention and read off
+/// verbatim.
+fn export_diff(documents: &[crate::state::DiffDocument]) -> String {
+    let side = |sign: char, range: &std::ops::Range<u32>| {
+        let count = range.end - range.start;
+        if count == 1 {
+            format!("{sign}{}", range.start)
+        } else {
+            format!("{sign}{},{count}", range.start)
+        }
+    };
+
+    documents
+        .iter()
+        .flat_map(|doc| {
+            let a = doc.old_path.as_deref().unwrap_or(&doc.path);
+            let header = format!("diff --git a/{a} b/{}", doc.path);
+            let binary = doc
+                .unavailable
+                .then(|| format!("Binary files a/{a} and b/{} differ", doc.path));
+
+            std::iter::once(header)
+                .chain(binary)
+                .chain(doc.hunks.iter().flat_map(|hunk| {
+                    let marker = format!(
+                        "@@ {} {} @@",
+                        side('-', &hunk.old_range),
+                        side('+', &hunk.new_range)
+                    );
+                    let header = match hunk.function_context.as_deref() {
+                        Some(ctx) => format!("{marker} {ctx}"),
+                        None => marker,
+                    };
+                    std::iter::once(header).chain(hunk.rows.iter().map(formatters::prefixed))
+                }))
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Format a portal as a fenced code block with language hint.
@@ -1170,6 +1218,26 @@ mod tests {
 
         let output = export_content(&content);
         assert_eq!(output, "# Title\nSome text\nMore text");
+    }
+
+    #[test]
+    fn export_content_reconstructs_patch_text_for_diffs() {
+        let diff = "diff --git a/file.rs b/file.rs\n--- a/file.rs\n+++ b/file.rs\n@@ -1,3 +1,4 @@ fn main()\n fn main() {\n-    old();\n+    new();\n+    more();\n }\n";
+        let source = ContentSource::Cli(CliSource::File {
+            path: PathBuf::from("changes.diff"),
+        });
+        let content = crate::state::ContentModel::from_diff(diff, source).unwrap();
+
+        // Copy-content / save in diff mode export patch-shaped text — headers
+        // and signs re-synthesized from the documents, plumbing lines omitted.
+        let expected = "diff --git a/file.rs b/file.rs\n\
+                        @@ -1,3 +1,4 @@ fn main()\n \
+                        fn main() {\n\
+                        -    old();\n\
+                        +    new();\n\
+                        +    more();\n \
+                        }";
+        assert_eq!(export_content(&content), expected);
     }
 
     #[test]
