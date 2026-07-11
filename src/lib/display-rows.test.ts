@@ -2,9 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   synthesizeDocs,
   deriveDisplay,
-  endpointKey,
+  selectionToDiffAnchor,
   type PseudoDoc,
 } from './display-rows';
+import { diffKey, anchorKeys } from './anchor';
 import { deriveFileEntries } from './file-tree';
 import { groupByFile } from './file-collapse';
 import type { DisplayLine } from './composables/useLineSegments.svelte';
@@ -297,11 +298,11 @@ describe('equivalence: walk ≡ old projections over the flat wire', () => {
 
   it('byIndex and byEndpoint resolve selection and anchor lookups', () => {
     // context row registers both sides
-    expect(display.byEndpoint.get(endpointKey('src/main.rs', 'old', 1))).toBe(
-      display.byEndpoint.get(endpointKey('src/main.rs', 'new', 1)),
+    expect(display.byEndpoint.get(diffKey('src/main.rs', 'old', 1))).toBe(
+      display.byEndpoint.get(diffKey('src/main.rs', 'new', 1)),
     );
     // deleted-file rows resolve old-side under the display path
-    const goneIdx = display.byEndpoint.get(endpointKey('src/gone.rs', 'old', 1))!;
+    const goneIdx = display.byEndpoint.get(diffKey('src/gone.rs', 'old', 1))!;
     const goneEntry = display.byIndex.get(goneIdx)!;
     expect(goneEntry.kind).toBe('row');
     if (goneEntry.kind === 'row') expect(goneEntry.rowKind).toBe('deleted');
@@ -328,6 +329,51 @@ describe('equivalence: walk ≡ old projections over the flat wire', () => {
     expect(docs[2].path).toBe('new/name.rs');
     expect(docs[3].hunks).toEqual([]);
     expect(docs[1].path).toBe('src/gone.rs');
+  });
+});
+
+describe('selectionToDiffAnchor', () => {
+  // src/main.rs display layout: header 1, hunk 2, rows 3–7
+  // (context 1/1, deleted old 2, added new 2, added new 3, context 3/4),
+  // hunk 8, rows 9–10. src/gone.rs: header 11, hunk 12, rows 13–14.
+
+  it('builds a mixed-side anchor over a replacement span', () => {
+    expect(selectionToDiffAnchor({ start: 4, end: 6 }, display)).toEqual({
+      type: 'diff',
+      path: 'src/main.rs',
+      start: { side: 'old', line: 2 },
+      end: { side: 'new', line: 3 },
+    });
+  });
+
+  it('anchors context spans new-side, mixing removed and added rows', () => {
+    expect(selectionToDiffAnchor({ start: 3, end: 7 }, display)).toEqual({
+      type: 'diff',
+      path: 'src/main.rs',
+      start: { side: 'new', line: 1 },
+      end: { side: 'new', line: 4 },
+    });
+  });
+
+  it('anchors deleted-file rows old-side under the display path', () => {
+    expect(selectionToDiffAnchor({ start: 13, end: 14 }, display)).toEqual({
+      type: 'diff',
+      path: 'src/gone.rs',
+      start: { side: 'old', line: 1 },
+      end: { side: 'old', line: 2 },
+    });
+  });
+
+  it('rejects spans touching headers or crossing documents', () => {
+    expect(selectionToDiffAnchor({ start: 2, end: 3 }, display)).toBeNull(); // hunk header
+    expect(selectionToDiffAnchor({ start: 10, end: 13 }, display)).toBeNull(); // crosses files
+  });
+
+  it('round-trips through byEndpoint with anchorKeys', () => {
+    const anchor = selectionToDiffAnchor({ start: 4, end: 6 }, display)!;
+    const [startKey, endKey] = anchorKeys(anchor);
+    expect(display.byEndpoint.get(startKey)).toBe(4);
+    expect(display.byEndpoint.get(endKey)).toBe(6);
   });
 });
 

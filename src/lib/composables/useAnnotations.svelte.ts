@@ -3,6 +3,7 @@ import type { JSONContent } from '@tiptap/core';
 import type { Range } from '$lib/range';
 import type { Line } from '$lib/types';
 import { type Anchor, anchorKeys, endpointKeys } from '$lib/anchor';
+import type { DiffDisplay } from '$lib/display-rows';
 import { extractContentNodes, isContentEmpty } from '$lib/tiptap';
 
 export interface AnnotationEntry {
@@ -21,17 +22,22 @@ export function cloneAnnotationEntry(entry: AnnotationEntry): AnnotationEntry {
 }
 
 export interface UseAnnotationsOptions {
-  /** Lines array for resolving anchors to display rows */
+  /** Lines array for resolving anchors to display rows (non-diff modes) */
   getLines: () => Line[];
+  /** The display walk; owns diff coordinate resolution when present */
+  getDisplay?: () => DiffDisplay | null;
 }
 
 export function useAnnotations(options: UseAnnotationsOptions) {
   let annotations: Record<string, AnnotationEntry> = $state({});
 
   // Anchors live in source coordinates; display rows are resolved through this
-  // map, rebuilt only when the lines array changes. Each line registers every
-  // coordinate it answers to (diff context lines carry both sides).
+  // map. Diff mode reads the walk's byEndpoint (context rows answer on both
+  // sides); other modes build the map from the lines array.
   const endpointToRow = $derived.by(() => {
+    const display = options.getDisplay?.() ?? null;
+    if (display) return display.byEndpoint;
+
     const map = new Map<string, number>();
     options.getLines().forEach((line, i) => {
       for (const key of endpointKeys(line)) map.set(key, i + 1);

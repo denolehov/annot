@@ -8,6 +8,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 import { useAnnotations, type AnnotationEntry } from './useAnnotations.svelte';
 import { invoke } from '@tauri-apps/api/core';
+import { deriveDisplay } from '$lib/display-rows';
 import type { Anchor } from '$lib/anchor';
 import type { Line } from '$lib/types';
 
@@ -177,24 +178,37 @@ describe('useAnnotations', () => {
     expect(state.spanOfAnchor(anchor(20, 99))).toBeNull(); // beyond the lines
   });
 
-  it('resolves diff anchors side-aware, including mixed-side spans', () => {
-    // Replacement hunk: context, two removed, two added, context.
-    const diffLines: Line[] = [
+  it('resolves diff anchors side-aware through the walk, including mixed-side spans', () => {
+    // Replacement hunk: header 1, hunk 2, rows 3–8
+    // (context, two removed, two added, context).
+    const rows = [
       { old_line: 1, new_line: 1 },
       { old_line: 2, new_line: null },
       { old_line: 3, new_line: null },
       { old_line: null, new_line: 2 },
       { old_line: null, new_line: 3 },
       { old_line: 4, new_line: 4 },
-    ].map(({ old_line, new_line }, i) => ({
-      content: `row ${i + 1}`,
-      html: null,
-      origin: { type: 'diff' as const, path: 'file.rs', old_line, new_line },
-      semantics: { type: 'plain' as const },
-    }));
-    const state = useAnnotations({ getLines: () => diffLines });
+    ].map((sides, i) => ({ ...sides, content: ` row ${i + 1}`, html: null, wireIndex: 3 + i }));
+    const display = deriveDisplay([{
+      path: 'file.rs',
+      old_path: null,
+      status: 'modified',
+      unavailable: false,
+      language: 'rs',
+      hunks: [{
+        old_range: { start: 1, end: 5 },
+        new_range: { start: 1, end: 5 },
+        function_context: null,
+        function_context_html: null,
+        rows,
+        wireIndex: 2,
+      }],
+      wireIndex: 1,
+      endWireIndex: 8,
+    }]);
+    const state = useAnnotations({ getLines: () => [], getDisplay: () => display });
 
-    // Mixed-side anchor: old:2 (row 2) → new:3 (row 5)
+    // Mixed-side anchor: old:2 (row 4) → new:3 (row 7)
     const mixed: Anchor = {
       type: 'diff',
       path: 'file.rs',
@@ -203,15 +217,15 @@ describe('useAnnotations', () => {
     };
     state.upsert('m1', mixed, CONTENT);
 
-    expect(state.spanOf('m1')).toEqual({ start: 2, end: 5 });
-    expect(state.atEndRow(5)?.id).toBe('m1');
-    expect(state.hasAnnotation(3)).toBe(true);
-    expect(state.hasAnnotation(1)).toBe(false);
+    expect(state.spanOf('m1')).toEqual({ start: 4, end: 7 });
+    expect(state.atEndRow(7)?.id).toBe('m1');
+    expect(state.hasAnnotation(5)).toBe(true);
+    expect(state.hasAnnotation(3)).toBe(false);
 
-    // Context lines answer on both sides: old:4 and new:4 both hit row 6.
+    // Context rows answer on both sides: old:4 and new:4 both hit row 8.
     expect(
       state.spanOfAnchor({ type: 'diff', path: 'file.rs', start: { side: 'old', line: 4 }, end: { side: 'new', line: 4 } })
-    ).toEqual({ start: 6, end: 6 });
+    ).toEqual({ start: 8, end: 8 });
   });
 
   it('removes annotation locally by id', () => {

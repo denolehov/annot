@@ -29,22 +29,6 @@ describe('selectionToAnchor', () => {
     });
   });
 
-  it('builds a diff anchor from diff mode lines', () => {
-    const lines: Line[] = [
-      makeLine({ type: 'diff', path: 'file.rs', old_line: null, new_line: 5 }),
-      makeLine({ type: 'diff', path: 'file.rs', old_line: null, new_line: 6 }),
-      makeLine({ type: 'diff', path: 'file.rs', old_line: null, new_line: 7 }),
-    ];
-
-    const anchor = selectionToAnchor({ start: 1, end: 3 }, lines);
-    expect(anchor).toEqual({
-      type: 'diff',
-      path: 'file.rs',
-      start: { side: 'new', line: 5 },
-      end: { side: 'new', line: 7 },
-    });
-  });
-
   it('returns null for virtual lines', () => {
     const lines: Line[] = [
       makeLine({ type: 'virtual' }),
@@ -73,60 +57,6 @@ describe('selectionToAnchor', () => {
 
     const anchor = selectionToAnchor({ start: 1, end: 2 }, lines);
     expect(anchor).toBeNull();
-  });
-
-  it('accepts diff ranges mixing removed and added lines', () => {
-    // Real hunk shape: removed lines carry old-file numbers, added/context
-    // lines carry new-file numbers, so consecutive rows "jump" numerically.
-    const lines: Line[] = [
-      makeLine({ type: 'diff', path: 'output.rs', old_line: 122, new_line: 124 }), // context
-      makeLine({ type: 'diff', path: 'output.rs', old_line: 123, new_line: null }), // removed
-      makeLine({ type: 'diff', path: 'output.rs', old_line: null, new_line: 125 }), // added
-      makeLine({ type: 'diff', path: 'output.rs', old_line: null, new_line: 126 }), // added
-    ];
-
-    const anchor = selectionToAnchor({ start: 1, end: 4 }, lines);
-    expect(anchor).toEqual({
-      type: 'diff',
-      path: 'output.rs',
-      start: { side: 'new', line: 124 },
-      end: { side: 'new', line: 126 },
-    });
-  });
-
-  it('marks a removed-only line as old side', () => {
-    const lines: Line[] = [
-      makeLine({ type: 'diff', path: 'output.rs', old_line: 122, new_line: null }), // removed
-      makeLine({ type: 'diff', path: 'output.rs', old_line: 123, new_line: null }), // removed
-    ];
-
-    const anchor = selectionToAnchor({ start: 1, end: 2 }, lines);
-    expect(anchor).toEqual({
-      type: 'diff',
-      path: 'output.rs',
-      start: { side: 'old', line: 122 },
-      end: { side: 'old', line: 123 },
-    });
-  });
-
-  it('builds a mixed-side anchor over a replacement span', () => {
-    // A deletion followed by its added replacement: the anchor endpoints
-    // land on different sides. Endpoints swap as a (line, side) unit when
-    // display order reverses source order.
-    const lines: Line[] = [
-      makeLine({ type: 'diff', path: 'file.rs', old_line: 2, new_line: null }), // removed
-      makeLine({ type: 'diff', path: 'file.rs', old_line: 3, new_line: null }), // removed
-      makeLine({ type: 'diff', path: 'file.rs', old_line: null, new_line: 2 }), // added
-      makeLine({ type: 'diff', path: 'file.rs', old_line: null, new_line: 3 }), // added
-    ];
-
-    const anchor = selectionToAnchor({ start: 1, end: 4 }, lines);
-    expect(anchor).toEqual({
-      type: 'diff',
-      path: 'file.rs',
-      start: { side: 'old', line: 2 },
-      end: { side: 'new', line: 3 },
-    });
   });
 
   it('returns null when line numbers have gap > 1', () => {
@@ -163,28 +93,15 @@ describe('endpointKeys', () => {
     expect(keys).toHaveLength(1);
   });
 
-  it('registers both sides for diff context lines', () => {
-    const keys = endpointKeys(makeLine({ type: 'diff', path: 'a.rs', old_line: 3, new_line: 5 }));
-    expect(keys).toHaveLength(2);
-  });
-
-  it('registers a single side for added and deleted lines', () => {
-    expect(endpointKeys(makeLine({ type: 'diff', path: 'a.rs', old_line: null, new_line: 5 }))).toHaveLength(1);
-    expect(endpointKeys(makeLine({ type: 'diff', path: 'a.rs', old_line: 3, new_line: null }))).toHaveLength(1);
+  it('registers nothing for diff lines — the display walk owns diff coordinates', () => {
+    expect(endpointKeys(makeLine({ type: 'diff', path: 'a.rs', old_line: 3, new_line: 5 }))).toEqual([]);
   });
 
   it('registers nothing for virtual lines', () => {
     expect(endpointKeys(makeLine({ type: 'virtual' }))).toEqual([]);
   });
 
-  it('resolves anchors against the keys lines register', () => {
-    const contextLine = makeLine({ type: 'diff', path: 'a.rs', old_line: 3, new_line: 5 });
-    const oldSide: Anchor = { type: 'diff', path: 'a.rs', start: { side: 'old', line: 3 }, end: { side: 'old', line: 3 } };
-    const newSide: Anchor = { type: 'diff', path: 'a.rs', start: { side: 'new', line: 5 }, end: { side: 'new', line: 5 } };
-    const keys = endpointKeys(contextLine);
-    expect(keys).toContain(anchorKeys(oldSide)[0]);
-    expect(keys).toContain(anchorKeys(newSide)[0]);
-
+  it('resolves source anchors against the keys lines register', () => {
     const sourceLine = makeLine({ type: 'source', path: 'a.rs', line: 7 });
     const source: Anchor = { type: 'source', path: 'a.rs', start: 7, end: 7 };
     expect(endpointKeys(sourceLine)).toContain(anchorKeys(source)[0]);

@@ -17,6 +17,8 @@
 
 import type { DiffDocument, DiffFileInfo, HunkV2, Line, LineRange, Row } from './types';
 import type { FileEntry } from './file-tree';
+import type { Range } from './range';
+import { diffKey, type Anchor, type Endpoint } from './anchor';
 
 // =============================================================================
 // Pseudo-documents (flat-wire shim, deleted with the per-file wire migration)
@@ -143,7 +145,7 @@ export interface DiffDisplay {
   docs: DocView[];
   /** displayIndex → entry: selection, scroll targeting, annotation slots. */
   byIndex: Map<number, DisplayRow>;
-  /** `${path}:${side}:${line}` → displayIndex (side ∈ 'old' | 'new'). */
+  /** anchor.ts `diffKey(path, side, line)` → displayIndex. */
   byEndpoint: Map<string, number>;
 }
 
@@ -167,9 +169,6 @@ export function rowKind(row: Row): RowKind {
   return 'context';
 }
 
-export function endpointKey(path: string, side: 'old' | 'new', line: number): string {
-  return `${path}:${side}:${line}`;
-}
 
 /** The single display-truth derivation for diff mode. */
 export function deriveDisplay(docs: PseudoDoc[]): DiffDisplay {
@@ -214,8 +213,8 @@ export function deriveDisplay(docs: PseudoDoc[]): DiffDisplay {
         rowStart ??= displayIndex;
         rowEnd = displayIndex;
 
-        if (row.old_line !== null) byEndpoint.set(endpointKey(doc.path, 'old', row.old_line), displayIndex);
-        if (row.new_line !== null) byEndpoint.set(endpointKey(doc.path, 'new', row.new_line), displayIndex);
+        if (row.old_line !== null) byEndpoint.set(diffKey(doc.path, 'old', row.old_line), displayIndex);
+        if (row.new_line !== null) byEndpoint.set(diffKey(doc.path, 'new', row.new_line), displayIndex);
       }
       hunkViews.push({ headerDisplayIndex: headerIdx, rowStart: rowStart ?? headerIdx + 1, rowEnd });
     });
@@ -236,6 +235,41 @@ export function deriveDisplay(docs: PseudoDoc[]): DiffDisplay {
   });
 
   return { rows, docs: docViews, byIndex, byEndpoint };
+}
+
+/** A row's anchor endpoint: new-side for added/context rows, old-side for deleted. */
+function rowEndpoint(row: Row): Endpoint {
+  return row.new_line !== null
+    ? { side: 'new', line: row.new_line }
+    : { side: 'old', line: row.old_line! };
+}
+
+/**
+ * Convert a display selection into a diff anchor. Valid only when every
+ * index in the range is a row of the same document — headers and
+ * cross-document spans are not annotatable.
+ */
+export function selectionToDiffAnchor(range: Range, display: DiffDisplay): Anchor | null {
+  const min = Math.min(range.start, range.end);
+  const max = Math.max(range.start, range.end);
+
+  const entries: Extract<DisplayRow, { kind: 'row' }>[] = [];
+  for (let i = min; i <= max; i++) {
+    const entry = display.byIndex.get(i);
+    if (!entry || entry.kind !== 'row') return null;
+    entries.push(entry);
+  }
+  if (entries.length === 0 || entries.some((e) => e.docIdx !== entries[0].docIdx)) return null;
+
+  const startPoint = rowEndpoint(entries[0].row);
+  const endPoint = rowEndpoint(entries[entries.length - 1].row);
+
+  // Display order can number in reverse of source order within a hunk (old vs
+  // new numbering) — swap the pair as a unit so each endpoint's line and side
+  // stay paired together.
+  const [lo, hi] = endPoint.line < startPoint.line ? [endPoint, startPoint] : [startPoint, endPoint];
+
+  return { type: 'diff', path: display.docs[entries[0].docIdx].path, start: lo, end: hi };
 }
 
 /**

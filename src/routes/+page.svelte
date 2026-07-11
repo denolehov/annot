@@ -4,7 +4,7 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount, tick } from "svelte";
   import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo, ConfigSnapshot } from "$lib/types";
-  import { getLineNumber, getDiffKind, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, isHorizontalRule } from "$lib/line-utils";
+  import { getLineNumber, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, isHorizontalRule } from "$lib/line-utils";
   import { type Range } from "$lib/range";
   import { selectionToAnchor, type Anchor, type SlotRef } from "$lib/anchor";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap, findExcalidrawChip } from "$lib/tiptap";
@@ -20,7 +20,7 @@
   import { Header, StatusBar, SessionEditor, WindowResizeHandles } from "$lib/components";
   import { PaneGroup, Pane, PaneResizer } from "paneforge";
   import FileTree from "$lib/components/FileTree.svelte";
-  import { synthesizeDocs, deriveDisplay, toFileEntries } from "$lib/display-rows";
+  import { synthesizeDocs, deriveDisplay, toFileEntries, selectionToDiffAnchor } from "$lib/display-rows";
   import { useFileTree } from "$lib/composables/useFileTree.svelte";
   import { useFileCollapse } from "$lib/composables/useFileCollapse.svelte";
   import { useExitModes } from "$lib/composables/useExitModes.svelte";
@@ -182,8 +182,15 @@
 
   // Check if a line at the given display index is selectable.
   function isLineSelectable(displayIdx: number): boolean {
+    // Diff mode: only walk rows are selectable — headers are structure.
+    if (diffDisplay) return diffDisplay.byIndex.get(displayIdx)?.kind === 'row';
     const line = lines[displayIdx - 1];
     return line ? isSelectable(line) : false;
+  }
+
+  /** Selection → anchor, routed by mode: the walk owns diff coordinates. */
+  function anchorForSelection(range: Range): Anchor | null {
+    return diffDisplay ? selectionToDiffAnchor(range, diffDisplay) : selectionToAnchor(range, lines);
   }
 
   // Selection bounds (composable) — hunk/portal/codeblock boundary logic
@@ -212,7 +219,7 @@
       draft = { id: existing.id, anchor: existing.anchor };
       return;
     }
-    const anchor = selectionToAnchor(range, lines);
+    const anchor = anchorForSelection(range);
     draft = anchor ? { id: crypto.randomUUID(), anchor } : null;
   }
 
@@ -271,6 +278,7 @@
   // Annotation state (composable)
   const annotationState = useAnnotations({
     getLines: () => lines,
+    getDisplay: () => diffDisplay,
   });
 
   // Exit mode state (composable)
@@ -548,7 +556,7 @@
    */
   function upsertAtSpan(range: Range, content: JSONContent): boolean {
     const existing = annotationState.atSpan(range);
-    const anchor = existing?.anchor ?? selectionToAnchor(range, lines);
+    const anchor = existing?.anchor ?? anchorForSelection(range);
     if (!anchor) return false;
     annotationState.upsert(existing?.id ?? crypto.randomUUID(), anchor, content);
     return true;
