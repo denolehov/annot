@@ -61,6 +61,20 @@ pub enum FileStatus {
     TypeChanged,
 }
 
+/// Serializes as a plain string — the wire doesn't carry `similarity`.
+impl serde::Serialize for FileStatus {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(match self {
+            FileStatus::Modified => "modified",
+            FileStatus::Added => "added",
+            FileStatus::Deleted => "deleted",
+            FileStatus::Renamed { .. } => "renamed",
+            FileStatus::Copied => "copied",
+            FileStatus::TypeChanged => "type_changed",
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BlobRef {
     Oid(String),
