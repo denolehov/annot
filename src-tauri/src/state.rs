@@ -689,110 +689,9 @@ impl ContentModel {
     #[must_use]
     pub fn from_diff(content: &str, source: ContentSource) -> Result<Self, AnnotError> {
         let label = source.label().to_string();
-        let mut diff_metadata = diff::parse_diff(content)?;
         let highlighter = Highlighter::new();
-
-        // Highlight function contexts in hunk headers
-        for file in &mut diff_metadata.files {
-            let fake_path = format!("file.{}", file.language);
-            for hunk in &mut file.hunks {
-                if let Some(ref ctx) = hunk.function_context {
-                    hunk.function_context_html =
-                        highlighter.highlight_function_context(ctx, &fake_path);
-                }
-            }
-        }
-
-        // For diffs, we create lines from the raw content
-        // Each line gets its display number (1-indexed)
-        let lines: Vec<Line> = content
-            .lines()
-            .enumerate()
-            .map(|(i, line_content)| {
-                let line_num = (i + 1) as u32;
-
-                // Get file language for this line from diff metadata
-                let language = diff_metadata
-                    .lines
-                    .get(&line_num)
-                    .and_then(|info| diff_metadata.files.get(info.file_index))
-                    .map(|f| f.language.as_str())
-                    .unwrap_or("");
-
-                // Only highlight non-header lines with actual code
-                let html = if !language.is_empty()
-                    && !line_content.starts_with("diff ")
-                    && !line_content.starts_with("---")
-                    && !line_content.starts_with("+++")
-                    && !line_content.starts_with("@@")
-                    && !line_content.starts_with("index ")
-                {
-                    // Strip the +/- prefix for highlighting, then add it back
-                    let (prefix, code) = if line_content.starts_with('+')
-                        || line_content.starts_with('-')
-                        || line_content.starts_with(' ')
-                    {
-                        (&line_content[..1], &line_content[1..])
-                    } else {
-                        ("", line_content)
-                    };
-
-                    let fake_path = format!("file.{}", language);
-                    highlighter.highlight_diff_row(prefix, code, &fake_path)
-                } else {
-                    None
-                };
-
-                // Get diff line info for origin and semantics
-                let diff_info = diff_metadata.lines.get(&line_num);
-
-                let (origin, semantics) = match diff_info {
-                    Some(info) => {
-                        // Get the file path from the diff file info
-                        let file_path = diff_metadata
-                            .files
-                            .get(info.file_index)
-                            .and_then(|f| f.new_name.as_ref().or(f.old_name.as_ref()))
-                            .cloned()
-                            .unwrap_or_default();
-
-                        let origin = LineOrigin::Diff {
-                            path: file_path,
-                            old_line: info.old_line_num,
-                            new_line: info.new_line_num,
-                        };
-                        let semantics = LineSemantics::Diff(match info.kind {
-                            diff::DiffLineKind::Context => DiffSemantics::Context,
-                            diff::DiffLineKind::Added => DiffSemantics::Added,
-                            diff::DiffLineKind::Deleted => DiffSemantics::Deleted,
-                            diff::DiffLineKind::FileHeader => DiffSemantics::FileHeader,
-                            diff::DiffLineKind::HunkHeader => DiffSemantics::HunkHeader {
-                                context: diff_metadata
-                                    .files
-                                    .get(info.file_index)
-                                    .and_then(|f| {
-                                        f.hunks.iter().find(|h| h.display_line == line_num)
-                                    })
-                                    .and_then(|h| h.function_context.clone()),
-                            },
-                            diff::DiffLineKind::Meta => DiffSemantics::Meta,
-                        });
-                        (origin, semantics)
-                    }
-                    None => {
-                        // Lines not in diff metadata (shouldn't happen, but fallback)
-                        (LineOrigin::Virtual, LineSemantics::Plain)
-                    }
-                };
-
-                Line {
-                    content: line_content.to_string(),
-                    html: html.map(LineHtml::Full),
-                    origin,
-                    semantics,
-                }
-            })
-            .collect();
+        let files = diff::parse_diff(content, &highlighter)?;
+        let (lines, diff_metadata) = diff::flatten(files);
 
         Ok(Self {
             label,
@@ -1376,7 +1275,7 @@ mod tests {
         let diff_with_doc_comment = r#"diff --git a/lib.rs b/lib.rs
 --- a/lib.rs
 +++ b/lib.rs
-@@ -1,3 +1,4 @@
+@@ -1,3 +1,3 @@
 -/// Old doc comment
 +/// New doc comment
  fn main() {

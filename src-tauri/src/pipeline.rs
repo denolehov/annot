@@ -49,9 +49,6 @@ pub fn build_oid_map(entries: &[FileEntry]) -> HashMap<(String, Side), BlobRef> 
 }
 
 /// Render enumerated files into the flat diff line stream + metadata.
-///
-/// `DiffMetadata.lines` stays empty: it exists only for `from_diff`'s
-/// text-walk construction; here lines are built directly.
 pub fn render(
     entries: &[FileEntry],
     source: &dyn FileSource,
@@ -63,13 +60,7 @@ pub fn render(
         .iter()
         .map(|entry| render_file(entry, source, highlighter, context, &mut lines))
         .collect::<Result<Vec<_>, _>>()?;
-    Ok((
-        lines,
-        DiffMetadata {
-            files,
-            lines: HashMap::new(),
-        },
-    ))
+    Ok((lines, DiffMetadata { files }))
 }
 
 fn render_file(
@@ -281,7 +272,9 @@ fn printed_range(range: &Range<u32>) -> (u32, u32) {
 }
 
 /// Git omits the count when it is 1: `-3` not `-3,1`.
-fn printed_side(sign: char, start: u32, count: u32) -> String {
+/// GNU-diff-style range formatting: omit the count when it's 1. Shared by
+/// the git pipeline and the patch parser.
+pub(crate) fn printed_side(sign: char, start: u32, count: u32) -> String {
     if count == 1 {
         format!("{sign}{start}")
     } else {
