@@ -307,6 +307,18 @@ describe('equivalence: walk ≡ old projections over the flat wire', () => {
     if (goneEntry.kind === 'row') expect(goneEntry.rowKind).toBe('deleted');
   });
 
+  it('hunk footprints match the wire: header at display_line, rows to next boundary', () => {
+    display.docs.forEach((dv, fi) => {
+      const info = wire.files[fi];
+      dv.hunks.forEach((hv, hi) => {
+        const next = info.hunks[hi + 1];
+        expect(hv.headerDisplayIndex).toBe(info.hunks[hi].display_line);
+        expect(hv.rowStart).toBe(info.hunks[hi].display_line + 1);
+        expect(hv.rowEnd).toBe(next ? next.display_line - 1 : info.end_line);
+      });
+    });
+  });
+
   it('promotes documents with stubs and real ranges', () => {
     expect(docs[0].hunks[0].old_range).toEqual({ start: 1, end: 4 });
     expect(docs[0].hunks[0].new_range).toEqual({ start: 1, end: 5 });

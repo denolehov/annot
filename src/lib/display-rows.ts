@@ -107,7 +107,15 @@ export type RowKind = 'added' | 'deleted' | 'context';
 export type DisplayRow =
   | { kind: 'file-header'; docIdx: number; displayIndex: number }
   | { kind: 'hunk-header'; docIdx: number; hunkIdx: number; displayIndex: number }
-  | { kind: 'row'; docIdx: number; row: Row; rowKind: RowKind; displayIndex: number };
+  | { kind: 'row'; docIdx: number; hunkIdx: number; row: Row; rowKind: RowKind; displayIndex: number };
+
+/** A hunk's footprint in display space. */
+export interface HunkView {
+  headerDisplayIndex: number;
+  /** Display-index span of the hunk's rows — the selectable region. */
+  rowStart: number;
+  rowEnd: number;
+}
 
 /** Per-document view: `deriveFileEntries` reborn inside the walk. */
 export interface DocView {
@@ -126,6 +134,8 @@ export interface DocView {
   headerDisplayIndex: number;
   /** Display index of the file's last entry. */
   endDisplayIndex: number;
+  /** Display footprints, parallel to `doc.hunks`. */
+  hunks: HunkView[];
 }
 
 export interface DiffDisplay {
@@ -186,21 +196,28 @@ export function deriveDisplay(docs: PseudoDoc[]): DiffDisplay {
 
     let added = 0;
     let deleted = 0;
+    const hunkViews: HunkView[] = [];
 
     doc.hunks.forEach((hunk, hunkIdx) => {
-      push({ kind: 'hunk-header', docIdx, hunkIdx, displayIndex: stamp(hunk.wireIndex) });
+      const headerIdx = stamp(hunk.wireIndex);
+      push({ kind: 'hunk-header', docIdx, hunkIdx, displayIndex: headerIdx });
 
+      let rowStart: number | null = null;
+      let rowEnd = headerIdx;
       for (const row of hunk.rows) {
         const kind = rowKind(row);
         if (kind === 'added') added += 1;
         else if (kind === 'deleted') deleted += 1;
 
         const displayIndex = stamp((row as PseudoRow).wireIndex);
-        push({ kind: 'row', docIdx, row, rowKind: kind, displayIndex });
+        push({ kind: 'row', docIdx, hunkIdx, row, rowKind: kind, displayIndex });
+        rowStart ??= displayIndex;
+        rowEnd = displayIndex;
 
         if (row.old_line !== null) byEndpoint.set(endpointKey(doc.path, 'old', row.old_line), displayIndex);
         if (row.new_line !== null) byEndpoint.set(endpointKey(doc.path, 'new', row.new_line), displayIndex);
       }
+      hunkViews.push({ headerDisplayIndex: headerIdx, rowStart: rowStart ?? headerIdx + 1, rowEnd });
     });
 
     const slash = doc.path.lastIndexOf('/');
@@ -214,6 +231,7 @@ export function deriveDisplay(docs: PseudoDoc[]): DiffDisplay {
       deleted,
       headerDisplayIndex,
       endDisplayIndex: doc.endWireIndex ?? rows[rows.length - 1].displayIndex,
+      hunks: hunkViews,
     });
   });
 

@@ -14,6 +14,7 @@ function entry(index: number, changed = 1): DocView {
     deleted: 0,
     headerDisplayIndex: index * 10 + 1,
     endDisplayIndex: index * 10 + 9,
+    hunks: [],
   };
 }
 

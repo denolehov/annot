@@ -7,8 +7,8 @@
  * - Code blocks: selections stay within fence boundaries
  */
 
-import type { Line, DiffMetadata } from '$lib/types';
-import { ContentTracker, type HunkPayload } from '$lib/content-tracker';
+import type { Line } from '$lib/types';
+import type { DiffDisplay } from '$lib/display-rows';
 import { isPortalLine, isCodeBlockLine, getFilePath, getLineNumber } from '$lib/line-utils';
 
 export interface Bounds {
@@ -18,51 +18,25 @@ export interface Bounds {
 
 export interface UseSelectionBoundsDeps {
   getLines: () => Line[];
-  getDiffMetadata: () => DiffMetadata | null;
-  getHunkTracker: () => ContentTracker<HunkPayload> | null;
+  getDiffDisplay: () => DiffDisplay | null;
 }
 
 export function useSelectionBounds(deps: UseSelectionBoundsDeps) {
-  const { getLines, getDiffMetadata, getHunkTracker } = deps;
+  const { getLines, getDiffDisplay } = deps;
 
   /**
    * Get hunk bounds for a line (returns null if line is a header or not in diff mode).
    * The bounds define the selectable region within a diff hunk.
    */
   function getHunkBounds(lineNum: number): Bounds | null {
-    const tracker = getHunkTracker();
-    const diffMetadata = getDiffMetadata();
-    const lines = getLines();
+    const display = getDiffDisplay();
+    if (!display) return null;
 
-    if (!diffMetadata || !tracker || tracker.length === 0) return null;
+    const entry = display.byIndex.get(lineNum);
+    if (!entry || entry.kind === 'file-header') return null;
 
-    const boundary = tracker.findAt(lineNum);
-    if (!boundary) return null;
-
-    const boundaries = tracker.all();
-
-    // Find this boundary's index
-    const boundaryIdx = boundaries.findIndex(
-      b => b.data.fileIndex === boundary.data.fileIndex && b.data.hunkIndex === boundary.data.hunkIndex
-    );
-
-    // The hunk starts at the @@ line (header), but selectable content starts on next line
-    const hunkStart = boundary.line + 1;
-
-    // Find end: next hunk in SAME file, or file's end
-    let hunkEnd: number;
-    const nextBoundary = boundaries[boundaryIdx + 1];
-
-    if (nextBoundary && nextBoundary.data.fileIndex === boundary.data.fileIndex) {
-      // Next hunk in same file - end before its header line
-      hunkEnd = nextBoundary.line - 1;
-    } else {
-      // Last hunk in this file - end at file's end_line
-      const file = diffMetadata.files[boundary.data.fileIndex];
-      hunkEnd = file?.end_line ?? lines.length;
-    }
-
-    return { start: hunkStart, end: hunkEnd };
+    const hunk = display.docs[entry.docIdx].hunks[entry.hunkIdx];
+    return { start: hunk.rowStart, end: hunk.rowEnd };
   }
 
   /**

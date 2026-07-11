@@ -193,8 +193,7 @@
   // Selection bounds (composable) — hunk/portal/codeblock boundary logic
   const selectionBounds = useSelectionBounds({
     getLines: () => lines,
-    getDiffMetadata: () => diffMetadata,
-    getHunkTracker: () => contentTracking.hunkTracker,
+    getDiffDisplay: () => diffDisplay,
   });
 
   // Draft slot: a new annotation's identity, minted the moment its slot comes
