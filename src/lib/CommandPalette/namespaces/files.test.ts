@@ -15,6 +15,7 @@ function entry(index: number, path: string, headerDisplayIndex: number): DocView
     deleted: 0,
     headerDisplayIndex,
     endDisplayIndex: headerDisplayIndex + 5,
+    hunks: [],
   };
 }
 
