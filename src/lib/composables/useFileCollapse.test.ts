@@ -1,18 +1,19 @@
 import { describe, it, expect, vi } from 'vitest';
-import { useFileCollapse } from './useFileCollapse.svelte';
-import { AUTO_COLLAPSE_THRESHOLD } from '$lib/file-collapse';
-import type { FileEntry } from '$lib/file-tree';
+import { useFileCollapse, AUTO_COLLAPSE_THRESHOLD } from './useFileCollapse.svelte';
+import type { DocView } from '$lib/display-rows';
 
-function entry(index: number, changed = 1): FileEntry {
+function entry(index: number, changed = 1): DocView {
+  const path = `f${index}.ts`;
   return {
     index,
-    path: `f${index}.ts`,
+    doc: { path, old_path: null, status: 'modified', unavailable: false, language: '', hunks: [] },
+    path,
     dir: '',
-    name: `f${index}.ts`,
+    name: path,
     added: changed,
     deleted: 0,
-    startLine: index * 10 + 1,
-    endLine: index * 10 + 9,
+    headerDisplayIndex: index * 10 + 1,
+    endDisplayIndex: index * 10 + 9,
   };
 }
 

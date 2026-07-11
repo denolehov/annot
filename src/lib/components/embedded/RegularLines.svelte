@@ -15,7 +15,7 @@
   import LineRow from './LineRow.svelte';
   import FileHeaderRow from './FileHeaderRow.svelte';
   import { getAnnotContext } from '$lib/context';
-  import { groupByFile } from '$lib/file-collapse';
+  import { hunkHeaderText, type DisplayRow } from '$lib/display-rows';
   import type { DisplayLine } from '$lib/composables/useLineSegments.svelte';
 
   interface Props {
@@ -34,9 +34,24 @@
   const markdownMetadata = $derived(ctx.markdownMetadata);
   const searchMatches = $derived(ctx.search.matches);
 
-  // Diff mode: group lines into per-file sections for collapse + sticky headers.
-  // Null for non-diff content — the flat render path below stays untouched.
-  const grouped = $derived(groupByFile(lines, ctx.fileEntries));
+  // Diff mode: the DisplayRow walk drives per-file sections for collapse +
+  // sticky headers. Null for non-diff content — the flat render path below
+  // stays untouched.
+  const display = $derived(ctx.diffDisplay);
+
+  // Body entries (hunk headers + rows) per document; file headers render
+  // structurally via FileHeaderRow.
+  const docBodies = $derived.by(() => {
+    const map = new Map<number, DisplayRow[]>();
+    if (!display) return map;
+    for (const entry of display.rows) {
+      if (entry.kind === 'file-header') continue;
+      const body = map.get(entry.docIdx);
+      if (body) body.push(entry);
+      else map.set(entry.docIdx, [entry]);
+    }
+    return map;
+  });
 
   // Map of display indices to code element refs for search highlighting
   let codeRefs: Map<number, HTMLElement> = new Map();
@@ -163,22 +178,60 @@
   <AnnotationSlot slotRef={slot} {...annotationSlotProps} />
 {/snippet}
 
-{#if grouped}
-  {#each grouped.leading as dl (dl.displayIndex)}
-    {@render row(dl)}
-  {/each}
-  {#each grouped.sections as section (section.entry.index)}
-    {@const collapsed = ctx.fileCollapse.isCollapsed(section.entry.index)}
+{#snippet walkEntry(entry: DisplayRow)}
+  {#if entry.kind === 'hunk-header'}
+    {@const hunk = display!.docs[entry.docIdx].doc.hunks[entry.hunkIdx]}
+    <LineRow displayIndex={entry.displayIndex} additionalClasses={{ 'diff-header': true }}>
+      {#snippet gutter()}
+        <span class="diff-gutter-old"></span>
+        <span class="diff-gutter-new"></span>
+      {/snippet}
+
+      {#snippet codeWrapper(innerContent)}
+        <span class="code" use:setCodeRef={entry.displayIndex}>
+          {@render innerContent()}
+        </span>
+      {/snippet}
+
+      {#snippet code()}{hunkHeaderText(hunk)}{/snippet}
+    </LineRow>
+  {:else if entry.kind === 'row'}
+    <LineRow
+      displayIndex={entry.displayIndex}
+      additionalClasses={{
+        'diff-added': entry.rowKind === 'added',
+        'diff-deleted': entry.rowKind === 'deleted',
+        'diff-context': entry.rowKind === 'context',
+      }}
+    >
+      {#snippet gutter()}
+        <span class="diff-gutter-old">{entry.row.old_line ?? ''}</span>
+        <span class="diff-gutter-new">{entry.row.new_line ?? ''}</span>
+      {/snippet}
+
+      {#snippet codeWrapper(innerContent)}
+        <span class="code" use:setCodeRef={entry.displayIndex}>
+          {@render innerContent()}
+        </span>
+      {/snippet}
+
+      {#snippet code()}
+        {#if entry.row.html?.type === 'full'}{@html entry.row.html.value}{:else}{entry.row.content}{/if}
+      {/snippet}
+    </LineRow>
+  {/if}
+  {@const slot = ctx.slotForRow(entry.displayIndex)}
+  <AnnotationSlot slotRef={slot} {...annotationSlotProps} />
+{/snippet}
+
+{#if display}
+  {#each display.docs as dv (dv.index)}
+    {@const collapsed = ctx.fileCollapse.isCollapsed(dv.index)}
     <section class="file-section">
-      <FileHeaderRow
-        entry={section.entry}
-        displayIndex={section.header.displayIndex}
-        {collapsed}
-        onToggle={() => ctx.fileCollapse.toggle(section.entry.index)}
-      />
+      <FileHeaderRow {dv} {collapsed} onToggle={() => ctx.fileCollapse.toggle(dv.index)} />
       {#if !collapsed}
-        {#each section.body as dl (dl.displayIndex)}
-          {@render row(dl)}
+        {#each docBodies.get(dv.index) ?? [] as entry (entry.displayIndex)}
+          {@render walkEntry(entry)}
         {/each}
       {/if}
     </section>
