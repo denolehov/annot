@@ -123,6 +123,52 @@ export interface DiffFileInfo {
 // Line info is now embedded in each Line's origin (LineOrigin::Diff)
 // and semantics (LineSemantics::Diff).
 
+// =============================================================================
+// Per-file diff documents
+//
+// Today synthesized from the flat wire (display-rows.ts); the per-file wire
+// migration makes them the wire itself and deletes the synthesis.
+// =============================================================================
+
+/** Half-open, 1-indexed source line range — Rust `Range<u32>`. */
+export interface LineRange {
+  start: number;
+  end: number;
+}
+
+/** VCS file status. Stubbed 'modified' until the wire serializes vcs::FileStatus. */
+export type FileStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'type_changed';
+
+export interface Row {
+  /** old-only = deleted, new-only = added, both = context — no kind field. */
+  old_line: number | null;
+  new_line: number | null;
+  /** Prefixed (+/-/space) while the flat wire is the source; raw once per-file. */
+  content: string;
+  html: LineHtml | null;
+}
+
+export interface HunkV2 {
+  old_range: LineRange;
+  new_range: LineRange;
+  function_context: string | null;
+  function_context_html: string | null;
+  /** Hunks own their rows — S3 unfold is hunk-local splicing. */
+  rows: Row[];
+}
+
+export interface DiffDocument {
+  /** Display identity: new name (old for deleted files). */
+  path: string;
+  /** Present ⇒ rename; S1 renders "old → new". */
+  old_path: string | null;
+  status: FileStatus;
+  /** Binary/oversize/non-UTF-8 — no hunks. */
+  unavailable: boolean;
+  language: string;
+  hunks: HunkV2[];
+}
+
 // Markdown types
 export interface MarkdownMetadata {
   sections: SectionInfo[];
