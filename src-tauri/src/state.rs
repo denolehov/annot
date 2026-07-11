@@ -59,7 +59,7 @@ impl TagUsageStats {
     }
 }
 
-use crate::diff::{self, DiffMetadata};
+use crate::diff;
 use crate::error::AnnotError;
 use crate::highlight::Highlighter;
 use crate::input::ContentSource;
@@ -84,15 +84,6 @@ pub enum LineOrigin {
         /// 1-indexed line number in the source file.
         line: u32,
     },
-    /// Line from a diff (maps to old/new file versions).
-    Diff {
-        /// Path to the file in the diff.
-        path: String,
-        /// Line number in old file (None if added line or header).
-        old_line: Option<u32>,
-        /// Line number in new file (None if deleted line or header).
-        new_line: Option<u32>,
-    },
     /// Synthetic line with no source (portal headers/footers, decorators).
     Virtual,
 }
@@ -104,26 +95,10 @@ pub enum LineSemantics {
     #[default]
     Plain,
     Markdown(MarkdownSemantics),
-    Diff(DiffSemantics),
     Portal(PortalSemantics),
 }
 
 // MarkdownSemantics is imported from crate::markdown
-
-/// Diff line semantics.
-#[derive(Clone, Debug, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum DiffSemantics {
-    FileHeader,
-    HunkHeader {
-        context: Option<String>,
-    },
-    /// Non-content plumbing lines (index, ---/+++, mode changes) — never rendered.
-    Meta,
-    Added,
-    Deleted,
-    Context,
-}
 
 /// Portal line semantics.
 #[derive(Clone, Debug, Serialize)]
@@ -369,8 +344,10 @@ impl ExitMode {
 #[derive(Clone)]
 pub struct ContentModel {
     pub label: String,
-    pub lines: Vec<Line>,
+    pub view: ContentView,
     pub source: ContentSource,
+    /// Non-diff extras (markdown sections/code blocks); `Plain` for diffs —
+    /// mode discrimination lives on `view`.
     pub metadata: ContentMetadata,
     /// Loaded portals for file registration (empty for non-markdown content).
     pub portals: Vec<LoadedPortal>,
@@ -381,12 +358,10 @@ pub struct ContentModel {
 }
 
 /// Type-safe representation of content-specific metadata.
-/// Replaces the two Option fields that were mutually exclusive.
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentMetadata {
     Plain,
-    Diff(DiffMetadata),
     Markdown(MarkdownMetadata),
 }
 
@@ -688,12 +663,12 @@ pub struct AppState {
 #[derive(Serialize)]
 pub struct ContentResponse {
     pub label: String,
-    pub lines: Vec<Line>,
+    pub view: ContentView,
     pub tags: Vec<Tag>,
     pub exit_modes: Vec<ExitMode>,
     pub selected_exit_mode_id: Option<String>,
     pub session_comment: Option<Vec<ContentNode>>,
-    /// Content-specific metadata (diff info, markdown sections, or plain).
+    /// Non-diff extras (markdown sections, or plain).
     pub metadata: ContentMetadata,
     /// Whether image paste is allowed (MCP mode only).
     pub allows_image_paste: bool,
@@ -732,7 +707,7 @@ impl ContentModel {
 
         Self {
             label,
-            lines,
+            view: ContentView::Flat { lines },
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
@@ -740,28 +715,27 @@ impl ContentModel {
         }
     }
 
-    /// Parse diff content into structured lines with diff metadata.
+    /// Parse diff content into per-file documents.
     #[must_use]
     pub fn from_diff(content: &str, source: ContentSource) -> Result<Self, AnnotError> {
         let label = source.label().to_string();
         let highlighter = Highlighter::new();
-        let files = diff::parse_diff(content, &highlighter)?;
-        let (lines, diff_metadata) = diff::flatten(files);
+        let documents = diff::parse_diff(content, &highlighter)?;
 
         Ok(Self {
             label,
-            lines,
+            view: ContentView::Diff { documents },
             source,
-            metadata: ContentMetadata::Diff(diff_metadata),
+            metadata: ContentMetadata::Plain,
             portals: Vec::new(),
             file_source: Arc::new(RawPatchSource),
         })
     }
 
-    /// Render a git diff in-process: enumerate → `GixSource`
-    /// full texts → computed hunks → the same flat line stream `from_diff`
-    /// produces from patch text. The model retains the `GixSource` so the
-    /// session keeps the full texts (unfold and re-diff need them).
+    /// Render a git diff in-process: enumerate → `GixSource` full texts →
+    /// computed hunks → the same per-file documents `from_diff` produces
+    /// from patch text. The model retains the `GixSource` so the session
+    /// keeps the full texts (unfold and re-diff need them).
     pub fn from_git(
         cwd: &Path,
         target: &DiffTarget,
@@ -781,7 +755,7 @@ impl ContentModel {
             crate::pipeline::build_oid_map(&entries),
         ));
         let highlighter = Highlighter::new();
-        let (lines, metadata) = crate::pipeline::render(
+        let documents = crate::pipeline::render(
             &entries,
             file_source.as_ref(),
             &highlighter,
@@ -791,9 +765,9 @@ impl ContentModel {
         let label = source.label().to_string();
         Ok(Self {
             label,
-            lines,
+            view: ContentView::Diff { documents },
             source,
-            metadata: ContentMetadata::Diff(metadata),
+            metadata: ContentMetadata::Plain,
             portals: Vec::new(),
             file_source,
         })
@@ -987,7 +961,7 @@ impl ContentModel {
 
         Self {
             label,
-            lines,
+            view: ContentView::Flat { lines },
             source,
             metadata: ContentMetadata::Markdown(md_metadata),
             portals: loaded_portals,
@@ -995,45 +969,23 @@ impl ContentModel {
         }
     }
 
-    /// Find a line by its source path and line number.
+    /// The flat line stream — file/markdown/content modes. Empty for diffs,
+    /// whose content lives in `ContentView::Diff` documents.
+    pub fn flat_lines(&self) -> &[Line] {
+        match &self.view {
+            ContentView::Flat { lines } => lines,
+            ContentView::Diff { .. } => &[],
+        }
+    }
+
+    /// Find a flat line by its source path and line number.
     ///
     /// This searches the lines array by `LineOrigin` rather than by array index,
     /// which is necessary because portal lines are interleaved at their markdown
     /// insertion point, not at their source file line number position.
     pub fn find_line(&self, path: &str, line_num: u32) -> Option<&Line> {
-        self.lines.iter().find(|l| match &l.origin {
+        self.flat_lines().iter().find(|l| match &l.origin {
             LineOrigin::Source { path: p, line } => p == path && *line == line_num,
-            LineOrigin::Diff {
-                path: p,
-                new_line,
-                old_line,
-            } => {
-                // Match by path and line number (prefer new_line, fallback to old_line)
-                p == path && (new_line == &Some(line_num) || old_line == &Some(line_num))
-            }
-            LineOrigin::Virtual => false,
-        })
-    }
-
-    /// Resolve an anchor endpoint to its display-row index, side-aware.
-    ///
-    /// Old endpoints match a row's `old_line`, New endpoints its `new_line`;
-    /// context rows carry both numbers and match either side. Source rows
-    /// (file/content mode) have no side and match by line alone.
-    pub fn find_row(&self, path: &str, endpoint: &crate::anchor::Endpoint) -> Option<usize> {
-        self.lines.iter().position(|l| match &l.origin {
-            LineOrigin::Source { path: p, line } => p == path && *line == endpoint.line,
-            LineOrigin::Diff {
-                path: p,
-                old_line,
-                new_line,
-            } => {
-                p == path
-                    && match endpoint.side {
-                        crate::source::Side::Old => *old_line == Some(endpoint.line),
-                        crate::source::Side::New => *new_line == Some(endpoint.line),
-                    }
-            }
             LineOrigin::Virtual => false,
         })
     }
@@ -1055,7 +1007,7 @@ impl AppState {
         Self {
             content: ContentModel {
                 label: String::new(),
-                lines: Vec::new(),
+                view: ContentView::Flat { lines: Vec::new() },
                 source: ContentSource::Cli(CliSource::Stdin {
                     label: String::new(),
                 }),
@@ -1072,7 +1024,7 @@ impl AppState {
     pub fn to_response(&self) -> ContentResponse {
         ContentResponse {
             label: self.content.label.clone(),
-            lines: self.content.lines.clone(),
+            view: self.content.view.clone(),
             tags: self.config.tags().to_vec(),
             exit_modes: self.config.exit_modes().to_vec(),
             selected_exit_mode_id: self.session.selected_exit_mode_id.clone(),
@@ -1117,23 +1069,29 @@ mod tests {
         AppState::new(content_model, UserConfig::empty())
     }
 
+    fn flat(response: &ContentResponse) -> &[Line] {
+        match &response.view {
+            ContentView::Flat { lines } => lines,
+            ContentView::Diff { .. } => panic!("expected a flat view"),
+        }
+    }
+
+    fn documents(view: &ContentView) -> &[DiffDocument] {
+        match view {
+            ContentView::Diff { documents } => documents,
+            ContentView::Flat { .. } => panic!("expected a diff view"),
+        }
+    }
+
     #[test]
     fn content_response_has_1_indexed_line_numbers() {
         let state = test_state("a\nb\nc", "test.rs");
         let response = state.to_response();
 
-        assert!(matches!(
-            response.lines[0].origin,
-            LineOrigin::Source { line: 1, .. }
-        ));
-        assert!(matches!(
-            response.lines[1].origin,
-            LineOrigin::Source { line: 2, .. }
-        ));
-        assert!(matches!(
-            response.lines[2].origin,
-            LineOrigin::Source { line: 3, .. }
-        ));
+        let lines = flat(&response);
+        assert!(matches!(lines[0].origin, LineOrigin::Source { line: 1, .. }));
+        assert!(matches!(lines[1].origin, LineOrigin::Source { line: 2, .. }));
+        assert!(matches!(lines[2].origin, LineOrigin::Source { line: 3, .. }));
     }
 
     #[test]
@@ -1149,8 +1107,8 @@ mod tests {
         let state = test_state("  indented\n\ttabbed", "test.rs");
         let response = state.to_response();
 
-        assert_eq!(response.lines[0].content, "  indented");
-        assert_eq!(response.lines[1].content, "\ttabbed");
+        assert_eq!(flat(&response)[0].content, "  indented");
+        assert_eq!(flat(&response)[1].content, "\ttabbed");
     }
 
     #[test]
@@ -1159,8 +1117,8 @@ mod tests {
         let response = state.to_response();
 
         // Should have HTML highlighting for Rust
-        assert!(response.lines[0].html.is_some());
-        let html = match response.lines[0].html.as_ref().unwrap() {
+        assert!(flat(&response)[0].html.is_some());
+        let html = match flat(&response)[0].html.as_ref().unwrap() {
             LineHtml::Full(s) => s.as_str(),
             LineHtml::Cells(_) => panic!("Expected Full HTML for source file"),
         };
@@ -1175,7 +1133,7 @@ mod tests {
         let response = state.to_response();
 
         // Plain text should still have html (just escaped text)
-        assert_eq!(response.lines.len(), 2);
+        assert_eq!(flat(&response).len(), 2);
     }
 
     #[test]
@@ -1228,65 +1186,34 @@ mod tests {
 "#;
 
     #[test]
-    fn from_diff_creates_state_with_metadata() {
+    fn from_diff_creates_documents() {
         let state = test_diff_state(SIMPLE_DIFF, test_diff_source("changes.diff"));
 
-        match &state.content.metadata {
-            ContentMetadata::Diff(meta) => {
-                assert_eq!(meta.files.len(), 1);
-                assert_eq!(meta.files[0].new_name, Some("file.rs".to_string()));
-            }
-            _ => panic!("Expected Diff metadata"),
-        }
+        let docs = documents(&state.content.view);
+        assert_eq!(docs.len(), 1);
+        assert_eq!(docs[0].path, "file.rs");
+        assert_eq!(docs[0].hunks.len(), 1);
     }
 
     #[test]
-    fn from_diff_creates_lines_from_content() {
+    fn from_diff_rows_carry_sides_and_raw_content() {
         let state = test_diff_state(SIMPLE_DIFF, test_diff_source("changes.diff"));
 
-        // Should have lines matching the diff content
-        assert!(!state.content.lines.is_empty());
+        let rows = &documents(&state.content.view)[0].hunks[0].rows;
+        assert_eq!(rows[0].old_line, Some(1), "row numbers are 1-indexed");
 
-        // First line should be the diff header
-        assert!(state.content.lines[0].content.starts_with("diff --git"));
-
-        // Check that +/- lines are preserved
-        let has_added = state
-            .content
-            .lines
-            .iter()
-            .any(|l| l.content.starts_with('+'));
-        let has_deleted = state
-            .content
-            .lines
-            .iter()
-            .any(|l| l.content.starts_with('-'));
-        assert!(has_added, "Should have added lines");
-        assert!(has_deleted, "Should have deleted lines");
+        let deleted = rows.iter().find(|r| r.new_line.is_none()).unwrap();
+        assert_eq!(deleted.content, "    old_code();", "content is raw");
+        assert!(rows.iter().any(|r| r.old_line.is_none()), "has added rows");
     }
 
     #[test]
-    fn from_diff_line_numbers_are_1_indexed() {
-        let state = test_diff_state(SIMPLE_DIFF, test_diff_source("changes.diff"));
-
-        // Diff lines have LineOrigin::Diff with old_line/new_line info
-        // Just verify lines exist and have Diff origin
-        assert!(matches!(
-            state.content.lines[0].origin,
-            LineOrigin::Diff { .. }
-        ));
-        assert!(matches!(
-            state.content.lines[1].origin,
-            LineOrigin::Diff { .. }
-        ));
-    }
-
-    #[test]
-    fn from_diff_response_includes_metadata() {
+    fn from_diff_response_serializes_the_diff_view() {
         let state = test_diff_state(SIMPLE_DIFF, test_diff_source("changes.diff"));
         let response = state.to_response();
 
-        assert!(matches!(response.metadata, ContentMetadata::Diff(_)));
+        assert!(matches!(response.view, ContentView::Diff { .. }));
+        assert!(matches!(response.metadata, ContentMetadata::Plain));
     }
 
     #[test]
@@ -1339,38 +1266,18 @@ mod tests {
 
         let state = test_diff_state(diff_with_doc_comment, test_diff_source("changes.diff"));
 
-        println!("\n=== DIFF DOC COMMENT LINES ===");
-        for (i, line) in state.content.lines.iter().enumerate() {
-            println!("Line {}: content={:?}", i + 1, line.content);
-            if let Some(ref html) = line.html {
-                let html_str = match html {
-                    LineHtml::Full(s) => s.as_str(),
-                    LineHtml::Cells(cells) => {
-                        println!("        cells={:?}", cells);
-                        continue;
-                    }
-                };
-                println!("        html={:?}", html_str);
-                // Check for newlines
-                if html_str.contains('\n') {
-                    println!("        WARNING: HTML contains newline!");
-                }
-            }
-        }
-        println!("=== END ===\n");
-
-        // Find the deleted doc comment line
-        let deleted_line = state
-            .content
-            .lines
+        // Find the deleted doc comment row
+        let deleted_row = documents(&state.content.view)[0]
+            .hunks
             .iter()
-            .find(|l| l.content.starts_with("-///"))
+            .flat_map(|h| &h.rows)
+            .find(|r| r.content.starts_with("///") && r.new_line.is_none())
             .unwrap();
         assert!(
-            deleted_line.html.is_some(),
+            deleted_row.html.is_some(),
             "Deleted doc comment should have HTML"
         );
-        let html = match deleted_line.html.as_ref().unwrap() {
+        let html = match deleted_row.html.as_ref().unwrap() {
             LineHtml::Full(s) => s.as_str(),
             LineHtml::Cells(_) => panic!("Expected Full HTML, got Cells"),
         };
@@ -1382,10 +1289,10 @@ mod tests {
             html
         );
 
-        // HTML should start with the prefix
+        // HTML carries no textual sign — the sign is presentation.
         assert!(
-            html.starts_with('-'),
-            "HTML should start with '-' prefix. Got: {:?}",
+            !html.starts_with('-'),
+            "HTML must not carry a '-' prefix. Got: {:?}",
             html
         );
     }
@@ -1401,8 +1308,7 @@ mod tests {
         let response = state.to_response();
 
         // Find the data row (row with "highlighted")
-        let data_row = response
-            .lines
+        let data_row = flat(&response)
             .iter()
             .find(|l| l.content.contains("highlighted"))
             .expect("Should have a row with 'highlighted'");

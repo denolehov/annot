@@ -80,7 +80,7 @@ pub fn export_content(content: &ContentModel) -> String {
     // If no portals, just join all lines
     if content.portals.is_empty() {
         return content
-            .lines
+            .flat_lines()
             .iter()
             .filter(|line| !matches!(line.semantics, LineSemantics::Portal(_)))
             .map(|l| l.content.as_str())
@@ -100,7 +100,7 @@ pub fn export_content(content: &ContentModel) -> String {
     let mut result = String::new();
     let mut original_line_num: u32 = 0;
 
-    for line in &content.lines {
+    for line in content.flat_lines() {
         // Skip portal lines (they're interleaved; we'll re-emit them as code blocks)
         if matches!(line.semantics, LineSemantics::Portal(_)) {
             continue;
@@ -201,7 +201,7 @@ pub fn export_section(content: &ContentModel, start_line: u32, end_line: u32) ->
     let mut result = String::new();
     let mut current_line: u32 = 0;
 
-    for line in &content.lines {
+    for line in content.flat_lines() {
         // Skip portal-interleaved lines (we'll re-emit them as code blocks)
         if matches!(line.semantics, LineSemantics::Portal(_)) {
             continue;
@@ -429,9 +429,16 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
     // Build annotation blocks (if any)
     if has_annotations {
         let files_with_annotations = collect_files_with_annotations(review);
+        let documents = match &content.view {
+            crate::state::ContentView::Diff { documents } => documents.as_slice(),
+            _ => &[],
+        };
 
         let mut first_block = true;
-        for (display_path, target) in &files_with_annotations {
+        for (display_path, doc_index, target) in &files_with_annotations {
+            // The anchor's document — `FileKey::diff_file(index)` ⇔ `documents[index]`.
+            let doc = doc_index.and_then(|index| documents.get(index));
+
             // Sort annotations within this file by start line
             let mut sorted_annotations: Vec<&Annotation> = target.annotations.values().collect();
             sorted_annotations.sort_by_key(|a| a.start_line());
@@ -446,6 +453,7 @@ pub fn format_output(review: &Review, mode: OutputMode) -> FormatResult {
                     content,
                     ann,
                     display_path,
+                    doc,
                     &mut images,
                     &mut figure_counter,
                     mode,
@@ -525,10 +533,11 @@ fn calculate_max_line(review: &Review) -> u32 {
         .unwrap_or(0)
 }
 
-/// Collect files with annotations in display order.
+/// Collect files with annotations in display order; diff-mode entries carry
+/// their document index.
 fn collect_files_with_annotations(
     review: &Review,
-) -> Vec<(String, &crate::review::AnnotationTarget)> {
+) -> Vec<(String, Option<usize>, &crate::review::AnnotationTarget)> {
     if let Some(diff_files) = review.root_view.diff_files() {
         // Diff mode: use DiffFileView for display paths, enumerate for index
         diff_files
@@ -540,7 +549,7 @@ fn collect_files_with_annotations(
                     if target.annotations.is_empty() {
                         None
                     } else {
-                        Some((df.path.display().to_string(), target))
+                        Some((df.path.display().to_string(), Some(index), target))
                     }
                 })
             })
@@ -552,8 +561,8 @@ fn collect_files_with_annotations(
             .iter()
             .filter(|(_, target)| !target.annotations.is_empty())
             .filter_map(|(key, target)| match key {
-                FileKey::Path(p) => Some((p.display().to_string(), target)),
-                FileKey::Ephemeral { label } => Some((label.clone(), target)),
+                FileKey::Path(p) => Some((p.display().to_string(), None, target)),
+                FileKey::Ephemeral { label } => Some((label.clone(), None, target)),
                 FileKey::DiffFile { .. } => None, // Should not happen in file mode
             })
             .collect()
@@ -593,7 +602,7 @@ mod tests {
         });
         let content = ContentModel {
             label: label.to_string(),
-            lines,
+            view: crate::state::ContentView::Flat { lines },
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
@@ -772,7 +781,7 @@ mod tests {
         );
         let content = ContentModel {
             label: "test.rs".to_string(),
-            lines: vec![],
+            view: crate::state::ContentView::Flat { lines: vec![] },
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
@@ -819,7 +828,7 @@ mod tests {
 
         let content = ContentModel {
             label: "test.rs".to_string(),
-            lines,
+            view: crate::state::ContentView::Flat { lines },
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
@@ -849,7 +858,7 @@ mod tests {
         });
         let content = ContentModel {
             label: "test.rs".to_string(),
-            lines: vec![],
+            view: crate::state::ContentView::Flat { lines: vec![] },
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
@@ -884,7 +893,7 @@ mod tests {
         );
         let content = ContentModel {
             label: "test.rs".to_string(),
-            lines: vec![],
+            view: crate::state::ContentView::Flat { lines: vec![] },
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
@@ -911,7 +920,7 @@ mod tests {
         });
         let content = ContentModel {
             label: "test.rs".to_string(),
-            lines: vec![],
+            view: crate::state::ContentView::Flat { lines: vec![] },
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
@@ -1081,7 +1090,7 @@ mod tests {
         });
         let content = ContentModel {
             label: "test.rs".to_string(),
-            lines,
+            view: crate::state::ContentView::Flat { lines },
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
@@ -1144,11 +1153,13 @@ mod tests {
     fn export_content_without_portals() {
         let content = ContentModel {
             label: "test.md".to_string(),
-            lines: vec![
-                make_line(1, "# Title"),
-                make_line(2, "Some text"),
-                make_line(3, "More text"),
-            ],
+            view: crate::state::ContentView::Flat {
+                lines: vec![
+                    make_line(1, "# Title"),
+                    make_line(2, "Some text"),
+                    make_line(3, "More text"),
+                ],
+            },
             source: ContentSource::Cli(CliSource::File {
                 path: PathBuf::from("test.md"),
             }),
@@ -1217,7 +1228,7 @@ mod tests {
 
         let content = ContentModel {
             label: "test.md".to_string(),
-            lines,
+            view: crate::state::ContentView::Flat { lines },
             source: ContentSource::Cli(CliSource::File {
                 path: PathBuf::from("test.md"),
             }),
@@ -1292,7 +1303,7 @@ mod tests {
 
         let content = ContentModel {
             label: "test.md".to_string(),
-            lines,
+            view: crate::state::ContentView::Flat { lines },
             source: ContentSource::Cli(CliSource::File {
                 path: PathBuf::from("test.md"),
             }),
@@ -1390,7 +1401,7 @@ mod tests {
 
         let content = ContentModel {
             label: "test.md".to_string(),
-            lines,
+            view: crate::state::ContentView::Flat { lines },
             source: ContentSource::Cli(CliSource::File {
                 path: PathBuf::from("test.md"),
             }),
@@ -1667,7 +1678,7 @@ mod tests {
         });
         let content = ContentModel {
             label: "test.rs".to_string(),
-            lines: vec![],
+            view: crate::state::ContentView::Flat { lines: vec![] },
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
@@ -1700,7 +1711,7 @@ mod tests {
         });
         let content = ContentModel {
             label: "test.rs".to_string(),
-            lines: vec![],
+            view: crate::state::ContentView::Flat { lines: vec![] },
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
@@ -1802,7 +1813,7 @@ Do something useful.
         );
         let content = ContentModel {
             label: "test.rs".to_string(),
-            lines: vec![],
+            view: crate::state::ContentView::Flat { lines: vec![] },
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),
@@ -1855,7 +1866,7 @@ Do something useful.
         );
         let content = ContentModel {
             label: "test.rs".to_string(),
-            lines: vec![],
+            view: crate::state::ContentView::Flat { lines: vec![] },
             source,
             metadata: ContentMetadata::Plain,
             portals: Vec::new(),

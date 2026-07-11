@@ -466,7 +466,7 @@ pub fn export_to_obsidian(
 
     // Use H1 title as note name if present, otherwise fall back to label
     let note_name = content_model
-        .lines
+        .flat_lines()
         .iter()
         .find(|l| l.content.starts_with("# "))
         .map(|l| l.content.trim_start_matches("# ").trim())

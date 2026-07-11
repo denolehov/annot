@@ -1,96 +1,17 @@
 //! Unified diff parsing and detection.
 //!
-//! Parses raw `diff_content` patches into a per-file model natively via
-//! `diffy`'s git-aware parser (`FileOperation`/`FileMode`/`PatchKind`/`Hunk`),
-//! then `flatten`s to the legacy wire shape (`Vec<Line>` + `DiffMetadata`) so
-//! no downstream consumer changes. Deliberately not emitted, matching what
-//! the frontend never renders and what `pipeline.rs`'s git-native path
-//! already omits: `index`/`---`/`+++`/mode/rename/similarity plumbing rows.
+//! Parses raw `diff_content` patches into per-file `DiffDocument`s natively
+//! via `diffy`'s git-aware parser (`FileOperation`/`FileMode`/`PatchKind`/
+//! `Hunk`). Plumbing rows (`index`/`---`/`+++`/mode/rename/similarity) have
+//! no representation, matching what the frontend never renders and what
+//! `pipeline.rs`'s git-native path already omits.
 
 use diffy::patch_set::{FileMode, FileOperation, ParseOptions, PatchKind, PatchSet};
-use serde::Serialize;
 
 use crate::error::AnnotError;
 use crate::highlight::Highlighter;
-use crate::state::{DiffSemantics, Line, LineHtml, LineOrigin, LineSemantics};
+use crate::state::{DiffDocument, HunkV2, LineHtml, Row};
 use crate::vcs::FileStatus;
-
-/// Metadata for a hunk within a file.
-#[derive(Clone, Debug, Serialize)]
-pub struct HunkInfo {
-    /// Display line number of the @@ header (1-indexed).
-    pub display_line: u32,
-    /// Starting line in old file.
-    pub old_start: u32,
-    /// Number of lines from old file.
-    pub old_count: u32,
-    /// Starting line in new file.
-    pub new_start: u32,
-    /// Number of lines in new file.
-    pub new_count: u32,
-    /// Function/context from hunk header (e.g., "fn process()").
-    pub function_context: Option<String>,
-    /// Syntax-highlighted HTML of function context.
-    pub function_context_html: Option<String>,
-}
-
-/// Metadata for a single file in the diff.
-#[derive(Clone, Debug, Serialize)]
-pub struct DiffFileInfo {
-    pub old_name: Option<String>,
-    pub new_name: Option<String>,
-    /// Detected language (from extension).
-    pub language: String,
-    /// 1-indexed start line in flattened view.
-    pub start_line: u32,
-    /// 1-indexed end line in flattened view.
-    pub end_line: u32,
-    /// Hunks within this file, ordered by display line.
-    pub hunks: Vec<HunkInfo>,
-}
-
-/// Parsed diff metadata for rendering.
-#[derive(Clone, Debug, Serialize)]
-pub struct DiffMetadata {
-    pub files: Vec<DiffFileInfo>,
-}
-
-/// One line of hunk content, already `+`/`-`/` `-prefixed — kind is
-/// derivable from which of `old_line`/`new_line` is populated (old-only =
-/// deleted, new-only = added, both = context).
-struct RawDiffRow {
-    old_line: Option<u32>,
-    new_line: Option<u32>,
-    content: String,
-    html: Option<String>,
-}
-
-/// One hunk in the per-file internal model, pre-flatten (no `display_line`
-/// yet — that's a flatten-time concept, assigned as rows land in the
-/// flattened stream).
-struct RawHunk {
-    old_start: u32,
-    old_count: u32,
-    new_start: u32,
-    new_count: u32,
-    function_context: Option<String>,
-    function_context_html: Option<String>,
-    rows: Vec<RawDiffRow>,
-}
-
-/// One file's parsed patch, in per-file/per-row form — the internal model
-/// `flatten` reproduces the legacy wire shape from.
-pub(crate) struct RawDiffFile {
-    old_path: Option<String>,
-    new_path: Option<String>,
-    // Not read by `flatten` — the legacy wire shape has no status field.
-    // Kept for C1, which exposes it directly in the new per-file wire model.
-    #[allow(dead_code)]
-    status: FileStatus,
-    unavailable: bool,
-    language: String,
-    hunks: Vec<RawHunk>,
-}
 
 /// Language identifier for a diff file: the extension of the new name (old
 /// for deleted files). Feeds syntax highlighting for both the patch parser
@@ -113,11 +34,11 @@ pub fn is_diff(content: &str) -> bool {
         .is_ok_and(|files| !files.is_empty())
 }
 
-/// Parse unified diff content into a per-file model.
+/// Parse unified diff content into per-file documents.
 pub(crate) fn parse_diff(
     content: &str,
     highlighter: &Highlighter,
-) -> Result<Vec<RawDiffFile>, AnnotError> {
+) -> Result<Vec<DiffDocument>, AnnotError> {
     let files = PatchSet::parse(content, ParseOptions::gitdiff())
         .map(|result| {
             result
@@ -133,7 +54,10 @@ pub(crate) fn parse_diff(
     Ok(files)
 }
 
-fn build_file(fp: &diffy::patch_set::FilePatch<'_, str>, highlighter: &Highlighter) -> RawDiffFile {
+fn build_file(
+    fp: &diffy::patch_set::FilePatch<'_, str>,
+    highlighter: &Highlighter,
+) -> DiffDocument {
     let (old_path, new_path, status) =
         resolve_operation(fp.operation(), fp.old_mode(), fp.new_mode());
     let language = language_for(new_path.as_deref(), old_path.as_deref());
@@ -151,9 +75,20 @@ fn build_file(fp: &diffy::patch_set::FilePatch<'_, str>, highlighter: &Highlight
         PatchKind::Binary(_) => Vec::new(),
     };
 
-    RawDiffFile {
+    // Display identity: new name wins (old for deleted files); `old_path`
+    // only when the name actually changed — mirrors pipeline::render_file.
+    let path = new_path
+        .clone()
+        .or_else(|| old_path.clone())
+        .unwrap_or_default();
+    let old_path = match (old_path, new_path) {
+        (Some(old), Some(new)) if old != new => Some(old),
+        _ => None,
+    };
+
+    DiffDocument {
+        path,
         old_path,
-        new_path,
         status,
         unavailable,
         language,
@@ -215,7 +150,7 @@ fn build_hunk(
     language: &str,
     highlighter: &Highlighter,
     fake_path: &str,
-) -> RawHunk {
+) -> HunkV2 {
     let old_range = hunk.old_range();
     let new_range = hunk.new_range();
     let function_context = hunk.function_context().map(str::to_owned);
@@ -232,11 +167,16 @@ fn build_hunk(
         .map(|line| build_row(line, &mut old_line, &mut new_line, language, highlighter, fake_path))
         .collect();
 
-    RawHunk {
-        old_start: old_range.start() as u32,
-        old_count: old_range.len() as u32,
-        new_start: new_range.start() as u32,
-        new_count: new_range.len() as u32,
+    // diffy ranges are already in git-printed convention (an empty side
+    // starts at the line before the position), matching HunkV2's contract.
+    let start = old_range.start() as u32;
+    let old_range = start..start + old_range.len() as u32;
+    let start = new_range.start() as u32;
+    let new_range = start..start + new_range.len() as u32;
+
+    HunkV2 {
+        old_range,
+        new_range,
         function_context,
         function_context_html,
         rows,
@@ -250,24 +190,24 @@ fn build_row(
     language: &str,
     highlighter: &Highlighter,
     fake_path: &str,
-) -> RawDiffRow {
-    let (raw, old, new, prefix) = match *line {
+) -> Row {
+    let (raw, old, new) = match *line {
         diffy::Line::Context(text) => {
             let old = *old_line;
             let new = *new_line;
             *old_line += 1;
             *new_line += 1;
-            (text, Some(old), Some(new), " ")
+            (text, Some(old), Some(new))
         }
         diffy::Line::Delete(text) => {
             let old = *old_line;
             *old_line += 1;
-            (text, Some(old), None, "-")
+            (text, Some(old), None)
         }
         diffy::Line::Insert(text) => {
             let new = *new_line;
             *new_line += 1;
-            (text, None, Some(new), "+")
+            (text, None, Some(new))
         }
     };
 
@@ -275,145 +215,16 @@ fn build_row(
     // line without one — our internal model, like every other line-based
     // representation in this codebase, is newline-free.
     let code = raw.trim_end_matches('\n');
-    let content = format!("{prefix}{code}");
 
     let html = (!language.is_empty())
-        .then(|| highlighter.highlight_diff_row(prefix, code, fake_path))
+        .then(|| highlighter.highlight_diff_row(code, fake_path))
         .flatten();
 
-    RawDiffRow {
+    Row {
         old_line: old,
         new_line: new,
-        content,
-        html,
-    }
-}
-
-/// Flatten the per-file model into the legacy wire shape: a flat `Vec<Line>`
-/// plus `DiffMetadata`. Pure — no highlighting or parsing here, only
-/// reshaping already-built data. Mirrors `pipeline::render`'s output shape
-/// so C1 can expose either producer's rows without writing new parse logic.
-pub(crate) fn flatten(files: Vec<RawDiffFile>) -> (Vec<Line>, DiffMetadata) {
-    let mut lines = Vec::new();
-    let files = files
-        .into_iter()
-        .map(|file| flatten_file(file, &mut lines))
-        .collect();
-    (lines, DiffMetadata { files })
-}
-
-fn flatten_file(file: RawDiffFile, lines: &mut Vec<Line>) -> DiffFileInfo {
-    let display_path = file
-        .new_path
-        .clone()
-        .or_else(|| file.old_path.clone())
-        .unwrap_or_default();
-    let start_line = lines.len() as u32 + 1;
-
-    let header_origin = |path: &str| LineOrigin::Diff {
-        path: path.to_string(),
-        old_line: None,
-        new_line: None,
-    };
-
-    lines.push(Line {
-        content: format!(
-            "diff --git a/{} b/{}",
-            file.old_path.as_deref().unwrap_or("/dev/null"),
-            file.new_path.as_deref().unwrap_or("/dev/null"),
-        ),
-        html: None,
-        origin: header_origin(&display_path),
-        semantics: LineSemantics::Diff(DiffSemantics::FileHeader),
-    });
-
-    if file.unavailable {
-        lines.push(Line {
-            content: format!(
-                "Binary files {} and {} differ",
-                file.old_path
-                    .as_deref()
-                    .map(|p| format!("a/{p}"))
-                    .unwrap_or_else(|| "/dev/null".into()),
-                file.new_path
-                    .as_deref()
-                    .map(|p| format!("b/{p}"))
-                    .unwrap_or_else(|| "/dev/null".into()),
-            ),
-            html: None,
-            origin: header_origin(&display_path),
-            semantics: LineSemantics::Diff(DiffSemantics::Meta),
-        });
-    }
-
-    let hunks = file
-        .hunks
-        .into_iter()
-        .map(|hunk| flatten_hunk(hunk, &display_path, lines))
-        .collect();
-
-    DiffFileInfo {
-        old_name: file.old_path,
-        new_name: file.new_path,
-        language: file.language,
-        start_line,
-        end_line: lines.len() as u32,
-        hunks,
-    }
-}
-
-fn flatten_hunk(hunk: RawHunk, display_path: &str, lines: &mut Vec<Line>) -> HunkInfo {
-    let marker = format!(
-        "@@ {} {} @@",
-        crate::pipeline::printed_side('-', hunk.old_start, hunk.old_count),
-        crate::pipeline::printed_side('+', hunk.new_start, hunk.new_count),
-    );
-    let header = match hunk.function_context.as_deref() {
-        Some(ctx) => format!("{marker} {ctx}"),
-        None => marker,
-    };
-
-    lines.push(Line {
-        content: header,
-        html: None,
-        origin: LineOrigin::Diff {
-            path: display_path.to_string(),
-            old_line: None,
-            new_line: None,
-        },
-        semantics: LineSemantics::Diff(DiffSemantics::HunkHeader {
-            context: hunk.function_context.clone(),
-        }),
-    });
-    let display_line = lines.len() as u32;
-
-    for row in hunk.rows {
-        let semantics = match (row.old_line, row.new_line) {
-            (Some(_), Some(_)) => DiffSemantics::Context,
-            (Some(_), None) => DiffSemantics::Deleted,
-            (None, Some(_)) => DiffSemantics::Added,
-            (None, None) => unreachable!("a row always belongs to at least one side"),
-        };
-        lines.push(Line {
-            content: row.content,
-            html: row.html.map(LineHtml::Full),
-            origin: LineOrigin::Diff {
-                path: display_path.to_string(),
-                old_line: row.old_line,
-                new_line: row.new_line,
-            },
-            semantics: LineSemantics::Diff(semantics),
-        });
-    }
-
-    HunkInfo {
-        display_line,
-        old_start: hunk.old_start,
-        old_count: hunk.old_count,
-        new_start: hunk.new_start,
-        new_count: hunk.new_count,
-        function_context: hunk.function_context,
-        function_context_html: hunk.function_context_html,
+        content: code.to_string(),
+        html: html.map(LineHtml::Full),
     }
 }
 
@@ -503,7 +314,7 @@ rename to new.rs
 +}
 "#;
 
-    fn parse(content: &str) -> Vec<RawDiffFile> {
+    fn parse(content: &str) -> Vec<DiffDocument> {
         parse_diff(content, &Highlighter::new()).unwrap()
     }
 
@@ -531,8 +342,8 @@ rename to new.rs
     fn parse_diff_extracts_file_info() {
         let files = parse(SIMPLE_DIFF);
         assert_eq!(files.len(), 1);
-        assert_eq!(files[0].old_path.as_deref(), Some("file.rs"));
-        assert_eq!(files[0].new_path.as_deref(), Some("file.rs"));
+        assert_eq!(files[0].path, "file.rs");
+        assert_eq!(files[0].old_path, None, "same name is not a rename");
         assert_eq!(files[0].language, "rs");
         assert_eq!(files[0].status, FileStatus::Modified);
     }
@@ -541,17 +352,19 @@ rename to new.rs
     fn parse_diff_handles_new_file() {
         let files = parse(NEW_FILE_DIFF);
         assert_eq!(files.len(), 1);
+        assert_eq!(files[0].path, "added_file");
         assert_eq!(files[0].old_path, None);
-        assert_eq!(files[0].new_path.as_deref(), Some("added_file"));
         assert_eq!(files[0].status, FileStatus::Added);
+        assert_eq!(files[0].hunks[0].old_range, 0..0, "git-printed convention");
+        assert_eq!(files[0].hunks[0].new_range, 1..5);
     }
 
     #[test]
     fn parse_deleted_file_diff() {
         let files = parse(DELETED_FILE_DIFF);
         assert_eq!(files.len(), 1);
-        assert_eq!(files[0].old_path.as_deref(), Some("old_file.rs"));
-        assert_eq!(files[0].new_path, None);
+        assert_eq!(files[0].path, "old_file.rs", "deleted files show the old name");
+        assert_eq!(files[0].old_path, None);
         assert_eq!(files[0].status, FileStatus::Deleted);
     }
 
@@ -559,16 +372,16 @@ rename to new.rs
     fn parse_multi_file_diff() {
         let files = parse(MULTI_FILE_DIFF);
         assert_eq!(files.len(), 2, "Should have 2 files");
-        assert_eq!(files[0].new_path.as_deref(), Some("src/main.rs"));
-        assert_eq!(files[1].new_path.as_deref(), Some("src/lib.rs"));
+        assert_eq!(files[0].path, "src/main.rs");
+        assert_eq!(files[1].path, "src/lib.rs");
     }
 
     #[test]
     fn parse_multiple_hunks() {
         let files = parse(MULTIPLE_HUNKS_DIFF);
         assert_eq!(files[0].hunks.len(), 2, "Should have 2 hunks");
-        assert_eq!(files[0].hunks[0].old_start, 1);
-        assert_eq!(files[0].hunks[1].old_start, 10);
+        assert_eq!(files[0].hunks[0].old_range, 1..4);
+        assert_eq!(files[0].hunks[1].old_range, 10..13);
     }
 
     #[test]
@@ -590,13 +403,13 @@ rename to new.rs
         );
         let files = parse(&combined);
         assert_eq!(files.len(), 2, "pure rename must not be dropped");
+        assert_eq!(files[0].path, "new.rs");
         assert_eq!(files[0].old_path.as_deref(), Some("old.rs"));
-        assert_eq!(files[0].new_path.as_deref(), Some("new.rs"));
         assert_eq!(files[0].status, FileStatus::Renamed { similarity: 100 });
         assert!(files[0].hunks.is_empty());
 
         // The second file must resolve correctly — not misindexed.
-        assert_eq!(files[1].old_path.as_deref(), Some("foo"));
+        assert_eq!(files[1].path, "foo");
         assert_eq!(files[1].hunks.len(), 1);
     }
 
@@ -616,29 +429,27 @@ rename to new.rs
 
     /// `pnpm demo:diff` opens this exact file — a native GUI window this
     /// suite can't drive, so this is the closest automatable stand-in:
-    /// the same fixture parsed and flattened end-to-end.
+    /// the same fixture parsed end-to-end.
     #[test]
     fn parses_the_demo_diff_fixture_end_to_end() {
         let sample = include_str!("../../test-fixtures/sample.diff");
         let files = parse(sample);
         assert_eq!(files.len(), 11, "sample.diff has 11 changed files");
         assert!(files.iter().all(|f| f.status == FileStatus::Modified));
-
-        let (lines, metadata) = flatten(files);
-        assert!(!lines.is_empty());
-        assert_eq!(metadata.files.len(), 11);
+        assert!(files.iter().all(|f| !f.hunks.is_empty()));
     }
 
     #[test]
-    fn flatten_reproduces_prefixed_content() {
+    fn rows_are_raw() {
         let files = parse(SIMPLE_DIFF);
-        let (lines, metadata) = flatten(files);
+        let rows = &files[0].hunks[0].rows;
 
-        assert!(lines[0].content.starts_with("diff --git"));
-        assert!(lines.iter().any(|l| l.content.starts_with('+')));
-        assert!(lines.iter().any(|l| l.content.starts_with('-')));
-        assert_eq!(metadata.files.len(), 1);
-        assert_eq!(metadata.files[0].start_line, 1);
-        assert_eq!(metadata.files[0].end_line, lines.len() as u32);
+        // No +/-/space prefix on content — the sign is derivable from the
+        // line-number pattern and re-attached only at presentation edges.
+        assert_eq!(rows[0].content, "fn main() {");
+        let deleted = rows.iter().find(|r| r.new_line.is_none()).unwrap();
+        assert_eq!(deleted.content, "    old_code();");
+        let added = rows.iter().find(|r| r.old_line.is_none()).unwrap();
+        assert!(!added.content.starts_with('+'));
     }
 }
