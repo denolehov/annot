@@ -176,6 +176,21 @@ Kill the stray `annot.exe` before rebuilding.
 - **Declarative over imperative**: `map`/`collect`/`join` over manual loops
 - **Composables pattern**: Svelte 5 runes in `src/lib/composables/`
 
+## Commit Messages
+
+release-please lifts every `feat`/`fix` subject line verbatim into
+CHANGELOG.md and the GitHub release notes (`refactor`/`chore`/etc. stay
+hidden). Write subjects for that audience:
+
+- `feat`/`fix` only for user-visible changes, phrased as what the user gets
+  ("working-tree reviews include untracked files"), not internal milestones
+  ("git substrate on gix — FileSource seam")
+- Internal capability, scaffolding, and inert types are `refactor` even when
+  they add code
+- Engineering narrative goes in the body — it's for `git log`, not the notes
+- No `BREAKING CHANGE:` footers / `!` until v1.0 is planned deliberately;
+  note migration steps as plain body text instead
+
 ## Agent Output Preferences
 
 - **Use `review_content` for reports/summaries**: Present plans, analysis, or structured output via the MCP tool instead of inline text.
