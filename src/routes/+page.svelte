@@ -23,7 +23,6 @@
   import { synthesizeDocs, deriveDisplay, toFileEntries } from "$lib/display-rows";
   import { useFileTree } from "$lib/composables/useFileTree.svelte";
   import { useFileCollapse } from "$lib/composables/useFileCollapse.svelte";
-  import { fileContaining } from "$lib/file-collapse";
   import { useExitModes } from "$lib/composables/useExitModes.svelte";
   import { useContentTracking } from "$lib/composables/useContentTracking.svelte";
   import { useInteraction, type EditorKind } from "$lib/composables/useInteraction.svelte";
@@ -291,15 +290,16 @@
   async function scrollToDisplayIndex(displayIndex: number, block: ScrollLogicalPosition = 'center') {
     // Jumps into a collapsed file expand it first (GitHub behavior); the header
     // row itself is always rendered, so it never triggers an expand.
-    const entry = fileContaining(fileEntries, displayIndex);
-    if (entry && displayIndex > entry.startLine && fileCollapse.isCollapsed(entry.index)) {
-      fileCollapse.expand(entry.index);
+    const walkEntry = diffDisplay?.byIndex.get(displayIndex);
+    const dv = walkEntry ? (diffDisplay?.docs[walkEntry.docIdx] ?? null) : null;
+    if (dv && displayIndex > dv.headerDisplayIndex && fileCollapse.isCollapsed(dv.index)) {
+      fileCollapse.expand(dv.index);
       await tick();
     }
     const target =
       contentEl?.querySelector(`[data-display-idx="${displayIndex}"]`) ??
-      // Meta lines are never rendered — land on their file's header instead.
-      (entry ? contentEl?.querySelector(`[data-display-idx="${entry.startLine}"]`) : null);
+      // Fall back to the file's header when the row itself isn't in the DOM.
+      (dv ? contentEl?.querySelector(`[data-display-idx="${dv.headerDisplayIndex}"]`) : null);
     if (!target || !contentEl) return;
     if (block === 'start') {
       // Native scrollIntoView misjudges targets that are `position: sticky`
@@ -315,9 +315,9 @@
   // File jumps land the file header at the top of the viewport. Centering it would
   // leave the *previous* file at the top, which is what current-file tracking reads.
   async function jumpToFile(startLine: number) {
-    const entry = fileEntries.find((e) => e.startLine === startLine);
-    if (entry && fileCollapse.isCollapsed(entry.index)) {
-      fileCollapse.expand(entry.index);
+    const dv = diffDisplay?.docs.find((d) => d.headerDisplayIndex === startLine);
+    if (dv && fileCollapse.isCollapsed(dv.index)) {
+      fileCollapse.expand(dv.index);
       await tick();
     }
     // Set current-file tracking directly rather than waiting on the scroll-driven
@@ -326,7 +326,7 @@
     contentTracking.updateFromLine(startLine);
     scrollToDisplayIndex(startLine, 'start');
   }
-  const search = useSearch(() => lines, scrollToDisplayIndex);
+  const search = useSearch(() => lines, scrollToDisplayIndex, () => diffDisplay);
 
   // Session comment state (global/file-level comment)
   let sessionComment: JSONContent | undefined = $state(undefined);
