@@ -15,7 +15,7 @@
  * toggle.
  */
 
-import type { DiffDocument, DiffFileInfo, HunkV2, Line, Row } from './types';
+import type { DiffDocument, DiffFileInfo, HunkV2, Line, LineRange, Row } from './types';
 import type { FileEntry } from './file-tree';
 
 // =============================================================================
@@ -135,6 +135,19 @@ export interface DiffDisplay {
   byIndex: Map<number, DisplayRow>;
   /** `${path}:${side}:${line}` → displayIndex (side ∈ 'old' | 'new'). */
   byEndpoint: Map<string, number>;
+}
+
+/**
+ * Presentation text for a hunk header: `@@ -a,b +c,d @@ ctx`.
+ * Git omits the count when it is 1: `-3` not `-3,1`.
+ */
+export function hunkHeaderText(hunk: HunkV2): string {
+  const side = (sign: string, range: LineRange) => {
+    const count = range.end - range.start;
+    return count === 1 ? `${sign}${range.start}` : `${sign}${range.start},${count}`;
+  };
+  const marker = `@@ ${side('-', hunk.old_range)} ${side('+', hunk.new_range)} @@`;
+  return hunk.function_context ? `${marker} ${hunk.function_context}` : marker;
 }
 
 /** Which side(s) a row lives on: old-only = deleted, new-only = added. */

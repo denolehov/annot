@@ -2,9 +2,6 @@ import type { DisplayLine } from './composables/useLineSegments.svelte';
 import type { FileEntry } from './file-tree';
 import { getDiffKind } from './line-utils';
 
-/** Files with more changed lines than this start collapsed. */
-export const AUTO_COLLAPSE_THRESHOLD = 500;
-
 /** A file's rows within a segment: the header row plus its renderable body. */
 export interface FileSection {
   entry: FileEntry;
@@ -52,13 +49,6 @@ export function groupByFile(displayLines: DisplayLine[], entries: FileEntry[]): 
   }
 
   return { leading, sections };
-}
-
-/** Indices of entries large enough to start collapsed. */
-export function autoCollapsedIndices(entries: FileEntry[]): number[] {
-  return entries
-    .filter((e) => e.added + e.deleted > AUTO_COLLAPSE_THRESHOLD)
-    .map((e) => e.index);
 }
 
 /** The entry whose [startLine, endLine] range contains the display index, or null. */

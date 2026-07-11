@@ -17,7 +17,8 @@
   import { getAnnotContext } from '$lib/context';
 
   interface Props {
-    line: Line;
+    /** Unused by LineRow itself; optional so walk-driven diff rows can omit it. */
+    line?: Line;
     displayIndex: number;
     additionalClasses?: Record<string, boolean>;
     gutterClass?: string;
@@ -29,7 +30,7 @@
   }
 
   let {
-    line,
+    line: _line,
     displayIndex,
     additionalClasses = {},
     gutterClass = '',

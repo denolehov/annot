@@ -257,17 +257,17 @@
   });
 
   // Per-file collapse (composable) — diff mode only
-  const fileCollapse = useFileCollapse(() => fileEntries, {
+  const fileCollapse = useFileCollapse(() => diffDisplay?.docs ?? [], {
     // Spec says "move selection to the header row", but header rows are not
     // selectable — clear instead (GitHub behavior).
-    onCollapse: (entry) => {
+    onCollapse: (dv) => {
       const r = interaction.range;
-      if (r && r.end >= entry.startLine && r.start <= entry.endLine) {
+      if (r && r.end >= dv.headerDisplayIndex && r.start <= dv.endDisplayIndex) {
         if (interaction.phase === 'editing') interaction.closeEditor();
         interaction.clearSelection();
       }
       const h = interaction.hoverLine;
-      if (h !== null && h > entry.startLine && h <= entry.endLine) {
+      if (h !== null && h > dv.headerDisplayIndex && h <= dv.endDisplayIndex) {
         interaction.handleLineLeave();
       }
     },

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupByFile, autoCollapsedIndices, fileContaining, AUTO_COLLAPSE_THRESHOLD } from './file-collapse';
+import { groupByFile, fileContaining } from './file-collapse';
 import type { FileEntry } from './file-tree';
 import type { DisplayLine } from './composables/useLineSegments.svelte';
 import type { Line } from './types';
@@ -106,18 +106,6 @@ describe('groupByFile', () => {
 
     expect(grouped.leading.map((dl) => dl.displayIndex)).toEqual([1]);
     expect(grouped.sections[0].header.displayIndex).toBe(2);
-  });
-});
-
-describe('autoCollapsedIndices', () => {
-  it('collapses files strictly above the threshold', () => {
-    const entries = [
-      entry({ index: 0, startLine: 1, endLine: 2, added: AUTO_COLLAPSE_THRESHOLD, deleted: 1 }),
-      entry({ index: 1, startLine: 3, endLine: 4, added: AUTO_COLLAPSE_THRESHOLD, deleted: 0 }),
-      entry({ index: 2, startLine: 5, endLine: 6, added: 3, deleted: 4 }),
-    ];
-
-    expect(autoCollapsedIndices(entries)).toEqual([0]);
   });
 });
 

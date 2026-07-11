@@ -1,27 +1,29 @@
 import { SvelteSet } from 'svelte/reactivity';
-import type { FileEntry } from '$lib/file-tree';
-import { autoCollapsedIndices } from '$lib/file-collapse';
+import type { DocView } from '$lib/display-rows';
+
+/** Files with more changed lines than this start collapsed. */
+export const AUTO_COLLAPSE_THRESHOLD = 500;
 
 export interface FileCollapseOptions {
   /** Fired for each file transitioning expanded → collapsed (selection/hover cleanup). */
-  onCollapse?: (entry: FileEntry) => void;
+  onCollapse?: (dv: DocView) => void;
 }
 
 /**
  * Per-file collapse state for diff views.
  *
- * Presentation state only — collapse never touches the lines array; the render
- * layer skips collapsed sections. If collapse ever becomes structural, only
- * that render-skip mechanism gets replaced.
+ * Presentation state only — collapse never touches the display walk; the
+ * render layer skips collapsed sections. Display indexes stay stable under
+ * toggle by construction.
  */
-export function useFileCollapse(getEntries: () => FileEntry[], options: FileCollapseOptions = {}) {
+export function useFileCollapse(getDocs: () => DocView[], options: FileCollapseOptions = {}) {
   const collapsed = new SvelteSet<number>();
 
   function collapse(index: number) {
     if (collapsed.has(index)) return;
     collapsed.add(index);
-    const entry = getEntries().find((e) => e.index === index);
-    if (entry) options.onCollapse?.(entry);
+    const dv = getDocs().find((d) => d.index === index);
+    if (dv) options.onCollapse?.(dv);
   }
 
   return {
@@ -43,14 +45,16 @@ export function useFileCollapse(getEntries: () => FileEntry[], options: FileColl
       }
     },
     collapseAll() {
-      for (const entry of getEntries()) collapse(entry.index);
+      for (const dv of getDocs()) collapse(dv.index);
     },
     expandAll() {
       collapsed.clear();
     },
     /** Seed auto-collapsed files after content load. Fires no onCollapse — nothing to clean up yet. */
     init() {
-      for (const index of autoCollapsedIndices(getEntries())) collapsed.add(index);
+      for (const dv of getDocs()) {
+        if (dv.added + dv.deleted > AUTO_COLLAPSE_THRESHOLD) collapsed.add(dv.index);
+      }
     },
   };
 }
