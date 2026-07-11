@@ -1,4 +1,5 @@
-import type { Line } from '$lib/types';
+import type { Line, LineHtml } from '$lib/types';
+import { hunkHeaderText, type DiffDisplay, type DisplayRow } from '$lib/display-rows';
 
 export interface SearchMatch {
   displayIndex: number;
@@ -16,7 +17,7 @@ interface SearchState {
  * Extract text content from HTML.
  * This ensures we search the same text that gets rendered in the DOM.
  */
-function getRenderedText(line: Line): string {
+function getRenderedText(line: { content: string; html: LineHtml | null }): string {
   if (!line.html) return line.content;
 
   // Use a temporary element to extract text from HTML
@@ -34,15 +35,29 @@ function getRenderedText(line: Line): string {
   return div.textContent ?? line.content;
 }
 
+/** The text an entry renders — search must match what's on screen. */
+function entryText(entry: DisplayRow, display: DiffDisplay): string {
+  switch (entry.kind) {
+    case 'file-header':
+      return display.docs[entry.docIdx].path;
+    case 'hunk-header':
+      return hunkHeaderText(display.docs[entry.docIdx].doc.hunks[entry.hunkIdx]);
+    case 'row':
+      return getRenderedText(entry.row);
+  }
+}
+
 /**
  * useSearch - Manages in-file search state.
  *
- * @param getLines - Function returning current lines array
+ * @param getLines - Function returning current lines array (non-diff modes)
  * @param scrollToLine - Callback to scroll viewport to a display index
+ * @param getDisplay - The DisplayRow walk; searched instead of lines in diff mode
  */
 export function useSearch(
   getLines: () => Line[],
-  scrollToLine: (displayIndex: number) => void
+  scrollToLine: (displayIndex: number) => void,
+  getDisplay: () => DiffDisplay | null = () => null
 ) {
   let state = $state<SearchState>({
     isOpen: false,
@@ -51,37 +66,41 @@ export function useSearch(
     currentMatchIndex: -1,
   });
 
-  function findMatches(lines: Line[], query: string): SearchMatch[] {
-    if (!query) return [];
+  function matchRanges(text: string, queryLower: string): Array<{ start: number; end: number }> {
+    const textLower = text.toLowerCase();
+    const ranges: Array<{ start: number; end: number }> = [];
 
-    const queryLower = query.toLowerCase();
-    const matches: SearchMatch[] = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      // Diff meta lines (index, ---/+++, mode changes) are never rendered —
-      // a match there would be a dead jump.
-      if (line.semantics.type === 'diff' && line.semantics.kind === 'meta') continue;
-      // Search rendered text to match DOM text node offsets
-      const textLower = getRenderedText(line).toLowerCase();
-      const ranges: Array<{ start: number; end: number }> = [];
-
-      let pos = 0;
-      let idx: number;
-      while ((idx = textLower.indexOf(queryLower, pos)) !== -1) {
-        ranges.push({ start: idx, end: idx + query.length });
-        pos = idx + 1;
-      }
-
-      if (ranges.length > 0) {
-        matches.push({
-          displayIndex: i + 1, // 1-indexed
-          ranges,
-        });
-      }
+    let pos = 0;
+    let idx: number;
+    while ((idx = textLower.indexOf(queryLower, pos)) !== -1) {
+      ranges.push({ start: idx, end: idx + queryLower.length });
+      pos = idx + 1;
     }
 
-    return matches;
+    return ranges;
+  }
+
+  function findMatches(query: string): SearchMatch[] {
+    if (!query) return [];
+    const queryLower = query.toLowerCase();
+
+    const display = getDisplay();
+    if (display) {
+      return display.rows
+        .map((entry) => ({
+          displayIndex: entry.displayIndex,
+          ranges: matchRanges(entryText(entry, display), queryLower),
+        }))
+        .filter((m) => m.ranges.length > 0);
+    }
+
+    return getLines()
+      .map((line, i) => ({
+        displayIndex: i + 1,
+        // Search rendered text to match DOM text node offsets
+        ranges: matchRanges(getRenderedText(line), queryLower),
+      }))
+      .filter((m) => m.ranges.length > 0);
   }
 
   function open() {
@@ -97,7 +116,7 @@ export function useSearch(
 
   function setQuery(query: string) {
     state.query = query;
-    state.matches = findMatches(getLines(), query);
+    state.matches = findMatches(query);
     state.currentMatchIndex = state.matches.length > 0 ? 0 : -1;
 
     if (state.currentMatchIndex >= 0) {
