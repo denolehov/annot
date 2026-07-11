@@ -1,7 +1,36 @@
 import { describe, it, expect } from 'vitest';
 import { flushSync } from 'svelte';
 import { useContentTracking } from './useContentTracking.svelte';
-import type { DiffMetadata, MarkdownMetadata } from '$lib/types';
+import { deriveDisplay, type PseudoDoc, type PseudoHunk } from '$lib/display-rows';
+import type { MarkdownMetadata } from '$lib/types';
+
+/** A doc whose header/hunk/row wire indexes mirror a real flat-wire layout. */
+function doc(path: string, headerIndex: number, hunkHeaders: number[][]): PseudoDoc {
+  const hunks = hunkHeaders.map(([header, rowCount]): PseudoHunk => ({
+    old_range: { start: 1, end: 1 + rowCount },
+    new_range: { start: 1, end: 1 + rowCount },
+    function_context: null,
+    function_context_html: null,
+    rows: Array.from({ length: rowCount }, (_, i) => ({
+      old_line: i + 1,
+      new_line: i + 1,
+      content: ` line ${i}`,
+      html: null,
+      wireIndex: header + 1 + i,
+    })),
+    wireIndex: header,
+  }));
+  return {
+    path,
+    old_path: null,
+    status: 'modified',
+    unavailable: false,
+    language: 'rs',
+    hunks,
+    wireIndex: headerIndex,
+    endWireIndex: (hunks.at(-1)?.rows.at(-1)?.wireIndex ?? headerIndex),
+  };
+}
 
 describe('useContentTracking', () => {
   it('starts with default indices', () => {
@@ -9,75 +38,19 @@ describe('useContentTracking', () => {
     expect(tracking.currentFileIndex).toBe(0);
     expect(tracking.currentHunkIndex).toBe(0);
     expect(tracking.currentSectionIndex).toBe(0);
-    expect(tracking.hunkTracker).toBeNull();
   });
 
-  it('initializes diff tracker from metadata', () => {
-    const tracking = useContentTracking();
-    const meta: DiffMetadata = {
-      files: [
-        {
-          old_name: 'a.rs',
-          new_name: 'a.rs',
-          language: 'rust',
-          start_line: 1,
-          end_line: 20,
-          hunks: [
-            { display_line: 2, old_start: 1, old_count: 5, new_start: 1, new_count: 6, function_context: null, function_context_html: null },
-            { display_line: 10, old_start: 10, old_count: 3, new_start: 11, new_count: 4, function_context: null, function_context_html: null },
-          ],
-        },
-        {
-          old_name: 'b.rs',
-          new_name: 'b.rs',
-          language: 'rust',
-          start_line: 21,
-          end_line: 40,
-          hunks: [
-            { display_line: 22, old_start: 1, old_count: 5, new_start: 1, new_count: 5, function_context: null, function_context_html: null },
-          ],
-        },
-      ],
-    };
+  it('updates position from display index in diff mode', () => {
+    // a.rs: header 1, hunks at 2 (rows 3–9) and 10 (rows 11–15)
+    const display = deriveDisplay([doc('a.rs', 1, [[2, 7], [10, 5]])]);
+    const tracking = useContentTracking(() => display);
 
-    flushSync(() => {
-      tracking.initializeDiff(meta);
-    });
-
-    expect(tracking.hunkTracker).not.toBeNull();
-    expect(tracking.hunkTracker?.length).toBe(3); // 2 + 1 hunks
-  });
-
-  it('updates position from line number in diff mode', () => {
-    const tracking = useContentTracking();
-    const meta: DiffMetadata = {
-      files: [
-        {
-          old_name: 'a.rs',
-          new_name: 'a.rs',
-          language: 'rust',
-          start_line: 1,
-          end_line: 20,
-          hunks: [
-            { display_line: 2, old_start: 1, old_count: 5, new_start: 1, new_count: 6, function_context: null, function_context_html: null },
-            { display_line: 10, old_start: 10, old_count: 3, new_start: 11, new_count: 4, function_context: null, function_context_html: null },
-          ],
-        },
-      ],
-    };
-
-    flushSync(() => {
-      tracking.initializeDiff(meta);
-    });
-
-    // Line 5 is in the first hunk (starts at line 2)
     flushSync(() => {
       tracking.updateFromLine(5);
     });
     expect(tracking.currentFileIndex).toBe(0);
     expect(tracking.currentHunkIndex).toBe(0);
 
-    // Line 15 is in the second hunk (starts at line 10)
     flushSync(() => {
       tracking.updateFromLine(15);
     });
@@ -86,45 +59,19 @@ describe('useContentTracking', () => {
   });
 
   it('resolves a file header line to its own file, not the file above it', () => {
-    const tracking = useContentTracking();
-    const meta: DiffMetadata = {
-      files: [
-        {
-          old_name: 'lib.rs',
-          new_name: 'lib.rs',
-          language: 'rust',
-          start_line: 1,
-          end_line: 20,
-          hunks: [
-            { display_line: 5, old_start: 1, old_count: 5, new_start: 1, new_count: 6, function_context: null, function_context_html: null },
-          ],
-        },
-        {
-          old_name: 'main.rs',
-          new_name: 'main.rs',
-          language: 'rust',
-          start_line: 21,
-          end_line: 40,
-          hunks: [
-            { display_line: 25, old_start: 1, old_count: 5, new_start: 1, new_count: 5, function_context: null, function_context_html: null },
-          ],
-        },
-      ],
-    };
+    // lib.rs: header 1, hunk at 5 (rows 6–20); main.rs: header 21, hunk at 25 (rows 26–35)
+    const display = deriveDisplay([
+      doc('lib.rs', 1, [[5, 15]]),
+      doc('main.rs', 21, [[25, 10]]),
+    ]);
+    const tracking = useContentTracking(() => display);
 
-    flushSync(() => {
-      tracking.initializeDiff(meta);
-    });
-
-    // Line 21 is main.rs's `diff --git` header — it sits above main.rs's first hunk,
-    // so hunk boundaries alone would resolve it to lib.rs.
     flushSync(() => {
       tracking.updateFromLine(21);
     });
     expect(tracking.currentFileIndex).toBe(1);
     expect(tracking.currentHunkIndex).toBe(0);
 
-    // Inside main.rs's hunk, tracking is unchanged.
     flushSync(() => {
       tracking.updateFromLine(30);
     });
@@ -148,7 +95,6 @@ describe('useContentTracking', () => {
       tracking.initializeMarkdown(meta);
     });
 
-    // We don't expose sectionTracker directly, but we can test via updateFromLine
     flushSync(() => {
       tracking.updateFromLine(15);
     });

@@ -8,7 +8,6 @@
   import { type Range } from "$lib/range";
   import { selectionToAnchor, type Anchor, type SlotRef } from "$lib/anchor";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap, findExcalidrawChip } from "$lib/tiptap";
-  import { ContentTracker, type HunkPayload, type SectionPayload } from "$lib/content-tracker";
   import AnnotationSlot from "$lib/components/AnnotationSlot.svelte";
   import CopyDropdown from "$lib/CopyDropdown.svelte";
   import { CommandPalette } from "$lib/CommandPalette";
@@ -83,14 +82,6 @@
     }, duration);
   }
 
-  // Content tracking (composable)
-  const contentTracking = useContentTracking();
-  let contentEl: HTMLDivElement | null = $state(null);
-  let scrollRafId: number | null = null;
-
-  // File tree sidebar (composable) — diff mode only
-  const fileTree = useFileTree();
-
   // The DisplayRow spine: single source of display truth for diff mode.
   let diffDisplay = $derived(
     diffMetadata ? deriveDisplay(synthesizeDocs(lines, diffMetadata.files)) : null
@@ -98,15 +89,21 @@
   // Transitional FileEntry view for consumers not yet reading the walk.
   let fileEntries = $derived(diffDisplay ? toFileEntries(diffDisplay) : []);
 
+  // Content tracking (composable)
+  const contentTracking = useContentTracking(() => diffDisplay);
+  let contentEl: HTMLDivElement | null = $state(null);
+  let scrollRafId: number | null = null;
+
+  // File tree sidebar (composable) — diff mode only
+  const fileTree = useFileTree();
+
   // Current file/hunk derived from indices (diff mode)
-  let currentFile = $derived.by(() => {
-    if (!diffMetadata || diffMetadata.files.length === 0) return null;
-    return diffMetadata.files[contentTracking.currentFileIndex] ?? null;
-  });
+  let currentFile = $derived(diffDisplay?.docs[contentTracking.currentFileIndex] ?? null);
 
   let currentHunk = $derived.by(() => {
-    if (!currentFile || currentFile.hunks.length === 0) return null;
-    return currentFile.hunks[contentTracking.currentHunkIndex] ?? null;
+    const hunks = currentFile?.doc.hunks;
+    if (!hunks || hunks.length === 0) return null;
+    return hunks[contentTracking.currentHunkIndex] ?? null;
   });
 
   // Current section derived from index (markdown mode)
@@ -739,7 +736,6 @@
 
       // Build content trackers for scroll tracking
       if (res.metadata.type === 'diff') {
-        contentTracking.initializeDiff(res.metadata);
         fileCollapse.init();
       }
       if (res.metadata.type === 'markdown') {

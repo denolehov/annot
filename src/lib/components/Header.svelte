@@ -3,15 +3,15 @@
   import Icon from '$lib/CommandPalette/Icon.svelte';
   import { ChevronUpDownIcon, ChevronDownUpIcon } from '$lib/icons';
   import { getAnnotContext } from '$lib/context';
-  import { diffTotals } from '$lib/file-tree';
   import { getCurrentWindow } from '@tauri-apps/api/window';
-  import type { DiffFileInfo, HunkInfo, SectionInfo } from '$lib/types';
+  import type { HunkV2, SectionInfo } from '$lib/types';
+  import type { DocView } from '$lib/display-rows';
 
   interface Props {
     label: string;
-    currentFile: DiffFileInfo | null;
+    currentFile: DocView | null;
     currentFileIndex: number;
-    currentHunk: HunkInfo | null;
+    currentHunk: HunkV2 | null;
     sectionBreadcrumb: SectionInfo[];
     headerCurrentSection: SectionInfo | null;
     hasSessionComment: boolean;
@@ -44,7 +44,11 @@
   const displayLabel = $derived(label.includes('/') ? label.split('/').pop() ?? label : label);
 
   // Changeset summary (diff mode)
-  const totals = $derived(diffTotals(ctx.fileEntries));
+  const docs = $derived(ctx.diffDisplay?.docs ?? []);
+  const totals = $derived({
+    added: docs.reduce((sum, dv) => sum + dv.added, 0),
+    deleted: docs.reduce((sum, dv) => sum + dv.deleted, 0),
+  });
 
   function toggleAllFiles(e: MouseEvent) {
     (ctx.fileCollapse.anyCollapsed ? ctx.fileCollapse.expandAll : ctx.fileCollapse.collapseAll)();
@@ -57,8 +61,8 @@
   <div class="header-left">
     {#if diffMetadata && currentFile}
       <!-- Diff mode: show hunk metadata -->
-      {@const fileName = currentFile.new_name ?? currentFile.old_name ?? 'unknown'}
-      {@const fileCount = diffMetadata.files.length}
+      {@const fileName = currentFile.path || 'unknown'}
+      {@const fileCount = docs.length}
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
       <span class="diff-header-info">
         <span
@@ -75,8 +79,8 @@
         {#if currentHunk}
           <span class="diff-header-sep">·</span>
           <span class="diff-header-range">
-            <span class="diff-header-old">-{currentHunk.old_start},{currentHunk.old_count}</span>
-            <span class="diff-header-new">+{currentHunk.new_start},{currentHunk.new_count}</span>
+            <span class="diff-header-old">-{currentHunk.old_range.start},{currentHunk.old_range.end - currentHunk.old_range.start}</span>
+            <span class="diff-header-new">+{currentHunk.new_range.start},{currentHunk.new_range.end - currentHunk.new_range.start}</span>
           </span>
           {#if currentHunk.function_context}
             <span class="diff-header-fn">
