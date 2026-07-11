@@ -188,7 +188,7 @@ describe('useAnnotations', () => {
       { old_line: null, new_line: 2 },
       { old_line: null, new_line: 3 },
       { old_line: 4, new_line: 4 },
-    ].map((sides, i) => ({ ...sides, content: ` row ${i + 1}`, html: null, wireIndex: 3 + i }));
+    ].map((sides, i) => ({ ...sides, content: ` row ${i + 1}`, html: null }));
     const display = deriveDisplay([{
       path: 'file.rs',
       old_path: null,
@@ -201,10 +201,7 @@ describe('useAnnotations', () => {
         function_context: null,
         function_context_html: null,
         rows,
-        wireIndex: 2,
       }],
-      wireIndex: 1,
-      endWireIndex: 8,
     }]);
     const state = useAnnotations({ getLines: () => [], getDisplay: () => display });
 

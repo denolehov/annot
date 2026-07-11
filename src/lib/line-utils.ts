@@ -1,7 +1,4 @@
-import type { Line, DiffSemantics } from './types';
-
-/** The kind of a diff line from semantics */
-export type DiffKind = DiffSemantics['kind'];
+import type { Line } from './types';
 
 /**
  * Get the display line number from a line's origin.
@@ -11,9 +8,6 @@ export function getLineNumber(line: Line): number | null {
   switch (line.origin.type) {
     case 'source':
       return line.origin.line;
-    case 'diff':
-      // For diff lines, prefer new_line, fallback to old_line
-      return line.origin.new_line ?? line.origin.old_line;
     case 'virtual':
       return null;
   }
@@ -29,23 +23,12 @@ export function getLineId(line: Line, index: number): number {
 }
 
 /**
- * Check if a line is a diff line and get its diff kind.
- */
-export function getDiffKind(line: Line): DiffKind | null {
-  if (line.semantics.type === 'diff') {
-    return line.semantics.kind;
-  }
-  return null;
-}
-
-/**
  * Get the file path from a line's origin.
  * Returns null for virtual lines.
  */
 export function getFilePath(line: Line): string | null {
   switch (line.origin.type) {
     case 'source':
-    case 'diff':
       return line.origin.path;
     case 'virtual':
       return null;
