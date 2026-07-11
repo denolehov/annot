@@ -5,14 +5,12 @@
 /** Where this line's content originates from. */
 export type LineOrigin =
   | { type: 'source'; path: string; line: number }
-  | { type: 'diff'; path: string; old_line: number | null; new_line: number | null }
   | { type: 'virtual' };
 
 /** Content classification: what kind of line is this? */
 export type LineSemantics =
   | { type: 'plain' }
   | ({ type: 'markdown' } & MarkdownSemantics)
-  | ({ type: 'diff' } & DiffSemantics)
   | ({ type: 'portal' } & PortalSemantics);
 
 /** Markdown structural semantics. */
@@ -25,15 +23,6 @@ export type MarkdownSemantics =
   | { kind: 'list_item'; ordered: boolean }
   | { kind: 'block_quote' }
   | { kind: 'horizontal_rule' };
-
-/** Diff line semantics. */
-export type DiffSemantics =
-  | { kind: 'file_header' }
-  | { kind: 'hunk_header'; context: string | null }
-  | { kind: 'meta' }
-  | { kind: 'added' }
-  | { kind: 'deleted' }
-  | { kind: 'context' };
 
 /** Portal line semantics. */
 export type PortalSemantics =
@@ -69,15 +58,20 @@ export interface ExitMode {
   origin: 'persisted' | 'transient';
 }
 
-// Content metadata discriminated union
+// Content metadata discriminated union (non-diff extras; diff mode
+// discriminates on `view.type`)
 export type ContentMetadata =
   | { type: 'plain' }
-  | ({ type: 'diff' } & DiffMetadata)
   | ({ type: 'markdown' } & MarkdownMetadata);
+
+/** The wire shape of the content itself. */
+export type ContentView =
+  | { type: 'flat'; lines: Line[] }
+  | { type: 'diff'; documents: DiffDocument[] };
 
 export interface ContentResponse {
   label: string;
-  lines: Line[];
+  view: ContentView;
   tags: Tag[];
   exit_modes: ExitMode[];
   selected_exit_mode_id: string | null;
@@ -93,57 +87,28 @@ export interface ConfigSnapshot {
   exit_modes: ExitMode[];
 }
 
-// Diff types
-export interface DiffMetadata {
-  files: DiffFileInfo[];
-  // Note: `lines` HashMap is no longer serialized from backend.
-  // Line info is now embedded in each Line's origin/semantics.
-}
-
-export interface HunkInfo {
-  display_line: number;
-  old_start: number;
-  old_count: number;
-  new_start: number;
-  new_count: number;
-  function_context: string | null;
-  function_context_html: string | null;
-}
-
-export interface DiffFileInfo {
-  old_name: string | null;
-  new_name: string | null;
-  language: string;
-  start_line: number;
-  end_line: number;
-  hunks: HunkInfo[];
-}
-
-// Note: DiffLineInfo and DiffLineKind are no longer needed on frontend.
-// Line info is now embedded in each Line's origin (LineOrigin::Diff)
-// and semantics (LineSemantics::Diff).
-
 // =============================================================================
-// Per-file diff documents
-//
-// Today synthesized from the flat wire (display-rows.ts); the per-file wire
-// migration makes them the wire itself and deletes the synthesis.
+// Per-file diff documents — the diff wire shape
 // =============================================================================
 
-/** Half-open, 1-indexed source line range — Rust `Range<u32>`. */
+/**
+ * Half-open, 1-indexed source line range — Rust `Range<u32>`, in git-printed
+ * convention: an empty side starts at the line before the position
+ * (`0..0` for a new file's old side).
+ */
 export interface LineRange {
   start: number;
   end: number;
 }
 
-/** VCS file status. Stubbed 'modified' until the wire serializes vcs::FileStatus. */
+/** VCS file status (vcs::FileStatus serialized as a plain string). */
 export type FileStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'type_changed';
 
 export interface Row {
   /** old-only = deleted, new-only = added, both = context — no kind field. */
   old_line: number | null;
   new_line: number | null;
-  /** Prefixed (+/-/space) while the flat wire is the source; raw once per-file. */
+  /** Raw source line — no +/-/space prefix; the sign is presentation. */
   content: string;
   html: LineHtml | null;
 }

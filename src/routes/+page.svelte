@@ -3,7 +3,7 @@
   import { listen, emit } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount, tick } from "svelte";
-  import type { ContentResponse, ContentNode, ContentMetadata, Line, JSONContent, ExitMode, Tag, DiffMetadata, HunkInfo, MarkdownMetadata, SectionInfo, ConfigSnapshot } from "$lib/types";
+  import type { ContentResponse, ContentNode, ContentMetadata, DiffDocument, Line, JSONContent, ExitMode, Tag, MarkdownMetadata, SectionInfo, ConfigSnapshot } from "$lib/types";
   import { getLineNumber, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, isHorizontalRule } from "$lib/line-utils";
   import { type Range } from "$lib/range";
   import { selectionToAnchor, type Anchor, type SlotRef } from "$lib/anchor";
@@ -20,7 +20,7 @@
   import { Header, StatusBar, SessionEditor, WindowResizeHandles } from "$lib/components";
   import { PaneGroup, Pane, PaneResizer } from "paneforge";
   import FileTree from "$lib/components/FileTree.svelte";
-  import { synthesizeDocs, deriveDisplay, selectionToDiffAnchor } from "$lib/display-rows";
+  import { deriveDisplay, selectionToDiffAnchor } from "$lib/display-rows";
   import { useFileTree } from "$lib/composables/useFileTree.svelte";
   import { useFileCollapse } from "$lib/composables/useFileCollapse.svelte";
   import { useExitModes } from "$lib/composables/useExitModes.svelte";
@@ -42,13 +42,12 @@
   import { isMermaidExcalidrawSupported } from "$lib/mermaid-loader";
 
   let lines: Line[] = $state([]);
+  let diffDocs = $state<DiffDocument[] | null>(null);
+  let loaded = $state(false);
   let label = $state("");
   let error = $state("");
   let metadata = $state<ContentMetadata>({ type: 'plain' });
   let allowsImagePaste = $state(false);
-
-  // Derived metadata for backwards compatibility
-  let diffMetadata = $derived(metadata.type === 'diff' ? metadata : null);
 
   // =============================================================================
   // Coordinate System (Display Index)
@@ -82,9 +81,7 @@
   }
 
   // The DisplayRow spine: single source of display truth for diff mode.
-  let diffDisplay = $derived(
-    diffMetadata ? deriveDisplay(synthesizeDocs(lines, diffMetadata.files)) : null
-  );
+  let diffDisplay = $derived(diffDocs ? deriveDisplay(diffDocs) : null);
 
   // Content tracking (composable)
   const contentTracking = useContentTracking(() => diffDisplay);
@@ -159,8 +156,8 @@
     if (!lineEl) return;
 
     const displayIdx = parseInt(lineEl.dataset.displayIdx ?? '1', 10);
-    if (diffMetadata) {
-      // Diff mode: hunk boundaries use display_line (position in rendered view)
+    if (diffDisplay) {
+      // Diff mode: hunk boundaries live in walk display space
       contentTracking.updateFromLine(displayIdx);
     } else {
       // Markdown/source mode: section boundaries use source_line from the file
@@ -664,9 +661,12 @@
     const end = Math.max(range.start, range.end);
     const rangeLines: string[] = [];
     for (let i = start; i <= end; i++) {
-      const line = lines[i - 1]; // Convert to 0-indexed
-      if (line) {
-        rangeLines.push(line.content);
+      if (diffDisplay) {
+        const entry = diffDisplay.byIndex.get(i);
+        if (entry?.kind === 'row') rangeLines.push(entry.row.content);
+      } else {
+        const line = lines[i - 1]; // Convert to 0-indexed
+        if (line) rangeLines.push(line.content);
       }
     }
     return rangeLines.join('\n');
@@ -698,7 +698,7 @@
       onCloseWindow: () => getCurrentWindow().close(),
       onOpenSearch: () => search.open(),
       onOpenHelp: () => overlay.openHelp(),
-      onToggleFileTree: () => { if (diffMetadata) fileTree.toggle(); },
+      onToggleFileTree: () => { if (diffDisplay) fileTree.toggle(); },
       onZoomIn: () => contentZoom = Math.min(contentZoom + 0.1, 3.0),
       onZoomOut: () => contentZoom = Math.max(contentZoom - 0.1, 0.5),
       onZoomReset: () => contentZoom = 1.0,
@@ -734,14 +734,19 @@
     try {
       const res = await invoke<ContentResponse>("get_content");
       label = res.label;
-      lines = res.lines;
+      if (res.view.type === 'diff') {
+        diffDocs = res.view.documents;
+      } else {
+        lines = res.view.lines;
+      }
+      loaded = true;
       tags = res.tags;
       exitModeState.initialize(res.exit_modes, res.selected_exit_mode_id);
       metadata = res.metadata;
       allowsImagePaste = res.allows_image_paste;
 
       // Build content trackers for scroll tracking
-      if (res.metadata.type === 'diff') {
+      if (res.view.type === 'diff') {
         fileCollapse.init();
       }
       if (res.metadata.type === 'markdown') {
@@ -831,7 +836,7 @@
 <main class="viewer" style:--mode-color={exitModeState.selectedMode?.color ?? 'transparent'}>
   {#if error}
     <div class="error">{error}</div>
-  {:else if lines.length === 0}
+  {:else if !loaded}
     <div class="loading">Loading...</div>
   {:else}
   <AnnotProvider
@@ -880,7 +885,7 @@
   </div>
 
   <PaneGroup direction="horizontal" class="viewer-body">
-    {#if fileTree.isOpen && diffMetadata}
+    {#if fileTree.isOpen && diffDisplay}
       <Pane order={1} defaultSize={22} minSize={12} maxSize={45} class="file-tree-pane">
         <FileTree
           docs={diffDisplay?.docs ?? []}
@@ -899,7 +904,7 @@
       class:phase-selecting={interaction.phase === 'selecting'}
       class:phase-committed={interaction.phase === 'committed'}
       class:phase-editing={interaction.phase === 'editing'}
-      class:diff-mode={diffMetadata !== null}
+      class:diff-mode={diffDisplay !== null}
       bind:this={contentEl}
       onscroll={handleContentScroll}
       onpointerdown={interaction.handleContentPointerDown}
@@ -912,6 +917,10 @@
         class="content-inner"
         style:zoom={contentZoom}
       >
+      {#if diffDisplay}
+        <!-- Diff mode: RegularLines renders the walk; there are no flat lines. -->
+        <RegularLines lines={[]} {annotationSlotProps} />
+      {:else}
       {#each lineSegmentation.segments as segment}
         {#if segment.type === 'portal'}
           <Portal lines={segment.lines}>
@@ -964,6 +973,7 @@
           />
         {/if}
       {/each}
+      {/if}
       </div>
     </div>
     </Pane>

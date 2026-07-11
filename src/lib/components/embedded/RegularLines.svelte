@@ -175,6 +175,7 @@
       {#snippet gutter()}
         <span class="diff-gutter-old"></span>
         <span class="diff-gutter-new"></span>
+        <span class="diff-sign"></span>
       {/snippet}
 
       {#snippet codeWrapper(innerContent)}
@@ -197,6 +198,7 @@
       {#snippet gutter()}
         <span class="diff-gutter-old">{entry.row.old_line ?? ''}</span>
         <span class="diff-gutter-new">{entry.row.new_line ?? ''}</span>
+        <span class="diff-sign">{entry.rowKind === 'added' ? '+' : entry.rowKind === 'deleted' ? '-' : ''}</span>
       {/snippet}
 
       {#snippet codeWrapper(innerContent)}

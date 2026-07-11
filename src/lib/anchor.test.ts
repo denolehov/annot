@@ -93,10 +93,6 @@ describe('endpointKeys', () => {
     expect(keys).toHaveLength(1);
   });
 
-  it('registers nothing for diff lines — the display walk owns diff coordinates', () => {
-    expect(endpointKeys(makeLine({ type: 'diff', path: 'a.rs', old_line: 3, new_line: 5 }))).toEqual([]);
-  });
-
   it('registers nothing for virtual lines', () => {
     expect(endpointKeys(makeLine({ type: 'virtual' }))).toEqual([]);
   });

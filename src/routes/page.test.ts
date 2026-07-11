@@ -63,16 +63,20 @@ function createMockResponse(overrides: Partial<{
   selected_exit_mode_id: string | null;
   tags: [];
 }> = {}) {
+  const { lines, ...rest } = {
+    lines: [makeLine(1, "// comment")],
+    ...overrides,
+  };
   return {
     label: "test.rs",
-    lines: [makeLine(1, "// comment")],
+    view: { type: 'flat' as const, lines },
     exit_modes: [],
     selected_exit_mode_id: null,
     tags: [],
     session_comment: null,
     metadata: { type: 'plain' as const },
     allows_image_paste: false,
-    ...overrides,
+    ...rest,
   };
 }
 

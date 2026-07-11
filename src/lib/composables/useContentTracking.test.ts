@@ -1,34 +1,28 @@
 import { describe, it, expect } from 'vitest';
 import { flushSync } from 'svelte';
 import { useContentTracking } from './useContentTracking.svelte';
-import { deriveDisplay, type PseudoDoc, type PseudoHunk } from '$lib/display-rows';
-import type { MarkdownMetadata } from '$lib/types';
+import { deriveDisplay } from '$lib/display-rows';
+import type { DiffDocument, MarkdownMetadata } from '$lib/types';
 
-/** A doc whose header/hunk/row wire indexes mirror a real flat-wire layout. */
-function doc(path: string, headerIndex: number, hunkHeaders: number[][]): PseudoDoc {
-  const hunks = hunkHeaders.map(([header, rowCount]): PseudoHunk => ({
-    old_range: { start: 1, end: 1 + rowCount },
-    new_range: { start: 1, end: 1 + rowCount },
-    function_context: null,
-    function_context_html: null,
-    rows: Array.from({ length: rowCount }, (_, i) => ({
-      old_line: i + 1,
-      new_line: i + 1,
-      content: ` line ${i}`,
-      html: null,
-      wireIndex: header + 1 + i,
-    })),
-    wireIndex: header,
-  }));
+function doc(path: string, rowCounts: number[]): DiffDocument {
   return {
     path,
     old_path: null,
     status: 'modified',
     unavailable: false,
     language: 'rs',
-    hunks,
-    wireIndex: headerIndex,
-    endWireIndex: (hunks.at(-1)?.rows.at(-1)?.wireIndex ?? headerIndex),
+    hunks: rowCounts.map((rowCount) => ({
+      old_range: { start: 1, end: 1 + rowCount },
+      new_range: { start: 1, end: 1 + rowCount },
+      function_context: null,
+      function_context_html: null,
+      rows: Array.from({ length: rowCount }, (_, i) => ({
+        old_line: i + 1,
+        new_line: i + 1,
+        content: ` line ${i}`,
+        html: null,
+      })),
+    })),
   };
 }
 
@@ -42,7 +36,7 @@ describe('useContentTracking', () => {
 
   it('updates position from display index in diff mode', () => {
     // a.rs: header 1, hunks at 2 (rows 3–9) and 10 (rows 11–15)
-    const display = deriveDisplay([doc('a.rs', 1, [[2, 7], [10, 5]])]);
+    const display = deriveDisplay([doc('a.rs', [7, 5])]);
     const tracking = useContentTracking(() => display);
 
     flushSync(() => {
@@ -59,21 +53,18 @@ describe('useContentTracking', () => {
   });
 
   it('resolves a file header line to its own file, not the file above it', () => {
-    // lib.rs: header 1, hunk at 5 (rows 6–20); main.rs: header 21, hunk at 25 (rows 26–35)
-    const display = deriveDisplay([
-      doc('lib.rs', 1, [[5, 15]]),
-      doc('main.rs', 21, [[25, 10]]),
-    ]);
+    // lib.rs: header 1, hunk 2 (rows 3–17); main.rs: header 18, hunk 19 (rows 20–29)
+    const display = deriveDisplay([doc('lib.rs', [15]), doc('main.rs', [10])]);
     const tracking = useContentTracking(() => display);
 
     flushSync(() => {
-      tracking.updateFromLine(21);
+      tracking.updateFromLine(18);
     });
     expect(tracking.currentFileIndex).toBe(1);
     expect(tracking.currentHunkIndex).toBe(0);
 
     flushSync(() => {
-      tracking.updateFromLine(30);
+      tracking.updateFromLine(25);
     });
     expect(tracking.currentFileIndex).toBe(1);
     expect(tracking.currentHunkIndex).toBe(0);

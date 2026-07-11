@@ -355,6 +355,24 @@ div.line.annotated .gutter {
 	color: var(--text-muted);
 }
 
+/* Sign column (GitHub-shaped): +/- rendered from the walk's rowKind, not
+   from row content — copied text stays raw. */
+.diff-sign {
+	display: inline-block;
+	width: 1ch;
+	margin-left: 8px;
+	text-align: center;
+	user-select: none;
+}
+
+div.line.diff-added .diff-sign {
+	color: rgb(34, 197, 94);
+}
+
+div.line.diff-deleted .diff-sign {
+	color: rgb(239, 68, 68);
+}
+
 /* Added lines (green) */
 div.line.diff-added {
 	background-color: rgba(34, 197, 94, 0.1);

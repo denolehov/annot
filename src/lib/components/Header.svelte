@@ -37,7 +37,7 @@
   const metadata = $derived(ctx.metadata);
   const showToast = ctx.showToast;
 
-  const diffMetadata = $derived(metadata.type === 'diff' ? metadata : null);
+  const isDiff = $derived(ctx.diffDisplay !== null);
   const markdownMetadata = $derived(metadata.type === 'markdown' ? metadata : null);
 
   // Extract filename from path for display (label is full path for consistency with LineOrigin)
@@ -59,7 +59,7 @@
 
 <header class="header" data-tauri-drag-region="deep">
   <div class="header-left">
-    {#if diffMetadata && currentFile}
+    {#if isDiff && currentFile}
       <!-- Diff mode: show hunk metadata -->
       {@const fileName = currentFile.path || 'unknown'}
       {@const fileCount = docs.length}
@@ -128,7 +128,7 @@
     {/if}
   </div>
   <div class="header-right">
-    {#if diffMetadata && docs.length > 0}
+    {#if isDiff && docs.length > 0}
       <span class="diff-header-summary" data-tauri-drag-region="false">
         <span class="file-tree-counts">
           <span class="added">+{totals.added}</span>
