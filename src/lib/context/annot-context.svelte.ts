@@ -9,6 +9,7 @@ import type { useSearch } from '$lib/composables/useSearch.svelte';
 import type { useMermaid } from '$lib/composables/useMermaid.svelte';
 import type { FileCollapse } from '$lib/composables/useFileCollapse.svelte';
 import type { FileEntry } from '$lib/file-tree';
+import type { DiffDisplay } from '$lib/display-rows';
 
 /**
  * AnnotContext - Shared state and utilities for annot components.
@@ -37,7 +38,10 @@ export interface AnnotContext {
   readonly allowsImagePaste: boolean;
   readonly markdownMetadata: MarkdownMetadata | null;
   readonly contentZoom: number;
-  /** Changed files in a diff; [] for non-diff content. */
+  /** The DisplayRow walk — display truth for diff mode; null otherwise. */
+  readonly diffDisplay: DiffDisplay | null;
+  /** Changed files in a diff; [] for non-diff content.
+   *  Transitional FileEntry view of diffDisplay.docs — prefer the walk. */
   readonly fileEntries: FileEntry[];
 
   // Utilities

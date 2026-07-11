@@ -8,7 +8,7 @@
   import type { State, Action, Command, Item, Namespace, InitialState } from './engine/types';
   import { getFilterPlaceholder, canDelete, isItemEditable } from './engine/types';
   import type { Tag, ExitMode } from '$lib/types';
-  import type { FileEntry } from '$lib/file-tree';
+  import type { DocView } from '$lib/display-rows';
   import Icon from './Icon.svelte';
 
   // Config type matching Rust
@@ -21,7 +21,7 @@
   interface Props {
     tags: Tag[];
     exitModes: ExitMode[];
-    files?: FileEntry[];
+    files?: DocView[];
     zoomLevel?: number;
     onClose: () => void;
     onSetExitMode: (modeId: string) => void;

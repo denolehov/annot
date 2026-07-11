@@ -21,7 +21,7 @@
   import { Header, StatusBar, SessionEditor, WindowResizeHandles } from "$lib/components";
   import { PaneGroup, Pane, PaneResizer } from "paneforge";
   import FileTree from "$lib/components/FileTree.svelte";
-  import { deriveFileEntries } from "$lib/file-tree";
+  import { synthesizeDocs, deriveDisplay, toFileEntries } from "$lib/display-rows";
   import { useFileTree } from "$lib/composables/useFileTree.svelte";
   import { useFileCollapse } from "$lib/composables/useFileCollapse.svelte";
   import { fileContaining } from "$lib/file-collapse";
@@ -90,7 +90,13 @@
 
   // File tree sidebar (composable) — diff mode only
   const fileTree = useFileTree();
-  let fileEntries = $derived(deriveFileEntries(lines, diffMetadata));
+
+  // The DisplayRow spine: single source of display truth for diff mode.
+  let diffDisplay = $derived(
+    diffMetadata ? deriveDisplay(synthesizeDocs(lines, diffMetadata.files)) : null
+  );
+  // Transitional FileEntry view for consumers not yet reading the walk.
+  let fileEntries = $derived(diffDisplay ? toFileEntries(diffDisplay) : []);
 
   // Current file/hunk derived from indices (diff mode)
   let currentFile = $derived.by(() => {
@@ -833,6 +839,7 @@
     {tags}
     {allowsImagePaste}
     {contentZoom}
+    {diffDisplay}
     {fileEntries}
     interaction={interaction}
     annotations={annotationState}
@@ -876,7 +883,7 @@
     {#if fileTree.isOpen && diffMetadata}
       <Pane order={1} defaultSize={22} minSize={12} maxSize={45} class="file-tree-pane">
         <FileTree
-          entries={fileEntries}
+          docs={diffDisplay?.docs ?? []}
           currentIndex={contentTracking.currentFileIndex}
           onJump={jumpToFile}
         />
@@ -978,7 +985,7 @@
   <CommandPalette
     {tags}
     exitModes={exitModeState.modes}
-    files={fileEntries}
+    files={diffDisplay?.docs ?? []}
     zoomLevel={contentZoom}
     onClose={handleCommandPaletteClose}
     onSetExitMode={handleSetExitModeFromPalette}

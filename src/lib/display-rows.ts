@@ -16,6 +16,7 @@
  */
 
 import type { DiffDocument, DiffFileInfo, HunkV2, Line, Row } from './types';
+import type { FileEntry } from './file-tree';
 
 // =============================================================================
 // Pseudo-documents (flat-wire shim, deleted with the per-file wire migration)
@@ -204,4 +205,21 @@ export function deriveDisplay(docs: PseudoDoc[]): DiffDisplay {
   });
 
   return { rows, docs: docViews, byIndex, byEndpoint };
+}
+
+/**
+ * Transitional adapter: DocViews in the legacy FileEntry shape, for consumers
+ * not yet reading the walk directly. Dies with its last consumer.
+ */
+export function toFileEntries(display: DiffDisplay): FileEntry[] {
+  return display.docs.map((dv) => ({
+    index: dv.index,
+    path: dv.path,
+    dir: dv.dir,
+    name: dv.name,
+    added: dv.added,
+    deleted: dv.deleted,
+    startLine: dv.headerDisplayIndex,
+    endLine: dv.endDisplayIndex,
+  }));
 }

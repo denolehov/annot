@@ -1,19 +1,20 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { setFileItems, getFileItems, filterFileItems } from './files';
 import { createQueryContext } from './index';
-import type { FileEntry } from '$lib/file-tree';
+import type { DocView } from '$lib/display-rows';
 
-function entry(index: number, path: string, startLine: number): FileEntry {
+function entry(index: number, path: string, headerDisplayIndex: number): DocView {
   const slash = path.lastIndexOf('/');
   return {
     index,
+    doc: { path, old_path: null, status: 'modified', unavailable: false, language: '', hunks: [] },
     path,
     dir: path.slice(0, slash + 1),
     name: path.slice(slash + 1),
     added: 1,
     deleted: 0,
-    startLine,
-    endLine: startLine + 5,
+    headerDisplayIndex,
+    endDisplayIndex: headerDisplayIndex + 5,
   };
 }
 
