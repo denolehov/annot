@@ -16,10 +16,9 @@
   import type { Line } from '$lib/types';
   import { getAnnotContext } from '$lib/context';
 
-  interface Props {
+  interface SharedProps {
     /** Unused by LineRow itself; optional so walk-driven diff rows can omit it. */
     line?: Line;
-    displayIndex: number;
     additionalClasses?: Record<string, boolean>;
     gutterClass?: string;
     gutter: Snippet<[]>;
@@ -29,27 +28,35 @@
     codeWrapper?: Snippet<[Snippet]>;
   }
 
-  let {
-    line: _line,
-    displayIndex,
-    additionalClasses = {},
-    gutterClass = '',
-    gutter,
-    code,
-    trailing,
-    codeWrapper,
-  }: Props = $props();
+  /**
+   * interactive: true  — a real, selectable/annotatable line. Requires displayIndex.
+   * interactive: false — presentational furniture (gap bars, etc). No displayIndex,
+   * no add-btn, no gutter click wiring, no selection/annotation lookups.
+   *
+   * Kept as a discriminated union (not an optional displayIndex + boolean flag) so
+   * a non-interactive row can never accidentally carry a displayIndex at the type
+   * level — that mistake is exactly what would make a gap row selectable.
+   */
+  type Props =
+    | (SharedProps & { interactive: true; displayIndex: number })
+    | (SharedProps & { interactive: false; displayIndex?: never });
+
+  // Held whole, not destructured: destructuring `$props()` here would type
+  // `displayIndex` as `number | undefined` and drop the link to `interactive`,
+  // defeating the union. Every other component in this codebase destructures
+  // `$props()` directly — this is a deliberate, contained exception.
+  let props: Props = $props();
 
   const ctx = getAnnotContext();
 
   // Unified state derivation from context
-  const selected = $derived(ctx.interaction.isLineHighlighted(displayIndex));
-  const annotated = $derived(ctx.annotations.hasAnnotation(displayIndex));
+  const selected = $derived(props.interactive ? ctx.interaction.isLineHighlighted(props.displayIndex) : false);
+  const annotated = $derived(props.interactive ? ctx.annotations.hasAnnotation(props.displayIndex) : false);
   const markdownMetadata = $derived(ctx.markdownMetadata);
 
   // Convert additionalClasses object to class string
   const extraClasses = $derived(
-    Object.entries(additionalClasses)
+    Object.entries(props.additionalClasses ?? {})
       .filter(([_, v]) => v)
       .map(([k]) => k)
       .join(' ')
@@ -60,37 +67,40 @@
   class="line {extraClasses}"
   class:selected
   class:annotated
-  data-display-idx={displayIndex}
-  onmouseenter={() => ctx.interaction.handleLineEnter(displayIndex)}
-  onmouseleave={() => ctx.interaction.handleLineLeave()}
+  data-display-idx={props.interactive ? props.displayIndex : undefined}
+  onmouseenter={() => props.interactive && ctx.interaction.handleLineEnter(props.displayIndex)}
+  onmouseleave={() => props.interactive && ctx.interaction.handleLineLeave()}
   role="presentation"
 >
-  <button
-    class="add-btn"
-    onpointerdown={(e) => ctx.interaction.handlePointerDown(displayIndex, e)}
-    aria-label="Add annotation"
-  >+</button>
+  {#if props.interactive}
+    <button
+      class="add-btn"
+      onpointerdown={(e) => ctx.interaction.handlePointerDown(props.displayIndex, e)}
+      aria-label="Add annotation"
+    >+</button>
+  {/if}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <span
-    class="gutter {gutterClass}"
+    class="gutter {props.gutterClass ?? ''}"
     class:selected
-    onpointerdown={(e) => ctx.interaction.handlePointerDown(displayIndex, e)}
-    onclick={() => ctx.interaction.handleGutterClick(displayIndex)}
-    role="button"
-    tabindex="-1"
+    onpointerdown={props.interactive ? (e) => ctx.interaction.handlePointerDown(props.displayIndex, e) : undefined}
+    onclick={props.interactive ? () => ctx.interaction.handleGutterClick(props.displayIndex) : undefined}
+    role={props.interactive ? 'button' : 'presentation'}
+    tabindex={props.interactive ? -1 : undefined}
   >
-    {@render gutter()}
+    {@render props.gutter()}
   </span>
-  {#if codeWrapper}
-    {@render codeWrapper(code)}
+  {#if props.codeWrapper}
+    {@render props.codeWrapper(props.code)}
   {:else}
     <span class="code" class:md={markdownMetadata}>
-      {@render code()}
+      {@render props.code()}
     </span>
   {/if}
-  {#if trailing}
+  {#if props.trailing}
     <span class="line-actions">
-      {@render trailing()}
+      {@render props.trailing()}
     </span>
   {/if}
 </div>

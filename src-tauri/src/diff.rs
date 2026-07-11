@@ -107,6 +107,8 @@ fn build_file(
         status,
         unavailable,
         language,
+        // Raw patch text — no full file to slice, so no unfold.
+        new_len: None,
         hunks,
     }
 }

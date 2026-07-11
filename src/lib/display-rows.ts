@@ -12,6 +12,9 @@ import type { DiffDocument, HunkV2, LineRange, Row } from './types';
 import type { Range } from './range';
 import { diffKey, type Anchor, type Endpoint } from './anchor';
 
+/** Context lines revealed per directional unfold click — mirrors `pipeline::EXPAND_STEP`. */
+export const EXPAND_STEP = 20;
+
 export type RowKind = 'added' | 'deleted' | 'context';
 
 export type DisplayRow =
@@ -25,6 +28,12 @@ export interface HunkView {
   /** Display-index span of the hunk's rows — the selectable region. */
   rowStart: number;
   rowEnd: number;
+  /**
+   * Folded context lines between this hunk and the previous one (or the
+   * file top). 0 when nothing is folded or the document can't unfold —
+   * a gap bar renders exactly when this is positive.
+   */
+  gapAbove: number;
 }
 
 /** Per-document view: file identity, counts, and display footprint. */
@@ -46,6 +55,8 @@ export interface DocView {
   endDisplayIndex: number;
   /** Display footprints, parallel to `doc.hunks`. */
   hunks: HunkView[];
+  /** Folded context lines after the last hunk; 0 when none or can't unfold. */
+  trailingGap: number;
 }
 
 export interface DiffDisplay {
@@ -76,6 +87,34 @@ export function rowKind(row: Row): RowKind {
   if (row.old_line === null) return 'added';
   if (row.new_line === null) return 'deleted';
   return 'context';
+}
+
+/**
+ * Ranges arrive in git-printed convention — an empty side starts at the line
+ * *before* the position. Gap arithmetic needs the true half-open range,
+ * where an empty side sits at its insertion point.
+ */
+function trueRange(range: LineRange): LineRange {
+  return range.start === range.end ? { start: range.start + 1, end: range.start + 1 } : range;
+}
+
+/**
+ * Folded context lines between hunk `idx` and its upper neighbor (or the
+ * file top). Pure new-side range arithmetic — expansion state is nothing
+ * but the ranges themselves.
+ */
+function gapAbove(doc: DiffDocument, idx: number): number {
+  if (doc.new_len === null) return 0;
+  const start = trueRange(doc.hunks[idx].new_range).start;
+  const bound = idx === 0 ? 1 : trueRange(doc.hunks[idx - 1].new_range).end;
+  return start - bound;
+}
+
+/** Folded context lines after the last hunk. */
+function trailingGap(doc: DiffDocument): number {
+  if (doc.new_len === null || doc.hunks.length === 0) return 0;
+  const end = trueRange(doc.hunks[doc.hunks.length - 1].new_range).end;
+  return doc.new_len + 1 - end;
 }
 
 /** The single display-truth derivation for diff mode. */
@@ -123,7 +162,12 @@ export function deriveDisplay(docs: DiffDocument[]): DiffDisplay {
         if (row.old_line !== null) byEndpoint.set(diffKey(doc.path, 'old', row.old_line), displayIndex);
         if (row.new_line !== null) byEndpoint.set(diffKey(doc.path, 'new', row.new_line), displayIndex);
       }
-      hunkViews.push({ headerDisplayIndex: headerIdx, rowStart: rowStart ?? headerIdx + 1, rowEnd });
+      hunkViews.push({
+        headerDisplayIndex: headerIdx,
+        rowStart: rowStart ?? headerIdx + 1,
+        rowEnd,
+        gapAbove: gapAbove(doc, hunkIdx),
+      });
     });
 
     const slash = doc.path.lastIndexOf('/');
@@ -138,6 +182,7 @@ export function deriveDisplay(docs: DiffDocument[]): DiffDisplay {
       headerDisplayIndex,
       endDisplayIndex: pos,
       hunks: hunkViews,
+      trailingGap: trailingGap(doc),
     });
   });
 

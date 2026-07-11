@@ -6,7 +6,7 @@ function entry(index: number, changed = 1): DocView {
   const path = `f${index}.ts`;
   return {
     index,
-    doc: { path, old_path: null, status: 'modified', unavailable: false, language: '', hunks: [] },
+    doc: { path, old_path: null, status: 'modified', unavailable: false, language: '', new_len: null, hunks: [] },
     path,
     dir: '',
     name: path,
@@ -15,6 +15,7 @@ function entry(index: number, changed = 1): DocView {
     headerDisplayIndex: index * 10 + 1,
     endDisplayIndex: index * 10 + 9,
     hunks: [],
+    trailingGap: 0,
   };
 }
 

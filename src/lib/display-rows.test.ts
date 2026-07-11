@@ -20,6 +20,7 @@ const DOCS: DiffDocument[] = [
     old_path: null,
     status: 'modified',
     unavailable: false,
+    new_len: null,
     language: 'rs',
     hunks: [
       {
@@ -49,6 +50,7 @@ const DOCS: DiffDocument[] = [
     old_path: null,
     status: 'deleted',
     unavailable: false,
+    new_len: null,
     language: 'rs',
     hunks: [
       {
@@ -65,6 +67,7 @@ const DOCS: DiffDocument[] = [
     old_path: 'old/name.rs',
     status: 'renamed',
     unavailable: false,
+    new_len: null,
     language: 'rs',
     hunks: [
       {
@@ -81,6 +84,7 @@ const DOCS: DiffDocument[] = [
     old_path: null,
     status: 'modified',
     unavailable: true,
+    new_len: null,
     language: 'png',
     hunks: [],
   },
@@ -89,6 +93,7 @@ const DOCS: DiffDocument[] = [
     old_path: null,
     status: 'added',
     unavailable: false,
+    new_len: null,
     language: 'md',
     hunks: [
       {
@@ -163,6 +168,57 @@ describe('deriveDisplay', () => {
     const goneEntry = display.byIndex.get(goneIdx)!;
     expect(goneEntry.kind).toBe('row');
     if (goneEntry.kind === 'row') expect(goneEntry.rowKind).toBe('deleted');
+  });
+});
+
+describe('gap derivation (S3 unfold)', () => {
+  it('emits no gaps when new_len is null — the capability signal', () => {
+    // The whole fixture is raw-patch shaped (new_len: null everywhere).
+    display.docs.forEach((dv) => {
+      dv.hunks.forEach((hv) => expect(hv.gapAbove).toBe(0));
+      expect(dv.trailingGap).toBe(0);
+    });
+  });
+
+  it('derives leading, interior, and trailing gaps from range arithmetic', () => {
+    const doc: DiffDocument = {
+      ...DOCS[0],
+      new_len: 100,
+      hunks: [
+        { ...DOCS[0].hunks[0], old_range: { start: 7, end: 14 }, new_range: { start: 7, end: 14 } },
+        { ...DOCS[0].hunks[1], old_range: { start: 57, end: 64 }, new_range: { start: 57, end: 64 } },
+      ],
+    };
+    const [dv] = deriveDisplay([doc]).docs;
+    expect(dv.hunks[0].gapAbove).toBe(6); // lines 1–6 folded
+    expect(dv.hunks[1].gapAbove).toBe(43); // lines 14–56 folded
+    expect(dv.trailingGap).toBe(37); // lines 64–100 folded
+  });
+
+  it('handles printed-empty ranges: a pure-deletion hunk sits at its insertion point', () => {
+    // Deletion between new lines 10 and 11: printed new_range 10..10,
+    // true position 11..11 — the gap after it starts at new line 11.
+    const doc: DiffDocument = {
+      ...DOCS[1],
+      new_len: 30,
+      hunks: [
+        {
+          ...DOCS[1].hunks[0],
+          old_range: { start: 11, end: 13 },
+          new_range: { start: 10, end: 10 },
+        },
+      ],
+    };
+    const [dv] = deriveDisplay([doc]).docs;
+    expect(dv.hunks[0].gapAbove).toBe(10); // new lines 1–10 folded above
+    expect(dv.trailingGap).toBe(20); // new lines 11–30 folded below
+  });
+
+  it('an added file whose hunk covers everything has no gaps', () => {
+    const doc: DiffDocument = { ...DOCS[4], new_len: 2 };
+    const [dv] = deriveDisplay([doc]).docs;
+    expect(dv.hunks[0].gapAbove).toBe(0);
+    expect(dv.trailingGap).toBe(0);
   });
 });
 

@@ -44,6 +44,7 @@
     showToast: (message: string, duration?: number) => void;
     isLineSelectable: (displayIdx: number) => boolean;
     getOriginalLinesForRange: (range: Range) => string;
+    expandContext: AnnotContext['expandContext'];
 
     children: Snippet;
   }
@@ -65,6 +66,7 @@
     showToast,
     isLineSelectable,
     getOriginalLinesForRange,
+    expandContext,
     children,
   }: Props = $props();
 
@@ -129,6 +131,7 @@
     get showToast() { return showToast; },
     get isLineSelectable() { return isLineSelectable; },
     get getOriginalLinesForRange() { return getOriginalLinesForRange; },
+    get expandContext() { return expandContext; },
     slotForRow,
   });
 </script>

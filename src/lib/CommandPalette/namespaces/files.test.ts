@@ -7,7 +7,7 @@ function entry(index: number, path: string, headerDisplayIndex: number): DocView
   const slash = path.lastIndexOf('/');
   return {
     index,
-    doc: { path, old_path: null, status: 'modified', unavailable: false, language: '', hunks: [] },
+    doc: { path, old_path: null, status: 'modified', unavailable: false, language: '', new_len: null, hunks: [] },
     path,
     dir: path.slice(0, slash + 1),
     name: path.slice(slash + 1),
@@ -16,6 +16,7 @@ function entry(index: number, path: string, headerDisplayIndex: number): DocView
     headerDisplayIndex,
     endDisplayIndex: headerDisplayIndex + 5,
     hunks: [],
+    trailingGap: 0,
   };
 }
 

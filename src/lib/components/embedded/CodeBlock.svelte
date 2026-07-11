@@ -194,6 +194,7 @@
     <LineRow
       {line}
       {displayIndex}
+      interactive={true}
       additionalClasses={{
         'codeblock-header': startFence && !!language,
         'codeblock-fence': fence && !language,

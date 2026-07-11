@@ -44,6 +44,17 @@ export interface AnnotContext {
   showToast: (message: string, duration?: number) => void;
   isLineSelectable: (displayIdx: number) => boolean;
   getOriginalLinesForRange: (range: Range) => string;
+  /**
+   * Unfold context around a hunk (S3): the backend grows the session's
+   * document and the updated document replaces `documents[docIdx]` — the
+   * walk re-derives, this never splices locally. Rejects on backend error.
+   */
+  expandContext: (
+    docIdx: number,
+    hunkIdx: number,
+    direction: 'up' | 'down',
+    amount: 'step' | 'all',
+  ) => Promise<void>;
 
   /**
    * The annotation slot a row hosts, used to connect annotation slots to

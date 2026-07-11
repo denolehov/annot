@@ -194,6 +194,7 @@ describe('useAnnotations', () => {
       old_path: null,
       status: 'modified',
       unavailable: false,
+      new_len: null,
       language: 'rs',
       hunks: [{
         old_range: { start: 1, end: 5 },

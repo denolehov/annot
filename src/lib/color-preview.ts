@@ -5,6 +5,8 @@
  * while preserving existing HTML structure (syntax highlighting, etc).
  */
 
+import { mergeTextSplit } from './dom-text';
+
 // Matches #RGB, #RGBA, #RRGGBB, #RRGGBBAA (word boundary to avoid partial matches)
 const HEX_PATTERN = /#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b/g;
 
@@ -82,8 +84,9 @@ export function injectColorSwatches(container: HTMLElement): void {
     const { node, index, hex } = matches[i];
 
     try {
-      // Split text node at the match position
-      const beforeNode = node.splitText(index);
+      // Split text node at the match position (skip the split when the hex
+      // starts the node — splitText(0) would leave an empty text node behind)
+      const beforeNode = index === 0 ? node : node.splitText(index);
 
       // Create swatch element
       const swatch = document.createElement('span');
@@ -102,13 +105,15 @@ export function injectColorSwatches(container: HTMLElement): void {
 }
 
 /**
- * Removes all color swatches from a container.
+ * Removes all color swatches from a container, re-joining exactly the split
+ * that injectColorSwatches made (see dom-text.ts for why normalize() is
+ * off limits here).
  */
 export function clearColorSwatches(container: HTMLElement): void {
   const swatches = container.querySelectorAll('span.color-swatch');
   swatches.forEach((swatch) => {
+    const prev = swatch.previousSibling;
     swatch.remove();
+    mergeTextSplit(prev);
   });
-  // Normalize to merge adjacent text nodes
-  container.normalize();
 }
