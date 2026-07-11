@@ -2,9 +2,10 @@
  * Generic content position tracker using binary search.
  *
  * Used for:
- * - Diff mode: tracking current hunk as user scrolls
  * - Markdown mode: tracking current section for breadcrumb
  * - Future: tracking current function/class in code
+ *
+ * Diff mode resolves positions through the DisplayRow walk (display-rows.ts).
  */
 
 export interface Boundary<T> {
@@ -62,12 +63,6 @@ export class ContentTracker<T> {
 }
 
 // Type aliases for specific use cases
-
-/** Payload for diff hunk tracking */
-export interface HunkPayload {
-  fileIndex: number;
-  hunkIndex: number;
-}
 
 /** Payload for markdown section tracking */
 export interface SectionPayload {
