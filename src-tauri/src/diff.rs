@@ -13,6 +13,18 @@ use crate::highlight::Highlighter;
 use crate::state::{DiffDocument, HunkV2, LineHtml, Row};
 use crate::vcs::FileStatus;
 
+/// Display identity for a diff file: `path` is the new name (old for deleted
+/// files); `old_path` only when the name actually changed. Shared by the
+/// patch parser and the git pipeline.
+pub(crate) fn display_identity(old: Option<&str>, new: Option<&str>) -> (String, Option<String>) {
+    let path = new.or(old).unwrap_or_default().to_string();
+    let old_path = match (old, new) {
+        (Some(old), Some(new)) if old != new => Some(old.to_string()),
+        _ => None,
+    };
+    (path, old_path)
+}
+
 /// Language identifier for a diff file: the extension of the new name (old
 /// for deleted files). Feeds syntax highlighting for both the patch parser
 /// and the git pipeline.
@@ -75,16 +87,7 @@ fn build_file(
         PatchKind::Binary(_) => Vec::new(),
     };
 
-    // Display identity: new name wins (old for deleted files); `old_path`
-    // only when the name actually changed — mirrors pipeline::render_file.
-    let path = new_path
-        .clone()
-        .or_else(|| old_path.clone())
-        .unwrap_or_default();
-    let old_path = match (old_path, new_path) {
-        (Some(old), Some(new)) if old != new => Some(old),
-        _ => None,
-    };
+    let (path, old_path) = display_identity(old_path.as_deref(), new_path.as_deref());
 
     DiffDocument {
         path,
@@ -153,7 +156,8 @@ fn build_hunk(
 ) -> HunkV2 {
     let old_range = hunk.old_range();
     let new_range = hunk.new_range();
-    let function_context = hunk.function_context().map(str::to_owned);
+    // diffy retains the header line's trailing newline in the context text.
+    let function_context = hunk.function_context().map(|ctx| ctx.trim_end().to_owned());
     let function_context_html = function_context
         .as_deref()
         .and_then(|ctx| highlighter.highlight_function_context(ctx, fake_path));

@@ -19,12 +19,13 @@
   import type { DisplayLine } from '$lib/composables/useLineSegments.svelte';
 
   interface Props {
-    lines: DisplayLine[];
+    /** Flat-mode segment lines; unused when the diff walk drives rendering. */
+    lines?: DisplayLine[];
     annotationSlotProps: Omit<AnnotationSlotProps, 'slotRef'>;
   }
 
   let {
-    lines,
+    lines = [],
     annotationSlotProps,
   }: Props = $props();
 
@@ -86,8 +87,9 @@
 
   // Inject color swatches for HEX values
   $effect(() => {
-    // Track lines to re-run when content changes
+    // Track the rendered content source to re-run when it changes
     void lines;
+    void display;
     // Use microtask to ensure DOM is updated after render
     queueMicrotask(() => {
       for (const el of codeRefs.values()) {
