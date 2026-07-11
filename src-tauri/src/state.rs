@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -65,7 +66,7 @@ use crate::input::ContentSource;
 use crate::markdown::{self, html_escape, MarkdownMetadata, MarkdownSemantics};
 use crate::portal::{self, LoadedPortal, MAX_PORTALS};
 use crate::source::{FileSource, GixSource, RawPatchSource};
-use crate::vcs::DiffTarget;
+use crate::vcs::{DiffTarget, FileStatus};
 
 // =============================================================================
 // Unified line model (LineOrigin + LineSemantics)
@@ -387,6 +388,60 @@ pub enum ContentMetadata {
     Plain,
     Diff(DiffMetadata),
     Markdown(MarkdownMetadata),
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CONTENT VIEW — the serialized shape of the content itself
+// ════════════════════════════════════════════════════════════════════════════
+
+/// The wire shape of the content: a flat line stream (file/markdown/content
+/// modes) or per-file diff documents. Mode discrimination = `view.type`.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentView {
+    Flat { lines: Vec<Line> },
+    Diff { documents: Vec<DiffDocument> },
+}
+
+/// One file's comparison in a diff view. Document order is producer order;
+/// `FileKey::diff_file(index)` indexes into `documents` — the annotation
+/// identity contract.
+#[derive(Clone, Debug, Serialize)]
+pub struct DiffDocument {
+    /// Display identity: new name (old for deleted files).
+    pub path: String,
+    /// Present ⇒ the file was renamed/copied; render as "old → new".
+    pub old_path: Option<String>,
+    pub status: FileStatus,
+    /// Binary/oversize/non-UTF-8 — no rows to show, badge instead.
+    pub unavailable: bool,
+    pub language: String,
+    pub hunks: Vec<HunkV2>,
+}
+
+/// A hunk owning its rows — unfold extends one hunk's `rows` and ranges.
+///
+/// Ranges are half-open, 1-indexed, in git-printed convention: an empty side
+/// prints the line *before* the position (`0..0` for a new file's old side),
+/// so `@@ -{start},{len} +{start},{len} @@` reads off the range verbatim.
+#[derive(Clone, Debug, Serialize)]
+pub struct HunkV2 {
+    pub old_range: Range<u32>,
+    pub new_range: Range<u32>,
+    pub function_context: Option<String>,
+    pub function_context_html: Option<String>,
+    pub rows: Vec<Row>,
+}
+
+/// One diff row. Side pattern is the kind: old-only = deleted, new-only =
+/// added, both = context.
+#[derive(Clone, Debug, Serialize)]
+pub struct Row {
+    pub old_line: Option<u32>,
+    pub new_line: Option<u32>,
+    /// Raw source line — no `+`/`-`/` ` prefix; the sign is presentation.
+    pub content: String,
+    pub html: Option<LineHtml>,
 }
 
 /// Per-file metadata for annotation targets.
