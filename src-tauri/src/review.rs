@@ -121,6 +121,12 @@ pub struct AnnotationTarget {
     pub metadata: FileMetadata,
 }
 
+impl Default for AnnotationTarget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AnnotationTarget {
     /// Create an empty annotation target.
     pub fn new() -> Self {
@@ -270,7 +276,7 @@ impl Review {
         // Register portal source files as annotation targets
         for portal in &content.portals {
             let portal_key = FileKey::path(portal.source_path.clone());
-            if !files.contains_key(&portal_key) {
+            files.entry(portal_key).or_insert_with(|| {
                 // Extract extension from portal source path
                 let portal_ext = portal
                     .source_path
@@ -279,8 +285,8 @@ impl Review {
                     .map(|s| s.to_string());
                 let mut portal_target = AnnotationTarget::new();
                 portal_target.metadata.language = portal_ext;
-                files.insert(portal_key, portal_target);
-            }
+                portal_target
+            });
         }
 
         // Note: View::File.path is not used anywhere, passing label as placeholder

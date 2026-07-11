@@ -104,11 +104,8 @@ impl Highlighter {
             })
             .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
 
-        let mut html_generator = ClassedHTMLGenerator::new_with_class_style(
-            syntax,
-            &self.syntax_set,
-            ClassStyle::Spaced,
-        );
+        let mut html_generator =
+            ClassedHTMLGenerator::new_with_class_style(syntax, self.syntax_set, ClassStyle::Spaced);
 
         // Parse the entire content to maintain cross-line state
         for line in LinesWithEndings::from(content) {

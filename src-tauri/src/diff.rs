@@ -6,12 +6,22 @@
 //! no representation, matching what the frontend never renders and what
 //! `pipeline.rs`'s git-native path already omits.
 
+use std::borrow::Cow;
+
 use diffy::patch_set::{FileMode, FileOperation, ParseOptions, PatchKind, PatchSet};
 
 use crate::error::AnnotError;
 use crate::highlight::Highlighter;
 use crate::state::{DiffDocument, HunkV2, LineHtml, Row};
 use crate::vcs::FileStatus;
+
+fn normalize_line_endings(content: &str) -> Cow<'_, str> {
+    if content.contains("\r\n") {
+        Cow::Owned(content.replace("\r\n", "\n"))
+    } else {
+        Cow::Borrowed(content)
+    }
+}
 
 /// Display identity for a diff file: `path` is the new name (old for deleted
 /// files); `old_path` only when the name actually changed. Shared by the
@@ -41,7 +51,8 @@ pub fn is_diff(content: &str) -> bool {
     if content.is_empty() {
         return false;
     }
-    PatchSet::parse(content, ParseOptions::gitdiff())
+    let content = normalize_line_endings(content);
+    PatchSet::parse(content.as_ref(), ParseOptions::gitdiff())
         .collect::<Result<Vec<_>, _>>()
         .is_ok_and(|files| !files.is_empty())
 }
@@ -51,7 +62,8 @@ pub(crate) fn parse_diff(
     content: &str,
     highlighter: &Highlighter,
 ) -> Result<Vec<DiffDocument>, AnnotError> {
-    let files = PatchSet::parse(content, ParseOptions::gitdiff())
+    let content = normalize_line_endings(content);
+    let files = PatchSet::parse(content.as_ref(), ParseOptions::gitdiff())
         .map(|result| {
             result
                 .map_err(|e| AnnotError::Diff(format!("Failed to parse diff: {e}")))
@@ -119,9 +131,11 @@ fn resolve_operation(
             // reads this field today, so a default costs nothing.
             FileStatus::Renamed { similarity: 100 },
         ),
-        FileOperation::Copy { from, to } => {
-            (Some(from.to_string()), Some(to.to_string()), FileStatus::Copied)
-        }
+        FileOperation::Copy { from, to } => (
+            Some(from.to_string()),
+            Some(to.to_string()),
+            FileStatus::Copied,
+        ),
         FileOperation::Delete(_) | FileOperation::Create(_) | FileOperation::Modify { .. } => {
             match op.strip_prefix(1) {
                 FileOperation::Delete(path) => (Some(path.into_owned()), None, FileStatus::Deleted),
@@ -168,7 +182,16 @@ fn build_hunk(
     let rows = hunk
         .lines()
         .iter()
-        .map(|line| build_row(line, &mut old_line, &mut new_line, language, highlighter, fake_path))
+        .map(|line| {
+            build_row(
+                line,
+                &mut old_line,
+                &mut new_line,
+                language,
+                highlighter,
+                fake_path,
+            )
+        })
         .collect();
 
     // diffy ranges are already in git-printed convention (an empty side
@@ -367,7 +390,10 @@ rename to new.rs
     fn parse_deleted_file_diff() {
         let files = parse(DELETED_FILE_DIFF);
         assert_eq!(files.len(), 1);
-        assert_eq!(files[0].path, "old_file.rs", "deleted files show the old name");
+        assert_eq!(
+            files[0].path, "old_file.rs",
+            "deleted files show the old name"
+        );
         assert_eq!(files[0].old_path, None);
         assert_eq!(files[0].status, FileStatus::Deleted);
     }
@@ -441,6 +467,17 @@ rename to new.rs
         assert_eq!(files.len(), 11, "sample.diff has 11 changed files");
         assert!(files.iter().all(|f| f.status == FileStatus::Modified));
         assert!(files.iter().all(|f| !f.hunks.is_empty()));
+    }
+
+    #[test]
+    fn parses_crlf_diff() {
+        let crlf = SIMPLE_DIFF.replace('\n', "\r\n");
+        assert!(is_diff(&crlf));
+
+        let files = parse(&crlf);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].path, "file.rs");
+        assert_eq!(files[0].hunks[0].rows[0].content, "fn main() {");
     }
 
     #[test]

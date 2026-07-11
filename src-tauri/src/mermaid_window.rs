@@ -22,6 +22,12 @@ pub struct MermaidWindowState {
     windows: HashMap<String, (String, MermaidContext)>,
 }
 
+impl Default for MermaidWindowState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MermaidWindowState {
     pub fn new() -> Self {
         Self {
