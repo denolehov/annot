@@ -615,7 +615,11 @@ fn diff_annotation_new_only_single() {
 
 #[test]
 fn diff_annotation_new_only_multiline() {
-    let review = replacement_review((Side::New, 2), (Side::New, 3), "Review the replacement pair");
+    let review = replacement_review(
+        (Side::New, 2),
+        (Side::New, 3),
+        "Review the replacement pair",
+    );
     insta::assert_snapshot!(format_output(&review, OutputMode::Cli).text);
 }
 

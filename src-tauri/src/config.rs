@@ -238,10 +238,7 @@ pub fn save_tag_usage(stats: &TagUsageStats) -> io::Result<()> {
     // Merge: add memory counts to disk counts
     let mut merged = disk_stats;
     for (tag_id, mem_usage) in &stats.tags {
-        let entry = merged
-            .tags
-            .entry(tag_id.clone())
-            .or_insert_with(|| crate::state::TagUsage::default());
+        let entry = merged.tags.entry(tag_id.clone()).or_default();
         entry.count += mem_usage.count;
         // Take the more recent last_used
         if mem_usage.last_used > entry.last_used {

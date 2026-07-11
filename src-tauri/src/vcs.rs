@@ -1005,9 +1005,8 @@ fn working_tree_entries(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testutil::git;
+    use crate::testutil::{git, git_output};
     use std::fs;
-    use std::process::Command;
 
     fn strs(args: &[&str]) -> Vec<String> {
         args.iter().map(|s| s.to_string()).collect()
@@ -1246,12 +1245,13 @@ mod tests {
         fs::write(p.join("a.txt"), "main\n").unwrap();
         git(p, &["add", "."]);
         git(p, &["commit", "-m", "main"]);
-        // merge fails with a conflict — run raw, ignoring the exit code
-        Command::new("git")
-            .args(["merge", "side"])
-            .current_dir(p)
-            .output()
-            .unwrap();
+        let out = git_output(p, &["merge", "side"]);
+        assert_eq!(
+            out.status.code(),
+            Some(1),
+            "git merge did not produce a conflict: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         let err = enumerate(p, &WT, &[]).unwrap_err();
         assert!(err.to_string().contains("unmerged"), "{err}");
     }

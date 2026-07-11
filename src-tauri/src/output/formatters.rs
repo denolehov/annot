@@ -85,7 +85,12 @@ pub fn format_annotation(
 /// (hunks flattened in order), and the contiguous row slice between them is
 /// what renders — for a mixed-side range that slice covers a deletion and
 /// its added replacement.
-fn format_diff_block(out: &mut OutputBuilder, doc: &DiffDocument, ann: &Annotation, file_path: &str) {
+fn format_diff_block(
+    out: &mut OutputBuilder,
+    doc: &DiffDocument,
+    ann: &Annotation,
+    file_path: &str,
+) {
     let Anchor::Diff { start, end, .. } = &ann.anchor else {
         // A side-less anchor can't resolve against a diff: header only.
         out.raw_line(&format!("{}:", file_path));
@@ -106,7 +111,10 @@ fn format_diff_block(out: &mut OutputBuilder, doc: &DiffDocument, ann: &Annotati
         })
     };
 
-    let Some((first, last)) = find(start).zip(find(end)).map(|(s, e)| (s.min(e), s.max(e))) else {
+    let Some((first, last)) = find(start)
+        .zip(find(end))
+        .map(|(s, e)| (s.min(e), s.max(e)))
+    else {
         // Anchor doesn't resolve against this diff: header only.
         out.raw_line(&format!("{}:", file_path));
         return;

@@ -98,7 +98,16 @@ fn render_file(
                 rows: hunk
                     .rows
                     .iter()
-                    .map(|row| render_row(row, &old_lines, &new_lines, &language, &fake_path, highlighter))
+                    .map(|row| {
+                        render_row(
+                            row,
+                            &old_lines,
+                            &new_lines,
+                            &language,
+                            &fake_path,
+                            highlighter,
+                        )
+                    })
                     .collect(),
             });
         }
@@ -270,10 +279,18 @@ mod tests {
             for hunk in &doc.hunks {
                 for row in &hunk.rows {
                     if let Some(old) = row.old_line {
-                        assert!(hunk.old_range.contains(&old), "{old} ∉ {:?}", hunk.old_range);
+                        assert!(
+                            hunk.old_range.contains(&old),
+                            "{old} ∉ {:?}",
+                            hunk.old_range
+                        );
                     }
                     if let Some(new) = row.new_line {
-                        assert!(hunk.new_range.contains(&new), "{new} ∉ {:?}", hunk.new_range);
+                        assert!(
+                            hunk.new_range.contains(&new),
+                            "{new} ∉ {:?}",
+                            hunk.new_range
+                        );
                     }
                 }
             }
@@ -509,7 +526,10 @@ mod tests {
                         .flat_map(|h| &h.rows)
                         .filter(|r| r.old_line.is_none() || r.new_line.is_none())
                         .map(|r| {
-                            format!("{} {:?}/{:?} {}", doc.path, r.old_line, r.new_line, r.content)
+                            format!(
+                                "{} {:?}/{:?} {}",
+                                doc.path, r.old_line, r.new_line, r.content
+                            )
                         })
                 })
                 .collect::<std::collections::BTreeSet<_>>()

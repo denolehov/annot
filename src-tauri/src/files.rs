@@ -26,6 +26,12 @@ pub struct FileCache {
     root: Option<String>,
 }
 
+impl Default for FileCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FileCache {
     pub fn new() -> Self {
         Self {
@@ -144,7 +150,7 @@ fn fuzzy_filter(files: &[String], query: &str, limit: usize) -> Vec<String> {
         .collect();
 
     // Sort by score descending
-    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.sort_by_key(|entry| std::cmp::Reverse(entry.0));
 
     scored
         .into_iter()

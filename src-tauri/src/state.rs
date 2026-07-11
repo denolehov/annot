@@ -47,10 +47,7 @@ impl Default for TagUsage {
 impl TagUsageStats {
     /// Increment usage for a tag, optionally with a language.
     pub fn increment(&mut self, tag_id: &str, language: Option<&str>) {
-        let usage = self
-            .tags
-            .entry(tag_id.to_string())
-            .or_insert_with(TagUsage::default);
+        let usage = self.tags.entry(tag_id.to_string()).or_default();
         usage.count += 1;
         usage.last_used = Utc::now();
         if let Some(lang) = language {
@@ -716,7 +713,6 @@ impl ContentModel {
     }
 
     /// Parse diff content into per-file documents.
-    #[must_use]
     pub fn from_diff(content: &str, source: ContentSource) -> Result<Self, AnnotError> {
         let label = source.label().to_string();
         let highlighter = Highlighter::new();
@@ -1089,9 +1085,18 @@ mod tests {
         let response = state.to_response();
 
         let lines = flat(&response);
-        assert!(matches!(lines[0].origin, LineOrigin::Source { line: 1, .. }));
-        assert!(matches!(lines[1].origin, LineOrigin::Source { line: 2, .. }));
-        assert!(matches!(lines[2].origin, LineOrigin::Source { line: 3, .. }));
+        assert!(matches!(
+            lines[0].origin,
+            LineOrigin::Source { line: 1, .. }
+        ));
+        assert!(matches!(
+            lines[1].origin,
+            LineOrigin::Source { line: 2, .. }
+        ));
+        assert!(matches!(
+            lines[2].origin,
+            LineOrigin::Source { line: 3, .. }
+        ));
     }
 
     #[test]

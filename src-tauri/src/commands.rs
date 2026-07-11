@@ -142,7 +142,7 @@ fn collect_tag_usage(review: &mut crate::review::Review) {
     let mut session_stats = TagUsageStats::default();
 
     // Walk all annotation targets
-    for (_file_key, target) in &review.files {
+    for target in review.files.values() {
         // Get language for this file from metadata
         let language = target
             .metadata

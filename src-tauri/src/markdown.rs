@@ -160,52 +160,40 @@ impl ParseState {
 
     /// Pop heading context if it's on top.
     fn pop_heading(&mut self) -> Option<(u32, u8, String)> {
-        match self.stack.last() {
-            Some(ParseContext::Heading { .. }) => {
-                if let Some(ParseContext::Heading { line, level, text }) = self.stack.pop() {
-                    return Some((line, level, text));
-                }
+        if let Some(ParseContext::Heading { .. }) = self.stack.last() {
+            if let Some(ParseContext::Heading { line, level, text }) = self.stack.pop() {
+                return Some((line, level, text));
             }
-            _ => {}
         }
         None
     }
 
     /// Pop code block context if it's on top.
     fn pop_code_block(&mut self) -> Option<(u32, Option<String>)> {
-        match self.stack.last() {
-            Some(ParseContext::CodeBlock { .. }) => {
-                if let Some(ParseContext::CodeBlock { line, lang }) = self.stack.pop() {
-                    return Some((line, lang));
-                }
+        if let Some(ParseContext::CodeBlock { .. }) = self.stack.last() {
+            if let Some(ParseContext::CodeBlock { line, lang }) = self.stack.pop() {
+                return Some((line, lang));
             }
-            _ => {}
         }
         None
     }
 
     /// Pop table context if it's on top.
     fn pop_table(&mut self) -> Option<u32> {
-        match self.stack.last() {
-            Some(ParseContext::Table { .. }) => {
-                if let Some(ParseContext::Table { start_line }) = self.stack.pop() {
-                    return Some(start_line);
-                }
+        if let Some(ParseContext::Table { .. }) = self.stack.last() {
+            if let Some(ParseContext::Table { start_line }) = self.stack.pop() {
+                return Some(start_line);
             }
-            _ => {}
         }
         None
     }
 
     /// Pop portal link context if it's on top.
     fn pop_portal_link(&mut self) -> Option<(u32, String, String)> {
-        match self.stack.last() {
-            Some(ParseContext::PortalLink { .. }) => {
-                if let Some(ParseContext::PortalLink { line, url, text }) = self.stack.pop() {
-                    return Some((line, url, text));
-                }
+        if let Some(ParseContext::PortalLink { .. }) = self.stack.last() {
+            if let Some(ParseContext::PortalLink { line, url, text }) = self.stack.pop() {
+                return Some((line, url, text));
             }
-            _ => {}
         }
         None
     }
@@ -259,26 +247,20 @@ impl ParseState {
 
     /// Pop table cell context and return its accumulated text.
     fn pop_table_cell(&mut self) -> Option<String> {
-        match self.stack.last() {
-            Some(ParseContext::TableCell { .. }) => {
-                if let Some(ParseContext::TableCell { text }) = self.stack.pop() {
-                    return Some(text);
-                }
+        if let Some(ParseContext::TableCell { .. }) = self.stack.last() {
+            if let Some(ParseContext::TableCell { text }) = self.stack.pop() {
+                return Some(text);
             }
-            _ => {}
         }
         None
     }
 
     /// Pop table row context and return its accumulated cells.
     fn pop_table_row(&mut self) -> Option<Vec<String>> {
-        match self.stack.last() {
-            Some(ParseContext::TableRow { .. }) => {
-                if let Some(ParseContext::TableRow { cells }) = self.stack.pop() {
-                    return Some(cells);
-                }
+        if let Some(ParseContext::TableRow { .. }) = self.stack.last() {
+            if let Some(ParseContext::TableRow { cells }) = self.stack.pop() {
+                return Some(cells);
             }
-            _ => {}
         }
         None
     }
@@ -654,7 +636,7 @@ pub fn format_table(lines: &[String]) -> Vec<String> {
                     let cell = row.get(i).map(|s| s.as_str()).unwrap_or("");
                     let width = col_widths.get(i).copied().unwrap_or(3);
 
-                    if is_separator(&row) {
+                    if is_separator(row) {
                         // Separator row: preserve alignment markers
                         let has_left = cell.starts_with(':');
                         let has_right = cell.ends_with(':');
@@ -704,8 +686,8 @@ fn build_section_hierarchy(sections: &mut [SectionInfo]) {
     // Stack of (index, level) for finding parents
     let mut stack: Vec<(usize, u8)> = Vec::new();
 
-    for i in 0..sections.len() {
-        let level = sections[i].level;
+    for (i, section) in sections.iter_mut().enumerate() {
+        let level = section.level;
 
         // Pop sections at same or deeper level
         while let Some(&(_, parent_level)) = stack.last() {
@@ -717,7 +699,7 @@ fn build_section_hierarchy(sections: &mut [SectionInfo]) {
         }
 
         // Parent is top of stack (if any)
-        sections[i].parent_index = stack.last().map(|&(idx, _)| idx);
+        section.parent_index = stack.last().map(|&(idx, _)| idx);
 
         // Push current section
         stack.push((i, level));
@@ -778,12 +760,8 @@ pub fn render_line(line: &str) -> RenderedLine {
     }
 
     // Blockquotes: > text -> "> " + inline_render("text")
-    if trimmed.starts_with('>') {
-        let content = if trimmed.starts_with("> ") {
-            &trimmed[2..]
-        } else {
-            &trimmed[1..]
-        };
+    if let Some(after_marker) = trimmed.strip_prefix('>') {
+        let content = after_marker.strip_prefix(' ').unwrap_or(after_marker);
         let marker = &trimmed[..trimmed.len() - content.len()];
         let html = format!(
             "<span class=\"md md-blockquote\">{}{}{}</span>",

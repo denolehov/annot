@@ -3,11 +3,12 @@
 
 use std::io::Write;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::{Command, Output, Stdio};
 
-/// Hermetic git: ignores system/global config, pins identity and autocrlf.
-pub fn git(dir: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
+/// Run hermetic git, ignoring system/global config and pinning identity and
+/// autocrlf. Unlike [`git`], this returns non-zero exits to the caller.
+pub fn git_output(dir: &Path, args: &[&str]) -> Output {
+    Command::new("git")
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("GIT_CONFIG_GLOBAL", dir.join("no-such-gitconfig"))
         .args([
@@ -25,7 +26,12 @@ pub fn git(dir: &Path, args: &[&str]) -> String {
         .args(args)
         .current_dir(dir)
         .output()
-        .expect("failed to run git");
+        .expect("failed to run git")
+}
+
+/// Hermetic git: asserts success and returns trimmed stdout.
+pub fn git(dir: &Path, args: &[&str]) -> String {
+    let out = git_output(dir, args);
     assert!(
         out.status.success(),
         "git {args:?} failed: {}",

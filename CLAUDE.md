@@ -176,6 +176,13 @@ Kill the stray `annot.exe` before rebuilding.
 - **Declarative over imperative**: `map`/`collect`/`join` over manual loops
 - **Composables pattern**: Svelte 5 runes in `src/lib/composables/`
 
+Before ending a session that changes Rust code, format it and run strict Clippy:
+
+```bash
+cargo fmt --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+```
+
 ## Commit Messages
 
 release-please lifts every `feat`/`fix` subject line verbatim into
