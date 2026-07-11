@@ -6,7 +6,7 @@
    * Uses LineRow for shared line-rendering logic and adds search highlighting via codeWrapper.
    */
   import type { SectionInfo } from '$lib/types';
-  import { getLineNumber, getDiffKind } from '$lib/line-utils';
+  import { getLineNumber } from '$lib/line-utils';
   import { highlightMatches, clearHighlights } from '$lib/search-highlight';
   import { injectColorSwatches, clearColorSwatches } from '$lib/color-preview';
   import { invoke } from '@tauri-apps/api/core';
@@ -120,24 +120,14 @@
 
 {#snippet row({ line, displayIndex }: DisplayLine)}
   {@const sourceLineNum = getLineNumber(line)}
-  {@const diffKind = getDiffKind(line)}
   {@const mermaidBlock = sourceLineNum !== null ? ctx.mermaid.getMermaidBlockAt(sourceLineNum) : null}
   {@const sectionInfo = sourceLineNum !== null ? getSectionAt(sourceLineNum) : null}
   <LineRow
     {line}
     {displayIndex}
-    additionalClasses={{
-      'diff-added': diffKind === 'added',
-      'diff-deleted': diffKind === 'deleted',
-      'diff-context': diffKind === 'context',
-      'diff-header': diffKind === 'file_header' || diffKind === 'hunk_header',
-    }}
   >
     {#snippet gutter()}
-      {#if line.origin.type === 'diff'}
-        <span class="diff-gutter-old">{line.origin.old_line ?? ''}</span>
-        <span class="diff-gutter-new">{line.origin.new_line ?? ''}</span>
-      {:else if sourceLineNum !== null}
+      {#if sourceLineNum !== null}
         {sourceLineNum}
       {/if}
     {/snippet}

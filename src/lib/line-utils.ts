@@ -20,18 +20,6 @@ export function getLineNumber(line: Line): number | null {
 }
 
 /**
- * Get which side of a diff a line's source position belongs to.
- * Non-diff lines (source/virtual) are always 'new' — file/content/markdown
- * modes have no old side.
- */
-export function getSide(line: Line): 'old' | 'new' {
-  if (line.origin.type === 'diff' && line.origin.old_line !== null && line.origin.new_line === null) {
-    return 'old';
-  }
-  return 'new';
-}
-
-/**
  * Get a unique identifier for a line (for keying, data attributes, etc).
  * For virtual lines, returns a synthetic ID.
  */
@@ -141,19 +129,13 @@ export function extractCodeBlockContent(
 }
 
 /**
- * Check if a line can be selected/annotated.
+ * Check if a line can be selected/annotated (non-diff modes; diff
+ * selectability is walk-kind-based — only DisplayRow 'row' entries select).
  */
 export function isSelectable(line: Line): boolean {
   // Virtual lines (portal headers/footers) cannot be selected
   if (line.origin.type === 'virtual') {
     return false;
-  }
-  // Diff file headers, hunk headers, and meta lines cannot be selected
-  if (line.semantics.type === 'diff') {
-    const kind = line.semantics.kind;
-    if (kind === 'file_header' || kind === 'hunk_header' || kind === 'meta') {
-      return false;
-    }
   }
   // Portal headers and footers cannot be selected
   if (line.semantics.type === 'portal' && (line.semantics.kind === 'header' || line.semantics.kind === 'footer')) {

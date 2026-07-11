@@ -1,6 +1,6 @@
 import type { Line } from './types';
 import type { Range } from './range';
-import { getLineNumber, getFilePath, getSide } from './line-utils';
+import { getLineNumber, getFilePath } from './line-utils';
 
 /**
  * Annotation identity and position.
@@ -26,35 +26,33 @@ export type SlotRef = { id: string; anchor: Anchor };
 /** Separator for coordinate keys — cannot occur in paths. */
 const SEP = '\u0000';
 
+/** Lookup key for a side-less source coordinate. */
+export function sourceKey(path: string, line: number): string {
+  return `${path}${SEP}${line}`;
+}
+
+/** Lookup key for a diff coordinate. Shared with the display walk's byEndpoint. */
+export function diffKey(path: string, side: Side, line: number): string {
+  return `${path}${SEP}${side}${SEP}${line}`;
+}
+
 /**
- * Coordinate keys a line answers to when resolving anchors to display rows.
- * Diff context lines carry both sides and answer on either; virtual lines
+ * Coordinate keys a line answers to when resolving anchors to display rows
+ * (non-diff modes; the display walk owns diff coordinates). Virtual lines
  * (portal headers/footers) answer on none.
  */
 export function endpointKeys(line: Line): string[] {
-  switch (line.origin.type) {
-    case 'source':
-      return [`${line.origin.path}${SEP}${line.origin.line}`];
-    case 'diff': {
-      const { path, old_line, new_line } = line.origin;
-      const keys: string[] = [];
-      if (old_line !== null) keys.push(`${path}${SEP}old${SEP}${old_line}`);
-      if (new_line !== null) keys.push(`${path}${SEP}new${SEP}${new_line}`);
-      return keys;
-    }
-    case 'virtual':
-      return [];
-  }
+  return line.origin.type === 'source' ? [sourceKey(line.origin.path, line.origin.line)] : [];
 }
 
 /** The anchor's two lookup keys (start, end). Source anchors are side-less. */
 export function anchorKeys(anchor: Anchor): [string, string] {
   if (anchor.type === 'source') {
-    return [`${anchor.path}${SEP}${anchor.start}`, `${anchor.path}${SEP}${anchor.end}`];
+    return [sourceKey(anchor.path, anchor.start), sourceKey(anchor.path, anchor.end)];
   }
   return [
-    `${anchor.path}${SEP}${anchor.start.side}${SEP}${anchor.start.line}`,
-    `${anchor.path}${SEP}${anchor.end.side}${SEP}${anchor.end.line}`,
+    diffKey(anchor.path, anchor.start.side, anchor.start.line),
+    diffKey(anchor.path, anchor.end.side, anchor.end.line),
   ];
 }
 
@@ -72,7 +70,10 @@ export function anchorLabel(anchor: Anchor): string {
 }
 
 /**
- * Convert a display selection into an anchor at creation time.
+ * Convert a display selection into a source anchor at creation time
+ * (non-diff modes; diff selections resolve through the display walk —
+ * see display-rows.ts selectionToDiffAnchor).
+ *
  * Validates:
  * 1. All lines in range have non-virtual origin
  * 2. All lines share the same origin.path
@@ -105,33 +106,14 @@ export function selectionToAnchor(range: Range, lines: Line[]): Anchor | null {
     // All lines must have line numbers (non-virtual)
     if (lineNum === null) return null;
 
-    // Check for line number discontinuity (gap > 1 indicates portal boundary).
-    // Skip for diff lines: removed lines number in old-file coordinates while
-    // added/context lines use new-file coordinates, so adjacent rows in a hunk
-    // legitimately jump (e.g. context new=124, removed old=123, added new=125).
-    // Diffs have no portals; hunk/file boundaries are already rejected above
-    // because their header lines have no line numbers.
-    if (line.origin.type !== 'diff' && prevLineNum !== null && Math.abs(lineNum - prevLineNum) > 1) {
+    // Check for line number discontinuity (gap > 1 indicates portal boundary)
+    if (prevLineNum !== null && Math.abs(lineNum - prevLineNum) > 1) {
       return null;
     }
     prevLineNum = lineNum;
   }
 
-  const startPoint = { line: getLineNumber(startLine)!, side: getSide(startLine) };
-  const endPoint = { line: getLineNumber(endLine)!, side: getSide(endLine) };
-
-  // startLine/endLine (display order) can number in reverse of source order
-  // within a diff hunk (old vs new numbering) — swap the pair as a unit so
-  // each endpoint's line and side stay paired together.
-  const [lo, hi] = endPoint.line < startPoint.line ? [endPoint, startPoint] : [startPoint, endPoint];
-
-  if (startLine.origin.type === 'diff') {
-    return {
-      type: 'diff',
-      path,
-      start: { side: lo.side, line: lo.line },
-      end: { side: hi.side, line: hi.line },
-    };
-  }
-  return { type: 'source', path, start: lo.line, end: hi.line };
+  const start = getLineNumber(startLine)!;
+  const end = getLineNumber(endLine)!;
+  return { type: 'source', path, start: Math.min(start, end), end: Math.max(start, end) };
 }
