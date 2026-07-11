@@ -1,19 +1,18 @@
 ---
 source: src/pipeline.rs
-expression: dump(&lines)
+expression: dump(&docs)
 ---
-   ·    · file |diff --git a/bin.dat b/bin.dat
-   ·    · meta |Binary files a/bin.dat and b/bin.dat differ
-   ·    · file |diff --git a/main.rs b/main.rs
-   ·    · hunk |@@ -2,7 +2,7 @@ fn main() {
-   2    2  ctx |     let a = 1;
-   3    3  ctx |     let b = 2;
-   4    4  ctx |     let c = 3;
-   5    ·  del |-    let d = 4;
-   ·    5  add |+    let d = 40;
-   6    6  ctx |     let e = 5;
-   7    7  ctx |     println!("{}", a + b);
-   8    8  ctx | }
-   ·    · file |diff --git a/untracked.txt b/untracked.txt
-   ·    · hunk |@@ -0,0 +1 @@
-   ·    1  add |+brand new
+=== bin.dat [Modified] lang=dat unavailable
+=== main.rs [Modified] lang=rs
+@@ -2,7 +2,7 @@ fn main() {
+   2    2 |    let a = 1;
+   3    3 |    let b = 2;
+   4    4 |    let c = 3;
+   5    · |    let d = 4;
+   ·    5 |    let d = 40;
+   6    6 |    let e = 5;
+   7    7 |    println!("{}", a + b);
+   8    8 |}
+=== untracked.txt [Added] lang=txt
+@@ -0,0 +1,1 @@
+   ·    1 |brand new

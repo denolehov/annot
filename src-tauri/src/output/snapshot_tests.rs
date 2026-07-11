@@ -17,8 +17,8 @@ use crate::input::{CliSource, ContentSource, DiffSource, McpSource};
 use crate::review::Review;
 use crate::source::Side;
 use crate::state::{
-    AnnotationRefSnapshot, ContentMetadata, ContentModel, ContentNode, ExitMode, ExitModeSource,
-    Line, LineOrigin, LineSemantics, RefSnapshot, UserConfig,
+    AnnotationRefSnapshot, ContentMetadata, ContentModel, ContentNode, ContentView, ExitMode,
+    ExitModeSource, Line, LineOrigin, LineSemantics, RefSnapshot, UserConfig,
 };
 
 use super::{format_output, OutputMode};
@@ -80,7 +80,7 @@ fn make_review(label: &str, lines: Vec<Line>, annotations: IndexMap<String, Anno
     });
     let content = ContentModel {
         label: label.to_string(),
-        lines,
+        view: ContentView::Flat { lines },
         source,
         metadata: ContentMetadata::Plain,
         portals: Vec::new(),
@@ -105,7 +105,7 @@ fn make_review_with_config(
     });
     let content = ContentModel {
         label: label.to_string(),
-        lines,
+        view: ContentView::Flat { lines },
         source,
         metadata: ContentMetadata::Plain,
         portals: Vec::new(),

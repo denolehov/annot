@@ -1,22 +1,19 @@
 //! Git-mode render pipeline: enumerated files + full texts + computed hunks
-//! → the same patch-shaped `Line` stream the legacy parser produces.
+//! → per-file `DiffDocument`s.
 //!
-//! The strangler seam for git mode: `diff.rs` keeps parsing raw
-//! `diff_content` patches; this module synthesizes the identical wire shape
-//! (`LineOrigin::Diff`, `DiffSemantics`, prefixed `content`) from structure,
-//! so no consumer changes. Deliberately not emitted, matching what the
-//! frontend never renders: `index`/`---`/`+++`/mode plumbing rows and
-//! `\ No newline at end of file` markers.
+//! Headers and `+`/`-` signs are presentation synthesized at the edges
+//! (frontend walk, output emit) — this module produces only structure.
+//! Plumbing (`index`/`---`/`+++`/mode lines, `\ No newline at end of file`
+//! markers) has no representation at all.
 
 use std::collections::HashMap;
 use std::ops::Range;
 
-use crate::diff::{DiffFileInfo, DiffMetadata, HunkInfo};
 use crate::engine::{compute_hunks, DiffRow};
 use crate::error::AnnotError;
 use crate::highlight::Highlighter;
 use crate::source::{FileSource, Side};
-use crate::state::{DiffSemantics, Line, LineHtml, LineOrigin, LineSemantics};
+use crate::state::{DiffDocument, HunkV2, LineHtml, Row};
 use crate::vcs::{BlobRef, FileEntry};
 
 /// Lines of context around changes — git's default; unfold is the
@@ -48,19 +45,17 @@ pub fn build_oid_map(entries: &[FileEntry]) -> HashMap<(String, Side), BlobRef> 
         .collect()
 }
 
-/// Render enumerated files into the flat diff line stream + metadata.
+/// Render enumerated files into per-file diff documents.
 pub fn render(
     entries: &[FileEntry],
     source: &dyn FileSource,
     highlighter: &Highlighter,
     context: u32,
-) -> Result<(Vec<Line>, DiffMetadata), AnnotError> {
-    let mut lines = Vec::new();
-    let files = entries
+) -> Result<Vec<DiffDocument>, AnnotError> {
+    entries
         .iter()
-        .map(|entry| render_file(entry, source, highlighter, context, &mut lines))
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok((lines, DiffMetadata { files }))
+        .map(|entry| render_file(entry, source, highlighter, context))
+        .collect()
 }
 
 fn render_file(
@@ -68,31 +63,20 @@ fn render_file(
     source: &dyn FileSource,
     highlighter: &Highlighter,
     context: u32,
-    lines: &mut Vec<Line>,
-) -> Result<DiffFileInfo, AnnotError> {
+) -> Result<DiffDocument, AnnotError> {
     // Display identity: new name wins (old for deleted files) — mirrors
-    // parse_diff. `a/` side is the old name, `b/` side the new.
-    let a_path = entry.old_path.as_ref().or(entry.new_path.as_ref());
-    let b_path = entry.new_path.as_ref().or(entry.old_path.as_ref());
-    let display_path = b_path.cloned().unwrap_or_default();
-    let language = crate::diff::language_for(entry.new_path.as_deref(), entry.old_path.as_deref());
-
-    let start_line = lines.len() as u32 + 1;
-    let header_origin = || LineOrigin::Diff {
-        path: display_path.clone(),
-        old_line: None,
-        new_line: None,
+    // parse_diff. `old_path` only when the name actually changed.
+    let display_path = entry
+        .new_path
+        .as_ref()
+        .or(entry.old_path.as_ref())
+        .cloned()
+        .unwrap_or_default();
+    let old_path = match (&entry.old_path, &entry.new_path) {
+        (Some(old), Some(new)) if old != new => Some(old.clone()),
+        _ => None,
     };
-    lines.push(Line {
-        content: format!(
-            "diff --git a/{} b/{}",
-            a_path.map(String::as_str).unwrap_or("/dev/null"),
-            b_path.map(String::as_str).unwrap_or("/dev/null"),
-        ),
-        html: None,
-        origin: header_origin(),
-        semantics: LineSemantics::Diff(DiffSemantics::FileHeader),
-    });
+    let language = crate::diff::language_for(entry.new_path.as_deref(), entry.old_path.as_deref());
 
     // A side the entry says exists but yields no text is binary/oversize/
     // non-UTF-8 (`Ok(None)` capability signal); a nonexistent side diffs
@@ -103,22 +87,7 @@ fn render_file(
         || (entry.new_oid.is_some() && new_text.is_none());
 
     let mut hunks = Vec::new();
-    if unavailable {
-        lines.push(Line {
-            content: format!(
-                "Binary files {} and {} differ",
-                a_path
-                    .map(|p| format!("a/{p}"))
-                    .unwrap_or_else(|| "/dev/null".into()),
-                b_path
-                    .map(|p| format!("b/{p}"))
-                    .unwrap_or_else(|| "/dev/null".into()),
-            ),
-            html: None,
-            origin: header_origin(),
-            semantics: LineSemantics::Diff(DiffSemantics::Meta),
-        });
-    } else {
+    if !unavailable {
         let old = old_text.as_deref().unwrap_or("");
         let new = new_text.as_deref().unwrap_or("");
         let old_lines: Vec<&str> = old.lines().collect();
@@ -129,56 +98,28 @@ fn render_file(
             let (old_start, old_count) = printed_range(&hunk.old_range);
             let (new_start, new_count) = printed_range(&hunk.new_range);
             let function_context = function_context(&old_lines, hunk.old_range.start);
-            let marker = format!(
-                "@@ {} {} @@",
-                printed_side('-', old_start, old_count),
-                printed_side('+', new_start, new_count)
-            );
-            let header = match function_context.as_deref() {
-                Some(ctx) => format!("{marker} {ctx}"),
-                None => marker,
-            };
-
-            lines.push(Line {
-                content: header,
-                html: None,
-                origin: header_origin(),
-                semantics: LineSemantics::Diff(DiffSemantics::HunkHeader {
-                    context: function_context.clone(),
-                }),
-            });
-            hunks.push(HunkInfo {
-                display_line: lines.len() as u32,
-                old_start,
-                old_count,
-                new_start,
-                new_count,
+            hunks.push(HunkV2 {
+                old_range: old_start..old_start + old_count,
+                new_range: new_start..new_start + new_count,
                 function_context_html: function_context
                     .as_deref()
                     .and_then(|ctx| highlighter.highlight_function_context(ctx, &fake_path)),
                 function_context,
+                rows: hunk
+                    .rows
+                    .iter()
+                    .map(|row| render_row(row, &old_lines, &new_lines, &language, &fake_path, highlighter))
+                    .collect(),
             });
-
-            for row in &hunk.rows {
-                lines.push(render_row(
-                    row,
-                    &old_lines,
-                    &new_lines,
-                    &display_path,
-                    &language,
-                    &fake_path,
-                    highlighter,
-                ));
-            }
         }
     }
 
-    Ok(DiffFileInfo {
-        old_name: entry.old_path.clone(),
-        new_name: entry.new_path.clone(),
+    Ok(DiffDocument {
+        path: display_path,
+        old_path,
+        status: entry.status.clone(),
+        unavailable,
         language,
-        start_line,
-        end_line: lines.len() as u32,
         hunks,
     })
 }
@@ -202,50 +143,29 @@ fn render_row(
     row: &DiffRow,
     old_lines: &[&str],
     new_lines: &[&str],
-    display_path: &str,
     language: &str,
     fake_path: &str,
     highlighter: &Highlighter,
-) -> Line {
+) -> Row {
     // `word_ranges` deliberately dropped: no wire field exists yet;
     // word-level highlights recompute from the session's retained FileSource.
-    let (prefix, text, old_line, new_line, semantics) = match *row {
-        DiffRow::Context { old_line, new_line } => (
-            " ",
-            line_at(old_lines, old_line),
-            Some(old_line),
-            Some(new_line),
-            DiffSemantics::Context,
-        ),
-        DiffRow::Deleted { old_line, .. } => (
-            "-",
-            line_at(old_lines, old_line),
-            Some(old_line),
-            None,
-            DiffSemantics::Deleted,
-        ),
-        DiffRow::Added { new_line, .. } => (
-            "+",
-            line_at(new_lines, new_line),
-            None,
-            Some(new_line),
-            DiffSemantics::Added,
-        ),
+    let (text, old_line, new_line) = match *row {
+        DiffRow::Context { old_line, new_line } => {
+            (line_at(old_lines, old_line), Some(old_line), Some(new_line))
+        }
+        DiffRow::Deleted { old_line, .. } => (line_at(old_lines, old_line), Some(old_line), None),
+        DiffRow::Added { new_line, .. } => (line_at(new_lines, new_line), None, Some(new_line)),
     };
 
     let html = (!language.is_empty())
-        .then(|| highlighter.highlight_diff_row(prefix, text, fake_path))
+        .then(|| highlighter.highlight_diff_row(text, fake_path))
         .flatten();
 
-    Line {
-        content: format!("{prefix}{text}"),
+    Row {
+        old_line,
+        new_line,
+        content: text.to_string(),
         html: html.map(LineHtml::Full),
-        origin: LineOrigin::Diff {
-            path: display_path.to_string(),
-            old_line,
-            new_line,
-        },
-        semantics: LineSemantics::Diff(semantics),
     }
 }
 
@@ -269,17 +189,6 @@ fn printed_range(range: &Range<u32>) -> (u32, u32) {
         range.start
     };
     (start, count)
-}
-
-/// Git omits the count when it is 1: `-3` not `-3,1`.
-/// GNU-diff-style range formatting: omit the count when it's 1. Shared by
-/// the git pipeline and the patch parser.
-pub(crate) fn printed_side(sign: char, start: u32, count: u32) -> String {
-    if count == 1 {
-        format!("{sign}{start}")
-    } else {
-        format!("{sign}{start},{count}")
-    }
 }
 
 /// Git's default funcname rule (xdiff `def_ff`, used when no userdiff driver
@@ -311,45 +220,74 @@ mod tests {
     use super::*;
     use crate::input::{CliSource, ContentSource};
     use crate::source::GixSource;
-    use crate::state::{ContentMetadata, ContentModel};
+    use crate::state::{ContentModel, ContentView, LineHtml};
     use crate::testutil::git;
     use crate::vcs::{enumerate, DiffTarget};
     use std::path::Path;
 
-    fn render_repo(p: &Path, target: &DiffTarget) -> (Vec<Line>, DiffMetadata) {
+    fn render_repo(p: &Path, target: &DiffTarget) -> Vec<DiffDocument> {
         let entries = enumerate(p, target, &[]).unwrap();
         let source = GixSource::new(gix::discover(p).unwrap(), build_oid_map(&entries));
         render(&entries, &source, &Highlighter::new(), CONTEXT_LINES).unwrap()
     }
 
-    /// Compact textual form of the line stream: origin numbers, semantics,
-    /// raw content — the full wire-relevant surface except html.
-    fn dump(lines: &[Line]) -> String {
+    /// Compact textual form of the documents: identity, hunk ranges, row
+    /// numbers, raw content — the full wire-relevant surface except html.
+    fn dump(docs: &[DiffDocument]) -> String {
         let num = |n: Option<u32>| n.map_or("·".to_string(), |n| n.to_string());
-        lines
-            .iter()
-            .map(|l| {
-                let (old, new) = match &l.origin {
-                    LineOrigin::Diff {
-                        old_line, new_line, ..
-                    } => (*old_line, *new_line),
-                    _ => (None, None),
-                };
-                let sem = match &l.semantics {
-                    LineSemantics::Diff(d) => match d {
-                        DiffSemantics::FileHeader => "file",
-                        DiffSemantics::HunkHeader { .. } => "hunk",
-                        DiffSemantics::Meta => "meta",
-                        DiffSemantics::Added => "add",
-                        DiffSemantics::Deleted => "del",
-                        DiffSemantics::Context => "ctx",
-                    },
-                    _ => "?",
-                };
-                format!("{:>4} {:>4} {:>4} |{}", num(old), num(new), sem, l.content)
+        docs.iter()
+            .flat_map(|doc| {
+                let renamed = doc
+                    .old_path
+                    .as_deref()
+                    .map(|p| format!(" (from {p})"))
+                    .unwrap_or_default();
+                let unavailable = if doc.unavailable { " unavailable" } else { "" };
+                let header = format!(
+                    "=== {}{renamed} [{:?}] lang={}{unavailable}",
+                    doc.path, doc.status, doc.language
+                );
+                std::iter::once(header).chain(doc.hunks.iter().flat_map(|hunk| {
+                    let ctx = hunk
+                        .function_context
+                        .as_deref()
+                        .map(|c| format!(" {c}"))
+                        .unwrap_or_default();
+                    let ranges = format!(
+                        "@@ -{},{} +{},{} @@{ctx}",
+                        hunk.old_range.start,
+                        hunk.old_range.end - hunk.old_range.start,
+                        hunk.new_range.start,
+                        hunk.new_range.end - hunk.new_range.start,
+                    );
+                    std::iter::once(ranges).chain(hunk.rows.iter().map(|row| {
+                        format!(
+                            "{:>4} {:>4} |{}",
+                            num(row.old_line),
+                            num(row.new_line),
+                            row.content
+                        )
+                    }))
+                }))
             })
             .collect::<Vec<_>>()
             .join("\n")
+    }
+
+    /// Every row's line numbers land inside its hunk's declared ranges.
+    fn assert_rows_within_ranges(docs: &[DiffDocument]) {
+        for doc in docs {
+            for hunk in &doc.hunks {
+                for row in &hunk.rows {
+                    if let Some(old) = row.old_line {
+                        assert!(hunk.old_range.contains(&old), "{old} ∉ {:?}", hunk.old_range);
+                    }
+                    if let Some(new) = row.new_line {
+                        assert!(hunk.new_range.contains(&new), "{new} ∉ {:?}", hunk.new_range);
+                    }
+                }
+            }
+        }
     }
 
     const MAIN_RS_V1: &str = "fn main() {\n    let a = 1;\n    let b = 2;\n    let c = 3;\n    let d = 4;\n    let e = 5;\n    println!(\"{}\", a + b);\n}\n";
@@ -399,23 +337,9 @@ mod tests {
     #[test]
     fn range_stream_snapshot() {
         let dir = range_fixture(Fixture::WithRename);
-        let (lines, meta) = render_repo(dir.path(), &head_range());
-        insta::assert_snapshot!(dump(&lines));
-
-        // File spans and hunk display lines index into the stream correctly.
-        for file in &meta.files {
-            assert!(matches!(
-                lines[file.start_line as usize - 1].semantics,
-                LineSemantics::Diff(DiffSemantics::FileHeader)
-            ));
-            assert!(file.end_line as usize <= lines.len());
-            for hunk in &file.hunks {
-                assert!(matches!(
-                    lines[hunk.display_line as usize - 1].semantics,
-                    LineSemantics::Diff(DiffSemantics::HunkHeader { .. })
-                ));
-            }
-        }
+        let docs = render_repo(dir.path(), &head_range());
+        insta::assert_snapshot!(dump(&docs));
+        assert_rows_within_ranges(&docs);
     }
 
     /// The strangler bar: the new pipeline's changed rows must be exactly the
@@ -424,66 +348,53 @@ mod tests {
     fn parity_with_legacy_parser_on_fixture() {
         let dir = range_fixture(Fixture::LegacySafe);
         let p = dir.path();
-        let (new_lines, new_meta) = render_repo(p, &head_range());
+        let new_docs = render_repo(p, &head_range());
 
         let patch = git(p, &["diff", "HEAD~1..HEAD"]);
         let cli_source = ContentSource::Cli(CliSource::Stdin {
             label: "diff".into(),
         });
         let legacy = ContentModel::from_diff(&patch, cli_source).unwrap();
-        let ContentMetadata::Diff(legacy_meta) = &legacy.metadata else {
+        let ContentView::Diff {
+            documents: legacy_docs,
+        } = &legacy.view
+        else {
             panic!("legacy model is not a diff");
         };
 
-        let names = |meta: &DiffMetadata| {
-            meta.files
-                .iter()
-                .map(|f| (f.old_name.clone(), f.new_name.clone()))
+        let names = |docs: &[DiffDocument]| {
+            docs.iter()
+                .map(|d| (d.path.clone(), d.old_path.clone()))
                 .collect::<Vec<_>>()
         };
-        assert_eq!(names(&new_meta), names(legacy_meta));
+        assert_eq!(names(&new_docs), names(legacy_docs));
 
-        // Changed rows: identical content, origins, and semantics. Context
-        // rows are excluded — hunk boundaries may differ cosmetically between
-        // engines (accepted at design time). noeol.txt is excluded from the
+        // Changed rows: identical content and line numbers. Context rows are
+        // excluded — hunk boundaries may differ cosmetically between engines
+        // (accepted at design time). noeol.txt is excluded from the
         // side-by-side because the legacy parser miscounts there: it treats
         // the `\ No newline at end of file` marker as a context line, shifting
         // every following new-side number by one (asserted correct below).
-        let changed = |lines: &[Line]| {
-            lines
-                .iter()
-                .filter(|l| {
-                    matches!(
-                        l.semantics,
-                        LineSemantics::Diff(DiffSemantics::Added | DiffSemantics::Deleted)
-                    )
+        let changed = |docs: &[DiffDocument]| {
+            docs.iter()
+                .filter(|doc| doc.path != "noeol.txt")
+                .flat_map(|doc| {
+                    doc.hunks
+                        .iter()
+                        .flat_map(|h| &h.rows)
+                        .filter(|r| r.old_line.is_none() || r.new_line.is_none())
+                        .map(|r| (doc.path.clone(), r.old_line, r.new_line, r.content.clone()))
                 })
-                .map(|l| {
-                    let LineOrigin::Diff {
-                        path,
-                        old_line,
-                        new_line,
-                    } = &l.origin
-                    else {
-                        panic!("diff row without diff origin");
-                    };
-                    (path.clone(), *old_line, *new_line, l.content.clone())
-                })
-                .filter(|(path, ..)| path != "noeol.txt")
                 .collect::<Vec<_>>()
         };
-        assert_eq!(changed(&new_lines), changed(&legacy.lines));
+        assert_eq!(changed(&new_docs), changed(legacy_docs));
 
         // The re-added `beta` really is line 2 of the new file — the number
         // the legacy parser gets wrong.
-        assert!(new_lines.iter().any(|l| l.content == "+beta"
-            && matches!(
-                l.origin,
-                LineOrigin::Diff {
-                    new_line: Some(2),
-                    ..
-                }
-            )));
+        assert!(new_docs
+            .iter()
+            .flat_map(|d| d.hunks.iter().flat_map(|h| &h.rows))
+            .any(|r| r.content == "beta" && r.old_line.is_none() && r.new_line == Some(2)));
     }
 
     #[test]
@@ -499,32 +410,28 @@ mod tests {
         std::fs::write(p.join("bin.dat"), b"\x00\x02new").unwrap();
         std::fs::write(p.join("untracked.txt"), "brand new\n").unwrap();
 
-        let (lines, _) = render_repo(p, &DiffTarget::WorkingTree);
-        insta::assert_snapshot!(dump(&lines));
+        let docs = render_repo(p, &DiffTarget::WorkingTree);
+        insta::assert_snapshot!(dump(&docs));
     }
 
     #[test]
-    fn rows_are_highlighted_headers_are_not() {
+    fn rows_are_highlighted_raw() {
         let dir = range_fixture(Fixture::WithRename);
-        let (lines, _) = render_repo(dir.path(), &head_range());
+        let docs = render_repo(dir.path(), &head_range());
 
-        let added_rs = lines
+        let added_rs = docs
             .iter()
-            .find(|l| {
-                matches!(l.semantics, LineSemantics::Diff(DiffSemantics::Added))
-                    && l.content.contains("let d = 40;")
-            })
+            .flat_map(|d| d.hunks.iter().flat_map(|h| &h.rows))
+            .find(|r| r.old_line.is_none() && r.content.contains("let d = 40;"))
             .unwrap();
         match &added_rs.html {
-            Some(LineHtml::Full(html)) => assert!(html.starts_with('+')),
+            // Highlighted, and no textual sign — the sign is presentation.
+            Some(LineHtml::Full(html)) => assert!(!html.starts_with('+')),
             other => panic!("expected highlighted row, got {other:?}"),
         }
 
-        let header = lines
-            .iter()
-            .find(|l| matches!(l.semantics, LineSemantics::Diff(DiffSemantics::FileHeader)))
-            .unwrap();
-        assert!(header.html.is_none());
+        let main_doc = docs.iter().find(|d| d.path == "main.rs").unwrap();
+        assert!(main_doc.hunks[0].function_context_html.is_some());
     }
 
     #[test]
@@ -572,9 +479,6 @@ mod tests {
         assert_eq!(printed_range(&(3..4)), (3, 1)); // @@ -3 (count omitted)
         assert_eq!(printed_range(&(1..1)), (0, 0)); // new file: @@ -0,0
         assert_eq!(printed_range(&(6..6)), (5, 0)); // insertion after line 5
-        assert_eq!(printed_side('-', 3, 1), "-3");
-        assert_eq!(printed_side('+', 1, 3), "+1,3");
-        assert_eq!(printed_side('-', 0, 0), "-0,0");
     }
 
     /// Manual corpus eyeball (the spec's verification bar): render the
@@ -586,7 +490,7 @@ mod tests {
     #[ignore = "manual eyeball against the enclosing repo's working tree"]
     fn side_by_side_on_this_repo() {
         let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-        let (new_lines, _) = render_repo(repo_root, &DiffTarget::WorkingTree);
+        let new_docs = render_repo(repo_root, &DiffTarget::WorkingTree);
 
         let patch = git(repo_root, &["diff", "HEAD"]);
         if patch.is_empty() {
@@ -600,20 +504,27 @@ mod tests {
             }),
         )
         .unwrap();
+        let ContentView::Diff {
+            documents: legacy_docs,
+        } = &legacy.view
+        else {
+            panic!("legacy model is not a diff");
+        };
 
-        let changed = |lines: &[Line]| {
-            lines
-                .iter()
-                .filter(|l| {
-                    matches!(
-                        l.semantics,
-                        LineSemantics::Diff(DiffSemantics::Added | DiffSemantics::Deleted)
-                    )
+        let changed = |docs: &[DiffDocument]| {
+            docs.iter()
+                .flat_map(|doc| {
+                    doc.hunks
+                        .iter()
+                        .flat_map(|h| &h.rows)
+                        .filter(|r| r.old_line.is_none() || r.new_line.is_none())
+                        .map(|r| {
+                            format!("{} {:?}/{:?} {}", doc.path, r.old_line, r.new_line, r.content)
+                        })
                 })
-                .map(|l| format!("{:?} {}", l.origin, l.content))
                 .collect::<std::collections::BTreeSet<_>>()
         };
-        let (ours, theirs) = (changed(&new_lines), changed(&legacy.lines));
+        let (ours, theirs) = (changed(&new_docs), changed(legacy_docs));
         for row in ours.difference(&theirs) {
             println!("only new pipeline: {row}");
         }

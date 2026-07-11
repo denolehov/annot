@@ -63,12 +63,10 @@ impl Highlighter {
         (!html.is_empty()).then_some(html)
     }
 
-    /// Highlight one diff row's code and re-attach its `+`/`-`/` ` prefix.
-    /// Shared by the patch parser and the git pipeline.
-    pub fn highlight_diff_row(&self, prefix: &str, code: &str, path: &str) -> Option<String> {
-        self.highlight_lines(code, path)
-            .first()
-            .map(|h| format!("{prefix}{h}"))
+    /// Highlight one diff row's raw code. Shared by the patch parser and the
+    /// git pipeline; the `+`/`-` sign is presentation, never part of the html.
+    pub fn highlight_diff_row(&self, code: &str, path: &str) -> Option<String> {
+        self.highlight_lines(code, path).first().cloned()
     }
 
     /// Map file extensions that syntect doesn't support to ones it does.

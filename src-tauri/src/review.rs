@@ -22,9 +22,7 @@ use serde::Serialize;
 
 use crate::anchor::{Anchor, Annotation};
 use crate::output::FormatResult;
-use crate::state::{
-    ContentMetadata, ContentModel, ContentNode, ContentResponse, FileMetadata, UserConfig,
-};
+use crate::state::{ContentModel, ContentNode, ContentResponse, FileMetadata, UserConfig};
 
 /// Key for annotation targets in Review.files.
 /// Distinguishes real file paths from ephemeral/synthetic content.
@@ -65,7 +63,7 @@ impl FileKey {
             FileKey::Ephemeral { label } => label.clone(),
             FileKey::DiffFile { .. } => {
                 // Diff files use index-based routing, not path-based
-                unreachable!("DiffFile uses index-based routing via LineOrigin::Diff")
+                unreachable!("DiffFile routes by index into the diff view's documents")
             }
         }
     }
@@ -226,17 +224,12 @@ impl Review {
         root_window: String,
         result_channel: Option<Sender<FormatResult>>,
     ) -> Self {
-        // Extract diff metadata before moving content
-        let diff_meta = match &content.metadata {
-            ContentMetadata::Diff(dm) => Some(dm.clone()),
-            _ => None,
-        };
-
-        let (root_view, files, window_view) = if let Some(dm) = diff_meta {
-            Self::build_diff_state(content, dm)
-        } else {
-            Self::build_file_state(content)
-        };
+        let (root_view, files, window_view) =
+            if matches!(content.view, crate::state::ContentView::Diff { .. }) {
+                Self::build_diff_state(content)
+            } else {
+                Self::build_file_state(content)
+            };
 
         let mut windows = HashMap::new();
         windows.insert(root_window.clone(), window_view);
@@ -302,34 +295,25 @@ impl Review {
     /// Build state for a diff (multiple files).
     fn build_diff_state(
         content: ContentModel,
-        diff_meta: crate::diff::DiffMetadata,
     ) -> (View, HashMap<FileKey, AnnotationTarget>, WindowView) {
         let window_label = content.label.clone();
         let mut diff_files = Vec::new();
         let mut files = HashMap::new();
 
-        for (index, file_info) in diff_meta.files.iter().enumerate() {
-            // Use new_name if available, otherwise old_name (for display)
-            let display_path = file_info
-                .new_name
-                .as_ref()
-                .or(file_info.old_name.as_ref())
-                .map(|s| PathBuf::from(s))
-                .unwrap_or_else(|| PathBuf::from("unknown"));
-
-            let old_path = file_info.old_name.as_ref().map(PathBuf::from);
-
+        let crate::state::ContentView::Diff { documents } = &content.view else {
+            unreachable!("build_diff_state requires a diff view");
+        };
+        for (index, doc) in documents.iter().enumerate() {
             diff_files.push(DiffFileView {
-                path: display_path,
-                old_path,
+                path: PathBuf::from(&doc.path),
+                old_path: doc.old_path.as_ref().map(PathBuf::from),
             });
 
-            // Key by index (type-safe)
+            // Key by index (type-safe): `documents[index]` is the identity.
             let key = FileKey::diff_file(index);
 
-            // Create annotation target for this file
             let mut target = AnnotationTarget::new();
-            target.metadata.language = Some(file_info.language.clone());
+            target.metadata.language = Some(doc.language.clone());
             files.insert(key, target);
         }
 
@@ -487,7 +471,7 @@ impl Review {
                 let content = self.root_view.content();
                 Some(ContentResponse {
                     label: content.label.clone(),
-                    lines: content.lines.clone(),
+                    view: content.view.clone(),
                     tags: self.config.tags().to_vec(),
                     exit_modes: self.config.exit_modes().to_vec(),
                     selected_exit_mode_id: self.selected_exit_mode_id.clone(),
