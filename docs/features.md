@@ -23,7 +23,9 @@ annot is a **structured dialogue medium** — a space where human and AI take tu
 Open any source file for annotation. Syntax highlighting adapts to language. Navigate by line numbers.
 
 ### Diff Review
-Review git changes (`--staged`, `main...HEAD`) or raw unified diffs. Color-coded: additions green, deletions red. Annotations capture both old and new line numbers.
+Review git changes or raw unified diffs. Color-coded: additions green, deletions red. Annotations capture both old and new line numbers.
+
+Git targets work from the CLI (`annot diff`, `annot diff --staged`, `annot diff main..HEAD -- src/`) and from MCP (`review_diff` with `target`/`pathspecs`) — same three comparisons: working tree vs HEAD, index vs HEAD, revision range (`...` diffs from the merge base). Raw diffs come via stdin (`git diff | annot`) or MCP `diff_content`.
 
 **File tree** — `Cmd+B` toggles a sidebar listing every changed file with its +/− counts. Clicking a file scrolls to it (expanding it if collapsed); the row for the file currently in view stays highlighted. The `:` palette's **Files** namespace does the same jump by fuzzy search.
 

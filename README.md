@@ -143,6 +143,9 @@ Claude now has review tools (`review_file`, `review_diff`, `review_content`). As
 ```bash
 annot file.rs           # Open a file for annotation
 annot --json file.rs    # Output as JSON (for agent consumption)
+annot diff              # Review working-tree changes vs HEAD
+annot diff --staged     # Review staged changes
+annot diff main..HEAD   # Review a revision range (main...HEAD for merge base)
 ```
 
 ## How it works
