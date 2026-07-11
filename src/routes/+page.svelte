@@ -702,6 +702,26 @@
     return rangeLines.join('\n');
   }
 
+  /**
+   * Unfold context around a hunk (S3). The backend grows the session's
+   * document (splice + merge live there — one source of truth) and returns
+   * the whole updated document; replacing it re-derives the walk.
+   */
+  async function expandContext(
+    docIdx: number,
+    hunkIdx: number,
+    direction: 'up' | 'down',
+    amount: 'step' | 'all',
+  ): Promise<void> {
+    const updated = await invoke<DiffDocument>('expand_context', {
+      fileIndex: docIdx,
+      hunkIndex: hunkIdx,
+      direction,
+      amount,
+    });
+    if (diffDocs) diffDocs[docIdx] = updated;
+  }
+
   // Shared props for AnnotationSlot component (context provides most state)
   let annotationSlotProps = $derived({
     pendingTagInsertion,
@@ -887,6 +907,7 @@
     {showToast}
     {isLineSelectable}
     {getOriginalLinesForRange}
+    {expandContext}
   >
   <div class="sticky-header">
     <Header

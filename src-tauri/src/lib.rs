@@ -33,9 +33,9 @@ pub mod window_state;
 
 use commands::{
     compute_replace_diff, copy_section, copy_to_clipboard, cycle_exit_mode, delete_annotation,
-    delete_exit_mode, delete_tag, export_to_obsidian, finish_review, get_config, get_content,
-    get_exit_modes, get_tags, get_theme, reload_config, reorder_exit_modes, save_config,
-    save_content, set_exit_mode, set_session_comment, set_theme, upsert_annotation,
+    delete_exit_mode, delete_tag, expand_context, export_to_obsidian, finish_review, get_config,
+    get_content, get_exit_modes, get_tags, get_theme, reload_config, reorder_exit_modes,
+    save_config, save_content, set_exit_mode, set_session_comment, set_theme, upsert_annotation,
     upsert_exit_mode, upsert_tag,
 };
 use excalidraw_window::{
@@ -84,7 +84,8 @@ macro_rules! all_commands {
             set_theme,
             list_project_files,
             invalidate_file_cache,
-            compute_replace_diff
+            compute_replace_diff,
+            expand_context
         ]
     };
 }

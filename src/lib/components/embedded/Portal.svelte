@@ -70,6 +70,7 @@
     <LineRow
       {line}
       {displayIndex}
+      interactive={true}
       additionalClasses={{
         'portal-header': portalSemantics?.kind === 'header',
         'portal-content': portalSemantics?.kind === 'content',

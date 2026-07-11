@@ -9,6 +9,8 @@
 use std::collections::HashMap;
 use std::ops::Range;
 
+use serde::Deserialize;
+
 use crate::engine::{compute_hunks, DiffRow};
 use crate::error::AnnotError;
 use crate::highlight::Highlighter;
@@ -19,6 +21,9 @@ use crate::vcs::{BlobRef, FileEntry};
 /// Lines of context around changes — git's default; unfold is the
 /// mechanism for seeing more, not a wider default.
 pub const CONTEXT_LINES: u32 = 3;
+
+/// Context lines revealed per directional unfold click (GitHub's step).
+pub const EXPAND_STEP: u32 = 20;
 
 /// Hunk-header function context is capped like git's (80 bytes).
 const FUNCTION_CONTEXT_MAX_BYTES: usize = 80;
@@ -113,12 +118,19 @@ fn render_file(
         }
     }
 
+    // Free byproduct of the diff having read the full text: the unfold
+    // capability signal and the trailing-gap bound.
+    let new_len = (!unavailable)
+        .then(|| new_text.as_deref().map(|t| t.lines().count() as u32))
+        .flatten();
+
     Ok(DiffDocument {
         path: display_path,
         old_path,
         status: entry.status.clone(),
         unavailable,
         language,
+        new_len,
         hunks,
     })
 }
@@ -188,6 +200,153 @@ fn printed_range(range: &Range<u32>) -> (u32, u32) {
         range.start
     };
     (start, count)
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// UNFOLD (S3) — grow a hunk's context, then restore the no-touching invariant
+// ════════════════════════════════════════════════════════════════════════════
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExpandDirection {
+    Up,
+    Down,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExpandAmount {
+    Step,
+    All,
+}
+
+/// Stored ranges use git-printed convention: an empty side starts at the
+/// line *before* the position. Expansion arithmetic needs the true half-open
+/// range, where an empty side sits at its insertion point.
+fn true_range(range: &Range<u32>) -> Range<u32> {
+    if range.start == range.end {
+        range.start + 1..range.start + 1
+    } else {
+        range.clone()
+    }
+}
+
+/// Unfold context around `hunks[hunk_index]`: grow its ranges toward the
+/// neighboring hunk (or the file edge), splice in context rows sliced from
+/// the new-side full text, and merge hunks whose ranges now touch — Zed's
+/// normalize-not-track rule: a fully unfolded gap disappears because the
+/// no-touching invariant is restored, not because anyone tracked the gap.
+pub fn expand_context(
+    doc: &mut DiffDocument,
+    source: &dyn FileSource,
+    highlighter: &Highlighter,
+    hunk_index: usize,
+    direction: ExpandDirection,
+    amount: ExpandAmount,
+) -> Result<(), AnnotError> {
+    let new_len = doc
+        .new_len
+        .ok_or_else(|| AnnotError::Diff("no full text available to unfold".into()))?;
+    if hunk_index >= doc.hunks.len() {
+        return Err(AnnotError::Diff(format!(
+            "hunk index {hunk_index} out of range"
+        )));
+    }
+
+    let text = source
+        .full_text(&doc.path, Side::New)?
+        .ok_or_else(|| AnnotError::Diff("full text unavailable to unfold".into()))?;
+    let new_lines: Vec<&str> = text.lines().collect();
+
+    let step = match amount {
+        ExpandAmount::Step => EXPAND_STEP,
+        ExpandAmount::All => u32::MAX,
+    };
+    let cur_old = true_range(&doc.hunks[hunk_index].old_range);
+    let cur_new = true_range(&doc.hunks[hunk_index].new_range);
+
+    // The gap is all context, so old and new coordinates stay in lockstep:
+    // an added row at new line n is old line n − delta, delta read off the
+    // hunk edge being grown. `[add_start, add_end)` in new-side coords.
+    let (add_start, add_end, delta) = match direction {
+        ExpandDirection::Up => {
+            let bound = if hunk_index == 0 {
+                1
+            } else {
+                true_range(&doc.hunks[hunk_index - 1].new_range).end
+            };
+            let start = cur_new.start.saturating_sub(step).max(bound);
+            (start, cur_new.start, cur_new.start - cur_old.start)
+        }
+        ExpandDirection::Down => {
+            let bound = if hunk_index + 1 == doc.hunks.len() {
+                new_len + 1
+            } else {
+                true_range(&doc.hunks[hunk_index + 1].new_range).start
+            };
+            let end = cur_new.end.saturating_add(step).min(bound);
+            (cur_new.end, end, cur_new.end - cur_old.end)
+        }
+    };
+    if add_start >= add_end {
+        return Ok(()); // already at the boundary — nothing to unfold
+    }
+
+    let fake_path = format!("file.{}", doc.language);
+    let rows: Vec<Row> = (add_start..add_end)
+        .map(|n| {
+            let content = line_at(&new_lines, n);
+            let html = (!doc.language.is_empty())
+                .then(|| highlighter.highlight_diff_row(content, &fake_path))
+                .flatten();
+            Row {
+                old_line: Some(n - delta),
+                new_line: Some(n),
+                content: content.to_string(),
+                html: html.map(LineHtml::Full),
+            }
+        })
+        .collect();
+    let count = add_end - add_start;
+
+    // A grown side is never empty again, so true coords are stored verbatim.
+    let hunk = &mut doc.hunks[hunk_index];
+    match direction {
+        ExpandDirection::Up => {
+            hunk.old_range = cur_old.start - count..cur_old.end;
+            hunk.new_range = add_start..cur_new.end;
+            hunk.rows.splice(0..0, rows);
+        }
+        ExpandDirection::Down => {
+            hunk.old_range = cur_old.start..cur_old.end + count;
+            hunk.new_range = cur_new.start..add_end;
+            hunk.rows.extend(rows);
+        }
+    }
+
+    merge_touching_hunks(doc);
+    Ok(())
+}
+
+/// Restore the invariant that no two hunks overlap or touch: merge any
+/// neighbor pair whose true new-side ranges meet (half-open ⇒ `end >= start`
+/// covers both overlap and adjacency). The earlier hunk's function context
+/// survives, matching what git would print for the merged hunk.
+fn merge_touching_hunks(doc: &mut DiffDocument) {
+    let hunks = std::mem::take(&mut doc.hunks);
+    let mut merged: Vec<HunkV2> = Vec::with_capacity(hunks.len());
+    for hunk in hunks {
+        if let Some(prev) = merged.last_mut() {
+            if true_range(&prev.new_range).end >= true_range(&hunk.new_range).start {
+                prev.old_range = true_range(&prev.old_range).start..true_range(&hunk.old_range).end;
+                prev.new_range = true_range(&prev.new_range).start..true_range(&hunk.new_range).end;
+                prev.rows.extend(hunk.rows);
+                continue;
+            }
+        }
+        merged.push(hunk);
+    }
+    doc.hunks = merged;
 }
 
 /// Git's default funcname rule (xdiff `def_ff`, used when no userdiff driver
@@ -546,6 +705,258 @@ mod tests {
             ours.len(),
             theirs.len()
         );
+    }
+
+    // ========== Unfold (S3) ==========
+
+    /// 100-line file, lines 10 and 60 changed → two hunks (7..14, 57..64)
+    /// with a leading gap, a 43-line interior gap, and a trailing gap.
+    fn two_hunk_repo() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path();
+        git(p, &["init"]);
+        let numbered =
+            |edit: &dyn Fn(u32) -> String| (1..=100).map(edit).collect::<Vec<_>>().join("");
+        std::fs::write(p.join("big.txt"), numbered(&|n| format!("line {n}\n"))).unwrap();
+        git(p, &["add", "."]);
+        git(p, &["commit", "-m", "one"]);
+        std::fs::write(
+            p.join("big.txt"),
+            numbered(&|n| {
+                if n == 10 || n == 60 {
+                    format!("line {n} changed\n")
+                } else {
+                    format!("line {n}\n")
+                }
+            }),
+        )
+        .unwrap();
+        git(p, &["add", "."]);
+        git(p, &["commit", "-m", "two"]);
+        dir
+    }
+
+    fn docs_and_source(p: &Path) -> (Vec<DiffDocument>, GixSource) {
+        let entries = enumerate(p, &head_range(), &[]).unwrap();
+        let source = GixSource::new(gix::discover(p).unwrap(), build_oid_map(&entries));
+        let docs = render(&entries, &source, &Highlighter::new(), CONTEXT_LINES).unwrap();
+        (docs, source)
+    }
+
+    fn expand(
+        doc: &mut DiffDocument,
+        source: &GixSource,
+        hunk: usize,
+        direction: ExpandDirection,
+        amount: ExpandAmount,
+    ) {
+        expand_context(doc, source, &Highlighter::new(), hunk, direction, amount).unwrap();
+    }
+
+    #[test]
+    fn new_len_is_the_capability_signal() {
+        let dir = two_hunk_repo();
+        let (docs, _) = docs_and_source(dir.path());
+        assert_eq!(docs[0].new_len, Some(100));
+
+        // Raw patch mode: no full text, no unfold.
+        let patch = git(dir.path(), &["diff", "HEAD~1..HEAD"]);
+        let raw = ContentModel::from_diff(
+            &patch,
+            ContentSource::Cli(CliSource::Stdin {
+                label: "diff".into(),
+            }),
+        )
+        .unwrap();
+        let ContentView::Diff { documents } = &raw.view else {
+            panic!("not a diff");
+        };
+        assert_eq!(documents[0].new_len, None);
+
+        let mut doc = documents[0].clone();
+        let err = expand_context(
+            &mut doc,
+            &crate::source::RawPatchSource,
+            &Highlighter::new(),
+            0,
+            ExpandDirection::Up,
+            ExpandAmount::Step,
+        );
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn expand_up_step_splices_context_rows() {
+        let dir = two_hunk_repo();
+        let (mut docs, source) = docs_and_source(dir.path());
+        let doc = &mut docs[0];
+        assert_eq!(doc.hunks[1].new_range, 57..64);
+
+        expand(doc, &source, 1, ExpandDirection::Up, ExpandAmount::Step);
+        assert_eq!(doc.hunks.len(), 2, "43-line gap survives a 20-line step");
+        assert_eq!(doc.hunks[1].new_range, 37..64);
+        assert_eq!(doc.hunks[1].old_range, 37..64);
+        let first = &doc.hunks[1].rows[0];
+        assert_eq!(
+            (first.old_line, first.new_line, first.content.as_str()),
+            (Some(37), Some(37), "line 37")
+        );
+        assert_rows_within_ranges(&docs);
+    }
+
+    #[test]
+    fn expand_down_all_consumes_gap_and_merges() {
+        let dir = two_hunk_repo();
+        let (mut docs, source) = docs_and_source(dir.path());
+        let doc = &mut docs[0];
+        let h0_ctx = doc.hunks[0].function_context.clone();
+
+        expand(doc, &source, 0, ExpandDirection::Down, ExpandAmount::All);
+        assert_eq!(doc.hunks.len(), 1, "touching hunks merge");
+        assert_eq!(doc.hunks[0].new_range, 7..64);
+        assert_eq!(doc.hunks[0].old_range, 7..64);
+        assert_eq!(doc.hunks[0].function_context, h0_ctx);
+        // 8 original (3+del+add+3) + 43 unfolded + 8 original rows.
+        assert_eq!(doc.hunks[0].rows.len(), 59);
+        let numbers: Vec<u32> = doc.hunks[0]
+            .rows
+            .iter()
+            .filter_map(|r| r.new_line)
+            .collect();
+        assert!(numbers.windows(2).all(|w| w[0] < w[1]));
+        assert_rows_within_ranges(&docs);
+    }
+
+    #[test]
+    fn expand_up_all_merges_into_previous_hunk() {
+        let dir = two_hunk_repo();
+        let (mut docs, source) = docs_and_source(dir.path());
+        let doc = &mut docs[0];
+
+        expand(doc, &source, 1, ExpandDirection::Up, ExpandAmount::All);
+        assert_eq!(doc.hunks.len(), 1);
+        assert_eq!(doc.hunks[0].new_range, 7..64);
+    }
+
+    #[test]
+    fn expand_clamps_at_file_edges() {
+        let dir = two_hunk_repo();
+        let (mut docs, source) = docs_and_source(dir.path());
+        let doc = &mut docs[0];
+
+        // Leading gap is 6 lines — a 20-line step clamps to the file top.
+        expand(doc, &source, 0, ExpandDirection::Up, ExpandAmount::Step);
+        assert_eq!(doc.hunks[0].new_range, 1..14);
+        assert_eq!(doc.hunks[0].rows[0].new_line, Some(1));
+
+        // Trailing gap is 37 lines — All clamps to new_len.
+        expand(doc, &source, 1, ExpandDirection::Down, ExpandAmount::All);
+        assert_eq!(doc.hunks[1].new_range, 57..101);
+        assert_eq!(doc.hunks[1].rows.last().unwrap().new_line, Some(100));
+        assert_eq!(
+            doc.hunks[1].rows.last().unwrap().content,
+            "line 100",
+            "slice reads the real file tail"
+        );
+        assert_rows_within_ranges(&docs);
+
+        // Both hunks now sit at their boundaries — further expansion no-ops.
+        let before = dump(&docs);
+        let (doc, before) = (&mut docs[0], before);
+        expand(doc, &source, 0, ExpandDirection::Up, ExpandAmount::All);
+        expand(doc, &source, 1, ExpandDirection::Down, ExpandAmount::Step);
+        assert_eq!(dump(&docs), before);
+    }
+
+    #[test]
+    fn expand_on_added_file_is_a_noop() {
+        // An added file's single hunk already covers every line; its old
+        // side is the printed-empty `0..0` — the true-range conversion must
+        // not underflow or invent rows.
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path();
+        git(p, &["init"]);
+        std::fs::write(p.join("seed.txt"), "seed\n").unwrap();
+        git(p, &["add", "."]);
+        git(p, &["commit", "-m", "one"]);
+        std::fs::write(p.join("fresh.txt"), "alpha\nbeta\ngamma\n").unwrap();
+        git(p, &["add", "."]);
+        git(p, &["commit", "-m", "two"]);
+
+        let (mut docs, source) = docs_and_source(p);
+        let doc = &mut docs[0];
+        assert_eq!(doc.new_len, Some(3));
+        let before = dump(&docs);
+        let doc = &mut docs[0];
+        expand(doc, &source, 0, ExpandDirection::Up, ExpandAmount::All);
+        expand(doc, &source, 0, ExpandDirection::Down, ExpandAmount::All);
+        assert_eq!(dump(&docs), before);
+    }
+
+    /// The keystone's proof: expansion lives in backend state, so an
+    /// annotation on an unfolded row resolves in output instead of
+    /// degrading to a bare file header.
+    #[test]
+    fn annotation_on_expanded_row_lands_in_output() {
+        use crate::anchor::{Anchor, Endpoint};
+        use crate::output::{format_output, OutputMode};
+        use crate::review::{FileKey, Review, View};
+        use crate::state::{ContentNode, UserConfig};
+
+        let dir = two_hunk_repo();
+        let content = ContentModel::from_git(
+            dir.path(),
+            &head_range(),
+            &[],
+            ContentSource::Cli(CliSource::Stdin {
+                label: "diff".into(),
+            }),
+        )
+        .unwrap();
+        let mut review = Review::cli(content, UserConfig::empty(), "main".to_string());
+
+        // Mirror the expand_context command's mutation path.
+        let View::Diff { content, .. } = &mut review.root_view else {
+            panic!("not a diff review");
+        };
+        let file_source = content.file_source.clone();
+        let ContentView::Diff { documents } = &mut content.view else {
+            panic!("not a diff view");
+        };
+        expand_context(
+            &mut documents[0],
+            file_source.as_ref(),
+            &Highlighter::new(),
+            1,
+            ExpandDirection::Up,
+            ExpandAmount::Step,
+        )
+        .unwrap();
+
+        // Line 40 exists only as an unfolded context row.
+        let target = review.files.get_mut(&FileKey::diff_file(0)).unwrap();
+        let endpoint = |line| Endpoint {
+            side: Side::New,
+            line,
+        };
+        target.upsert_annotation(
+            "a1".to_string(),
+            Anchor::Diff {
+                path: "big.txt".to_string(),
+                start: endpoint(40),
+                end: endpoint(40),
+            },
+            vec![ContentNode::Text {
+                text: "unfolded context annotation".to_string(),
+            }],
+        );
+
+        let output = format_output(&review, OutputMode::Cli).text;
+        assert!(
+            output.contains("line 40"),
+            "expanded row must resolve in output, got:\n{output}"
+        );
+        assert!(output.contains("unfolded context annotation"));
     }
 
     #[test]

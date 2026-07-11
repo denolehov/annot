@@ -5,6 +5,8 @@
  * existing HTML structure (syntax highlighting, etc).
  */
 
+import { mergeTextSplit } from './dom-text';
+
 interface TextNodeInfo {
   node: Text;
   start: number; // cumulative char offset in container
@@ -126,20 +128,25 @@ export function highlightMatches(
 }
 
 /**
- * Removes all search highlight marks from a container.
+ * Removes all search highlight marks from a container, re-joining the splits
+ * the highlight range created (see dom-text.ts for why normalize() is off
+ * limits here).
  */
 export function clearHighlights(container: HTMLElement): void {
   const marks = container.querySelectorAll('mark.search-match, mark.search-current');
   marks.forEach((mark) => {
     const parent = mark.parentNode;
     if (parent) {
+      const prev = mark.previousSibling;
+      const next = mark.nextSibling;
       // Replace mark with its contents
       while (mark.firstChild) {
         parent.insertBefore(mark.firstChild, mark);
       }
       parent.removeChild(mark);
-      // Normalize to merge adjacent text nodes
-      parent.normalize();
+      // Re-join the splits the highlight range created (never normalize()).
+      mergeTextSplit(prev);
+      mergeTextSplit(next ? next.previousSibling : parent.lastChild?.previousSibling);
     }
   });
 }

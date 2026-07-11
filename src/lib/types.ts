@@ -131,6 +131,12 @@ export interface DiffDocument {
   /** Binary/oversize/non-UTF-8 — no hunks. */
   unavailable: boolean;
   language: string;
+  /**
+   * New-side total line count. Non-null ⇒ unfold available (the capability
+   * signal) and sizes the trailing gap. Null ⇒ raw-patch mode or no new
+   * side (deleted file) — no gap bars.
+   */
+  new_len: number | null;
   hunks: HunkV2[];
 }
 

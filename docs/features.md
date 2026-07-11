@@ -31,6 +31,8 @@ Git targets work from the CLI (`annot diff`, `annot diff --staged`, `annot diff 
 
 **Per-file collapse** — every file gets a header bar (chevron, path, +/− counts) that sticks to the top while its lines scroll. Clicking the bar collapses the file to just its header; the titlebar shows the changeset's +A −D totals with a fold-all/unfold-all toggle. Files with more than 500 changed lines start collapsed. Search hits and file jumps auto-expand collapsed files. Collapse is pure presentation — annotations keep resolving to the same lines.
 
+**Unfold context** — in git-mode diffs, fold arrows stacked in the @@ hunk-header gutter (GitHub-style, Octicon fold-down/fold-up: ▼ on top continues the hunk above downward, ▲ below grows the hunk beneath upward; each arrow is a full-width band one row tall, making the header two rows when both show) expand hidden context: each reveals 20 lines toward its edge of the gap, and a gap of 20 lines or fewer collapses to a single expand-all button. The fold after a file's last hunk has no header below it, so it keeps a standalone arrow row. The folded line count lives in the arrow tooltips. A fully unfolded gap's arrows disappear and its neighboring hunks merge. Unfolded lines are ordinary context rows — annotatable, searchable, and included in output like any other line. Raw pasted diffs have no file contents to slice, so no unfold chevrons appear there. Expansion is per-session.
+
 ### Content Review
 Review agent-generated content — plans, drafts, analysis. Markdown rendering with Mermaid diagrams and portal links that embed live code.
 

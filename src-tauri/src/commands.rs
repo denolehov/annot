@@ -9,8 +9,9 @@ use crate::anchor::Anchor;
 use crate::config::{self, Config, Theme};
 use crate::lang::extension_to_fence_language;
 use crate::output::{export_content, export_section, format_json, format_output, OutputMode};
+use crate::pipeline::{ExpandAmount, ExpandDirection};
 use crate::review::ActiveReview;
-use crate::state::{ContentNode, ContentResponse, ExitMode, Tag, TagUsageStats};
+use crate::state::{ContentNode, ContentResponse, DiffDocument, ExitMode, Tag, TagUsageStats};
 
 /// Snapshot of config data for reload_config command.
 #[derive(Serialize)]
@@ -80,6 +81,42 @@ pub fn delete_annotation(
         let target = review.resolve_target_mut(&path)?;
         target.delete_annotation(&id);
         Ok(())
+    })
+}
+
+/// Unfold context around a hunk (S3): grows the session's document in place —
+/// the backend owns expansion state so output anchor resolution sees the
+/// expanded rows — and returns the whole updated document (hunk boundaries
+/// may have merged; the frontend re-renders rather than re-splicing).
+#[tauri::command]
+pub fn expand_context(
+    review_state: State<ActiveReview>,
+    file_index: usize,
+    hunk_index: usize,
+    direction: ExpandDirection,
+    amount: ExpandAmount,
+) -> Result<DiffDocument, String> {
+    with_review!(review_state, |review| {
+        let crate::review::View::Diff { content, .. } = &mut review.root_view else {
+            return Err("Not a diff review".to_string());
+        };
+        let file_source = content.file_source.clone();
+        let crate::state::ContentView::Diff { documents } = &mut content.view else {
+            return Err("Not a diff view".to_string());
+        };
+        let doc = documents
+            .get_mut(file_index)
+            .ok_or_else(|| format!("file index {file_index} out of range"))?;
+        crate::pipeline::expand_context(
+            doc,
+            file_source.as_ref(),
+            &crate::highlight::Highlighter::new(),
+            hunk_index,
+            direction,
+            amount,
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(doc.clone())
     })
 }
 

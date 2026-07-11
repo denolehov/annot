@@ -333,11 +333,13 @@ impl ExitMode {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// CONTENT MODEL — immutable after construction
+// CONTENT MODEL — immutable after construction (except unfold)
 // ════════════════════════════════════════════════════════════════════════════
 
 /// Content model: the document being annotated.
-/// Immutable after construction.
+/// Immutable after construction, with one exception: diff documents grow
+/// context rows via `expand_context` (S3 unfold) under the `ActiveReview`
+/// lock — the documents always describe the comparison as currently unfolded.
 #[derive(Clone)]
 pub struct ContentModel {
     pub label: String,
@@ -388,6 +390,10 @@ pub struct DiffDocument {
     /// Binary/oversize/non-UTF-8 — no rows to show, badge instead.
     pub unavailable: bool,
     pub language: String,
+    /// New-side total line count. `Some` ⇒ unfold available (the capability
+    /// signal), sizes the trailing gap, and bounds expansion clamping.
+    /// `None` ⇒ raw-patch mode or no new side (deleted file) — no gap bars.
+    pub new_len: Option<u32>,
     pub hunks: Vec<HunkV2>,
 }
 

@@ -14,6 +14,8 @@
   import AnnotationSlot, { type AnnotationSlotProps } from '$lib/components/AnnotationSlot.svelte';
   import LineRow from './LineRow.svelte';
   import FileHeaderRow from './FileHeaderRow.svelte';
+  import TrailingGapRow from './TrailingGapRow.svelte';
+  import UnfoldControls from './UnfoldControls.svelte';
   import { getAnnotContext } from '$lib/context';
   import { hunkHeaderText, type DisplayRow } from '$lib/display-rows';
   import type { DisplayLine } from '$lib/composables/useLineSegments.svelte';
@@ -127,6 +129,7 @@
   <LineRow
     {line}
     {displayIndex}
+    interactive={true}
   >
     {#snippet gutter()}
       {#if sourceLineNum !== null}
@@ -173,11 +176,30 @@
 {#snippet walkEntry(entry: DisplayRow)}
   {#if entry.kind === 'hunk-header'}
     {@const hunk = display!.docs[entry.docIdx].doc.hunks[entry.hunkIdx]}
-    <LineRow displayIndex={entry.displayIndex} additionalClasses={{ 'diff-header': true }}>
+    {@const gap = display!.docs[entry.docIdx].hunks[entry.hunkIdx].gapAbove}
+    <LineRow displayIndex={entry.displayIndex} interactive={true} additionalClasses={{ 'diff-header': true }}>
       {#snippet gutter()}
-        <span class="diff-gutter-old"></span>
-        <span class="diff-gutter-new"></span>
-        <span class="diff-sign"></span>
+        {#if gap > 0}
+          <!-- Gap above this hunk, GitHub-style in the header's gutter slots:
+               ▲ grows this hunk upward, ▼ grows the hunk above downward —
+               both reveal folded lines from opposite edges. -->
+          <UnfoldControls
+            size={gap}
+            showUp={true}
+            showDown={entry.hunkIdx > 0}
+            onExpand={({ direction, amount }) =>
+              ctx.expandContext(
+                entry.docIdx,
+                direction === 'up' ? entry.hunkIdx : entry.hunkIdx - 1,
+                direction,
+                amount,
+              )}
+          />
+        {:else}
+          <span class="diff-gutter-old"></span>
+          <span class="diff-gutter-new"></span>
+          <span class="diff-sign"></span>
+        {/if}
       {/snippet}
 
       {#snippet codeWrapper(innerContent)}
@@ -191,6 +213,7 @@
   {:else if entry.kind === 'row'}
     <LineRow
       displayIndex={entry.displayIndex}
+      interactive={true}
       additionalClasses={{
         'diff-added': entry.rowKind === 'added',
         'diff-deleted': entry.rowKind === 'deleted',
@@ -227,6 +250,13 @@
         {#each docBodies.get(dv.index) ?? [] as entry (entry.displayIndex)}
           {@render walkEntry(entry)}
         {/each}
+        {#if dv.trailingGap > 0}
+          <TrailingGapRow
+            size={dv.trailingGap}
+            onExpand={({ direction, amount }) =>
+              ctx.expandContext(dv.index, dv.doc.hunks.length - 1, direction, amount)}
+          />
+        {/if}
       {/if}
     </section>
   {/each}

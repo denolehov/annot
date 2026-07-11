@@ -438,6 +438,14 @@ div.line.diff-header .gutter {
 	pointer-events: none;
 }
 
+/* With unfold arrows stacked in the gutter the header row is two rows tall —
+   keep the @@ text vertically centered beside them (the gutter itself must
+   stay stretched so the bands fill the full row height). */
+div.line.diff-header .code {
+	display: flex;
+	align-items: center;
+}
+
 div.line.diff-header .code {
 	font-weight: 500;
 }
