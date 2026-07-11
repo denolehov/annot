@@ -8,7 +8,6 @@ import type { useExitModes } from '$lib/composables/useExitModes.svelte';
 import type { useSearch } from '$lib/composables/useSearch.svelte';
 import type { useMermaid } from '$lib/composables/useMermaid.svelte';
 import type { FileCollapse } from '$lib/composables/useFileCollapse.svelte';
-import type { FileEntry } from '$lib/file-tree';
 import type { DiffDisplay } from '$lib/display-rows';
 
 /**
@@ -40,9 +39,6 @@ export interface AnnotContext {
   readonly contentZoom: number;
   /** The DisplayRow walk — display truth for diff mode; null otherwise. */
   readonly diffDisplay: DiffDisplay | null;
-  /** Changed files in a diff; [] for non-diff content.
-   *  Transitional FileEntry view of diffDisplay.docs — prefer the walk. */
-  readonly fileEntries: FileEntry[];
 
   // Utilities
   showToast: (message: string, duration?: number) => void;

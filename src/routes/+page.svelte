@@ -20,7 +20,7 @@
   import { Header, StatusBar, SessionEditor, WindowResizeHandles } from "$lib/components";
   import { PaneGroup, Pane, PaneResizer } from "paneforge";
   import FileTree from "$lib/components/FileTree.svelte";
-  import { synthesizeDocs, deriveDisplay, toFileEntries, selectionToDiffAnchor } from "$lib/display-rows";
+  import { synthesizeDocs, deriveDisplay, selectionToDiffAnchor } from "$lib/display-rows";
   import { useFileTree } from "$lib/composables/useFileTree.svelte";
   import { useFileCollapse } from "$lib/composables/useFileCollapse.svelte";
   import { useExitModes } from "$lib/composables/useExitModes.svelte";
@@ -85,8 +85,6 @@
   let diffDisplay = $derived(
     diffMetadata ? deriveDisplay(synthesizeDocs(lines, diffMetadata.files)) : null
   );
-  // Transitional FileEntry view for consumers not yet reading the walk.
-  let fileEntries = $derived(diffDisplay ? toFileEntries(diffDisplay) : []);
 
   // Content tracking (composable)
   const contentTracking = useContentTracking(() => diffDisplay);
@@ -843,7 +841,6 @@
     {allowsImagePaste}
     {contentZoom}
     {diffDisplay}
-    {fileEntries}
     interaction={interaction}
     annotations={annotationState}
     {draft}

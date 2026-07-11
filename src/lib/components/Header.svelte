@@ -128,7 +128,7 @@
     {/if}
   </div>
   <div class="header-right">
-    {#if diffMetadata && ctx.fileEntries.length > 0}
+    {#if diffMetadata && docs.length > 0}
       <span class="diff-header-summary" data-tauri-drag-region="false">
         <span class="file-tree-counts">
           <span class="added">+{totals.added}</span>
