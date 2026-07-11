@@ -55,6 +55,9 @@ pub enum CliSource {
     File { path: PathBuf },
     /// Piped from stdin with user-provided label.
     Stdin { label: String },
+    /// `annot diff` subcommand — git diff from a structured target,
+    /// the CLI twin of `McpSource::Diff` with `DiffSource::Target`.
+    Diff { label: String },
 }
 
 /// MCP content source (which tool was called).
@@ -101,6 +104,7 @@ impl ContentSource {
             ContentSource::Cli(CliSource::File { path })
             | ContentSource::Mcp(McpSource::File { path }) => path.to_str().unwrap_or("file"),
             ContentSource::Cli(CliSource::Stdin { label })
+            | ContentSource::Cli(CliSource::Diff { label })
             | ContentSource::Mcp(McpSource::Content { label }) => label,
             ContentSource::Mcp(McpSource::Diff { label, .. }) => label.as_deref().unwrap_or("diff"),
         }
@@ -112,6 +116,7 @@ impl ContentSource {
             ContentSource::Cli(CliSource::File { path })
             | ContentSource::Mcp(McpSource::File { path }) => path.to_str(),
             ContentSource::Cli(CliSource::Stdin { label })
+            | ContentSource::Cli(CliSource::Diff { label })
             | ContentSource::Mcp(McpSource::Content { label }) => Some(label),
             ContentSource::Mcp(McpSource::Diff { label, .. }) => label.as_deref(),
         }
@@ -141,10 +146,57 @@ impl ContentSource {
             | ContentSource::Mcp(McpSource::File { path }) => FileKey::path(path.clone()),
             ContentSource::Cli(CliSource::Stdin { label }) => FileKey::ephemeral(label.clone()),
             ContentSource::Mcp(McpSource::Content { label }) => FileKey::ephemeral(label.clone()),
-            ContentSource::Mcp(McpSource::Diff { .. }) => {
+            ContentSource::Cli(CliSource::Diff { .. })
+            | ContentSource::Mcp(McpSource::Diff { .. }) => {
                 // Diff mode uses DiffFile keys per file, not a single key for the whole diff
                 unreachable!("Diff mode uses DiffFile keys per file")
             }
+        }
+    }
+}
+
+/// Parse `annot diff`'s CLI arguments into a `DiffTarget` — the same three
+/// comparisons the MCP `review_diff` tool accepts, in git's range syntax:
+/// `A..B` (tree vs tree), `A...B` (merge base vs B), an empty side
+/// defaulting to `HEAD` (git parity: `main..` ≡ `main..HEAD`). A bare
+/// revision is rejected: git's `git diff A` means worktree-vs-A, a
+/// comparison the target model deliberately doesn't express.
+pub fn parse_diff_target(
+    range: Option<&str>,
+    staged: bool,
+) -> Result<crate::vcs::DiffTarget, AnnotError> {
+    use crate::vcs::DiffTarget;
+
+    match (range, staged) {
+        (Some(_), true) => Err(AnnotError::Validation(
+            "--staged cannot be combined with a revision range".into(),
+        )),
+        (None, true) => Ok(DiffTarget::Staged),
+        (None, false) => Ok(DiffTarget::WorkingTree),
+        (Some(spec), false) => {
+            let (separator, merge_base) = if spec.contains("...") {
+                ("...", true)
+            } else if spec.contains("..") {
+                ("..", false)
+            } else {
+                return Err(AnnotError::Validation(format!(
+                    "unsupported range '{spec}': use '{spec}..HEAD' (changes since {spec}) \
+                     or '{spec}...HEAD' (changes since the merge base)"
+                )));
+            };
+            let (from, to) = spec.split_once(separator).expect("separator just matched");
+            let default_head = |side: &str| {
+                if side.is_empty() {
+                    "HEAD".to_string()
+                } else {
+                    side.to_string()
+                }
+            };
+            Ok(DiffTarget::Range {
+                from: default_head(from),
+                to: default_head(to),
+                merge_base,
+            })
         }
     }
 }
@@ -345,6 +397,59 @@ mod tests {
         let resolved = mode.resolve().unwrap();
 
         assert_eq!(resolved.rendering_mode, RenderingMode::Diff);
+    }
+
+    #[test]
+    fn parse_diff_target_covers_all_mcp_shapes() {
+        use crate::vcs::DiffTarget;
+
+        assert_eq!(
+            parse_diff_target(None, false).unwrap(),
+            DiffTarget::WorkingTree
+        );
+        assert_eq!(parse_diff_target(None, true).unwrap(), DiffTarget::Staged);
+        assert_eq!(
+            parse_diff_target(Some("main..HEAD"), false).unwrap(),
+            DiffTarget::Range {
+                from: "main".into(),
+                to: "HEAD".into(),
+                merge_base: false,
+            }
+        );
+        assert_eq!(
+            parse_diff_target(Some("main...feature"), false).unwrap(),
+            DiffTarget::Range {
+                from: "main".into(),
+                to: "feature".into(),
+                merge_base: true,
+            }
+        );
+        // git parity: an empty side means HEAD
+        assert_eq!(
+            parse_diff_target(Some("main.."), false).unwrap(),
+            DiffTarget::Range {
+                from: "main".into(),
+                to: "HEAD".into(),
+                merge_base: false,
+            }
+        );
+        assert_eq!(
+            parse_diff_target(Some("...feature"), false).unwrap(),
+            DiffTarget::Range {
+                from: "HEAD".into(),
+                to: "feature".into(),
+                merge_base: true,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_diff_target_rejects_bare_revisions_with_a_hint() {
+        let err = parse_diff_target(Some("main"), false).unwrap_err();
+        assert!(err.to_string().contains("main..HEAD"));
+
+        let err = parse_diff_target(Some("main..HEAD"), true).unwrap_err();
+        assert!(err.to_string().contains("--staged"));
     }
 
     #[test]
