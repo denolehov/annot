@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.18.0](https://github.com/denolehov/annot/compare/v0.17.0...v0.18.0) (2026-07-12)
+
+
+### Features
+
+* collapsing the current file in diff review snaps to the next file ([c4b69a4](https://github.com/denolehov/annot/commit/c4b69a404dc511c725c4a6ed1dece9647f2b98fc))
+* review a whole stack of commits as one diff in jj repos ([64fc74e](https://github.com/denolehov/annot/commit/64fc74e4bf6718744321b90ac97f56879373dc63))
+* review diffs in jj repositories ([00a5017](https://github.com/denolehov/annot/commit/00a5017df130a4ba790e16f79ea6823aeb9be1f5))
+* zoom level persists across sessions ([8c9b457](https://github.com/denolehov/annot/commit/8c9b4573d27af060e503450834849e03b1533d4a))
+
+
+### Bug Fixes
+
+* crisp, consistent rendering at fractional zoom levels ([198042d](https://github.com/denolehov/annot/commit/198042deed62d350f109723adf66009ff0b389cb))
+* diff review file tree tracks the file you're actually reading ([7d054f0](https://github.com/denolehov/annot/commit/7d054f09ce248525833869b788a8cfc29cfb67c9))
+
 ## [0.17.0](https://github.com/denolehov/annot/compare/v0.16.0...v0.17.0) (2026-07-12)
 
 
