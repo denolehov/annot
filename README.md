@@ -163,6 +163,27 @@ No data leaves your machine. No accounts. No cloud.
 
 ## Features
 
+| Feature | What it does |
+|---|---|
+| **File review** | Any source file, syntax highlighting for 50+ languages |
+| **Diff review** | git & jj: working copy, revision, range, staged — or raw diffs via stdin/MCP |
+| **Content review** | Agent-generated markdown — plans, drafts, analysis |
+| **Tags** | Semantic mini-prompts (`[# VERIFY]`) woven into annotations |
+| **Exit modes** | Signal intent on close — "Apply", "Reject", agent-defined per session |
+| **Session context** | Review-wide framing comment (`Shift+C`) |
+| **Replace blocks** | Propose inline code changes (`/replace`) |
+| **Excalidraw** | Sketch diagrams inside annotations (`/excalidraw`); convert Mermaid to sketch |
+| **Mermaid** | Diagrams rendered inline from markdown code blocks |
+| **Portal links** | Embed live code from other files into markdown under review |
+| **Images** | Paste screenshots directly into annotations |
+| **References** | `@`-link annotations, sections, and project files |
+| **Diff navigation** | File tree sidebar (`Cmd+B`), per-file collapse, unified/split view, unfold context |
+| **Command palette** | `:` — tags, exit modes, file jump, copy, save, theme |
+| **Export** | Save to markdown file, send to Obsidian |
+| **Structured output** | LLM-ready text or `--json` with embedded images |
+
+Full detail in [docs/features.md](docs/features.md). Three highlights:
+
 ### Tags
 
 Composable mini-prompts you build over time. Type `#` in the annotation editor to insert one:
@@ -193,14 +214,6 @@ Signal *intent* when closing a review. Instead of just closing, indicate what sh
 ### Session context
 
 Press `Shift+C` to add comments that apply to the entire review — framing context like "focus on error handling, ignore style."
-
-### More
-
-- **Syntax highlighting** for 50+ languages
-- **Mermaid diagrams** rendered inline
-- **Portal links** — embed live code from other files
-- **`/excalidraw`** — draw diagrams inside annotations
-- **`/replace`** — propose inline code changes
 
 ## MCP tools
 
