@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0](https://github.com/denolehov/annot/compare/v0.16.0...v0.17.0) (2026-07-12)
+
+
+### Features
+
+* word-level highlights on changed lines in diff view ([cc921ec](https://github.com/denolehov/annot/commit/cc921eccb5b435164181f46c57849269e9b34e1c))
+
 ## [0.16.0](https://github.com/denolehov/annot/compare/v0.15.0...v0.16.0) (2026-07-12)
 
 
