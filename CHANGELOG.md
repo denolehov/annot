@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.15.0](https://github.com/denolehov/annot/compare/v0.14.0...v0.15.0) (2026-07-12)
+
+
+### Features
+
+* **diff:** +/- signs move to the gutter — copied diff text is raw source ([6b0d966](https://github.com/denolehov/annot/commit/6b0d96646fc34b0fe10eb030709124d53c66b551))
+* **diff:** working-tree reviews include untracked files; hunks computed in-process ([148c517](https://github.com/denolehov/annot/commit/148c51780eb79c32a88f6db0db7081d8070c2295))
+* **mcp:** review_diff takes a structured DiffTarget + pathspecs ([6235314](https://github.com/denolehov/annot/commit/6235314e338aeb3db8a17ecbf6e7dc5aa5da9f37))
+* **output:** mixed-side annotation ranges — headers name both sides (old:2 → new:5) ([efa370b](https://github.com/denolehov/annot/commit/efa370b96d0e2c87a2ccf481017e17ee079084d0))
+* review git changes from the CLI with `annot diff` ([a3c06a9](https://github.com/denolehov/annot/commit/a3c06a9f32ce5605c07c21755d95ab309c2274ee))
+* show toast feedback when copying an [@file](https://github.com/file) reference ([c2b2ab0](https://github.com/denolehov/annot/commit/c2b2ab0824373b18489ae00ba9ae5b8b8fe628f4))
+
+
+### Performance Improvements
+
+* **ui:** freeze content while growing to kill large-file resize trail ([be76896](https://github.com/denolehov/annot/commit/be76896f325bfcd84c60d91a5e9ed1a0ab08738f))
+
 ## [0.14.0](https://github.com/denolehov/annot/compare/v0.13.1...v0.14.0) (2026-07-10)
 
 
