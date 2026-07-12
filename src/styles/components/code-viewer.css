@@ -523,6 +523,92 @@ div.line.diff-deleted.diff-run-end.annotated {
 }
 
 /* ===========================================
+   SPLIT VIEW - side-by-side diff columns
+   =========================================== */
+
+.split-pair {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+}
+
+.split-cell {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.split-cell[data-side='new'] {
+	border-left: 1px solid var(--border-subtle);
+}
+
+/* The cell's line stretches to the pair's row height so a wrapped neighbor
+   doesn't leave the shorter side's background hanging. */
+.split-cell > div.line {
+	flex: 1;
+}
+
+/* One line-number column per cell (the unified diff gutter fits two) */
+.content.diff-mode .split-cell .gutter {
+	width: 52px;
+}
+
+.content.diff-mode .split-cell .add-btn {
+	left: 43px;
+}
+
+.split-gutter {
+	display: inline-block;
+	width: 4ch;
+	text-align: right;
+}
+
+/* Annotation slots below a change pair live in the column they belong to —
+   an old-side annotation under the left cell, new-side under the right. */
+.split-slot-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	align-items: start;
+}
+
+.split-slot-cell {
+	min-width: 0;
+}
+
+.split-slot-cell:last-child {
+	border-left: 1px solid var(--border-subtle);
+}
+
+/* Half-width columns: the unified diff editor indent (100px, set on
+   .content.diff-mode) wastes too much of the cell — align with the split
+   cell's own gutter instead. */
+.content.diff-mode .split-slot-cell .annotation-editor {
+	margin-left: 60px;
+}
+
+/* Filler cell: the shorter side of an uneven change run. Dithered like code
+   blocks so it reads as "nothing here", not an empty context line. */
+div.line.diff-filler {
+	background:
+		var(--codeblock-pattern-bg),
+		var(--bg-panel);
+	background-size: var(--codeblock-pattern-size), auto;
+	pointer-events: none;
+}
+
+/* Filler is presentational — no hover highlight or accent bar. Specificity
+   must match the phase-idle hover rules above to win. */
+.content.phase-idle div.line.diff-filler:hover {
+	background:
+		var(--codeblock-pattern-bg),
+		var(--bg-panel);
+	background-size: var(--codeblock-pattern-size), auto;
+}
+
+.content.phase-idle div.line.diff-filler:hover::before {
+	content: none;
+}
+
+/* ===========================================
    DIFF HEADER - Hunk metadata in window header
    =========================================== */
 

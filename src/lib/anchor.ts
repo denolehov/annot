@@ -45,6 +45,19 @@ export function endpointKeys(line: Line): string[] {
   return line.origin.type === 'source' ? [sourceKey(line.origin.path, line.origin.line)] : [];
 }
 
+/**
+ * Which split-view columns an anchor touches. Source anchors are side-less
+ * (both); a diff anchor covers the sides its endpoints sit on — mixed-side
+ * ranges (replacements) cover both columns.
+ */
+export function anchorSides(anchor: Anchor): { old: boolean; new: boolean } {
+  if (anchor.type !== 'diff') return { old: true, new: true };
+  return {
+    old: anchor.start.side === 'old' || anchor.end.side === 'old',
+    new: anchor.start.side === 'new' || anchor.end.side === 'new',
+  };
+}
+
 /** The anchor's two lookup keys (start, end). Source anchors are side-less. */
 export function anchorKeys(anchor: Anchor): [string, string] {
   if (anchor.type === 'source') {

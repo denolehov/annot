@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deriveDisplay, hunkHeaderText, rowKind, selectionToDiffAnchor } from './display-rows';
+import { deriveDisplay, hunkHeaderText, pairHunkRows, rowKind, selectionToDiffAnchor } from './display-rows';
 import { diffKey, anchorKeys } from './anchor';
 import type { DiffDocument, Row } from './types';
 
@@ -274,5 +274,64 @@ describe('selectionToDiffAnchor', () => {
     const [startKey, endKey] = anchorKeys(anchor);
     expect(display.byEndpoint.get(startKey)).toBe(4);
     expect(display.byEndpoint.get(endKey)).toBe(6);
+  });
+
+  it('side-scoped selection skips opposite-side rows and anchors on the scoped side', () => {
+    // Rows 3–7: ctx, del, add, add, ctx — a column drag over the whole hunk.
+    expect(selectionToDiffAnchor({ start: 3, end: 7 }, display, 'new')).toEqual({
+      type: 'diff',
+      path: 'src/main.rs',
+      start: { side: 'new', line: 1 },
+      end: { side: 'new', line: 4 },
+    });
+    expect(selectionToDiffAnchor({ start: 3, end: 7 }, display, 'old')).toEqual({
+      type: 'diff',
+      path: 'src/main.rs',
+      start: { side: 'old', line: 1 },
+      end: { side: 'old', line: 3 },
+    });
+  });
+
+  it('side-scoped selection over only opposite-side rows is unanchorable', () => {
+    // Rows 5–6 are both added — nothing lives in the old column there.
+    expect(selectionToDiffAnchor({ start: 5, end: 6 }, display, 'old')).toBeNull();
+  });
+});
+
+describe('pairHunkRows', () => {
+  const bodyOf = (docIdx: number) =>
+    display.rows.filter((e) => e.kind !== 'file-header' && e.docIdx === docIdx);
+
+  it('spans context both sides, pairs change runs by index, pads the shorter side', () => {
+    // src/main.rs hunk 1: ctx(3), del(4), add(5), add(6), ctx(7).
+    const entries = pairHunkRows(bodyOf(0));
+    expect(entries[0]).toMatchObject({ kind: 'hunk-header', hunkIdx: 0 });
+    expect(entries.slice(1, 5).map((e) => e.kind === 'pair' && [e.old?.displayIndex ?? null, e.new?.displayIndex ?? null])).toEqual([
+      [3, 3],
+      [4, 5],
+      [null, 6],
+      [7, 7],
+    ]);
+  });
+
+  it('keeps runs hunk-local: a header flushes the pending run', () => {
+    // src/main.rs hunk 2 follows hunk 1 directly: del(9), add(10).
+    const entries = pairHunkRows(bodyOf(0));
+    expect(entries[5]).toMatchObject({ kind: 'hunk-header', hunkIdx: 1 });
+    expect(entries[6]).toMatchObject({ kind: 'pair', old: { displayIndex: 9 }, new: { displayIndex: 10 } });
+    expect(entries).toHaveLength(7);
+  });
+
+  it('renders one-sided documents as a column of cells against filler', () => {
+    const deleted = pairHunkRows(bodyOf(1)).filter((e) => e.kind === 'pair');
+    expect(deleted.map((p) => [p.old?.displayIndex ?? null, p.new?.displayIndex ?? null])).toEqual([
+      [13, null],
+      [14, null],
+    ]);
+    const added = pairHunkRows(bodyOf(4)).filter((e) => e.kind === 'pair');
+    expect(added.map((p) => [p.old?.displayIndex ?? null, p.new?.displayIndex ?? null])).toEqual([
+      [null, 22],
+      [null, 23],
+    ]);
   });
 });

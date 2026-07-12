@@ -14,6 +14,7 @@
    */
   import type { Snippet } from 'svelte';
   import type { Line } from '$lib/types';
+  import type { Side } from '$lib/anchor';
   import { getAnnotContext } from '$lib/context';
 
   interface SharedProps {
@@ -21,6 +22,12 @@
     line?: Line;
     additionalClasses?: Record<string, boolean>;
     gutterClass?: string;
+    /**
+     * Split-view column this row renders in, for side-aware selection and
+     * annotation highlight. Null for unified/flat rows — and for context
+     * cells, which are the same line in both columns and highlight in both.
+     */
+    side?: Side | null;
     gutter: Snippet<[]>;
     code: Snippet<[]>;
     trailing?: Snippet<[]>;
@@ -50,8 +57,8 @@
   const ctx = getAnnotContext();
 
   // Unified state derivation from context
-  const selected = $derived(props.interactive ? ctx.interaction.isLineHighlighted(props.displayIndex) : false);
-  const annotated = $derived(props.interactive ? ctx.annotations.hasAnnotation(props.displayIndex) : false);
+  const selected = $derived(props.interactive ? ctx.interaction.isCellHighlighted(props.displayIndex, props.side ?? null) : false);
+  const annotated = $derived(props.interactive ? ctx.annotations.hasAnnotation(props.displayIndex, props.side ?? null) : false);
   const markdownMetadata = $derived(ctx.markdownMetadata);
 
   // Convert additionalClasses object to class string

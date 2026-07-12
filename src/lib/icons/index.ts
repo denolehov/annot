@@ -37,3 +37,4 @@ export { default as FileAddedIcon } from './FileAddedIcon.svelte';
 export { default as FileDeletedIcon } from './FileDeletedIcon.svelte';
 export { default as FileDiffIcon } from './FileDiffIcon.svelte';
 export { default as FileRenamedIcon } from './FileRenamedIcon.svelte';
+export { default as ColumnsIcon } from './ColumnsIcon.svelte';

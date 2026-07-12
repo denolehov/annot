@@ -8,7 +8,7 @@ import type { useExitModes } from '$lib/composables/useExitModes.svelte';
 import type { useSearch } from '$lib/composables/useSearch.svelte';
 import type { useMermaid } from '$lib/composables/useMermaid.svelte';
 import type { FileCollapse } from '$lib/composables/useFileCollapse.svelte';
-import type { DiffDisplay } from '$lib/display-rows';
+import type { DiffDisplay, DiffViewMode } from '$lib/display-rows';
 
 /**
  * AnnotContext - Shared state and utilities for annot components.
@@ -39,6 +39,9 @@ export interface AnnotContext {
   readonly contentZoom: number;
   /** The DisplayRow walk — display truth for diff mode; null otherwise. */
   readonly diffDisplay: DiffDisplay | null;
+  /** Diff rendering projection (unified default). Session-scoped, not persisted. */
+  readonly diffView: DiffViewMode;
+  setDiffView: (mode: DiffViewMode) => void;
 
   // Utilities
   showToast: (message: string, duration?: number) => void;

@@ -1,5 +1,6 @@
 import type { Range } from '$lib/range';
 import { isLineInRange } from '$lib/range';
+import { anchorSides, type Anchor, type Side } from '$lib/anchor';
 
 /**
  * Editor identification - which editor is currently active.
@@ -20,23 +21,29 @@ export type ModalLock =
 /**
  * Discriminated union for UI interaction state.
  * Each phase only contains the data it needs — impossible states are unrepresentable.
+ *
+ * The drag gesture (`selecting`) lives in display space: it may transiently
+ * cross virtual lines or portal boundaries, judged only at commit. `side` is
+ * the column the drag started in (split view); null in unified/flat modes.
+ * A committed selection is a draft Anchor — source coordinates, the same
+ * shape annotations persist — resolved back to display rows on demand.
  */
 export type UiState =
   | { phase: 'idle' }
-  | { phase: 'selecting'; anchor: number; current: number }
-  | { phase: 'committed'; range: Range }
+  | { phase: 'selecting'; anchor: number; current: number; side: Side | null }
+  | { phase: 'committed'; draft: Anchor }
   | { phase: 'editing'; editor: EditorKind };
 
 /** Derived type for phase names (for backwards compatibility) */
 export type Phase = UiState['phase'];
 
 export type UiAction =
-  | { type: 'START_SELECT'; anchor: number }
+  | { type: 'START_SELECT'; anchor: number; side: Side | null }
   | { type: 'EXTEND_SELECT'; to: number }
-  | { type: 'COMMIT_SELECT' }
+  | { type: 'COMMIT_SELECT'; draft: Anchor }
   | { type: 'OPEN_EDITOR'; editor: EditorKind }
   | { type: 'CLOSE_EDITOR' }
-  | { type: 'SET_SELECTION'; range: Range }
+  | { type: 'SET_SELECTION'; draft: Anchor }
   | { type: 'RESET' };
 
 /** Actions that are blocked when a modal lock is active */
@@ -50,7 +57,7 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
   switch (action.type) {
     case 'START_SELECT':
       // Can start selecting from any phase (interrupts current state)
-      return { phase: 'selecting', anchor: action.anchor, current: action.anchor };
+      return { phase: 'selecting', anchor: action.anchor, current: action.anchor, side: action.side };
 
     case 'EXTEND_SELECT':
       if (state.phase !== 'selecting') return state;
@@ -58,8 +65,7 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
 
     case 'COMMIT_SELECT':
       if (state.phase !== 'selecting') return state;
-      const range = normalizeRange(state.anchor, state.current);
-      return { phase: 'committed', range };
+      return { phase: 'committed', draft: action.draft };
 
     case 'OPEN_EDITOR':
       // Can open from committed, idle, or editing (to switch editors)
@@ -73,7 +79,7 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
       return { phase: 'idle' };
 
     case 'SET_SELECTION':
-      return { phase: 'committed', range: action.range };
+      return { phase: 'committed', draft: action.draft };
 
     case 'RESET':
       return { phase: 'idle' };
@@ -98,14 +104,23 @@ export interface UseInteractionOptions {
   /** Resolve an annotation's display span (editing-phase highlight). */
   spanForAnnotation: (id: string) => Range | null;
   /**
-   * Which editor a just-committed selection opens; null blocks (unanchorable
-   * selection). Reads the draft onSelectionChange already minted for the
-   * committed range — no range param needed, dispatch() calls
-   * onSelectionChange before this.
+   * Display selection → draft anchor at commit, routed by mode. `side` scopes
+   * a split-view drag to one column. Null = unanchorable — the gesture
+   * dissolves instead of committing.
+   */
+  anchorForRange: (range: Range, side: Side | null) => Anchor | null;
+  /** Resolve a committed draft anchor back to its display span. */
+  spanForDraft: (anchor: Anchor) => Range | null;
+  /** An annotation's anchor (editing-phase column coverage in split view). */
+  anchorForAnnotation: (id: string) => Anchor | null;
+  /**
+   * Which editor a just-committed selection opens; null blocks. Reads the
+   * draft onSelectionChange already minted for the committed anchor — no
+   * param needed, dispatch() calls onSelectionChange before this.
    */
   editorForSelection: () => EditorKind | null;
-  /** Fired on selection state changes: the committed range, or null when idle. */
-  onSelectionChange: (range: Range | null) => void;
+  /** Fired on selection state changes: the committed draft anchor, or null when idle. */
+  onSelectionChange: (draft: Anchor | null) => void;
 }
 
 export function useInteraction(options: UseInteractionOptions) {
@@ -135,11 +150,11 @@ export function useInteraction(options: UseInteractionOptions) {
       }
     }
     state = uiReducer(state, action);
-    // Notify on the committed range / return to idle — the page keys its
+    // Notify on the committed draft / return to idle — the page keys its
     // draft-annotation lifecycle off this. Editing keeps the last-committed
     // state alive; selecting is transient (the slot is hidden while dragging).
     if (state.phase === 'committed') {
-      options.onSelectionChange(state.range);
+      options.onSelectionChange(state.draft);
     } else if (state.phase === 'idle') {
       options.onSelectionChange(null);
     }
@@ -153,7 +168,7 @@ export function useInteraction(options: UseInteractionOptions) {
       case 'selecting':
         return normalizeRange(state.anchor, state.current);
       case 'committed':
-        return state.range;
+        return options.spanForDraft(state.draft);
       case 'editing':
         // Editing phase: resolve the annotation's span from its anchor
         if (state.editor.kind === 'annotation') {
@@ -169,15 +184,41 @@ export function useInteraction(options: UseInteractionOptions) {
     return hoverLine;
   }
 
+  const BOTH_SIDES = { old: true, new: true };
+
+  /** Which split-view columns the active selection/edit covers. */
+  function activeSides(): { old: boolean; new: boolean } {
+    switch (state.phase) {
+      case 'selecting':
+        return state.side ? { old: state.side === 'old', new: state.side === 'new' } : BOTH_SIDES;
+      case 'committed':
+        return anchorSides(state.draft);
+      case 'editing': {
+        if (state.editor.kind !== 'annotation') return BOTH_SIDES;
+        const anchor = options.anchorForAnnotation(state.editor.id);
+        return anchor ? anchorSides(anchor) : BOTH_SIDES;
+      }
+      default:
+        return BOTH_SIDES;
+    }
+  }
+
+  /**
+   * Check if a split-view cell should show selection highlight. `side` is
+   * the cell's column; null (unified rows, context cells — the same line in
+   * both columns) matches on the display span alone.
+   */
+  function isCellHighlighted(displayIdx: number, side: Side | null): boolean {
+    const range = getRange();
+    if (!range || !isLineInRange(displayIdx, range)) return false;
+    return side ? activeSides()[side] : true;
+  }
+
   /**
    * Check if a line should show selection highlight.
    */
   function isLineHighlighted(displayIdx: number): boolean {
-    const range = getRange();
-    if (range && (state.phase === 'selecting' || state.phase === 'committed' || state.phase === 'editing')) {
-      return isLineInRange(displayIdx, range);
-    }
-    return false;
+    return isCellHighlighted(displayIdx, null);
   }
 
   /**
@@ -203,7 +244,9 @@ export function useInteraction(options: UseInteractionOptions) {
     clearNativeSelection();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
-    dispatch({ type: 'START_SELECT', anchor: displayIdx });
+    // The drag is scoped to the split-view column it starts in (the cell's
+    // data-side wrapper); null in unified/flat modes.
+    dispatch({ type: 'START_SELECT', anchor: displayIdx, side: getSideFromElement(e.currentTarget as Element) });
   }
 
   function handlePointerMove(e: PointerEvent) {
@@ -236,10 +279,18 @@ export function useInteraction(options: UseInteractionOptions) {
   function commitSelection() {
     if (state.phase !== 'selecting') return;
 
+    // Release mints the draft anchor; an unanchorable gesture (portal
+    // boundary, mixed paths) dissolves back to idle instead of committing.
+    const draft = options.anchorForRange(normalizeRange(state.anchor, state.current), state.side);
+    if (!draft) {
+      dispatch({ type: 'RESET' });
+      return;
+    }
+
     // Releasing a selection opens the annotation editor directly. COMMIT_SELECT
-    // fires onSelectionChange first, so the page has minted a draft (or found
-    // the existing annotation) by the time we ask which editor to open.
-    dispatch({ type: 'COMMIT_SELECT' });
+    // fires onSelectionChange first, so the page has minted a draft slot (or
+    // found the existing annotation) by the time we ask which editor to open.
+    dispatch({ type: 'COMMIT_SELECT', draft });
     const editor = options.editorForSelection();
     if (editor) dispatch({ type: 'OPEN_EDITOR', editor });
   }
@@ -256,7 +307,7 @@ export function useInteraction(options: UseInteractionOptions) {
     e.preventDefault();
     clearNativeSelection();
 
-    dispatch({ type: 'START_SELECT', anchor: displayIdx });
+    dispatch({ type: 'START_SELECT', anchor: displayIdx, side: getSideFromElement(el) });
   }
 
   // --- Line hover handlers ---
@@ -285,12 +336,13 @@ export function useInteraction(options: UseInteractionOptions) {
 
     clearNativeSelection();
 
-    // Toggle: if clicking same single-line selection, clear it
+    // Toggle: if clicking same single-line selection, clear it. A single-line
+    // selection needs no side scoping — a lone row anchors on its own side.
     const currentRange = getRange();
     if (currentRange?.start === displayIdx && currentRange?.end === displayIdx) {
       dispatch({ type: 'RESET' });
     } else {
-      dispatch({ type: 'SET_SELECTION', range: { start: displayIdx, end: displayIdx } });
+      setSelection({ start: displayIdx, end: displayIdx });
     }
   }
 
@@ -326,13 +378,15 @@ export function useInteraction(options: UseInteractionOptions) {
     dispatch({ type: 'RESET' });
   }
 
-  function setSelection(range: Range) {
-    dispatch({ type: 'SET_SELECTION', range });
+  function setSelection(range: Range, side: Side | null = null) {
+    // Unanchorable programmatic selections are a no-op — nothing to commit.
+    const draft = options.anchorForRange(range, side);
+    if (draft) dispatch({ type: 'SET_SELECTION', draft });
   }
 
-  function selectLine(displayIdx: number) {
+  function selectLine(displayIdx: number, side: Side | null = null) {
     if (options.isLineSelectable(displayIdx)) {
-      dispatch({ type: 'SET_SELECTION', range: { start: displayIdx, end: displayIdx } });
+      setSelection({ start: displayIdx, end: displayIdx }, side);
     }
   }
 
@@ -357,6 +411,7 @@ export function useInteraction(options: UseInteractionOptions) {
 
     // Query functions
     isLineHighlighted,
+    isCellHighlighted,
     isLinePreview,
     showAddButton,
     isAnnotationSealed,
@@ -408,4 +463,10 @@ function getDisplayIdxFromElement(el: Element | null): number | null {
 
   const parsed = parseInt(idx, 10);
   return isNaN(parsed) ? null : parsed;
+}
+
+/** The split-view column an element sits in; null outside split view. */
+function getSideFromElement(el: Element | null): Side | null {
+  const side = el?.closest('[data-side]')?.getAttribute('data-side');
+  return side === 'old' || side === 'new' ? side : null;
 }

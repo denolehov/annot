@@ -6,7 +6,7 @@
   import type { ContentResponse, ContentNode, ContentMetadata, DiffDocument, Line, JSONContent, ExitMode, Tag, MarkdownMetadata, SectionInfo, ConfigSnapshot } from "$lib/types";
   import { getLineNumber, isSelectable, isPortalLine, isCodeBlockLine, isCodeBlockFence, isTableLine, isHorizontalRule } from "$lib/line-utils";
   import { type Range } from "$lib/range";
-  import { selectionToAnchor, type Anchor, type SlotRef } from "$lib/anchor";
+  import { selectionToAnchor, type Anchor, type Side, type SlotRef } from "$lib/anchor";
   import { extractContentNodes, isContentEmpty, contentNodesToTipTap, findExcalidrawChip } from "$lib/tiptap";
   import AnnotationSlot from "$lib/components/AnnotationSlot.svelte";
   import CopyDropdown from "$lib/CopyDropdown.svelte";
@@ -20,7 +20,7 @@
   import { Header, StatusBar, SessionEditor, WindowResizeHandles } from "$lib/components";
   import { PaneGroup, Pane, PaneResizer } from "paneforge";
   import FileTree from "$lib/components/FileTree.svelte";
-  import { deriveDisplay, selectionToDiffAnchor } from "$lib/display-rows";
+  import { deriveDisplay, selectionToDiffAnchor, type DiffViewMode } from "$lib/display-rows";
   import { useFileTree } from "$lib/composables/useFileTree.svelte";
   import { useFileCollapse } from "$lib/composables/useFileCollapse.svelte";
   import { useExitModes } from "$lib/composables/useExitModes.svelte";
@@ -82,6 +82,14 @@
 
   // The DisplayRow spine: single source of display truth for diff mode.
   let diffDisplay = $derived(diffDocs ? deriveDisplay(diffDocs) : null);
+
+  // Diff view projection (unified default). Session-scoped by design —
+  // persistence is parked (see .specs.local/diff-redesign/s4-split-view.md).
+  let diffView = $state<DiffViewMode>('unified');
+
+  function setDiffView(mode: DiffViewMode) {
+    diffView = mode;
+  }
 
   // Content tracking (composable)
   const contentTracking = useContentTracking(() => diffDisplay);
@@ -208,9 +216,18 @@
     return line ? isSelectable(line) : false;
   }
 
-  /** Selection → anchor, routed by mode: the walk owns diff coordinates. */
+  /**
+   * Selection → anchor, routed by mode: the walk owns diff coordinates.
+   * `side` scopes a split-view drag to one column; null (unified/flat)
+   * keeps every row in the range.
+   */
+  function anchorForRange(range: Range, side: Side | null): Anchor | null {
+    return diffDisplay ? selectionToDiffAnchor(range, diffDisplay, side) : selectionToAnchor(range, lines);
+  }
+
+  /** Side-less variant for programmatic display ranges (mermaid, excalidraw). */
   function anchorForSelection(range: Range): Anchor | null {
-    return diffDisplay ? selectionToDiffAnchor(range, diffDisplay) : selectionToAnchor(range, lines);
+    return anchorForRange(range, null);
   }
 
   // Selection bounds (composable) — hunk/portal/codeblock boundary logic
@@ -225,8 +242,8 @@
   // remount on the first keystroke. Cleared when interaction returns to idle.
   let draft = $state<SlotRef | null>(null);
 
-  function handleSelectionChange(range: Range | null) {
-    if (!range) {
+  function handleSelectionChange(anchor: Anchor | null) {
+    if (!anchor) {
       draft = null;
       return;
     }
@@ -234,13 +251,9 @@
     // draft shadows it anyway: emptying the editor deletes the entry mid-edit,
     // and the shadow is what keeps the slot (and the live editor) mounted
     // until the editor is dismissed.
-    const existing = annotationState.atEndRow(range.end);
-    if (existing) {
-      draft = { id: existing.id, anchor: existing.anchor };
-      return;
-    }
-    const anchor = anchorForSelection(range);
-    draft = anchor ? { id: crypto.randomUUID(), anchor } : null;
+    const span = annotationState.spanOfAnchor(anchor);
+    const existing = span ? annotationState.atEndRow(span.end) : null;
+    draft = existing ? { id: existing.id, anchor: existing.anchor } : { id: crypto.randomUUID(), anchor };
   }
 
   /** Open an annotation's editor, shadowing it as the active draft (see above). */
@@ -274,6 +287,9 @@
     isLineSelectable,
     constrainToBounds: selectionBounds.constrainToSelectionBounds,
     spanForAnnotation,
+    anchorForRange,
+    spanForDraft: (anchor) => annotationState.spanOfAnchor(anchor),
+    anchorForAnnotation: anchorForId,
     editorForSelection,
     onSelectionChange: handleSelectionChange,
   });
@@ -508,6 +524,9 @@
     } else if (event === 'JUMP_TO_FILE') {
       overlay.close();
       jumpToFile(payload as number);
+    } else if (event === 'SET_DIFF_VIEW') {
+      setDiffView(payload as DiffViewMode);
+      overlay.close();
     }
   }
 
@@ -897,6 +916,8 @@
     {allowsImagePaste}
     {contentZoom}
     {diffDisplay}
+    {diffView}
+    {setDiffView}
     interaction={interaction}
     annotations={annotationState}
     {draft}
@@ -1053,6 +1074,7 @@
     {tags}
     exitModes={exitModeState.modes}
     files={diffDisplay?.docs ?? []}
+    diffView={diffDisplay ? diffView : null}
     zoomLevel={contentZoom}
     onClose={handleCommandPaletteClose}
     onSetExitMode={handleSetExitModeFromPalette}
@@ -1113,6 +1135,13 @@
   :global(.header-btn:focus-visible) {
     outline: none;
     border-color: var(--focus-ring);
+  }
+
+  /* Toggled-on state (e.g. split view active) */
+  :global(.header-btn.active) {
+    background: var(--bg-window);
+    border-color: var(--border-subtle);
+    color: var(--accent);
   }
 
   :global(.header-btn svg) {

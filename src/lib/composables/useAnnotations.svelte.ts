@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { JSONContent } from '@tiptap/core';
 import type { Range } from '$lib/range';
 import type { Line } from '$lib/types';
-import { type Anchor, anchorKeys, endpointKeys } from '$lib/anchor';
+import { type Anchor, type Side, anchorKeys, anchorSides, endpointKeys } from '$lib/anchor';
 import type { DiffDisplay } from '$lib/display-rows';
 import { extractContentNodes, isContentEmpty } from '$lib/tiptap';
 
@@ -71,18 +71,28 @@ export function useAnnotations(options: UseAnnotationsOptions) {
     return map;
   });
 
-  // Display rows covered by any annotation. Rebuilt once when the entry set
-  // changes, so per-line `hasAnnotation` is an O(1) Set lookup. Without this,
-  // adding one annotation re-scans every entry for all ~10k lines (O(N·A)) and
-  // stalls the reactive flush — the dominant cost while annotating large files.
+  // Display rows covered by any annotation, with the split-view columns the
+  // covering anchors touch. Rebuilt once when the entry set changes, so
+  // per-line `hasAnnotation` is an O(1) lookup. Without this, adding one
+  // annotation re-scans every entry for all ~10k lines (O(N·A)) and stalls
+  // the reactive flush — the dominant cost while annotating large files.
   const annotatedRows = $derived.by(() => {
-    const set = new Set<number>();
-    for (const span of spans.values()) {
+    const map = new Map<number, { old: boolean; new: boolean }>();
+    for (const [id, span] of spans) {
+      const entry = annotations[id];
+      if (!entry) continue;
+      const sides = anchorSides(entry.anchor);
       for (let i = span.start; i <= span.end; i++) {
-        set.add(i);
+        const cur = map.get(i);
+        if (cur) {
+          cur.old ||= sides.old;
+          cur.new ||= sides.new;
+        } else {
+          map.set(i, { ...sides });
+        }
       }
     }
-    return set;
+    return map;
   });
 
   // Maps each annotation's resolved end row to its entry — the end row hosts
@@ -205,8 +215,15 @@ export function useAnnotations(options: UseAnnotationsOptions) {
     return null;
   }
 
-  function hasAnnotation(displayIdx: number): boolean {
-    return annotatedRows.has(displayIdx);
+  /**
+   * Whether a display row (or one of its split-view cells, when `side` is
+   * given) is covered by an annotation. Side-less queries match the unified
+   * view: any coverage counts.
+   */
+  function hasAnnotation(displayIdx: number, side: Side | null = null): boolean {
+    const sides = annotatedRows.get(displayIdx);
+    if (!sides) return false;
+    return side ? sides[side] : true;
   }
 
   function spanOf(id: string): Range | null {

@@ -11,19 +11,23 @@ let store: ReturnType<typeof makeStore>;
 // fn instances LineRow wires up (vi.mock factories are hoisted).
 const shared = vi.hoisted(() => ({
   interaction: {
-    isLineHighlighted: () => false,
+    isCellHighlighted: () => false,
     handleLineEnter: vi.fn(),
     handleLineLeave: vi.fn(),
     handlePointerDown: vi.fn(),
     handleGutterClick: vi.fn(),
   },
   expandContext: vi.fn(() => Promise.resolve()),
+  view: { mode: 'unified' as 'unified' | 'split' },
 }));
 
 vi.mock('$lib/context', () => ({
   getAnnotContext: () => ({
     get diffDisplay() {
       return store.display;
+    },
+    get diffView() {
+      return shared.view.mode;
     },
     markdownMetadata: null,
     interaction: shared.interaction,
@@ -178,5 +182,47 @@ describe('RegularLines unfold affordance placement', () => {
     expect(shared.expandContext).toHaveBeenCalledWith(0, 1, 'up', 'step');
     expect(shared.interaction.handleGutterClick).not.toHaveBeenCalled();
     expect(shared.interaction.handlePointerDown).not.toHaveBeenCalled();
+  });
+});
+
+describe('RegularLines split view', () => {
+  it('pairs change runs into two data-side columns, filler on the shorter side', () => {
+    shared.view.mode = 'split';
+    try {
+      // ctx(1), del(2), add(2), add(3), ctx(4) → 4 pairs: ctx | del+add | filler+add | ctx.
+      store = makeStore([
+        doc([hunk([ctx(1), row(2, null, 'old 2'), row(null, 2, 'new 2'), row(null, 3, 'extra'), ctx(4)])]),
+      ]);
+      const { container } = render(RegularLines, {
+        props: { annotationSlotProps: {} as never },
+      });
+      flushSync();
+
+      const pairs = [...container.querySelectorAll('.split-pair')];
+      expect(pairs).toHaveLength(4);
+      const cellText = (pair: Element, side: string) =>
+        pair.querySelector(`[data-side="${side}"] .code`)?.textContent ?? null;
+
+      // Context renders in both columns under one display index.
+      expect(cellText(pairs[0], 'old')).toBe('line 1');
+      expect(cellText(pairs[0], 'new')).toBe('line 1');
+      expect(pairs[0].querySelectorAll('[data-display-idx]')).toHaveLength(2);
+
+      // The change run pairs by index; the uneven third add faces filler.
+      expect(cellText(pairs[1], 'old')).toBe('old 2');
+      expect(cellText(pairs[1], 'new')).toBe('new 2');
+      expect(cellText(pairs[2], 'old')).toBeNull();
+      expect(pairs[2].querySelector('[data-side="old"] .diff-filler')).not.toBeNull();
+      expect(cellText(pairs[2], 'new')).toBe('extra');
+
+      // Filler is presentational: no display index, not selectable.
+      expect(pairs[2].querySelector('[data-side="old"] [data-display-idx]')).toBeNull();
+
+      // The @@ header still spans full width outside any pair.
+      expect(container.querySelector('.split-pair .diff-header')).toBeNull();
+      expect(container.querySelector('.line.diff-header')).not.toBeNull();
+    } finally {
+      shared.view.mode = 'unified';
+    }
   });
 });

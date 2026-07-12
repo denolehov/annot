@@ -1,7 +1,7 @@
 <script lang="ts">
   import CopyDropdown from '$lib/CopyDropdown.svelte';
   import Icon from '$lib/CommandPalette/Icon.svelte';
-  import { ChevronUpDownIcon, ChevronDownUpIcon } from '$lib/icons';
+  import { ChevronUpDownIcon, ChevronDownUpIcon, ColumnsIcon } from '$lib/icons';
   import { getAnnotContext } from '$lib/context';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import type { HunkV2, SectionInfo } from '$lib/types';
@@ -52,6 +52,11 @@
   function toggleAllFiles(e: MouseEvent) {
     (ctx.fileCollapse.anyCollapsed ? ctx.fileCollapse.expandAll : ctx.fileCollapse.collapseAll)();
     // Give focus back to the window so line shortcuts (c, :, ?) keep working.
+    (e.currentTarget as HTMLButtonElement).blur();
+  }
+
+  function toggleDiffView(e: MouseEvent) {
+    ctx.setDiffView(ctx.diffView === 'unified' ? 'split' : 'unified');
     (e.currentTarget as HTMLButtonElement).blur();
   }
 </script>
@@ -133,18 +138,28 @@
           <span class="added">+{totals.added}</span>
           <span class="deleted">−{totals.deleted}</span>
         </span>
-        <button
-          class="header-btn"
-          onclick={toggleAllFiles}
-          title={ctx.fileCollapse.anyCollapsed ? 'Expand all files' : 'Collapse all files'}
-        >
-          {#if ctx.fileCollapse.anyCollapsed}
-            <ChevronUpDownIcon />
-          {:else}
-            <ChevronDownUpIcon />
-          {/if}
-        </button>
       </span>
+      <!-- Buttons sit directly in header-right so its gap spaces every
+           titlebar button evenly — the summary's wider gap is counts-only. -->
+      <button
+        class="header-btn"
+        class:active={ctx.diffView === 'split'}
+        onclick={toggleDiffView}
+        title={ctx.diffView === 'split' ? 'Switch to unified view' : 'Switch to split view'}
+      >
+        <ColumnsIcon />
+      </button>
+      <button
+        class="header-btn"
+        onclick={toggleAllFiles}
+        title={ctx.fileCollapse.anyCollapsed ? 'Expand all files' : 'Collapse all files'}
+      >
+        {#if ctx.fileCollapse.anyCollapsed}
+          <ChevronUpDownIcon />
+        {:else}
+          <ChevronDownUpIcon />
+        {/if}
+      </button>
     {/if}
     {#if zoomLevel !== 1.0}
       <span class="zoom-indicator">{Math.round(zoomLevel * 100)}%</span>
@@ -162,6 +177,13 @@
 </header>
 
 <style>
+  /* Buttons carry 6px transparent horizontal padding, so their icons sit
+     inset from the 4px flex gap. Mirror that padding after the +/− counts
+     so text-to-icon spacing optically matches icon-to-icon spacing. */
+  .diff-header-summary {
+    margin-right: 6px;
+  }
+
   .close-btn {
     font-size: 16px;
     line-height: 1;

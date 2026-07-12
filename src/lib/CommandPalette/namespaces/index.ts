@@ -9,12 +9,14 @@ import { saveNamespace, getSaveItems, filterSaveItems } from './save';
 import { obsidianNamespace, getObsidianItems, filterObsidianItems } from './obsidian';
 import { themeNamespace, getThemeItems, filterThemeItems } from './theme';
 import { filesNamespace, getFileItems, filterFileItems } from './files';
+import { viewNamespace, getViewItems, filterViewItems } from './view';
 
-const namespaces: Namespace[] = [tagsNamespace, exitModesNamespace, filesNamespace, copyNamespace, obsidianNamespace, saveNamespace, themeNamespace];
+const namespaces: Namespace[] = [tagsNamespace, exitModesNamespace, filesNamespace, viewNamespace, copyNamespace, obsidianNamespace, saveNamespace, themeNamespace];
 
 const getItemsMap: Record<string, () => Item[]> = {
   tags: getTagItems,
   files: getFileItems,
+  view: getViewItems,
   'exit-modes': getExitModeItems,
   copy: getCopyItems,
   save: getSaveItems,
@@ -25,6 +27,7 @@ const getItemsMap: Record<string, () => Item[]> = {
 const filterItemsMap: Record<string, (query: string) => Item[]> = {
   tags: filterTagItems,
   files: filterFileItems,
+  view: filterViewItems,
   'exit-modes': filterExitModeItems,
   copy: filterCopyItems,
   save: filterSaveItems,
@@ -32,9 +35,11 @@ const filterItemsMap: Record<string, (query: string) => Item[]> = {
   theme: filterThemeItems,
 };
 
-/** Files only exist in diff sessions — don't surface an empty namespace elsewhere. */
+/** Files and view modes only exist in diff sessions — don't surface empty namespaces elsewhere. */
 function activeNamespaces(): Namespace[] {
-  return namespaces.filter((n) => n.id !== 'files' || getFileItems().length > 0);
+  return namespaces.filter(
+    (n) => (n.id !== 'files' || getFileItems().length > 0) && (n.id !== 'view' || getViewItems().length > 0),
+  );
 }
 
 export function createQueryContext(): QueryContext {
@@ -66,3 +71,4 @@ export { saveNamespace, getSaveItems, filterSaveItems } from './save';
 export { obsidianNamespace, getObsidianItems, filterObsidianItems, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId, getRawVaultItems } from './obsidian';
 export { themeNamespace, getThemeItems, filterThemeItems } from './theme';
 export { filesNamespace, getFileItems, setFileItems, filterFileItems } from './files';
+export { viewNamespace, getViewItems, setViewItems, filterViewItems } from './view';

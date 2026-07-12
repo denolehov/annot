@@ -19,7 +19,7 @@
   import type { useSearch } from '$lib/composables/useSearch.svelte';
   import type { useMermaid } from '$lib/composables/useMermaid.svelte';
   import type { FileCollapse } from '$lib/composables/useFileCollapse.svelte';
-  import type { DiffDisplay } from '$lib/display-rows';
+  import type { DiffDisplay, DiffViewMode } from '$lib/display-rows';
 
   interface Props {
     // Reactive data
@@ -29,6 +29,8 @@
     allowsImagePaste: boolean;
     contentZoom: number;
     diffDisplay: DiffDisplay | null;
+    diffView: DiffViewMode;
+    setDiffView: (mode: DiffViewMode) => void;
 
     // Composables (created by page)
     interaction: ReturnType<typeof useInteraction>;
@@ -56,6 +58,8 @@
     allowsImagePaste,
     contentZoom,
     diffDisplay,
+    diffView,
+    setDiffView,
     interaction,
     annotations,
     draft,
@@ -127,6 +131,8 @@
     get markdownMetadata() { return markdownMetadata; },
     get contentZoom() { return contentZoom; },
     get diffDisplay() { return diffDisplay; },
+    get diffView() { return diffView; },
+    get setDiffView() { return setDiffView; },
 
     get showToast() { return showToast; },
     get isLineSelectable() { return isLineSelectable; },

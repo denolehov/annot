@@ -23,7 +23,8 @@
     HeadingH1Icon,
     HeadingH2Icon,
     HeadingH3Icon,
-    FileIcon
+    FileIcon,
+    ColumnsIcon
   } from '$lib/icons';
 
   interface Props {
@@ -57,7 +58,8 @@
     'heading-h1': HeadingH1Icon,
     'heading-h2': HeadingH2Icon,
     'heading-h3': HeadingH3Icon,
-    file: FileIcon
+    file: FileIcon,
+    columns: ColumnsIcon
   };
 
   const IconComponent = $derived(icons[name]);

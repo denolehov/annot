@@ -4,11 +4,11 @@
   import { invoke } from '@tauri-apps/api/core';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { reduce, computeItemList } from './engine/reducer';
-  import { createQueryContext, setTagItems, setExitModeItems, setFileItems, saveTagItem, deleteTagItem, saveExitModeItem, deleteExitModeItem, reorderExitModeItems, generateTagId, generateExitModeId, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId } from './namespaces';
+  import { createQueryContext, setTagItems, setExitModeItems, setFileItems, setViewItems, saveTagItem, deleteTagItem, saveExitModeItem, deleteExitModeItem, reorderExitModeItems, generateTagId, generateExitModeId, setObsidianVaults, saveObsidianVault, deleteObsidianVault, getVaultNames, generateVaultId } from './namespaces';
   import type { State, Action, Command, Item, Namespace, InitialState } from './engine/types';
   import { getFilterPlaceholder, canDelete, isItemEditable } from './engine/types';
   import type { Tag, ExitMode } from '$lib/types';
-  import type { DocView } from '$lib/display-rows';
+  import type { DiffViewMode, DocView } from '$lib/display-rows';
   import Icon from './Icon.svelte';
 
   // Config type matching Rust
@@ -22,6 +22,8 @@
     tags: Tag[];
     exitModes: ExitMode[];
     files?: DocView[];
+    /** Current diff view projection; null outside diff sessions (hides the namespace). */
+    diffView?: DiffViewMode | null;
     zoomLevel?: number;
     onClose: () => void;
     onSetExitMode: (modeId: string) => void;
@@ -34,7 +36,7 @@
     onEvent?: (event: string, payload: unknown) => void;
   }
 
-  let { tags, exitModes, files = [], zoomLevel = 1, onClose, onSetExitMode, onTagsChange, onExitModesChange, showToast, onOpenSaveModal, initialState, onItemCreated, onEvent }: Props = $props();
+  let { tags, exitModes, files = [], diffView = null, zoomLevel = 1, onClose, onSetExitMode, onTagsChange, onExitModesChange, showToast, onOpenSaveModal, initialState, onItemCreated, onEvent }: Props = $props();
 
   // Convert domain types to Item format
   function tagToItem(tag: Tag): Item {
@@ -71,6 +73,10 @@
 
   $effect(() => {
     setFileItems(files);
+  });
+
+  $effect(() => {
+    setViewItems(diffView);
   });
 
   // State machine

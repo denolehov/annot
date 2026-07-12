@@ -17,7 +17,8 @@
   import TrailingGapRow from './TrailingGapRow.svelte';
   import UnfoldControls from './UnfoldControls.svelte';
   import { getAnnotContext } from '$lib/context';
-  import { hunkHeaderText, type DisplayRow } from '$lib/display-rows';
+  import { hunkHeaderText, pairHunkRows, type DisplayRow, type SplitCell, type SplitEntry } from '$lib/display-rows';
+  import type { Side } from '$lib/anchor';
   import type { DisplayLine } from '$lib/composables/useLineSegments.svelte';
 
   interface Props {
@@ -56,17 +57,45 @@
     return map;
   });
 
-  // Map of display indices to code element refs for search highlighting
-  let codeRefs: Map<number, HTMLElement> = new Map();
+  // Split view: the same body entries projected into column pairs. Pure
+  // re-arrangement of the walk — same DisplayRows, same index space.
+  const splitBodies = $derived.by(() => {
+    const map = new Map<number, SplitEntry[]>();
+    if (ctx.diffView !== 'split') return map;
+    for (const [docIdx, body] of docBodies) map.set(docIdx, pairHunkRows(body));
+    return map;
+  });
+
+  /** Stable each-key for split entries (a pair has no displayIndex of its own). */
+  function splitEntryKey(entry: SplitEntry): string {
+    return entry.kind === 'pair'
+      ? `p${entry.old?.displayIndex ?? ''}:${entry.new?.displayIndex ?? ''}`
+      : `h${entry.displayIndex}`;
+  }
+
+  // Map of display indices to code element refs for search highlighting.
+  // A set per index: in split view a context row renders as two cells.
+  let codeRefs: Map<number, Set<HTMLElement>> = new Map();
 
   // Svelte action to track code element refs
   function setCodeRef(el: HTMLElement, displayIndex: number) {
-    codeRefs.set(displayIndex, el);
+    let refs = codeRefs.get(displayIndex);
+    if (!refs) {
+      refs = new Set();
+      codeRefs.set(displayIndex, refs);
+    }
+    refs.add(el);
     return {
       destroy() {
-        codeRefs.delete(displayIndex);
+        const set = codeRefs.get(displayIndex);
+        set?.delete(el);
+        if (set?.size === 0) codeRefs.delete(displayIndex);
       },
     };
+  }
+
+  function* allCodeRefs(): Iterable<HTMLElement> {
+    for (const set of codeRefs.values()) yield* set;
   }
 
   /**
@@ -92,9 +121,10 @@
     // Track the rendered content source to re-run when it changes
     void lines;
     void display;
+    void ctx.diffView;
     // Use microtask to ensure DOM is updated after render
     queueMicrotask(() => {
-      for (const el of codeRefs.values()) {
+      for (const el of allCodeRefs()) {
         clearColorSwatches(el);
         injectColorSwatches(el);
       }
@@ -104,15 +134,14 @@
   // Apply search highlights when matches change
   $effect(() => {
     // Clear all previous highlights first
-    for (const el of codeRefs.values()) {
+    for (const el of allCodeRefs()) {
       clearHighlights(el);
     }
 
     // Apply new highlights
     const currentSearchMatch = ctx.search.getCurrentMatch();
     for (const match of searchMatches) {
-      const el = codeRefs.get(match.displayIndex);
-      if (el) {
+      for (const el of codeRefs.get(match.displayIndex) ?? []) {
         const isCurrent = currentSearchMatch?.displayIndex === match.displayIndex;
         // Find the range index within this match that should be "current"
         const currentRangeIndex = isCurrent ? 0 : null;
@@ -241,15 +270,89 @@
   <AnnotationSlot slotRef={slot} {...annotationSlotProps} />
 {/snippet}
 
+{#snippet splitCellRow(cell: SplitCell | null, column: Side)}
+  <div class="split-cell" data-side={column}>
+    {#if cell}
+      <!-- Context cells are the same line in both columns — side-less so
+           selection/annotation highlight lands on both. Run borders are a
+           unified-view affordance (filler breaks the box shape); the color
+           bar and background carry the run in split view. -->
+      <LineRow
+        displayIndex={cell.displayIndex}
+        interactive={true}
+        side={cell.rowKind === 'context' ? null : column}
+        additionalClasses={{
+          'diff-added': cell.rowKind === 'added',
+          'diff-deleted': cell.rowKind === 'deleted',
+          'diff-context': cell.rowKind === 'context',
+        }}
+      >
+        {#snippet gutter()}
+          <span class="split-gutter">{(column === 'old' ? cell.row.old_line : cell.row.new_line) ?? ''}</span>
+        {/snippet}
+
+        {#snippet codeWrapper(innerContent)}
+          <span class="code" use:setCodeRef={cell.displayIndex}>
+            {@render innerContent()}
+          </span>
+        {/snippet}
+
+        {#snippet code()}
+          {#if cell.row.html?.type === 'full'}{@html cell.row.html.value}{:else}{cell.row.content}{/if}
+        {/snippet}
+      </LineRow>
+    {:else}
+      <div class="line diff-filler"></div>
+    {/if}
+  </div>
+{/snippet}
+
+{#snippet splitPair(pair: Extract<SplitEntry, { kind: 'pair' }>)}
+  <div class="split-pair">
+    {@render splitCellRow(pair.old, 'old')}
+    {@render splitCellRow(pair.new, 'new')}
+  </div>
+  <!-- Each slot renders inside its own column (GitHub-shaped) so ownership is
+       visible: an old-side annotation sits under the left cell, new-side under
+       the right. A context pair is one row shown twice — its slot spans full
+       width like unified view. -->
+  {#if pair.old === pair.new}
+    <AnnotationSlot slotRef={pair.old ? ctx.slotForRow(pair.old.displayIndex) : null} {...annotationSlotProps} />
+  {:else}
+    {@const oldSlot = pair.old ? ctx.slotForRow(pair.old.displayIndex) : null}
+    {@const newSlot = pair.new ? ctx.slotForRow(pair.new.displayIndex) : null}
+    {#if oldSlot || newSlot}
+      <div class="split-slot-row">
+        <div class="split-slot-cell">
+          <AnnotationSlot slotRef={oldSlot} {...annotationSlotProps} />
+        </div>
+        <div class="split-slot-cell">
+          <AnnotationSlot slotRef={newSlot} {...annotationSlotProps} />
+        </div>
+      </div>
+    {/if}
+  {/if}
+{/snippet}
+
 {#if display}
   {#each display.docs as dv (dv.index)}
     {@const collapsed = ctx.fileCollapse.isCollapsed(dv.index)}
     <section class="file-section">
       <FileHeaderRow {dv} {collapsed} onToggle={() => ctx.fileCollapse.toggle(dv.index)} />
       {#if !collapsed}
-        {#each docBodies.get(dv.index) ?? [] as entry (entry.displayIndex)}
-          {@render walkEntry(entry)}
-        {/each}
+        {#if ctx.diffView === 'split'}
+          {#each splitBodies.get(dv.index) ?? [] as entry (splitEntryKey(entry))}
+            {#if entry.kind === 'pair'}
+              {@render splitPair(entry)}
+            {:else}
+              {@render walkEntry(entry)}
+            {/if}
+          {/each}
+        {:else}
+          {#each docBodies.get(dv.index) ?? [] as entry (entry.displayIndex)}
+            {@render walkEntry(entry)}
+          {/each}
+        {/if}
         {#if dv.trailingGap > 0}
           <TrailingGapRow
             size={dv.trailingGap}

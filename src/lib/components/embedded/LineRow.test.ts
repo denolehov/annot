@@ -4,7 +4,7 @@ import { createRawSnippet } from 'svelte';
 import LineRow from './LineRow.svelte';
 
 const handlers = {
-  isLineHighlighted: vi.fn(() => false),
+  isCellHighlighted: vi.fn(() => false),
   hasAnnotation: vi.fn(() => false),
   handleLineEnter: vi.fn(),
   handleLineLeave: vi.fn(),
@@ -15,7 +15,7 @@ const handlers = {
 vi.mock('$lib/context', () => ({
   getAnnotContext: () => ({
     interaction: {
-      isLineHighlighted: handlers.isLineHighlighted,
+      isCellHighlighted: handlers.isCellHighlighted,
       handleLineEnter: handlers.handleLineEnter,
       handleLineLeave: handlers.handleLineLeave,
       handlePointerDown: handlers.handlePointerDown,
@@ -68,7 +68,7 @@ describe('LineRow interactive gating', () => {
     const gutter = document.querySelector('.gutter');
     expect(gutter).toHaveAttribute('role', 'presentation');
     expect(document.querySelector('[data-display-idx]')).toBeNull();
-    expect(handlers.isLineHighlighted).not.toHaveBeenCalled();
+    expect(handlers.isCellHighlighted).not.toHaveBeenCalled();
     expect(handlers.hasAnnotation).not.toHaveBeenCalled();
   });
 });

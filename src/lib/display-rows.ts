@@ -10,10 +10,13 @@
 
 import type { DiffDocument, HunkV2, LineRange, Row } from './types';
 import type { Range } from './range';
-import { diffKey, type Anchor, type Endpoint } from './anchor';
+import { diffKey, type Anchor, type Endpoint, type Side } from './anchor';
 
 /** Context lines revealed per directional unfold click — mirrors `pipeline::EXPAND_STEP`. */
 export const EXPAND_STEP = 20;
+
+/** Diff rendering projection: one column or two. Session-scoped, not persisted. */
+export type DiffViewMode = 'unified' | 'split';
 
 export type RowKind = 'added' | 'deleted' | 'context';
 
@@ -219,8 +222,64 @@ export function deriveDisplay(docs: DiffDocument[]): DiffDisplay {
   return { rows, docs: docViews, byIndex, byEndpoint };
 }
 
-/** A row's anchor endpoint: new-side for added/context rows, old-side for deleted. */
-function rowEndpoint(row: Row): Endpoint {
+/** A split-view cell: one walk row rendered in one column. */
+export type SplitCell = Extract<DisplayRow, { kind: 'row' }>;
+
+/**
+ * One entry of the split-view render sequence: headers pass through
+ * full-width; rows become column pairs. A null cell is filler — the shorter
+ * side of an uneven change run.
+ */
+export type SplitEntry =
+  | Exclude<DisplayRow, { kind: 'row' }>
+  | { kind: 'pair'; old: SplitCell | null; new: SplitCell | null };
+
+/**
+ * Project a document's walk entries into split-view pairs — a pure
+ * re-arrangement of the same DisplayRows, no new index space. Context rows
+ * span both columns (one displayIndex, two cells); a change run pairs its
+ * deletions and additions by index. Runs never cross context or headers, so
+ * pairing is hunk-local by construction.
+ */
+export function pairHunkRows(entries: DisplayRow[]): SplitEntry[] {
+  const out: SplitEntry[] = [];
+  let dels: SplitCell[] = [];
+  let adds: SplitCell[] = [];
+
+  const flush = () => {
+    const n = Math.max(dels.length, adds.length);
+    for (let i = 0; i < n; i++) {
+      out.push({ kind: 'pair', old: dels[i] ?? null, new: adds[i] ?? null });
+    }
+    dels = [];
+    adds = [];
+  };
+
+  for (const entry of entries) {
+    if (entry.kind !== 'row') {
+      flush();
+      out.push(entry);
+    } else if (entry.rowKind === 'context') {
+      flush();
+      out.push({ kind: 'pair', old: entry, new: entry });
+    } else if (entry.rowKind === 'deleted') {
+      dels.push(entry);
+    } else {
+      adds.push(entry);
+    }
+  }
+  flush();
+  return out;
+}
+
+/**
+ * A row's anchor endpoint. Side-scoped selections (split view) anchor on the
+ * scoped side — the filter guarantees the row has a line there. Otherwise:
+ * new-side for added/context rows, old-side for deleted.
+ */
+function rowEndpoint(row: Row, side: Side | null): Endpoint {
+  if (side === 'old' && row.old_line !== null) return { side: 'old', line: row.old_line };
+  if (side === 'new' && row.new_line !== null) return { side: 'new', line: row.new_line };
   return row.new_line !== null
     ? { side: 'new', line: row.new_line }
     : { side: 'old', line: row.old_line! };
@@ -230,8 +289,14 @@ function rowEndpoint(row: Row): Endpoint {
  * Convert a display selection into a diff anchor. Valid only when every
  * index in the range is a row of the same document — headers and
  * cross-document spans are not annotatable.
+ *
+ * `side` scopes the selection to one split-view column: rows absent from
+ * that side (the opposite column's half of a change run) are skipped, not
+ * rejected — a column drag is non-contiguous in display space. Both
+ * endpoints then anchor on the scoped side, so split drags always produce
+ * single-side anchors; mixed-side ranges stay a unified-view gesture.
  */
-export function selectionToDiffAnchor(range: Range, display: DiffDisplay): Anchor | null {
+export function selectionToDiffAnchor(range: Range, display: DiffDisplay, side: Side | null = null): Anchor | null {
   const min = Math.min(range.start, range.end);
   const max = Math.max(range.start, range.end);
 
@@ -239,12 +304,14 @@ export function selectionToDiffAnchor(range: Range, display: DiffDisplay): Ancho
   for (let i = min; i <= max; i++) {
     const entry = display.byIndex.get(i);
     if (!entry || entry.kind !== 'row') return null;
+    if (side === 'old' && entry.row.old_line === null) continue;
+    if (side === 'new' && entry.row.new_line === null) continue;
     entries.push(entry);
   }
   if (entries.length === 0 || entries.some((e) => e.docIdx !== entries[0].docIdx)) return null;
 
-  const startPoint = rowEndpoint(entries[0].row);
-  const endPoint = rowEndpoint(entries[entries.length - 1].row);
+  const startPoint = rowEndpoint(entries[0].row, side);
+  const endPoint = rowEndpoint(entries[entries.length - 1].row, side);
 
   // Display order can number in reverse of source order within a hunk (old vs
   // new numbering) — swap the pair as a unit so each endpoint's line and side
