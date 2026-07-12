@@ -59,6 +59,7 @@ function doc(hunks: DiffDocument['hunks']): DiffDocument {
     old_path: null,
     status: 'modified',
     unavailable: false,
+    conflicted: false,
     new_len: 100,
     language: 'rs',
     hunks,

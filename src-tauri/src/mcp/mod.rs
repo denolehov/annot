@@ -106,7 +106,7 @@ impl AnnotServer {
     }
 
     #[tool(
-        description = "Opens a diff for human review. Blocks until the window closes. `target` selects what to diff: working_tree (default; staged + unstaged + untracked vs HEAD), staged, or a range {from, to, merge_base}. Optional `pathspecs` limit files. Or pass raw diff_content. Returns annotations anchored to diff lines for targeted feedback on changes."
+        description = "Opens a diff for human review. Blocks until the window closes. Works in git and jj repositories alike. `target` selects what to diff: working_copy (default; uncommitted work vs its base), revision {rev} (one revision vs its parent), a range {from, to, merge_base}, or staged (git only). Revision strings are the repo's own dialect: git revspecs, or jj revsets in a jj repo. Optional `pathspecs` limit files. Or pass raw diff_content. Returns annotations anchored to diff lines for targeted feedback on changes."
     )]
     async fn review_diff(
         &self,
@@ -194,7 +194,7 @@ fn run_diff_session(
             let target = params
                 .target
                 .clone()
-                .unwrap_or(crate::vcs::DiffTarget::WorkingTree);
+                .unwrap_or(crate::vcs::DiffTarget::WorkingCopy);
             let pathspecs = params.pathspecs.clone().unwrap_or_default();
             let label = params.label.clone().unwrap_or_else(|| target.label());
             let content_source = mcp_diff(label, DiffSource::Target(target.clone()));
@@ -202,7 +202,7 @@ fn run_diff_session(
             // process's working directory.
             let cwd = std::env::current_dir()
                 .map_err(|e| format!("Failed to resolve working directory: {}", e))?;
-            crate::state::ContentModel::from_git(&cwd, &target, &pathspecs, content_source)
+            crate::state::ContentModel::from_vcs(&cwd, &target, &pathspecs, content_source)
                 .map_err(|e| e.to_string())?
         }
     };

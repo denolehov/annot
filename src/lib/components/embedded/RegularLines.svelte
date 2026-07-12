@@ -249,6 +249,8 @@
         'diff-context': entry.rowKind === 'context',
         'diff-run-start': entry.rowKind !== 'context' && entry.runStart,
         'diff-run-end': entry.rowKind !== 'context' && entry.runEnd,
+        'conflict-marker': entry.conflict === 'marker',
+        'conflict-body': entry.conflict === 'body',
       }}
     >
       {#snippet gutter()}
@@ -293,6 +295,8 @@
           'diff-added': cell.rowKind === 'added',
           'diff-deleted': cell.rowKind === 'deleted',
           'diff-context': cell.rowKind === 'context',
+          'conflict-marker': cell.conflict === 'marker',
+          'conflict-body': cell.conflict === 'body',
         }}
       >
         {#snippet gutter()}

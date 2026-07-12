@@ -118,6 +118,10 @@ process before rebuilding or you'll get `Access is denied (os error 5)`.
 **Backend** (`src-tauri/src/`):
 - `lib.rs` — Entry points (CLI vs MCP mode), IPC command registration
 - `review.rs` — Session state, content loading
+- `vcs/` — Repository substrate behind one seam: `DiffTarget` in, `FileEntry` +
+  `FileSource` out. `git.rs` (gitoxide) and `jj.rs` (jj-lib) are tiers; `.jj`
+  wins over a colocated `.git`. **The jj tier snapshots the working copy** —
+  annot's only write to a repo, deliberate (see `vcs/jj/mod.rs` header)
 - `commands.rs` — All Tauri IPC handlers
 - `output/` — Structured output rendering for LLM consumption
 - `mcp/` — Model Context Protocol server

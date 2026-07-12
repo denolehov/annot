@@ -102,6 +102,8 @@ fn build_file(
     let (path, old_path) = display_identity(old_path.as_deref(), new_path.as_deref());
 
     DiffDocument {
+        // Raw patch text has no notion of a materialized conflict.
+        conflicted: false,
         path,
         old_path,
         status,

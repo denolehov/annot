@@ -880,3 +880,47 @@ div.line.separator-line:hover {
 		var(--hl-mid)
 	);
 }
+
+/* ── Merge conflicts (jj) ──────────────────────────────────────────────────
+   A conflicted file's text is materialized markers — real content, gated by
+   DiffDocument.conflicted so a file that merely mentions "<<<<<<<" is left
+   alone. Two indicators, deliberately different in weight:
+
+   - marker lines (<<<<<<<, %%%%%%%, +++++++, >>>>>>>) are structure: amber,
+     bold, and carrying jj's own side label ("Contents of side #2") as their
+     text — the line is its own caption.
+   - body lines are one side's content: a striped left border, so the region
+     reads as one block without competing with the add/delete tint underneath.
+
+   The stripe uses repeating-linear-gradient (the house pattern for an
+   indicator that must coexist with another) and sits at left: 3px, inboard of
+   the add/delete bar, so both are legible on the same row. */
+div.line.conflict-body::after,
+div.line.conflict-marker::after {
+	content: "";
+	position: absolute;
+	left: 3px;
+	top: 0;
+	bottom: 0;
+	width: 3px;
+	background: repeating-linear-gradient(
+		45deg,
+		rgb(217, 119, 6),
+		rgb(217, 119, 6) 2px,
+		transparent 2px,
+		transparent 4px
+	);
+}
+
+div.line.conflict-marker {
+	background-color: rgba(217, 119, 6, 0.16);
+	font-weight: 600;
+}
+
+div.line.conflict-marker .code {
+	color: rgb(180, 83, 9);
+}
+
+div.line.conflict-marker::after {
+	background: rgb(217, 119, 6);
+}

@@ -20,6 +20,32 @@ export type DiffViewMode = 'unified' | 'split';
 
 export type RowKind = 'added' | 'deleted' | 'context';
 
+/**
+ * A row's place in a materialized merge conflict (jj only — see
+ * `FileSource::is_conflicted`).
+ *
+ * - `marker` — a conflict marker line: `<<<<<<<`, `%%%%%%%`, `+++++++`,
+ *   `-------`, `>>>>>>>`. The text after the marker is the side label jj
+ *   wrote ("Contents of side #2"), so the line is its own caption.
+ * - `body` — a line between markers: one side's actual content.
+ * - `null` — an ordinary line.
+ */
+export type ConflictPart = 'marker' | 'body' | null;
+
+/**
+ * Conflict markers are 7-or-more repeats of a marker char; jj lengthens them
+ * when the content itself contains marker-looking lines, so the count is not
+ * fixed at 7.
+ *
+ * Only ever applied within a file the backend flagged `conflicted` — otherwise
+ * a markdown rule (`-------`) or a doc *about* conflicts would light up.
+ */
+const CONFLICT_MARKER = /^(<{7,}|>{7,}|%{7,}|\+{7,}|-{7,})(\s|$)/;
+
+export function isConflictMarker(content: string): boolean {
+  return CONFLICT_MARKER.test(content);
+}
+
 export type DisplayRow =
   | { kind: 'file-header'; docIdx: number; displayIndex: number }
   | { kind: 'hunk-header'; docIdx: number; hunkIdx: number; displayIndex: number }
@@ -37,6 +63,8 @@ export type DisplayRow =
        */
       runStart: boolean;
       runEnd: boolean;
+      /** Place in a conflict region; `null` outside one (and always in git). */
+      conflict: ConflictPart;
       displayIndex: number;
     };
 
@@ -167,6 +195,9 @@ export function deriveDisplay(docs: DiffDocument[]): DiffDisplay {
 
       let rowStart: number | null = null;
       let rowEnd = headerIdx;
+      // Depth, not a boolean: jj emits one region per conflicted hunk, and a
+      // file can hold several. Reset per hunk — an unfold never straddles one.
+      let insideConflict = false;
       hunk.rows.forEach((row, i) => {
         const kind = rowKind(row);
         if (kind === 'added') added += 1;
@@ -174,6 +205,15 @@ export function deriveDisplay(docs: DiffDocument[]): DiffDisplay {
 
         const prevKind = i > 0 ? rowKind(hunk.rows[i - 1]) : null;
         const nextKind = i < hunk.rows.length - 1 ? rowKind(hunk.rows[i + 1]) : null;
+
+        let conflict: ConflictPart = null;
+        if (doc.conflicted && isConflictMarker(row.content)) {
+          conflict = 'marker';
+          if (row.content.startsWith('<')) insideConflict = true;
+          else if (row.content.startsWith('>')) insideConflict = false;
+        } else if (doc.conflicted && insideConflict) {
+          conflict = 'body';
+        }
 
         const displayIndex = stamp();
         push({
@@ -187,6 +227,7 @@ export function deriveDisplay(docs: DiffDocument[]): DiffDisplay {
           // replace-a-line case), which would double up on a shared edge.
           runStart: prevKind === null || prevKind === 'context',
           runEnd: nextKind === null || nextKind === 'context',
+          conflict,
           displayIndex,
         });
         rowStart ??= displayIndex;

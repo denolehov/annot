@@ -62,7 +62,7 @@ use crate::highlight::Highlighter;
 use crate::input::ContentSource;
 use crate::markdown::{self, html_escape, MarkdownMetadata, MarkdownSemantics};
 use crate::portal::{self, LoadedPortal, MAX_PORTALS};
-use crate::source::{FileSource, GixSource, RawPatchSource};
+use crate::source::{FileSource, RawPatchSource};
 use crate::vcs::{DiffTarget, FileStatus};
 
 // =============================================================================
@@ -389,6 +389,10 @@ pub struct DiffDocument {
     pub status: FileStatus,
     /// Binary/oversize/non-UTF-8 — no rows to show, badge instead.
     pub unavailable: bool,
+    /// The file's content is a materialized merge conflict (jj only). Marker
+    /// lines in it are structure to render, not prose that happens to contain
+    /// `<<<<<<<`.
+    pub conflicted: bool,
     pub language: String,
     /// New-side total line count. `Some` ⇒ unfold available (the capability
     /// signal), sizes the trailing gap, and bounds expansion clamping.
@@ -739,37 +743,41 @@ impl ContentModel {
         })
     }
 
-    /// Render a git diff in-process: enumerate → `GixSource` full texts →
-    /// computed hunks → the same per-file documents `from_diff` produces
-    /// from patch text. The model retains the `GixSource` so the session
-    /// keeps the full texts (unfold and re-diff need them).
-    pub fn from_git(
+    /// Render a VCS diff in-process: enumerate → full texts → computed hunks
+    /// → the same per-file documents `from_diff` produces from patch text.
+    /// The model retains the `FileSource` so the session keeps the full texts
+    /// (unfold and re-diff need them).
+    ///
+    /// The tier (git via gix, jj via jj-lib) is chosen by `vcs::prepare`; from
+    /// here down nothing knows which one answered.
+    pub fn from_vcs(
         cwd: &Path,
         target: &DiffTarget,
         pathspecs: &[String],
         source: ContentSource,
     ) -> Result<Self, AnnotError> {
-        let repo = crate::vcs::discover(cwd)?;
-        let entries = crate::vcs::enumerate_in(&repo, target, pathspecs)?;
-        if entries.is_empty() {
+        let prepared = crate::vcs::prepare(cwd, target, pathspecs)?;
+        if prepared.entries.is_empty() {
             return Err(AnnotError::Diff(format!(
                 "no changes to review for {}",
-                target.label()
+                prepared.label.as_deref().unwrap_or(&target.label())
             )));
         }
-        let file_source = Arc::new(GixSource::new(
-            repo,
-            crate::pipeline::build_oid_map(&entries),
-        ));
+        let file_source = prepared.source;
         let highlighter = Highlighter::new();
         let documents = crate::pipeline::render(
-            &entries,
+            &prepared.entries,
             file_source.as_ref(),
             &highlighter,
             crate::pipeline::CONTEXT_LINES,
         )?;
 
-        let label = source.label().to_string();
+        // A tier-supplied label wins only when the caller didn't name the
+        // session: jj resolves `@` to a change id the agent can act on later.
+        let label = match (&prepared.label, source.label()) {
+            (Some(resolved), caller) if caller == target.label() => resolved.clone(),
+            (_, caller) => caller.to_string(),
+        };
         Ok(Self {
             label,
             view: ContentView::Diff { documents },

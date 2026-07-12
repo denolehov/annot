@@ -28,12 +28,12 @@ pub struct ReviewContentInput {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ReviewDiffInput {
     #[schemars(
-        description = "what to diff: working_tree (default; worktree vs HEAD, includes staged + unstaged + untracked), staged (index vs HEAD), or range {from, to, merge_base}"
+        description = "what to diff: working_copy (default; uncommitted work vs its base), revision {rev} (one revision vs its parent), range {from, to, merge_base}, or staged (git only; index vs HEAD). Revision strings are the repo's own dialect — git revspecs (HEAD~2, abc1234) in a git repo, jj revsets (@-, main@origin) in a jj repo."
     )]
     pub target: Option<crate::vcs::DiffTarget>,
 
     #[schemars(
-        description = "optional git pathspecs limiting the diff (e.g. [\"src/\", \"*.rs\"])"
+        description = "optional pathspecs limiting the diff (e.g. [\"src/\", \"*.rs\"]); git repos only"
     )]
     pub pathspecs: Option<Vec<String>>,
 

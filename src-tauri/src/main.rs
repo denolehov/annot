@@ -61,12 +61,13 @@ enum Command {
 
 #[derive(clap::Args)]
 struct DiffArgs {
-    /// Revision range: A..B, or A...B to diff from the merge base
-    /// (an empty side means HEAD, e.g. "main..")
-    #[arg(value_name = "RANGE", conflicts_with = "staged")]
+    /// A revision (diffed against its parent), or a range A..B — A...B diffs
+    /// from the merge base, and an empty side means the current revision
+    /// (e.g. "main.."). Git repos take revspecs, jj repos take revsets.
+    #[arg(value_name = "REVISION", conflicts_with = "staged")]
     range: Option<String>,
 
-    /// Review staged changes (index vs HEAD)
+    /// Review staged changes (index vs HEAD; git only — jj has no index)
     #[arg(long)]
     staged: bool,
 
@@ -128,10 +129,10 @@ fn main() {
         config.prepend_transient_modes(transient_modes);
     }
 
-    // Resolve content: the diff subcommand renders via the git pipeline;
+    // Resolve content: the diff subcommand renders via the VCS pipeline;
     // everything else reads file/stdin and detects a rendering mode.
     let content = match cli.command {
-        Some(Command::Diff(args)) => git_diff_content(args),
+        Some(Command::Diff(args)) => vcs_diff_content(args),
         _ => cli_input_content(cli.file, cli.label),
     };
 
@@ -140,9 +141,10 @@ fn main() {
     annot_lib::run(state, context, cli.json);
 }
 
-/// `annot diff`: render a structured git target through the pipeline — the
-/// CLI twin of the MCP `review_diff` tool (same targets, same cwd semantics).
-fn git_diff_content(args: DiffArgs) -> annot_lib::state::ContentModel {
+/// `annot diff`: render a structured target through the pipeline — the CLI twin
+/// of the MCP `review_diff` tool (same targets, same cwd semantics). The tier
+/// (git or jj) is chosen from the repo found at cwd, not from the arguments.
+fn vcs_diff_content(args: DiffArgs) -> annot_lib::state::ContentModel {
     let target = match annot_lib::input::parse_diff_target(args.range.as_deref(), args.staged) {
         Ok(target) => target,
         Err(e) => {
@@ -159,7 +161,7 @@ fn git_diff_content(args: DiffArgs) -> annot_lib::state::ContentModel {
     };
     let label = args.label.unwrap_or_else(|| target.label());
     let source = ContentSource::Cli(CliSource::Diff { label });
-    match annot_lib::state::ContentModel::from_git(&cwd, &target, &args.pathspecs, source) {
+    match annot_lib::state::ContentModel::from_vcs(&cwd, &target, &args.pathspecs, source) {
         Ok(content) => content,
         Err(e) => {
             eprintln!("{}", e);

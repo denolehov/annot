@@ -10,6 +10,7 @@ function doc(path: string, rowCounts: number[]): DiffDocument {
     old_path: null,
     status: 'modified',
     unavailable: false,
+    conflicted: false,
     new_len: null,
     language: 'rs',
     hunks: rowCounts.map((rowCount) => ({

@@ -136,6 +136,12 @@ export interface DiffDocument {
   status: FileStatus;
   /** Binary/oversize/non-UTF-8 — no hunks. */
   unavailable: boolean;
+  /**
+   * Content is a materialized merge conflict (jj only). Gates conflict-marker
+   * rendering: without it, a file that merely *mentions* `<<<<<<<` would light
+   * up as if it were conflicted.
+   */
+  conflicted: boolean;
   language: string;
   /**
    * New-side total line count. Non-null ⇒ unfold available (the capability

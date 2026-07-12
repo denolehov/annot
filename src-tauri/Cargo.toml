@@ -30,6 +30,12 @@ thiserror = "2"
 dirs = "6"
 fs4 = "1.1"
 gix = "=0.85.0"
+# jj tier. Pre-1.0 with a monthly breaking-release cadence — pinned exactly,
+# bumped deliberately. `git` feature: the git backend, which every real jj
+# repo (colocated or not) uses to store objects.
+jj-lib = { version = "=0.43.0", features = ["git"] }
+futures = "0.3"
+pollster = "0.4"
 rand = "0.10"
 rmcp = { version = "1.7.0", features = ["server", "transport-io"] }
 tokio = { version = "1.48.0", features = ["full"] }
@@ -53,6 +59,12 @@ sublime_fuzzy = "0.7"
 similar = { version = "3", features = ["inline"] }
 
 [dev-dependencies]
+# Only to verify the vendored jj defaults still match jj's own (see
+# `vcs::jj::config`). Deliberately NOT a real dependency: jj-cli drags in a
+# terminal UI stack (ratatui, crossterm, streampager — +129 crates) that a
+# desktop app has no use for, and its config env *writes* to `.jj`. The
+# tripwire test gets the fidelity; the app pays nothing.
+jj-cli = { version = "=0.43.0", default-features = false, features = ["git"] }
 insta = "1.45"
 proptest = "1"
 tempfile = "3.23.0"

@@ -124,11 +124,18 @@ fn render_file(
         .then(|| new_text.as_deref().map(|t| t.lines().count() as u32))
         .flatten();
 
+    let conflicted = entry
+        .new_path
+        .as_deref()
+        .or(entry.old_path.as_deref())
+        .is_some_and(|path| source.is_conflicted(path));
+
     Ok(DiffDocument {
         path: display_path,
         old_path,
         status: entry.status.clone(),
         unavailable,
+        conflicted,
         language,
         new_len,
         hunks,
@@ -409,7 +416,8 @@ mod tests {
     use crate::source::GixSource;
     use crate::state::{ContentModel, ContentView, LineHtml};
     use crate::testutil::git;
-    use crate::vcs::{enumerate, DiffTarget};
+    use crate::vcs::git::enumerate;
+    use crate::vcs::DiffTarget;
     use std::path::Path;
 
     fn render_repo(p: &Path, target: &DiffTarget) -> Vec<DiffDocument> {
@@ -632,7 +640,7 @@ mod tests {
         std::fs::write(p.join("bin.dat"), b"\x00\x02new").unwrap();
         std::fs::write(p.join("untracked.txt"), "brand new\n").unwrap();
 
-        let docs = render_repo(p, &DiffTarget::WorkingTree);
+        let docs = render_repo(p, &DiffTarget::WorkingCopy);
         insta::assert_snapshot!(dump(&docs));
     }
 
@@ -668,7 +676,7 @@ mod tests {
         let source = ContentSource::Cli(CliSource::Stdin {
             label: "diff".into(),
         });
-        let Err(err) = ContentModel::from_git(p, &DiffTarget::WorkingTree, &[], source) else {
+        let Err(err) = ContentModel::from_vcs(p, &DiffTarget::WorkingCopy, &[], source) else {
             panic!("expected an error for an empty enumeration");
         };
         assert!(err.to_string().contains("no changes"));
@@ -712,7 +720,7 @@ mod tests {
     #[ignore = "manual eyeball against the enclosing repo's working tree"]
     fn side_by_side_on_this_repo() {
         let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-        let new_docs = render_repo(repo_root, &DiffTarget::WorkingTree);
+        let new_docs = render_repo(repo_root, &DiffTarget::WorkingCopy);
 
         let patch = git(repo_root, &["diff", "HEAD"]);
         if patch.is_empty() {
@@ -960,7 +968,7 @@ mod tests {
         use crate::state::{ContentNode, UserConfig};
 
         let dir = two_hunk_repo();
-        let content = ContentModel::from_git(
+        let content = ContentModel::from_vcs(
             dir.path(),
             &head_range(),
             &[],

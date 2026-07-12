@@ -155,12 +155,20 @@ impl ContentSource {
     }
 }
 
-/// Parse `annot diff`'s CLI arguments into a `DiffTarget` — the same three
-/// comparisons the MCP `review_diff` tool accepts, in git's range syntax:
-/// `A..B` (tree vs tree), `A...B` (merge base vs B), an empty side
-/// defaulting to `HEAD` (git parity: `main..` ≡ `main..HEAD`). A bare
-/// revision is rejected: git's `git diff A` means worktree-vs-A, a
-/// comparison the target model deliberately doesn't express.
+/// Parse `annot diff`'s CLI arguments into a `DiffTarget` — the same
+/// comparisons the MCP `review_diff` tool accepts:
+///
+/// - nothing → `WorkingCopy`; `--staged` → `Staged` (git only)
+/// - `A..B` → tree vs tree, `A...B` → merge base vs B, an empty side meaning
+///   "the current revision" (git parity: `main..` ≡ `main..HEAD`)
+/// - a bare revision → `Revision` (that revision vs its parent), so
+///   `annot diff 4f7d4491` and `annot diff @-` just work
+///
+/// The revision *strings* are never parsed here — only the range separators
+/// are. `HEAD`, `@-`, `main@{u}` are dialect, resolved by whichever tier owns
+/// the repo; the only syntax annot claims is `..` / `...`. An empty side stays
+/// empty for the same reason: `HEAD` is git's word for it, `@` is jj's, and
+/// the tier substitutes its own (see `DiffTarget::Range`).
 pub fn parse_diff_target(
     range: Option<&str>,
     staged: bool,
@@ -169,33 +177,25 @@ pub fn parse_diff_target(
 
     match (range, staged) {
         (Some(_), true) => Err(AnnotError::Validation(
-            "--staged cannot be combined with a revision range".into(),
+            "--staged cannot be combined with a revision".into(),
         )),
         (None, true) => Ok(DiffTarget::Staged),
-        (None, false) => Ok(DiffTarget::WorkingTree),
+        (None, false) => Ok(DiffTarget::WorkingCopy),
         (Some(spec), false) => {
-            let (separator, merge_base) = if spec.contains("...") {
-                ("...", true)
+            let separator = if spec.contains("...") {
+                "..."
             } else if spec.contains("..") {
-                ("..", false)
+                ".."
             } else {
-                return Err(AnnotError::Validation(format!(
-                    "unsupported range '{spec}': use '{spec}..HEAD' (changes since {spec}) \
-                     or '{spec}...HEAD' (changes since the merge base)"
-                )));
+                return Ok(DiffTarget::Revision {
+                    rev: spec.to_string(),
+                });
             };
             let (from, to) = spec.split_once(separator).expect("separator just matched");
-            let default_head = |side: &str| {
-                if side.is_empty() {
-                    "HEAD".to_string()
-                } else {
-                    side.to_string()
-                }
-            };
             Ok(DiffTarget::Range {
-                from: default_head(from),
-                to: default_head(to),
-                merge_base,
+                from: from.to_string(),
+                to: to.to_string(),
+                merge_base: separator == "...",
             })
         }
     }
@@ -405,7 +405,7 @@ mod tests {
 
         assert_eq!(
             parse_diff_target(None, false).unwrap(),
-            DiffTarget::WorkingTree
+            DiffTarget::WorkingCopy
         );
         assert_eq!(parse_diff_target(None, true).unwrap(), DiffTarget::Staged);
         assert_eq!(
@@ -424,19 +424,19 @@ mod tests {
                 merge_base: true,
             }
         );
-        // git parity: an empty side means HEAD
+        // An empty side stays empty — the tier fills in HEAD (git) or @ (jj).
         assert_eq!(
             parse_diff_target(Some("main.."), false).unwrap(),
             DiffTarget::Range {
                 from: "main".into(),
-                to: "HEAD".into(),
+                to: "".into(),
                 merge_base: false,
             }
         );
         assert_eq!(
             parse_diff_target(Some("...feature"), false).unwrap(),
             DiffTarget::Range {
-                from: "HEAD".into(),
+                from: "".into(),
                 to: "feature".into(),
                 merge_base: true,
             }
@@ -444,10 +444,19 @@ mod tests {
     }
 
     #[test]
-    fn parse_diff_target_rejects_bare_revisions_with_a_hint() {
-        let err = parse_diff_target(Some("main"), false).unwrap_err();
-        assert!(err.to_string().contains("main..HEAD"));
+    fn parse_diff_target_accepts_bare_revisions() {
+        use crate::vcs::DiffTarget;
+        // `annot diff 4f7d4491` — a revision, not a range.
+        for rev in ["main", "4f7d4491", "@-", "HEAD~2"] {
+            assert_eq!(
+                parse_diff_target(Some(rev), false).unwrap(),
+                DiffTarget::Revision { rev: rev.into() }
+            );
+        }
+    }
 
+    #[test]
+    fn parse_diff_target_rejects_staged_with_a_revision() {
         let err = parse_diff_target(Some("main..HEAD"), true).unwrap_err();
         assert!(err.to_string().contains("--staged"));
     }

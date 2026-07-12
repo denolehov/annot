@@ -12,6 +12,7 @@ function dv(path: string, index: number): DocView {
     old_path: null,
     status: 'modified',
     unavailable: false,
+    conflicted: false,
     new_len: null,
     language: '',
     hunks: [],

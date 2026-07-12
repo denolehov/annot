@@ -143,9 +143,10 @@ Claude now has review tools (`review_file`, `review_diff`, `review_content`). As
 ```bash
 annot file.rs           # Open a file for annotation
 annot --json file.rs    # Output as JSON (for agent consumption)
-annot diff              # Review working-tree changes vs HEAD
-annot diff --staged     # Review staged changes
+annot diff              # Review uncommitted changes
+annot diff 4f7d4491     # Review one revision against its parent
 annot diff main..HEAD   # Review a revision range (main...HEAD for merge base)
+annot diff --staged     # Review staged changes (git only — jj has no index)
 ```
 
 ## How it works
@@ -212,13 +213,15 @@ Press `Shift+C` to add comments that apply to the entire review — framing cont
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `target` | object | no* | What to diff: `{"kind": "working_tree"}` (default), `{"kind": "staged"}`, or `{"kind": "range", "from": "main", "to": "HEAD", "merge_base": true}` |
-| `pathspecs` | array | no | Git pathspecs limiting the diff (e.g., `["src/", "*.rs"]`) |
+| `target` | object | no* | What to diff: `{"kind": "working_copy"}` (default), `{"kind": "revision", "rev": "@-"}`, `{"kind": "range", "from": "main", "to": "HEAD", "merge_base": true}`, or `{"kind": "staged"}` (git only) |
+| `pathspecs` | array | no | Pathspecs limiting the diff (e.g., `["src/", "*.rs"]`); jj filesets in a jj repo |
 | `diff_content` | string | no* | Raw unified diff content (mutually exclusive with `target`/`pathspecs`) |
 | `label` | string | no | Display name (default: "diff") |
 | `exit_modes` | array | no | Ephemeral exit modes for this session |
 
-*`target` defaults to `working_tree` — worktree vs HEAD, staged + unstaged combined, untracked files included. `range` with `merge_base: true` diffs from `merge_base(from, to)` to `to`, like `from...to`.
+*`target` defaults to `working_copy` — in git, worktree vs HEAD (staged + unstaged, untracked included); in jj, `@` vs its parents after snapshotting the working copy. `range` with `merge_base: true` diffs from `merge_base(from, to)` to `to`, like `from...to`.
+
+**Works with git and [jj](https://jj-vcs.github.io/jj/) alike**, colocated or not. `rev` strings are the repository's own dialect — git revspecs, or jj revsets (`@-`, `trunk()`) in a jj repo. In a jj repo annot snapshots the working copy the way every `jj` command does (one `snapshot working copy` op — annot's only write), and conflicted files render as jj's marker text instead of erroring.
 
 ### `review_content`
 

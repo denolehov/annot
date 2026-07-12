@@ -1,98 +1,24 @@
-//! Structured diff enumeration backed by gitoxide (`gix`).
+//! Git tier: structured diff enumeration backed by gitoxide (`gix`).
 //!
 //! `review_diff` accepts a `DiffTarget` — not arbitrary git CLI args — so the
-//! revision semantics annot owns are exactly three comparisons: worktree vs
-//! HEAD, index vs HEAD, and tree vs tree. Everything else (revspec grammar,
-//! rename detection thresholds, pathspec magic) is delegated to gix.
+//! revision semantics annot owns are exactly four comparisons: worktree vs
+//! HEAD, index vs HEAD, revision vs its first parent, and tree vs tree.
+//! Everything else (revspec grammar, rename detection thresholds, pathspec
+//! magic) is delegated to gix.
 //!
 //! Non-UTF-8 paths are a hard error — a lossily-converted path would silently
 //! fail content lookups downstream, hiding a file from review. Unmerged
-//! (conflicted) paths are an error too, never a silent skip.
+//! (conflicted) paths are an error too, never a silent skip: in git a conflict
+//! means "you are mid-merge, go fix it". (The jj tier takes the opposite
+//! stance, because there a conflict is a committed, reviewable object.)
 
 use std::collections::BTreeMap;
 use std::path::Path;
 
 use gix::bstr::{BString, ByteSlice};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 
+use super::{tree_sort, BlobRef, DiffTarget, FileEntry, FileStatus};
 use crate::error::AnnotError;
-
-/// What to diff. The MCP schema for `review_diff`'s `target` field.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum DiffTarget {
-    /// Worktree vs HEAD: staged + unstaged combined, untracked files included.
-    WorkingTree,
-    /// Index vs HEAD.
-    Staged,
-    /// Two-revision diff.
-    Range {
-        from: String,
-        to: String,
-        /// If true, diff from merge_base(from, to) to `to` (like `from...to`).
-        #[serde(default)]
-        merge_base: bool,
-    },
-}
-
-impl DiffTarget {
-    /// Display label for the review window.
-    pub fn label(&self) -> String {
-        match self {
-            DiffTarget::WorkingTree => "diff".into(),
-            DiffTarget::Staged => "staged".into(),
-            DiffTarget::Range {
-                from,
-                to,
-                merge_base,
-            } => format!("{from}{}{to}", if *merge_base { "..." } else { ".." }),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FileStatus {
-    Modified,
-    Added,
-    Deleted,
-    Renamed { similarity: u8 },
-    Copied,
-    TypeChanged,
-}
-
-/// Serializes as a plain string — the wire doesn't carry `similarity`.
-impl serde::Serialize for FileStatus {
-    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_str(match self {
-            FileStatus::Modified => "modified",
-            FileStatus::Added => "added",
-            FileStatus::Deleted => "deleted",
-            FileStatus::Renamed { .. } => "renamed",
-            FileStatus::Copied => "copied",
-            FileStatus::TypeChanged => "type_changed",
-        })
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BlobRef {
-    Oid(String),
-    WorkingTree,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FileEntry {
-    pub status: FileStatus,
-    /// `None` for added files.
-    pub old_path: Option<String>,
-    /// `None` for deleted files.
-    pub new_path: Option<String>,
-    /// `None` = old side nonexistent (added file).
-    pub old_oid: Option<String>,
-    /// `None` = new side nonexistent (deleted file).
-    pub new_oid: Option<BlobRef>,
-}
 
 /// Locate the enclosing git repository for `cwd`.
 pub fn discover(cwd: &Path) -> Result<gix::Repository, AnnotError> {
@@ -115,75 +41,19 @@ pub fn enumerate_in(
     target: &DiffTarget,
     pathspecs: &[String],
 ) -> Result<Vec<FileEntry>, AnnotError> {
+    // An empty range side means "the current revision"; git spells that HEAD.
+    let or_head = |rev: &str| if rev.is_empty() { "HEAD" } else { rev }.to_string();
     let entries = match target {
         DiffTarget::Range {
             from,
             to,
             merge_base,
-        } => range_entries(repo, from, to, *merge_base, pathspecs)?,
+        } => range_entries(repo, &or_head(from), &or_head(to), *merge_base, pathspecs)?,
+        DiffTarget::Revision { rev } => revision_entries(repo, &or_head(rev), pathspecs)?,
         DiffTarget::Staged => staged_entries(repo, pathspecs)?,
-        DiffTarget::WorkingTree => working_tree_entries(repo, pathspecs)?,
+        DiffTarget::WorkingCopy => working_tree_entries(repo, pathspecs)?,
     };
-    // Status items arrive interleaved from two producer threads, and the
-    // frontend's annotation identity keys off array position (`FileKey::
-    // diff_file(index)`) — the sort is mandatory for determinism, not
-    // cosmetic. Ordering matches the sidebar file tree (directories before
-    // files, alphabetical within each level) rather than flat full-path
-    // order, which the two disagree on: e.g. "foo.txt" sorts before
-    // "foo/bar.txt" byte-wise ('.' < '/') but must render after it once
-    // "foo" is recognized as a directory.
     Ok(tree_sort(entries))
-}
-
-fn entry_path(e: &FileEntry) -> &str {
-    e.new_path
-        .as_deref()
-        .or(e.old_path.as_deref())
-        .unwrap_or("")
-}
-
-/// Reorders `entries` into directories-first, alphabetical-within-level
-/// order — the same shape the sidebar file tree renders (mirrors `file-
-/// tree.ts`'s `flatten()`). Builds a path tree keyed by segment, then walks
-/// it depth-first: a node's subdirectories (each fully recursed, sorted by
-/// name) come before its own direct files (sorted by name).
-fn tree_sort(mut entries: Vec<FileEntry>) -> Vec<FileEntry> {
-    #[derive(Default)]
-    struct Node<'a> {
-        dirs: BTreeMap<&'a str, Node<'a>>,
-        files: Vec<(&'a str, usize)>,
-    }
-
-    let mut root = Node::default();
-    for (i, e) in entries.iter().enumerate() {
-        let mut node = &mut root;
-        let mut segments = entry_path(e).split('/').peekable();
-        while let Some(seg) = segments.next() {
-            if segments.peek().is_none() {
-                node.files.push((seg, i));
-            } else {
-                node = node.dirs.entry(seg).or_default();
-            }
-        }
-    }
-
-    fn flatten(node: &Node, order: &mut Vec<usize>) {
-        for child in node.dirs.values() {
-            flatten(child, order);
-        }
-        let mut files = node.files.clone();
-        files.sort_by_key(|(name, _)| *name);
-        order.extend(files.into_iter().map(|(_, i)| i));
-    }
-
-    let mut order = Vec::with_capacity(entries.len());
-    flatten(&root, &mut order);
-
-    let mut slots: Vec<Option<FileEntry>> = entries.drain(..).map(Some).collect();
-    order
-        .into_iter()
-        .map(|i| slots[i].take().unwrap())
-        .collect()
 }
 
 fn diff_err(e: impl std::fmt::Display) -> AnnotError {
@@ -275,6 +145,44 @@ fn range_entries(
 
     let changes = repo
         .diff_tree_to_tree(Some(&old_tree), Some(&new_tree), None)
+        .map_err(|e| AnnotError::Diff(format!("tree diff failed: {e}")))?;
+
+    let mut entries = Vec::new();
+    for change in changes {
+        if let Some(entry) = range_entry(change)? {
+            entries.push(entry);
+        }
+    }
+    filter_by_pathspec(repo, entries, pathspecs)
+}
+
+/// One revision vs its *first* parent — `git show`'s convention. A root
+/// commit diffs against the empty tree.
+fn revision_entries(
+    repo: &gix::Repository,
+    rev: &str,
+    pathspecs: &[String],
+) -> Result<Vec<FileEntry>, AnnotError> {
+    let id = repo
+        .rev_parse_single(rev)
+        .map_err(|e| AnnotError::Diff(format!("failed to resolve '{rev}': {e}")))?;
+    let commit = id
+        .object()
+        .map_err(|e| AnnotError::Diff(format!("failed to load '{rev}': {e}")))?
+        .peel_to_commit()
+        .map_err(|e| AnnotError::Diff(format!("'{rev}' does not point to a commit: {e}")))?;
+
+    let new_tree = commit
+        .tree()
+        .map_err(|e| AnnotError::Diff(format!("failed to load tree of '{rev}': {e}")))?;
+    let parent = commit.parent_ids().next();
+    let old_tree = match parent {
+        Some(parent) => Some(peel_to_tree(parent, rev)?),
+        None => None,
+    };
+
+    let changes = repo
+        .diff_tree_to_tree(old_tree.as_ref(), Some(&new_tree), None)
         .map_err(|e| AnnotError::Diff(format!("tree diff failed: {e}")))?;
 
     let mut entries = Vec::new();
@@ -1065,7 +973,7 @@ mod tests {
         git(dir, &["rev-parse", rev_path])
     }
 
-    const WT: DiffTarget = DiffTarget::WorkingTree;
+    const WT: DiffTarget = DiffTarget::WorkingCopy;
     const STAGED: DiffTarget = DiffTarget::Staged;
 
     fn range(from: &str, to: &str) -> DiffTarget {
@@ -1074,6 +982,10 @@ mod tests {
             to: to.into(),
             merge_base: false,
         }
+    }
+
+    fn revision(rev: &str) -> DiffTarget {
+        DiffTarget::Revision { rev: rev.into() }
     }
 
     /// One commit: a.txt, b.txt, old.txt, .gitignore (ignoring ignored.txt).
@@ -1114,42 +1026,7 @@ mod tests {
             .unwrap_or_else(|| panic!("no entry for {path}: {entries:?}"))
     }
 
-    // --- DiffTarget ---
-
-    #[test]
-    fn diff_target_serde_roundtrip() {
-        let range = DiffTarget::Range {
-            from: "main".into(),
-            to: "HEAD".into(),
-            merge_base: true,
-        };
-        for target in [DiffTarget::WorkingTree, DiffTarget::Staged, range] {
-            let json = serde_json::to_string(&target).unwrap();
-            assert_eq!(serde_json::from_str::<DiffTarget>(&json).unwrap(), target);
-        }
-        // wire shape + merge_base default
-        assert_eq!(
-            serde_json::from_str::<DiffTarget>(r#"{"kind":"range","from":"a","to":"b"}"#).unwrap(),
-            DiffTarget::Range {
-                from: "a".into(),
-                to: "b".into(),
-                merge_base: false,
-            }
-        );
-        assert_eq!(
-            serde_json::to_string(&DiffTarget::WorkingTree).unwrap(),
-            r#"{"kind":"working_tree"}"#
-        );
-    }
-
-    #[test]
-    fn labels() {
-        assert_eq!(WT.label(), "diff");
-        assert_eq!(STAGED.label(), "staged");
-        assert_eq!(range("a", "b").label(), "a..b");
-    }
-
-    // --- WorkingTree ---
+    // --- WorkingCopy ---
 
     #[test]
     fn empty_diff_is_empty_vec() {
@@ -1439,6 +1316,77 @@ mod tests {
                 new_oid: Some(BlobRef::Oid(oid(p, "HEAD:renamed.txt"))),
             }
         );
+    }
+
+    // --- Revision ---
+
+    #[test]
+    fn revision_diffs_against_first_parent() {
+        let dir = two_commit_repo();
+        let p = dir.path();
+        // `annot diff <rev>` with no second endpoint — the ask that forced
+        // "HEAD~1..HEAD" before. Equivalent to the range against the parent.
+        let entries = enumerate(p, &revision("HEAD"), &[]).unwrap();
+        assert_eq!(
+            entries,
+            enumerate(p, &range("HEAD~1", "HEAD"), &[]).unwrap()
+        );
+        assert_eq!(entries.len(), 4);
+    }
+
+    #[test]
+    fn revision_accepts_a_bare_sha() {
+        let dir = two_commit_repo();
+        let p = dir.path();
+        let sha = oid(p, "HEAD");
+        let entries = enumerate(p, &revision(&sha[..8]), &[]).unwrap();
+        assert_eq!(find(&entries, "new.txt").status, FileStatus::Added);
+    }
+
+    #[test]
+    fn revision_of_root_commit_is_all_additions() {
+        let dir = repo();
+        let p = dir.path();
+        let entries = enumerate(p, &revision("HEAD"), &[]).unwrap();
+        assert_eq!(entries.len(), 4); // a, b, old, .gitignore
+        assert!(entries.iter().all(|e| e.status == FileStatus::Added));
+        assert!(entries.iter().all(|e| e.old_oid.is_none()));
+    }
+
+    #[test]
+    fn revision_of_merge_uses_first_parent() {
+        let dir = repo();
+        let p = dir.path();
+        git(p, &["switch", "-c", "side"]);
+        fs::write(p.join("side.txt"), "side\n").unwrap();
+        git(p, &["add", "."]);
+        git(p, &["commit", "-m", "side work"]);
+        git(p, &["switch", "main"]);
+        fs::write(p.join("main.txt"), "main\n").unwrap();
+        git(p, &["add", "."]);
+        git(p, &["commit", "-m", "main work"]);
+        git(p, &["merge", "--no-ff", "-m", "merge", "side"]);
+
+        // First parent is main's tip, so the merge shows only side's work.
+        let entries = enumerate(p, &revision("HEAD"), &[]).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].new_path.as_deref(), Some("side.txt"));
+    }
+
+    #[test]
+    fn revision_pathspec_filter() {
+        let dir = two_commit_repo();
+        let p = dir.path();
+        let entries = enumerate(p, &revision("HEAD"), &strs(&["a.txt"])).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].new_path.as_deref(), Some("a.txt"));
+    }
+
+    #[test]
+    fn revision_bogus_rev_is_err() {
+        let dir = repo();
+        let err = enumerate(dir.path(), &revision("no-such-rev-zzz"), &[]).unwrap_err();
+        assert!(err.to_string().contains("no-such-rev-zzz"), "{err}");
     }
 
     #[test]

@@ -20,6 +20,7 @@ const DOCS: DiffDocument[] = [
     old_path: null,
     status: 'modified',
     unavailable: false,
+    conflicted: false,
     new_len: null,
     language: 'rs',
     hunks: [
@@ -50,6 +51,7 @@ const DOCS: DiffDocument[] = [
     old_path: null,
     status: 'deleted',
     unavailable: false,
+    conflicted: false,
     new_len: null,
     language: 'rs',
     hunks: [
@@ -67,6 +69,7 @@ const DOCS: DiffDocument[] = [
     old_path: 'old/name.rs',
     status: 'renamed',
     unavailable: false,
+    conflicted: false,
     new_len: null,
     language: 'rs',
     hunks: [
@@ -84,6 +87,7 @@ const DOCS: DiffDocument[] = [
     old_path: null,
     status: 'modified',
     unavailable: true,
+    conflicted: false,
     new_len: null,
     language: 'png',
     hunks: [],
@@ -93,6 +97,7 @@ const DOCS: DiffDocument[] = [
     old_path: null,
     status: 'added',
     unavailable: false,
+    conflicted: false,
     new_len: null,
     language: 'md',
     hunks: [
@@ -333,5 +338,70 @@ describe('pairHunkRows', () => {
       [null, 22],
       [null, 23],
     ]);
+  });
+});
+
+// =============================================================================
+// Conflict regions (jj). The backend materializes a conflicted file into jj's
+// own marker text; the spine's job is to say which rows are markers, which are
+// conflict body, and — crucially — to say "none of them" for a file that
+// merely contains marker-looking lines.
+// =============================================================================
+
+describe('conflict classification', () => {
+  const CONFLICT_ROWS: Row[] = [
+    row(1, 1, 'one'),
+    row(null, 2, '<<<<<<< Conflict 1 of 1'),
+    row(null, 3, '%%%%%%% Changes from base to side #1'),
+    row(null, 4, '-two'),
+    row(null, 5, '+SIDE A'),
+    row(null, 6, '+++++++ Contents of side #2'),
+    row(null, 7, 'SIDE B'),
+    row(null, 8, '>>>>>>> Conflict 1 of 1 ends'),
+    row(3, 9, 'three'),
+  ];
+
+  const conflictDoc = (conflicted: boolean): DiffDocument => ({
+    path: 'src/a.txt',
+    old_path: null,
+    status: 'modified',
+    unavailable: false,
+    conflicted,
+    new_len: null,
+    language: 'txt',
+    hunks: [
+      {
+        old_range: { start: 1, end: 4 },
+        new_range: { start: 1, end: 10 },
+        function_context: null,
+        function_context_html: null,
+        rows: CONFLICT_ROWS,
+      },
+    ],
+  });
+
+  const parts = (doc: DiffDocument) =>
+    deriveDisplay([doc])
+      .rows.filter((r) => r.kind === 'row')
+      .map((r) => (r.kind === 'row' ? r.conflict : null));
+
+  it('marks markers and the body between them', () => {
+    expect(parts(conflictDoc(true))).toEqual([
+      null, // one
+      'marker', // <<<<<<<
+      'marker', // %%%%%%%
+      'body', // -two
+      'body', // +SIDE A
+      'marker', // +++++++
+      'body', // SIDE B
+      'marker', // >>>>>>>
+      null, // three
+    ]);
+  });
+
+  it('leaves a file alone unless the backend flagged it conflicted', () => {
+    // The same bytes in an ordinary file — a doc *about* merge conflicts, say,
+    // or this very repository's own source. Nothing may light up.
+    expect(parts(conflictDoc(false)).every((p) => p === null)).toBe(true);
   });
 });

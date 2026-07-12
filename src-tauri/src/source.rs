@@ -4,7 +4,7 @@
 //! local slice. Consumed by the diff pipeline (loads both sides) and unfold
 //! IPC (slices gap lines).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -24,7 +24,7 @@ pub enum Side {
 
 /// Files larger than this are treated as unavailable — the unfold affordance
 /// simply won't render for them.
-const MAX_FILE_SIZE: u64 = 1024 * 1024;
+pub(crate) const MAX_FILE_SIZE: u64 = 1024 * 1024;
 
 pub trait FileSource: Send + Sync {
     /// Full text of the file at `path` on `side`.
@@ -36,6 +36,19 @@ pub trait FileSource: Send + Sync {
     /// erroring; the `Result` exists for future sources whose failures
     /// callers should surface.
     fn full_text(&self, path: &str, side: Side) -> Result<Option<Arc<str>>, AnnotError>;
+
+    /// Whether the text served for `path` is a *materialized merge conflict* —
+    /// marker text standing in for several sides that were never merged.
+    ///
+    /// Only jj can answer yes: there a conflict is a committed object a rebase
+    /// carries around, so the text is real content. Git's tier errors on
+    /// unmerged paths instead, and raw patches have no such notion — hence the
+    /// default. The frontend uses this to decide whether marker lines in a
+    /// file are structure to style or just prose that happens to contain
+    /// `<<<<<<<`.
+    fn is_conflicted(&self, _path: &str) -> bool {
+        false
+    }
 }
 
 /// Raw patch mode: only the patch text exists, full files are never available.
@@ -97,14 +110,49 @@ impl GixSource {
     }
 }
 
-/// Binary gate shared by blob and working-tree reads: a NUL byte means binary
-/// (NUL is valid UTF-8, so this isn't subsumed by the UTF-8 check); invalid
-/// UTF-8 also yields `None`.
-fn bytes_to_text(bytes: Vec<u8>) -> Option<Arc<str>> {
+/// Binary gate shared by every tier: a NUL byte means binary (NUL is valid
+/// UTF-8, so this isn't subsumed by the UTF-8 check); invalid UTF-8 also
+/// yields `None`.
+pub(crate) fn bytes_to_text(bytes: Vec<u8>) -> Option<Arc<str>> {
     if bytes.contains(&0) {
         return None;
     }
     String::from_utf8(bytes).ok().map(Arc::from)
+}
+
+/// Serves full file texts from a jj repo.
+///
+/// Unlike `GixSource` this is eager: the enumerator materialized every side
+/// already, because a conflicted side has no blob to fetch later — it's a
+/// merge of several, resolved into marker text at diff time. Since the
+/// pipeline reads both sides of every file anyway, eager costs nothing extra.
+///
+/// A present key with a `None` value is the capability signal: the side exists
+/// but has no reviewable text (binary, oversize, non-UTF-8, symlink,
+/// submodule).
+pub struct JjSource {
+    texts: HashMap<(String, Side), Option<Arc<str>>>,
+    /// Paths (either side) whose text is materialized conflict markers.
+    conflicted: HashSet<String>,
+}
+
+impl JjSource {
+    pub fn new(
+        texts: HashMap<(String, Side), Option<Arc<str>>>,
+        conflicted: HashSet<String>,
+    ) -> Self {
+        Self { texts, conflicted }
+    }
+}
+
+impl FileSource for JjSource {
+    fn full_text(&self, path: &str, side: Side) -> Result<Option<Arc<str>>, AnnotError> {
+        Ok(self.texts.get(&(path.to_string(), side)).cloned().flatten())
+    }
+
+    fn is_conflicted(&self, path: &str) -> bool {
+        self.conflicted.contains(path)
+    }
 }
 
 impl FileSource for GixSource {

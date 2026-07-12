@@ -23,9 +23,22 @@ annot is a **structured dialogue medium** — a space where human and AI take tu
 Open any source file for annotation. Syntax highlighting adapts to language. Navigate by line numbers.
 
 ### Diff Review
-Review git changes or raw unified diffs. Color-coded: additions green, deletions red. Annotations capture both old and new line numbers.
+Review changes from a git or jj repository, or raw unified diffs. Color-coded: additions green, deletions red. Annotations capture both old and new line numbers.
 
-Git targets work from the CLI (`annot diff`, `annot diff --staged`, `annot diff main..HEAD -- src/`) and from MCP (`review_diff` with `target`/`pathspecs`) — same three comparisons: working tree vs HEAD, index vs HEAD, revision range (`...` diffs from the merge base). Raw diffs come via stdin (`git diff | annot`) or MCP `diff_content`.
+Targets work from the CLI (`annot diff`, `annot diff 4f7d4491`, `annot diff main..HEAD -- src/`) and from MCP (`review_diff` with `target`/`pathspecs`) — the same comparisons either way: **working copy** (uncommitted work vs its base), **revision** (one revision vs its parent), **range** (`...` diffs from the merge base), and **staged** (git only — jj has no index). Raw diffs come via stdin (`git diff | annot`) or MCP `diff_content`.
+
+Revision strings are the repository's own dialect: git revspecs (`HEAD~2`, `abc1234`) in a git repo, **jj revsets** (`@-`, `trunk()`, your own aliases) in a jj one — resolved by jj's own engine against your own config, so a revset means here what it means in `jj`.
+
+In jj a revset may name several commits. If they form one **contiguous stack** — one root, one head, no gaps — annot reviews them as a *single changeset*: the base the stack sits on versus its tip. So `annot diff 'trunk()..@'` reviews your whole branch as one diff, and a revset alias for it (`'ready()' = 'trunk()..@'`) works the same way — `annot diff 'ready()'`. Anything else is an error naming the candidates, never a silent pick: `mutable() & mine()` names several unrelated stacks, and there is no single diff of that.
+
+### Jujutsu (jj)
+jj repositories are first-class, colocated or not. Three things differ from git, deliberately:
+
+- **The working copy is snapshotted.** jj's working copy is a commit (`@`) that only matches the filesystem because every `jj` command snapshots on startup — so annot does too, and your uncommitted edits show up even if no jj command has run since you made them. This is the one and only write annot performs on a repository: a `snapshot working copy` entry in `jj op log`, the same one `jj status` would leave. A clean working copy produces no operation at all.
+- **Conflicts are content, not errors.** A rebase can leave a committed conflict, and "what did this rebase break?" is exactly the review you want. Conflicted files render as jj's own marker text (`<<<<<<<`, `%%%%%%%`, `+++++++`, `>>>>>>>`), with the marker lines tinted and a striped gutter down the conflict region. They annotate like any other line. (In git, an unmerged path still errors — there it means "you're mid-merge, go fix it".)
+- **Change IDs lead.** Window labels name a revision by its change ID (`@ · kmxyzqrs`), which survives rewrites — quote it back after an amend and it still resolves, where a commit ID may already be dangling.
+
+Pathspecs become jj **filesets** in a jj repo (`src/` as a bare path, `glob:"*.rs"` as an expression).
 
 **File tree** — `Cmd+B` toggles a sidebar listing every changed file with its +/− counts. Clicking a file scrolls to it (expanding it if collapsed); the row for the file currently in view stays highlighted. The `:` palette's **Files** namespace does the same jump by fuzzy search.
 
@@ -33,7 +46,7 @@ Git targets work from the CLI (`annot diff`, `annot diff --staged`, `annot diff 
 
 **Split view** — a titlebar button (two-column icon) or the `:` palette's **View** namespace switches the diff between unified (default) and side-by-side rendering. Context lines span both columns; each change run pairs its deletions and additions row by row, padding the shorter side with hatched filler. Selections drag within one column and annotate that side; annotations created in either view render in both and survive toggling. The choice is per-session — every review opens unified.
 
-**Unfold context** — in git-mode diffs, fold arrows stacked in the @@ hunk-header gutter (GitHub-style, Octicon fold-down/fold-up: ▼ on top continues the hunk above downward, ▲ below grows the hunk beneath upward; each arrow is a full-width band one row tall, making the header two rows when both show) expand hidden context: each reveals 20 lines toward its edge of the gap, and a gap of 20 lines or fewer collapses to a single expand-all button. The fold after a file's last hunk has no header below it, so it keeps a standalone arrow row. The folded line count lives in the arrow tooltips. A fully unfolded gap's arrows disappear and its neighboring hunks merge. Unfolded lines are ordinary context rows — annotatable, searchable, and included in output like any other line. Raw pasted diffs have no file contents to slice, so no unfold chevrons appear there. Expansion is per-session.
+**Unfold context** — in repository-backed diffs (git or jj), fold arrows stacked in the @@ hunk-header gutter (GitHub-style, Octicon fold-down/fold-up: ▼ on top continues the hunk above downward, ▲ below grows the hunk beneath upward; each arrow is a full-width band one row tall, making the header two rows when both show) expand hidden context: each reveals 20 lines toward its edge of the gap, and a gap of 20 lines or fewer collapses to a single expand-all button. The fold after a file's last hunk has no header below it, so it keeps a standalone arrow row. The folded line count lives in the arrow tooltips. A fully unfolded gap's arrows disappear and its neighboring hunks merge. Unfolded lines are ordinary context rows — annotatable, searchable, and included in output like any other line. Raw pasted diffs have no file contents to slice, so no unfold chevrons appear there. Expansion is per-session.
 
 ### Content Review
 Review agent-generated content — plans, drafts, analysis. Markdown rendering with Mermaid diagrams and portal links that embed live code.
@@ -230,7 +243,7 @@ Saved to /path/to/file.md
 Three tools exposed via Model Context Protocol:
 
 1. **review_file** — Open file at path
-2. **review_diff** — Review git diffs (structured target: working tree / staged / rev range) or raw diff content
+2. **review_diff** — Review diffs from a git or jj repo (structured target: working copy / revision / range / staged) or raw diff content
 3. **review_content** — Review agent-generated content
 
 All block until window closes, returning structured output with annotations, exit mode, and any images.

@@ -1,0 +1,46 @@
+# jj's own defaults — copied verbatim from jj-cli 0.43
+# (`cli/src/config/misc.toml` and `cli/src/config/revsets.toml`).
+#
+# These live in jj-cli, not jj-lib, and annot links only jj-lib (jj-cli writes to
+# `.jj` and prints to stdout — see the module docs in config.rs). Without them
+# `snapshot.auto-track` would be missing and `trunk()` wouldn't exist, which also
+# breaks the user's *own* aliases, since those are usually built on `trunk()` and
+# `immutable_heads()`.
+#
+# This file is a pinned cache, not a fork: `vendored_defaults_match_jj` compares
+# it against `jj_cli::config::default_config_layers()` (jj-cli is a
+# dev-dependency for exactly that) and fails the moment upstream drifts. If it
+# fails after a jj bump, paste jj's new definitions here — that is the whole
+# maintenance burden, and the test makes it impossible to forget.
+#
+# Keep this a verbatim copy: a `trunk()` that quietly means something different
+# here than it does in `jj` is precisely the silent wrong answer the jj tier
+# exists to prevent.
+
+[snapshot]
+auto-track = "all()"
+max-new-file-size = "1MiB"
+
+[revset-aliases]
+# trunk() can be overridden as '<bookmark>@<remote>'.
+'trunk()' = '''
+latest(
+  remote_bookmarks(exact:"main", exact:"origin") |
+  remote_bookmarks(exact:"master", exact:"origin") |
+  remote_bookmarks(exact:"trunk", exact:"origin") |
+  remote_bookmarks(exact:"main", exact:"upstream") |
+  remote_bookmarks(exact:"master", exact:"upstream") |
+  remote_bookmarks(exact:"trunk", exact:"upstream") |
+  root()
+)
+'''
+
+# If immutable_heads() failed to evaluate, many jj commands wouldn't work. Use
+# present(expr) if symbols in expr might not always exist.
+'builtin_immutable_heads()' = 'trunk() | tags() | untracked_remote_bookmarks()'
+'immutable_heads()' = 'builtin_immutable_heads()'
+'immutable()' = '::(immutable_heads() | root())'
+'mutable()' = '~immutable()'
+
+'visible()' = '::visible_heads()'
+'hidden()' = '~visible()'
