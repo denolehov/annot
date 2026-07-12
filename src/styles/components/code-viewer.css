@@ -385,40 +385,59 @@ div.line.annotated .gutter {
 	color: var(--text-muted);
 }
 
-/* Sign column (GitHub-shaped): +/- rendered from the walk's rowKind, not
-   from row content — copied text stays raw. */
-.diff-sign {
-	display: inline-block;
-	width: 1ch;
-	margin-left: 8px;
-	text-align: center;
-	user-select: none;
-}
-
-div.line.diff-added .diff-sign {
-	color: rgb(34, 197, 94);
-}
-
-div.line.diff-deleted .diff-sign {
-	color: rgb(239, 68, 68);
-}
-
-/* Added lines (green) */
+/* Added/deleted lines: left-edge color bar replaces the old +/- sign column.
+   Contiguous runs of the same kind box themselves with a top/bottom border
+   (diff-run-start/diff-run-end, computed alongside rowKind in display-rows.ts). */
 div.line.diff-added {
 	background-color: rgba(34, 197, 94, 0.1);
 }
 
-div.line.diff-added .diff-gutter-new {
-	color: rgb(34, 197, 94);
+div.line.diff-added::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 3px;
+	background: rgb(34, 197, 94);
 }
 
-/* Deleted lines (red) */
+div.line.diff-added.diff-run-start {
+	border-top: 1px solid rgb(34, 197, 94);
+}
+
+div.line.diff-added.diff-run-end {
+	border-bottom: 1px solid rgb(34, 197, 94);
+}
+
+div.line.diff-added .diff-gutter-new {
+	color: rgb(22, 163, 74);
+}
+
 div.line.diff-deleted {
 	background-color: rgba(239, 68, 68, 0.1);
 }
 
+div.line.diff-deleted::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 3px;
+	background: rgb(239, 68, 68);
+}
+
+div.line.diff-deleted.diff-run-start {
+	border-top: 1px solid rgb(239, 68, 68);
+}
+
+div.line.diff-deleted.diff-run-end {
+	border-bottom: 1px solid rgb(239, 68, 68);
+}
+
 div.line.diff-deleted .diff-gutter-old {
-	color: rgb(239, 68, 68);
+	color: rgb(220, 38, 38);
 }
 
 /* Header lines (dimmed, non-selectable) */
@@ -474,6 +493,29 @@ div.line.diff-added.annotated,
 div.line.diff-deleted.annotated,
 div.line.diff-context.annotated {
 	background-color: var(--selection-bg);
+}
+
+/* Selection/annotation take priority over diff run coloring on the left bar
+   and run borders too — same precedent as the background-color rules above. */
+div.line.diff-added.selected::before,
+div.line.diff-deleted.selected::before,
+div.line.diff-added.annotated::before,
+div.line.diff-deleted.annotated::before {
+	background: var(--selection-border);
+}
+
+div.line.diff-added.diff-run-start.selected,
+div.line.diff-deleted.diff-run-start.selected,
+div.line.diff-added.diff-run-start.annotated,
+div.line.diff-deleted.diff-run-start.annotated {
+	border-top-color: var(--selection-border);
+}
+
+div.line.diff-added.diff-run-end.selected,
+div.line.diff-deleted.diff-run-end.selected,
+div.line.diff-added.diff-run-end.annotated,
+div.line.diff-deleted.diff-run-end.annotated {
+	border-bottom-color: var(--selection-border);
 }
 
 /* ===========================================
