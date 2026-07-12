@@ -143,7 +143,7 @@
     background: transparent;
     border: none;
     border-radius: 0;
-    color: var(--text-secondary);
+    color: var(--accent-blue-hover);
     /* <button> doesn't inherit font-size from ancestors (browser default
        stylesheet gives form controls their own font) — set explicitly to
        match .gutter/.code's 12px, since icons size themselves in `em`
@@ -154,8 +154,8 @@
   }
 
   .unfold-btn:hover {
-    background: var(--bg-window);
-    color: var(--text-primary);
+    background: var(--diff-header-bg-hover);
+    color: var(--accent-blue);
   }
 
   .unfold-btn:focus-visible {

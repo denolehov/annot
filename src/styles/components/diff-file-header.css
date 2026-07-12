@@ -3,26 +3,31 @@
    =========================================== */
 
 /* Sticky row: pinned within its .file-section while the file scrolls,
-   pushed out at the file boundary by the next section's header. */
+   pushed out at the file boundary by the next section's header. Unpadded —
+   .file-header-bar bleeds edge-to-edge; the border lives on that child
+   (not here), so the sticky element itself carries no margin/padding that
+   could leave a gap once it engages `top: 0`. */
 .file-header-line {
 	position: sticky;
 	top: 0;
 	z-index: 5;
-	padding: 4px 8px;
 	background: var(--bg-main);
 }
 
-/* The pill spanning the row */
+/* GitHub-style strip: edge-to-edge, no rounding (there's no inset left to
+   round into), bordered top/bottom to mark the sticky boundary. */
 .file-header-bar {
 	display: flex;
 	align-items: center;
 	width: 100%;
 	height: 32px;
 	gap: 6px;
-	padding: 0 8px 0 4px;
+	padding: 0 8px;
 	background: var(--bg-panel);
-	border: 1px solid var(--border-subtle);
-	border-radius: var(--radius-md);
+	border: none;
+	border-top: 1px solid var(--border-subtle);
+	border-bottom: 1px solid var(--border-subtle);
+	border-radius: 0;
 	font-family: var(--font-mono);
 	font-size: 12px;
 	color: var(--text-primary);

@@ -192,6 +192,10 @@
 	--diff-remove-word-bg: rgba(220, 38, 38, 0.35);
 	--diff-add-word-bg: rgba(22, 163, 74, 0.35);
 	--diff-gutter: var(--text-muted);
+	/* Hunk header (@@) — blue reads as "structural metadata", distinct from
+	   the neutral panel/window grays and the red/green change colors. */
+	--diff-header-bg: rgba(59, 130, 246, 0.07);
+	--diff-header-bg-hover: rgba(59, 130, 246, 0.15);
 
 	/* Focus */
 	--focus-ring: var(--border-active);
@@ -367,6 +371,8 @@
 	--diff-remove-word-bg: rgba(239, 68, 68, 0.4);
 	--diff-add-word-bg: rgba(34, 197, 94, 0.4);
 	--diff-gutter: var(--text-muted);
+	--diff-header-bg: rgba(96, 165, 250, 0.1);
+	--diff-header-bg-hover: rgba(96, 165, 250, 0.2);
 
 	/* --- ACCENTS --- */
 	--accent: var(--dark-amber-400);

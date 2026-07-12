@@ -138,7 +138,9 @@ describe('RegularLines unfold affordance placement', () => {
     });
     flushSync();
 
-    const headers = [...container.querySelectorAll('.line.diff-header')];
+    // Trailing gap row also carries 'diff-header' (shared styling only, see
+    // TrailingGapRow.svelte) — exclude it to count actual @@ rows.
+    const headers = [...container.querySelectorAll('.line.diff-header:not(.gap-line)')];
     expect(headers).toHaveLength(2);
     // No gap above hunk A: empty slots. Gap above hunk B: chevrons in-gutter.
     expect(headers[0].querySelector('.unfold-controls')).toBeNull();

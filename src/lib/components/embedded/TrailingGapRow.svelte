@@ -20,7 +20,9 @@
   let { size, onExpand }: Props = $props();
 </script>
 
-<LineRow interactive={false} additionalClasses={{ 'gap-line': true }}>
+<!-- 'diff-header' borrows the @@ row's blue tint / hover / chevron pointer-events
+     treatment from code-viewer.css — same fold affordance, no header text. -->
+<LineRow interactive={false} additionalClasses={{ 'gap-line': true, 'diff-header': true }}>
   {#snippet gutter()}
     <!-- ▼ only: the hunk above grows downward into the fold. -->
     <UnfoldControls {size} showUp={false} showDown={true} {onExpand} />
