@@ -33,7 +33,7 @@ pub struct ReviewDiffInput {
     pub target: Option<crate::vcs::DiffTarget>,
 
     #[schemars(
-        description = "optional pathspecs limiting the diff (e.g. [\"src/\", \"*.rs\"]); git repos only"
+        description = "optional pathspecs limiting the diff (e.g. [\"src/\", \"*.rs\"]); parsed as jj filesets in a jj repo"
     )]
     pub pathspecs: Option<Vec<String>>,
 

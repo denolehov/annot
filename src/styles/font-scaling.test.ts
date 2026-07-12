@@ -43,7 +43,7 @@ describe("font-size scaling", () => {
     const violations: string[] = [];
 
     for (const file of walk(SRC_ROOT)) {
-      const rel = relative(SRC_ROOT, file);
+      const rel = relative(SRC_ROOT, file).replaceAll("\\", "/");
       if (EXEMPT_DIRS.some((dir) => rel.startsWith(dir))) continue;
 
       const lines = readFileSync(file, "utf8").split("\n");

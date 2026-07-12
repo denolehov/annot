@@ -75,7 +75,8 @@ struct DiffArgs {
     #[arg(short = 'l', long = "label")]
     label: Option<String>,
 
-    /// Git pathspecs limiting the diff, after "--" (e.g. -- src/ '*.rs')
+    /// Pathspecs limiting the diff, after "--" (e.g. -- src/ '*.rs');
+    /// parsed as jj filesets in a jj repo
     #[arg(last = true, value_name = "PATHSPEC")]
     pathspecs: Vec<String>,
 }
