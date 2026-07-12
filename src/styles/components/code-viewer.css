@@ -188,7 +188,6 @@ div.line.selected {
 .gutter.selected {
 	background-color: var(--selection-bg);
 	color: var(--text-secondary);
-	border-right-color: var(--selection-border);
 }
 
 /* Left accent bar on selected lines */
@@ -307,7 +306,6 @@ div.line.annotated .gutter {
 	font-size: 12px;
 	line-height: 22px;
 	font-variant-numeric: tabular-nums;
-	border-right: 1px solid var(--border-subtle);
 	/* Prevent gutter from being included in text selection */
 	pointer-events: auto;
 }
@@ -317,7 +315,6 @@ div.line.annotated .gutter {
 .content.phase-idle div.line:not(.diff-header):hover .gutter {
 	background-color: var(--selection-bg);
 	color: var(--text-secondary);
-	border-right-color: var(--selection-border);
 }
 
 /* Code content */

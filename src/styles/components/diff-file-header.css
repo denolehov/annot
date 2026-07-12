@@ -2,6 +2,17 @@
    Diff file headers + summary bar
    =========================================== */
 
+/* Divider between files — on the content's trailing edge, not the next
+   file's sticky header. A border-top on the header itself would dangle as
+   an orphan line whenever that header is the one currently pinned at
+   `top: 0` (i.e. for every file except the first, most of the time it's
+   on screen) — there'd be nothing "above" it to separate from. Bottom
+   border on the section instead: it scrolls out of view together with the
+   file it closes, so it never collides with a stuck header. */
+.file-section:not(:last-child) {
+	border-bottom: 1px solid var(--border-subtle);
+}
+
 /* Sticky row: pinned within its .file-section while the file scrolls,
    pushed out at the file boundary by the next section's header. Unpadded —
    .file-header-bar bleeds edge-to-edge; the border lives on that child
@@ -15,7 +26,7 @@
 }
 
 /* GitHub-style strip: edge-to-edge, no rounding (there's no inset left to
-   round into), bordered top/bottom to mark the sticky boundary. */
+   round into). */
 .file-header-bar {
 	display: flex;
 	align-items: center;
@@ -23,21 +34,35 @@
 	height: 32px;
 	gap: 6px;
 	padding: 0 8px;
-	background: var(--bg-panel);
+	background: var(--bg-hover);
 	border: none;
-	border-top: 1px solid var(--border-subtle);
 	border-bottom: 1px solid var(--border-subtle);
+	border-left: 2px solid var(--border-subtle);
 	border-radius: 0;
 	font-family: var(--font-mono);
 	font-size: 12px;
 	color: var(--text-primary);
 	cursor: pointer;
 	text-align: left;
+	/* Same soft depth shadow as the window's own title bar (header.header,
+	   code-viewer.css) — this bar sticks the same way, so it gets the same
+	   "floating above scrolled content" cue. */
+	box-shadow:
+		0 1px 3px rgba(0, 0, 0, 0.04),
+		0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+/* Collapsed: nothing scrolls underneath, so the "floating above content"
+   shadow (which reads as depth over scrolled-past lines) has nothing to
+   justify it. */
+.file-header-bar[aria-expanded="false"] {
+	box-shadow: none;
 }
 
 .file-header-bar:hover {
-	background: var(--bg-hover);
-	border-color: var(--border-strong);
+	background: var(--bg-selected);
+	border-bottom-color: var(--border-strong);
+	border-left-color: var(--border-strong);
 }
 
 .file-header-bar:focus-visible {
