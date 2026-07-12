@@ -27,6 +27,12 @@
 	width: 4px;
 	position: relative;
 	cursor: col-resize;
+	/* Fills the strip so it reads as one continuous surface with the sidebar
+	   — without this, the transparent gap shows the content pane's
+	   --bg-main through instead, a stray seam. The file tree has no header
+	   of its own anymore, so this is flat (unlike the content pane, which
+	   still has its own --bg-hover sticky file header). */
+	background: var(--bg-panel);
 }
 
 .file-tree-resizer::after {
@@ -34,33 +40,15 @@
 	position: absolute;
 	top: 0;
 	bottom: 0;
-	left: 50%;
+	right: 0;
 	width: 1px;
 	background: var(--border-subtle);
-	transform: translateX(-50%);
 }
 
 .file-tree-resizer:hover::after,
 .file-tree-resizer[data-active]::after {
 	width: 2px;
 	background: var(--border-active);
-}
-
-.file-tree-summary {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	padding: 8px 12px;
-	color: var(--text-secondary);
-	border-bottom: 1px solid var(--border-subtle);
-}
-
-.file-tree-summary-label {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 }
 
 .file-tree-list {
@@ -98,8 +86,9 @@
 	border-left-color: var(--accent);
 }
 
-/* Fixed-width slot so directory chevrons and file names align to the same
-   column at a given depth. Empty (no chevron) on file rows. */
+/* Fixed-width slot so directory and file icons align to the same column at
+   a given depth: a folder glyph (open/closed) on directory rows, a status
+   glyph (added/deleted/modified/renamed) on file rows. */
 .tree-row-icon {
 	display: inline-flex;
 	align-items: center;
@@ -110,13 +99,27 @@
 	color: var(--text-muted);
 }
 
-.tree-row-icon.collapsed {
-	transform: rotate(-90deg);
+.tree-row-icon svg {
+	width: 14px;
+	height: 14px;
 }
 
-.tree-row-icon svg {
-	width: 12px;
-	height: 12px;
+.tree-row-icon.status-added {
+	color: rgb(34, 197, 94);
+}
+
+.tree-row-icon.status-deleted {
+	color: rgb(239, 68, 68);
+}
+
+.tree-row-icon.status-modified,
+.tree-row-icon.status-type_changed {
+	color: var(--warning);
+}
+
+.tree-row-icon.status-renamed,
+.tree-row-icon.status-copied {
+	color: var(--accent-blue);
 }
 
 .dir-row-name {

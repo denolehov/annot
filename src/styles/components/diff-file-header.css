@@ -37,7 +37,6 @@
 	background: var(--bg-hover);
 	border: none;
 	border-bottom: 1px solid var(--border-subtle);
-	border-left: 2px solid var(--border-subtle);
 	border-radius: 0;
 	font-family: var(--font-mono);
 	font-size: 12px;
@@ -62,7 +61,6 @@
 .file-header-bar:hover {
 	background: var(--bg-selected);
 	border-bottom-color: var(--border-strong);
-	border-left-color: var(--border-strong);
 }
 
 .file-header-bar:focus-visible {

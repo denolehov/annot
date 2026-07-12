@@ -946,6 +946,7 @@
           onJump={jumpToFile}
           isDirExpanded={fileTree.isDirExpanded}
           toggleDir={fileTree.toggleDir}
+          zoom={contentZoom}
         />
       </Pane>
       <PaneResizer class="file-tree-resizer" />
