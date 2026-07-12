@@ -20,7 +20,22 @@ export type RowKind = 'added' | 'deleted' | 'context';
 export type DisplayRow =
   | { kind: 'file-header'; docIdx: number; displayIndex: number }
   | { kind: 'hunk-header'; docIdx: number; hunkIdx: number; displayIndex: number }
-  | { kind: 'row'; docIdx: number; hunkIdx: number; row: Row; rowKind: RowKind; displayIndex: number };
+  | {
+      kind: 'row';
+      docIdx: number;
+      hunkIdx: number;
+      row: Row;
+      rowKind: RowKind;
+      /**
+       * True when this row should draw a top/bottom run border — the edge of
+       * a contiguous added/deleted run against context or a hunk boundary,
+       * but not against an adjacent run of the opposite kind. Unused for
+       * context rows.
+       */
+      runStart: boolean;
+      runEnd: boolean;
+      displayIndex: number;
+    };
 
 /** A hunk's footprint in display space. */
 export interface HunkView {
@@ -149,19 +164,34 @@ export function deriveDisplay(docs: DiffDocument[]): DiffDisplay {
 
       let rowStart: number | null = null;
       let rowEnd = headerIdx;
-      for (const row of hunk.rows) {
+      hunk.rows.forEach((row, i) => {
         const kind = rowKind(row);
         if (kind === 'added') added += 1;
         else if (kind === 'deleted') deleted += 1;
 
+        const prevKind = i > 0 ? rowKind(hunk.rows[i - 1]) : null;
+        const nextKind = i < hunk.rows.length - 1 ? rowKind(hunk.rows[i + 1]) : null;
+
         const displayIndex = stamp();
-        push({ kind: 'row', docIdx, hunkIdx, row, rowKind: kind, displayIndex });
+        push({
+          kind: 'row',
+          docIdx,
+          hunkIdx,
+          row,
+          rowKind: kind,
+          // Only border where a run meets context or a hunk edge — not where
+          // a deleted run and an added run "kiss" directly (the common
+          // replace-a-line case), which would double up on a shared edge.
+          runStart: prevKind === null || prevKind === 'context',
+          runEnd: nextKind === null || nextKind === 'context',
+          displayIndex,
+        });
         rowStart ??= displayIndex;
         rowEnd = displayIndex;
 
         if (row.old_line !== null) byEndpoint.set(diffKey(doc.path, 'old', row.old_line), displayIndex);
         if (row.new_line !== null) byEndpoint.set(diffKey(doc.path, 'new', row.new_line), displayIndex);
-      }
+      });
       hunkViews.push({
         headerDisplayIndex: headerIdx,
         rowStart: rowStart ?? headerIdx + 1,

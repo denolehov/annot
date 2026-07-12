@@ -198,7 +198,6 @@
         {:else}
           <span class="diff-gutter-old"></span>
           <span class="diff-gutter-new"></span>
-          <span class="diff-sign"></span>
         {/if}
       {/snippet}
 
@@ -218,12 +217,13 @@
         'diff-added': entry.rowKind === 'added',
         'diff-deleted': entry.rowKind === 'deleted',
         'diff-context': entry.rowKind === 'context',
+        'diff-run-start': entry.rowKind !== 'context' && entry.runStart,
+        'diff-run-end': entry.rowKind !== 'context' && entry.runEnd,
       }}
     >
       {#snippet gutter()}
         <span class="diff-gutter-old">{entry.row.old_line ?? ''}</span>
         <span class="diff-gutter-new">{entry.row.new_line ?? ''}</span>
-        <span class="diff-sign">{entry.rowKind === 'added' ? '+' : entry.rowKind === 'deleted' ? '-' : ''}</span>
       {/snippet}
 
       {#snippet codeWrapper(innerContent)}
