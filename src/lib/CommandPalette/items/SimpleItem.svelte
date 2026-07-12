@@ -25,10 +25,10 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 12px;
-    border-radius: 6px;
+    padding: calc(10px * var(--content-zoom, 1)) calc(12px * var(--content-zoom, 1));
+    border-radius: calc(6px * var(--content-zoom, 1));
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--fs-13);
     color: var(--text-primary);
     transition: background 80ms ease;
   }
@@ -65,8 +65,8 @@
   }
 
   .ephemeral-badge {
-    font-size: 10px;
-    padding: 2px 4px;
+    font-size: var(--fs-10);
+    padding: calc(2px * var(--content-zoom, 1)) calc(4px * var(--content-zoom, 1));
     color: var(--text-muted);
   }
 </style>

@@ -403,9 +403,9 @@
   .lang-badge {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: calc(6px * var(--content-zoom, 1));
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--fs-11);
     color: var(--text-secondary);
     font-weight: 500;
   }
@@ -413,8 +413,8 @@
   .lang-badge::before {
     content: "";
     display: inline-block;
-    width: 6px;
-    height: 6px;
+    width: calc(6px * var(--content-zoom, 1));
+    height: calc(6px * var(--content-zoom, 1));
     border-radius: 50%;
     background: var(--lang-color, var(--accent));
   }
@@ -422,22 +422,22 @@
   .codeblock-actions {
     display: inline-flex;
     align-items: center;
-    gap: 2px;
+    gap: calc(2px * var(--content-zoom, 1));
     margin-left: auto;
-    margin-right: 4px;
+    margin-right: calc(4px * var(--content-zoom, 1));
   }
 
   .codeblock-action-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 2px;
+    padding: calc(2px * var(--content-zoom, 1));
     background: transparent;
     border: none;
     color: var(--text-muted);
     cursor: pointer;
-    border-radius: 4px;
-    font-size: 16px;
+    border-radius: calc(4px * var(--content-zoom, 1));
+    font-size: var(--fs-16);
     transition: color 0.15s ease, background 0.15s ease;
   }
 
@@ -473,7 +473,7 @@
     transform: translateY(-50%);
     display: inline-flex;
     align-items: center;
-    gap: 2px;
+    gap: calc(2px * var(--content-zoom, 1));
   }
 
   /* Ensure content lines have relative positioning for inline actions */
@@ -502,10 +502,10 @@
     left: 0;
     background: var(--bg-window);
     border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    padding: 12px;
-    min-width: 280px;
-    max-width: 400px;
+    border-radius: calc(8px * var(--content-zoom, 1));
+    padding: calc(12px * var(--content-zoom, 1));
+    min-width: calc(280px * var(--content-zoom, 1));
+    max-width: calc(400px * var(--content-zoom, 1));
     box-shadow:
       0 4px 12px rgba(0, 0, 0, 0.08),
       0 1px 3px rgba(0, 0, 0, 0.06);
@@ -526,15 +526,15 @@
 
   .mermaid-error-popover .error-text {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--fs-11);
     color: var(--text-secondary);
     background: var(--bg-panel);
-    border-radius: 4px;
-    padding: 8px;
-    margin: 0 0 8px 0;
+    border-radius: calc(4px * var(--content-zoom, 1));
+    padding: calc(8px * var(--content-zoom, 1));
+    margin: 0 0 calc(8px * var(--content-zoom, 1)) 0;
     white-space: pre-wrap;
     word-break: break-word;
-    max-height: 150px;
+    max-height: calc(150px * var(--content-zoom, 1));
     overflow-y: auto;
   }
 
@@ -543,14 +543,14 @@
     align-items: center;
     justify-content: center;
     width: 100%;
-    padding: 8px 12px;
+    padding: calc(8px * var(--content-zoom, 1)) calc(12px * var(--content-zoom, 1));
     background: var(--warning, #f97316);
     border: none;
-    border-radius: 6px;
+    border-radius: calc(6px * var(--content-zoom, 1));
     color: white;
     cursor: pointer;
     font-family: var(--font-ui);
-    font-size: 12px;
+    font-size: var(--fs-12);
     font-weight: 500;
     transition: opacity 0.15s ease;
   }
@@ -579,6 +579,6 @@
   /* Override annotation editor margin when inside code block */
   .annotation-row :global(.annotation-editor) {
     flex: 1;
-    margin-left: 8px;
+    margin-left: calc(8px * var(--content-zoom, 1));
   }
 </style>

@@ -391,7 +391,7 @@
 <style>
   /* Mermaid button - extends .line-action */
   .mermaid-view-btn {
-    padding: 2px 4px;
+    padding: calc(2px * var(--content-zoom, 1)) calc(4px * var(--content-zoom, 1));
     background: var(--bg-window);
     border: 1px solid var(--border-subtle);
     color: var(--text-secondary);
@@ -408,8 +408,13 @@
     border-color: var(--focus-ring);
   }
 
+  /* Overrides the inline width/height="14" attrs on the SVG (CSS beats
+     presentational HTML attributes) so the icon tracks --content-zoom like
+     everything else here. */
   .mermaid-view-btn svg {
     display: block;
+    width: calc(14px * var(--content-zoom, 1));
+    height: calc(14px * var(--content-zoom, 1));
   }
 
   :global(.line:hover .copy-section-btn) {

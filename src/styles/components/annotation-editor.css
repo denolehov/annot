@@ -4,20 +4,20 @@
 
 /* Popover container matching hl-editor appearance */
 .annotation-editor {
-	--annotation-padding-x: 14px;
+	--annotation-padding-x: calc(14px * var(--content-zoom, 1));
 	display: block;
 	position: relative;
 	background: var(--bg-portal);
 	border: 1px solid var(--border-strong);
-	border-radius: 8px;
+	border-radius: calc(8px * var(--content-zoom, 1));
 	box-shadow:
 		0 1px 2px rgba(0, 0, 0, 0.04),
 		0 2px 4px rgba(0, 0, 0, 0.02);
 	z-index: 2;
-	max-width: 600px;
-	margin: 8px 8px 8px 60px;
-	padding: 10px var(--annotation-padding-x);
-	min-height: 44px;
+	max-width: calc(600px * var(--content-zoom, 1));
+	margin: calc(8px * var(--content-zoom, 1)) calc(8px * var(--content-zoom, 1)) calc(8px * var(--content-zoom, 1)) calc(60px * var(--content-zoom, 1));
+	padding: calc(10px * var(--content-zoom, 1)) var(--annotation-padding-x);
+	min-height: calc(44px * var(--content-zoom, 1));
 	font-family: var(--font-ui);
 }
 
@@ -38,10 +38,10 @@
 .annotation-editor::after {
 	content: '';
 	position: absolute;
-	left: 24px;
-	top: -6px;
-	width: 10px;
-	height: 10px;
+	left: calc(24px * var(--content-zoom, 1));
+	top: calc(-6px * var(--content-zoom, 1));
+	width: calc(10px * var(--content-zoom, 1));
+	height: calc(10px * var(--content-zoom, 1));
 	background: var(--bg-portal);
 	border-left: 1px solid var(--border-strong);
 	border-top: 1px solid var(--border-strong);
@@ -98,7 +98,7 @@
 .editor-content .tiptap {
 	outline: none;
 	font-family: var(--font-ui);
-	font-size: 14px;
+	font-size: var(--fs-14);
 	line-height: var(--editor-line-height);
 	color: var(--text-primary);
 }
@@ -120,7 +120,7 @@
 .editor-content .tiptap ul,
 .editor-content .tiptap ol {
 	margin: 0;
-	padding-left: 20px;
+	padding-left: calc(20px * var(--content-zoom, 1));
 }
 
 .editor-content .tiptap li {
@@ -138,8 +138,8 @@
 		var(--bg-code-block);
 	background-size: var(--codeblock-pattern-size), auto;
 	border: 1px solid var(--border-code);
-	padding: 1px 5px;
-	border-radius: 4px;
+	padding: calc(1px * var(--content-zoom, 1)) calc(5px * var(--content-zoom, 1));
+	border-radius: calc(4px * var(--content-zoom, 1));
 	font-family: var(--font-mono);
 }
 
@@ -148,9 +148,9 @@
    =========================================== */
 .toolbar {
 	display: flex;
-	gap: 12px;
-	margin-top: 10px;
-	padding-top: 10px;
+	gap: calc(12px * var(--content-zoom, 1));
+	margin-top: calc(10px * var(--content-zoom, 1));
+	padding-top: calc(10px * var(--content-zoom, 1));
 	border-top: 1px solid var(--border-subtle);
 }
 
@@ -161,26 +161,26 @@
 	position: fixed;
 	background: var(--bg-window);
 	border: 1px solid var(--border-strong);
-	border-radius: 6px;
+	border-radius: calc(6px * var(--content-zoom, 1));
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 	z-index: 100;
-	min-width: 160px;
-	max-width: 300px;
-	max-height: 280px;
+	min-width: calc(160px * var(--content-zoom, 1));
+	max-width: calc(300px * var(--content-zoom, 1));
+	max-height: calc(280px * var(--content-zoom, 1));
 	overflow-y: auto;
-	scroll-padding-block: 40px;
-	padding: 4px;
+	scroll-padding-block: calc(40px * var(--content-zoom, 1));
+	padding: calc(4px * var(--content-zoom, 1));
 	font-family: var(--font-ui);
 }
 
 .tag-suggestion {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: calc(8px * var(--content-zoom, 1));
 	width: 100%;
-	padding: 6px 8px;
+	padding: calc(6px * var(--content-zoom, 1)) calc(8px * var(--content-zoom, 1));
 	border: none;
-	border-radius: 4px;
+	border-radius: calc(4px * var(--content-zoom, 1));
 	background: none;
 	cursor: pointer;
 	text-align: left;
@@ -193,13 +193,13 @@
 
 .tag-name {
 	font-family: var(--font-ui);
-	font-size: 13px;
+	font-size: var(--fs-13);
 	font-weight: 500;
 	color: var(--text-primary);
 }
 
 .tag-instruction {
-	font-size: 11px;
+	font-size: var(--fs-11);
 	color: var(--text-muted);
 	white-space: nowrap;
 	overflow: hidden;
@@ -215,26 +215,26 @@
 	position: fixed;
 	background: var(--bg-window);
 	border: 1px solid var(--border-strong);
-	border-radius: 6px;
+	border-radius: calc(6px * var(--content-zoom, 1));
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 	z-index: 100;
-	min-width: 200px;
-	max-width: 300px;
-	max-height: 280px;
+	min-width: calc(200px * var(--content-zoom, 1));
+	max-width: calc(300px * var(--content-zoom, 1));
+	max-height: calc(280px * var(--content-zoom, 1));
 	overflow-y: auto;
-	scroll-padding-block: 40px;
-	padding: 4px;
+	scroll-padding-block: calc(40px * var(--content-zoom, 1));
+	padding: calc(4px * var(--content-zoom, 1));
 	font-family: var(--font-ui);
 }
 
 .slash-suggestion {
 	display: flex;
 	align-items: center;
-	gap: 10px;
+	gap: calc(10px * var(--content-zoom, 1));
 	width: 100%;
-	padding: 8px 10px;
+	padding: calc(8px * var(--content-zoom, 1)) calc(10px * var(--content-zoom, 1));
 	border: none;
-	border-radius: 4px;
+	border-radius: calc(4px * var(--content-zoom, 1));
 	background: none;
 	cursor: pointer;
 	text-align: left;
@@ -246,7 +246,7 @@
 }
 
 .slash-icon {
-	font-size: 16px;
+	font-size: var(--fs-16);
 	flex-shrink: 0;
 	color: var(--text-secondary);
 }
@@ -254,18 +254,18 @@
 .slash-info {
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
+	gap: calc(2px * var(--content-zoom, 1));
 	min-width: 0;
 }
 
 .slash-name {
-	font-size: 13px;
+	font-size: var(--fs-13);
 	font-weight: 500;
 	color: var(--text-primary);
 }
 
 .slash-description {
-	font-size: 11px;
+	font-size: var(--fs-11);
 	color: var(--text-muted);
 }
 
@@ -276,26 +276,26 @@
 	position: fixed;
 	background: var(--bg-window);
 	border: 1px solid var(--border-strong);
-	border-radius: 6px;
+	border-radius: calc(6px * var(--content-zoom, 1));
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 	z-index: 100;
-	min-width: 300px;
-	max-width: 420px;
-	max-height: 320px;
+	min-width: calc(300px * var(--content-zoom, 1));
+	max-width: calc(420px * var(--content-zoom, 1));
+	max-height: calc(320px * var(--content-zoom, 1));
 	overflow-y: auto;
-	scroll-padding-block: 40px;
-	padding: 4px;
+	scroll-padding-block: calc(40px * var(--content-zoom, 1));
+	padding: calc(4px * var(--content-zoom, 1));
 	font-family: var(--font-ui);
 }
 
 .ref-suggestion {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: calc(8px * var(--content-zoom, 1));
 	width: 100%;
-	padding: 6px 10px;
+	padding: calc(6px * var(--content-zoom, 1)) calc(10px * var(--content-zoom, 1));
 	border: none;
-	border-radius: 4px;
+	border-radius: calc(4px * var(--content-zoom, 1));
 	background: none;
 	cursor: pointer;
 	text-align: left;
@@ -307,22 +307,22 @@
 }
 
 .ref-suggestion svg {
-	width: 16px;
-	height: 16px;
+	width: calc(16px * var(--content-zoom, 1));
+	height: calc(16px * var(--content-zoom, 1));
 	flex-shrink: 0;
 	color: var(--text-secondary);
 }
 
 .ref-suggestion .ref-primary {
 	font-family: var(--font-mono);
-	font-size: 12px;
+	font-size: var(--fs-12);
 	font-weight: 500;
 	color: var(--text-primary);
 	flex-shrink: 0;
 }
 
 .ref-suggestion .ref-secondary {
-	font-size: 12px;
+	font-size: var(--fs-12);
 	color: var(--text-muted);
 	white-space: nowrap;
 }
@@ -334,20 +334,20 @@
 	position: fixed;
 	background: var(--bg-window);
 	border: 1px solid var(--border-strong);
-	border-radius: 6px;
+	border-radius: calc(6px * var(--content-zoom, 1));
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 	z-index: 100;
-	padding: 4px;
+	padding: calc(4px * var(--content-zoom, 1));
 	font-family: var(--font-ui);
 }
 
 .create-tag-btn {
 	display: flex;
 	align-items: center;
-	gap: 6px;
-	padding: 6px 10px;
+	gap: calc(6px * var(--content-zoom, 1));
+	padding: calc(6px * var(--content-zoom, 1)) calc(10px * var(--content-zoom, 1));
 	border: none;
-	border-radius: 4px;
+	border-radius: calc(4px * var(--content-zoom, 1));
 	background: none;
 	cursor: pointer;
 	text-align: left;
@@ -359,14 +359,14 @@
 }
 
 .create-tag-icon {
-	font-size: 13px;
+	font-size: var(--fs-13);
 	font-weight: 600;
 	color: var(--tag-text);
 	opacity: 0.8;
 }
 
 .create-tag-label {
-	font-size: 13px;
+	font-size: var(--fs-13);
 	font-weight: 500;
 	color: var(--text-primary);
 }

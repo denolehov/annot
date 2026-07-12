@@ -230,24 +230,37 @@
 	   Not theme-dependent
 	   =========================================== */
 
-	/* Gutter */
-	--gutter-width: 50px;
+	/* Gutter — scales with --content-zoom (see code-viewer.css) */
+	--gutter-width: calc(50px * var(--content-zoom, 1));
 
 	/* Fonts */
 	--font-mono: "JetBrains Mono", monospace;
 	--font-ui: "Inter", sans-serif;
 
 	/* Editor Typography */
-	--editor-line-height: 22px;
+	--editor-line-height: calc(22px * var(--content-zoom, 1));
 
-	/* Chip/Tag Sizing */
-	--chip-height: 20px;
-	--chip-radius: 4px;
-	--chip-font: 10px;
-	--chip-padding: 0 6px;
-	--chip-padding-tight: 0 2px;
-	--chip-gap: 3px;
-	--chip-divider-height: 10px;
+	/* Scaled font sizes — anything in the content plane must use one of
+	   these (or an explicit calc(Npx * var(--content-zoom, 1))). Bare px
+	   font-size is reserved for fixed chrome (titlebar, SaveModal, toasts)
+	   and must carry an `unscaled` comment on the same line — enforced by
+	   font-scaling.test.ts. */
+	--fs-9: calc(9px * var(--content-zoom, 1));
+	--fs-10: calc(10px * var(--content-zoom, 1));
+	--fs-11: calc(11px * var(--content-zoom, 1));
+	--fs-12: calc(12px * var(--content-zoom, 1));
+	--fs-13: calc(13px * var(--content-zoom, 1));
+	--fs-14: calc(14px * var(--content-zoom, 1));
+	--fs-16: calc(16px * var(--content-zoom, 1));
+
+	/* Chip/Tag Sizing — scales with --content-zoom (chips.css/nodeviews are the only consumers) */
+	--chip-height: calc(20px * var(--content-zoom, 1));
+	--chip-radius: calc(4px * var(--content-zoom, 1));
+	--chip-font: calc(10px * var(--content-zoom, 1));
+	--chip-padding: 0 calc(6px * var(--content-zoom, 1));
+	--chip-padding-tight: 0 calc(2px * var(--content-zoom, 1));
+	--chip-gap: calc(3px * var(--content-zoom, 1));
+	--chip-divider-height: calc(10px * var(--content-zoom, 1));
 
 	/* Border Radii */
 	--radius-sm: 4px;

@@ -52,7 +52,7 @@ header.header {
 
 .zoom-indicator {
 	font-family: var(--font-mono);
-	font-size: 11px;
+	font-size: 11px; /* unscaled: chrome */
 	color: var(--fg-muted);
 	padding: 0 4px;
 }
@@ -67,7 +67,7 @@ header.header {
 
 /* Session slot for global comment editor */
 .session-slot {
-	padding: 0 12px 12px 12px;
+	padding: 0 calc(12px * var(--content-zoom, 1)) calc(12px * var(--content-zoom, 1)) calc(12px * var(--content-zoom, 1));
 	background: color-mix(in srgb, var(--bg-panel) 85%, transparent);
 	backdrop-filter: blur(20px) saturate(180%);
 	-webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -75,7 +75,7 @@ header.header {
 
 /* Override annotation-editor styles when in session slot */
 .session-slot .annotation-editor {
-	margin: 8px 8px 0 8px;
+	margin: calc(8px * var(--content-zoom, 1)) calc(8px * var(--content-zoom, 1)) 0 calc(8px * var(--content-zoom, 1));
 	max-width: none;
 }
 
@@ -88,7 +88,7 @@ header.header {
 .file-name {
 	color: var(--text-primary);
 	font-weight: 600;
-	font-size: 13px;
+	font-size: 13px; /* unscaled: chrome */
 	letter-spacing: -0.01em;
 	cursor: pointer;
 	-webkit-app-region: no-drag;
@@ -122,10 +122,14 @@ header.header {
 	overflow-anchor: none;
 }
 
-/* Inner wrapper for zoom scaling - uses CSS zoom for crisp rendering */
-.content-inner {
-	transform-origin: top left;
-}
+/* .content-inner needs no styling of its own: content scale comes from
+   --content-zoom, set on document.documentElement (+page.svelte) and
+   consumed directly by font-size/dimension calc()s below. (Previously this
+   element carried `zoom: contentZoom`; at fractional zoom, syntect's
+   one-<span>-per-token markup made WebKit round each span's glyph advances
+   independently, so adjacent tokens drifted into each other on dense lines.
+   Scaling the underlying lengths instead means each line is shaped once, at
+   its real size, like unzoomed text.) */
 
 /* While the window is GROWING, suspend rendering of the content tree. On a
    10k-line file the reflow can't fill the newly-exposed area fast enough so
@@ -138,11 +142,15 @@ header.header {
    We hide the inner (whose frozen width can't fill a grown window) but keep the
    outer scroller `.content` at full flex size with a solid themed background,
    so growing shows themed empty space — not a stale scrollbar or torn content
-   — and the real content snaps back in on release. */
-.content.resizing {
+   — and the real content snaps back in on release.
+
+   Like the per-line skipping below, this is gated on `.virtualized` (set by
+   +page.svelte above ~2000 rows): small documents reflow fast enough to stay
+   live through a resize. */
+.content.virtualized.resizing {
 	background: var(--bg-main);
 }
-.content.resizing .content-inner {
+.content.virtualized.resizing .content-inner {
 	content-visibility: hidden;
 }
 
@@ -152,17 +160,33 @@ div.line {
 	display: flex;
 	white-space: pre-wrap;
 	tab-size: 4;
-	/* Skip layout/paint for off-screen lines. On large files (10k+ lines) a
-	   window resize otherwise re-wraps every line every frame, so content
-	   visibly trails the resize. content-visibility lets the engine skip
-	   off-screen rows; contain-intrinsic-size keeps their reserved height
-	   stable so the scrollbar doesn't jump. (Continuous resize is handled
-	   separately by the `.resizing` freeze above.) */
+}
+
+/* Skip layout/paint for off-screen lines — big documents only (`.virtualized`,
+   set by +page.svelte above ~2000 rows). On large files (10k+ lines) a window
+   resize otherwise re-wraps every line every frame, so content visibly trails
+   the resize; contain-intrinsic-size keeps skipped rows' reserved height
+   stable so the scrollbar doesn't jump. (Continuous resize is handled
+   separately by the `.resizing` freeze above.)
+
+   The cost — and why small documents opt out: WebKit lays skipped lines out
+   only as they near the viewport, so scrolling visibly "renders in", and
+   skipped layout has invalidation edge cases (see zoom-relayout below). */
+.content.virtualized div.line {
 	content-visibility: auto;
-	/* Match the real single-row line-height (.code/.gutter = 22px) so the
-	   reserved height for never-yet-rendered off-screen lines is accurate;
-	   `auto` then remembers each line's true (possibly wrapped) height. */
-	contain-intrinsic-size: auto 22px;
+	/* Match the real single-row line-height (.code/.gutter) so the reserved
+	   height for never-yet-rendered off-screen lines is accurate; `auto`
+	   then remembers each line's true (possibly wrapped) height. */
+	contain-intrinsic-size: auto calc(22px * var(--content-zoom, 1));
+}
+
+/* Zoom changes must invalidate skipped lines' cached layout: WebKit keeps
+   their old-zoom token positions and reuses them when the line scrolls into
+   view (glyphs at the new size inside boxes at the old widths). +page.svelte
+   toggles this class around one forced reflow on every zoom change.
+   (Must come after the .virtualized rule above — equal specificity.) */
+:root.zoom-relayout div.line {
+	content-visibility: visible;
 }
 
 /* Hover highlight — CSS-driven so mouse-move never re-renders 10k lines.
@@ -230,8 +254,8 @@ div.line.annotated .gutter {
 .line-actions {
 	display: inline-flex;
 	align-items: center;
-	gap: 2px;
-	margin-left: 8px;
+	gap: calc(2px * var(--content-zoom, 1));
+	margin-left: calc(8px * var(--content-zoom, 1));
 }
 
 /* Shared base styles for all line action buttons */
@@ -239,10 +263,10 @@ div.line.annotated .gutter {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	padding: 2px;
+	padding: calc(2px * var(--content-zoom, 1));
 	background: transparent;
 	border: none;
-	border-radius: 4px;
+	border-radius: calc(4px * var(--content-zoom, 1));
 	cursor: pointer;
 	transition: color 0.15s ease, background 0.15s ease;
 }
@@ -265,15 +289,15 @@ div.line.annotated .gutter {
 .add-btn {
 	position: absolute;
 	top: 50%;
-	left: calc(var(--gutter-width) - 9px);
+	left: calc(var(--gutter-width) - 9px * var(--content-zoom, 1));
 	transform: translateY(-50%);
-	width: 18px;
-	height: 18px;
+	width: calc(18px * var(--content-zoom, 1));
+	height: calc(18px * var(--content-zoom, 1));
 	background: var(--selection-border);
 	color: white;
 	border: none;
-	border-radius: 4px;
-	font-size: 16px;
+	border-radius: calc(4px * var(--content-zoom, 1));
+	font-size: var(--fs-16);
 	font-weight: 400;
 	cursor: pointer;
 	display: none;
@@ -301,15 +325,15 @@ div.line.annotated .gutter {
 .gutter {
 	width: var(--gutter-width);
 	flex-shrink: 0;
-	padding-right: 12px;
+	padding-right: calc(12px * var(--content-zoom, 1));
 	text-align: right;
 	color: var(--text-muted);
 	-webkit-user-select: none;
 	user-select: none;
 	cursor: pointer;
 	font-family: var(--font-mono);
-	font-size: 12px;
-	line-height: 22px;
+	font-size: var(--fs-12);
+	line-height: 1.8333;
 	font-variant-numeric: tabular-nums;
 	/* Prevent gutter from being included in text selection */
 	pointer-events: auto;
@@ -325,12 +349,12 @@ div.line.annotated .gutter {
 /* Code content */
 .code {
 	flex: 1;
-	padding-left: 8px;
+	padding-left: calc(8px * var(--content-zoom, 1));
 	-webkit-user-select: text;
 	user-select: text;
 	font-family: var(--font-mono);
-	font-size: 12px;
-	line-height: 22px;
+	font-size: var(--fs-12);
+	line-height: 1.8333;
 }
 
 /* Disable native text selection during line selection drag to prevent scroll jumps */
@@ -356,7 +380,7 @@ div.line.annotated .gutter {
 
 /* Wider gutter for diff mode */
 .content.diff-mode .gutter {
-	width: 90px;
+	width: calc(90px * var(--content-zoom, 1));
 	display: flex;
 	justify-content: flex-end;
 	gap: 0;
@@ -364,12 +388,12 @@ div.line.annotated .gutter {
 
 /* Adjust add button position for diff mode */
 .content.diff-mode .add-btn {
-	left: 81px;
+	left: calc(81px * var(--content-zoom, 1));
 }
 
 /* Adjust annotation editor position for diff mode's wider gutter */
 .content.diff-mode .annotation-editor {
-	margin-left: 100px;
+	margin-left: calc(100px * var(--content-zoom, 1));
 }
 
 /* Diff gutter shows old | new line numbers */
@@ -385,7 +409,7 @@ div.line.annotated .gutter {
 }
 
 .diff-gutter-new {
-	margin-left: 8px;
+	margin-left: calc(8px * var(--content-zoom, 1));
 	color: var(--text-muted);
 }
 
@@ -559,11 +583,11 @@ div.line.diff-deleted.diff-run-end.annotated {
 
 /* One line-number column per cell (the unified diff gutter fits two) */
 .content.diff-mode .split-cell .gutter {
-	width: 52px;
+	width: calc(52px * var(--content-zoom, 1));
 }
 
 .content.diff-mode .split-cell .add-btn {
-	left: 43px;
+	left: calc(43px * var(--content-zoom, 1));
 }
 
 .split-gutter {
@@ -592,7 +616,7 @@ div.line.diff-deleted.diff-run-end.annotated {
    .content.diff-mode) wastes too much of the cell — align with the split
    cell's own gutter instead. */
 .content.diff-mode .split-slot-cell .annotation-editor {
-	margin-left: 60px;
+	margin-left: calc(60px * var(--content-zoom, 1));
 }
 
 /* Filler cell: the shorter side of an uneven change run. Dithered like code
@@ -627,7 +651,7 @@ div.line.diff-filler {
 	align-items: center;
 	gap: 0.5rem;
 	font-family: var(--font-mono);
-	font-size: 12px;
+	font-size: 12px; /* unscaled: chrome */
 	-webkit-app-region: no-drag;
 }
 
@@ -682,7 +706,7 @@ div.line.diff-filler {
 	align-items: center;
 	gap: 0.5rem;
 	font-family: var(--font-mono);
-	font-size: 12px;
+	font-size: 12px; /* unscaled: chrome */
 	-webkit-app-region: no-drag;
 	flex: 1;
 	min-width: 0;
@@ -815,8 +839,8 @@ div.line.separator-line:hover {
 		var(--bg-code-block);
 	background-size: var(--codeblock-pattern-size), auto;
 	border: 1px solid var(--border-code);
-	padding: 1px 5px;
-	border-radius: 4px;
+	padding: calc(1px * var(--content-zoom, 1)) calc(5px * var(--content-zoom, 1));
+	border-radius: calc(4px * var(--content-zoom, 1));
 	font-family: var(--font-mono);
 }
 
@@ -826,8 +850,8 @@ div.line.separator-line:hover {
 	font-size: 0.9em;
 	color: var(--text-muted);
 	background: color-mix(in srgb, var(--border-portal) 15%, transparent);
-	padding: 1px 4px;
-	border-radius: 3px;
+	padding: calc(1px * var(--content-zoom, 1)) calc(4px * var(--content-zoom, 1));
+	border-radius: calc(3px * var(--content-zoom, 1));
 }
 
 .portal-ref::before {

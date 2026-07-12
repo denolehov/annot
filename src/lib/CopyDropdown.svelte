@@ -106,7 +106,7 @@
 		color: var(--text-secondary);
 		cursor: pointer;
 		font-family: var(--font-ui);
-		font-size: 18px;
+		font-size: 18px; /* unscaled: chrome */
 		font-weight: 500;
 		transition: all 150ms ease;
 		line-height: 1;
@@ -163,7 +163,7 @@
 		color: var(--text-secondary);
 		cursor: pointer;
 		font-family: var(--font-ui);
-		font-size: 12px;
+		font-size: 12px; /* unscaled: chrome */
 		font-weight: 500;
 		text-align: left;
 	}

@@ -2,9 +2,7 @@ import { defineConfig, createLogger } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { svelteTesting } from "@testing-library/svelte/vite";
 
-// @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
-// @ts-expect-error process is a nodejs global
 const isMacos = process.platform === 'darwin';
 
 // Custom logger to filter out Svelte 5 @__PURE__ annotation warnings

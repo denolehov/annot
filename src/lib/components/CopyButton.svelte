@@ -52,13 +52,13 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 2px;
+    padding: calc(2px * var(--content-zoom, 1));
     background: transparent;
     border: none;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--content-zoom, 1));
     color: var(--text-muted);
     cursor: pointer;
-    font-size: 16px;
+    font-size: var(--fs-16);
     transition: color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
   }
 

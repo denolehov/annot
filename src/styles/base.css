@@ -21,9 +21,9 @@ body {
 code {
 	font-family: var(--font-mono);
 	background: var(--bg-panel);
-	padding: 1px 5px;
-	border-radius: 3px;
-	font-size: 12px;
+	padding: calc(1px * var(--content-zoom, 1)) calc(5px * var(--content-zoom, 1));
+	border-radius: calc(3px * var(--content-zoom, 1));
+	font-size: var(--fs-12);
 }
 
 /* ===========================================

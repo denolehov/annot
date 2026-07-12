@@ -31,15 +31,15 @@
 	display: flex;
 	align-items: center;
 	width: 100%;
-	height: 32px;
-	gap: 6px;
-	padding: 0 8px;
+	height: calc(32px * var(--content-zoom, 1));
+	gap: calc(6px * var(--content-zoom, 1));
+	padding: 0 calc(8px * var(--content-zoom, 1));
 	background: var(--bg-hover);
 	border: none;
 	border-bottom: 1px solid var(--border-subtle);
 	border-radius: 0;
 	font-family: var(--font-mono);
-	font-size: 12px;
+	font-size: var(--fs-12);
 	color: var(--text-primary);
 	cursor: pointer;
 	text-align: left;
@@ -72,8 +72,8 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 20px;
-	height: 20px;
+	width: calc(20px * var(--content-zoom, 1));
+	height: calc(20px * var(--content-zoom, 1));
 	flex-shrink: 0;
 	color: var(--text-secondary);
 	transition: transform var(--transition-fast);
@@ -84,8 +84,8 @@
 }
 
 .file-header-chevron svg {
-	width: 14px;
-	height: 14px;
+	width: calc(14px * var(--content-zoom, 1));
+	height: calc(14px * var(--content-zoom, 1));
 }
 
 .file-header-path {
@@ -110,7 +110,7 @@
 	align-items: center;
 	gap: 8px;
 	font-family: var(--font-ui);
-	font-size: 12px;
+	font-size: 12px; /* unscaled: chrome */
 	color: var(--text-secondary);
 	white-space: nowrap;
 }

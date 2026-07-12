@@ -10,6 +10,11 @@
 	min-height: 0;
 }
 
+/* .file-tree-inner needs no styling of its own: content scale comes from
+   --content-zoom, set on document.documentElement (+page.svelte) and
+   consumed directly by font-size/dimension calc()s below. (Previously this
+   element carried `zoom: contentZoom` via a prop on FileTree.svelte.) */
+
 .file-tree {
 	height: 100%;
 	display: flex;
@@ -18,7 +23,7 @@
 	overflow-y: auto;
 	background: var(--bg-panel);
 	font-family: var(--font-ui);
-	font-size: 12px;
+	font-size: var(--fs-12);
 }
 
 /* Draggable border between the file tree and content panes. */
@@ -54,15 +59,15 @@
 .file-tree-list {
 	list-style: none;
 	margin: 0;
-	padding: 4px 0;
+	padding: calc(4px * var(--content-zoom, 1)) 0;
 }
 
 .tree-row {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: calc(4px * var(--content-zoom, 1));
 	width: 100%;
-	padding: 4px 12px;
+	padding: calc(4px * var(--content-zoom, 1)) calc(12px * var(--content-zoom, 1));
 	background: transparent;
 	border: none;
 	border-left: 2px solid transparent;
@@ -93,15 +98,18 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 16px;
-	height: 16px;
+	width: calc(16px * var(--content-zoom, 1));
+	height: calc(16px * var(--content-zoom, 1));
 	flex-shrink: 0;
 	color: var(--text-muted);
 }
 
+/* Overrides .cp-icon's `width/height: 1em` (higher specificity: one class +
+   one element vs. one class) so these need an explicit calc() — they don't
+   auto-scale off font-size like a plain .cp-icon consumer would. */
 .tree-row-icon svg {
-	width: 14px;
-	height: 14px;
+	width: calc(14px * var(--content-zoom, 1));
+	height: calc(14px * var(--content-zoom, 1));
 }
 
 .tree-row-icon.status-added {
@@ -141,10 +149,10 @@
 
 .file-tree-counts {
 	display: flex;
-	gap: 6px;
+	gap: calc(6px * var(--content-zoom, 1));
 	flex-shrink: 0;
 	font-family: var(--font-mono);
-	font-size: 11px;
+	font-size: var(--fs-11);
 }
 
 .file-tree-counts .added {

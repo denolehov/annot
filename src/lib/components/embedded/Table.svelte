@@ -324,8 +324,8 @@
     border-collapse: separate;
     border-spacing: 0;
     font-family: var(--font-mono);
-    font-size: 12px;
-    line-height: 22px;
+    font-size: var(--fs-12);
+    line-height: 1.8333;
     background:
       var(--chip-pattern-bg),
       var(--bg-code-block);
@@ -333,7 +333,7 @@
   }
 
   .content-row {
-    height: 22px;
+    height: calc(22px * var(--content-zoom, 1));
   }
 
   /* Preview highlight (hover state - lighter than selection) */
@@ -369,15 +369,15 @@
     align-items: center;
     justify-content: flex-end;
     width: 100%;
-    height: 22px;
+    height: calc(22px * var(--content-zoom, 1));
     border-right: none;
     background: inherit;
   }
 
   /* Content cells */
   .table-cell {
-    height: 22px;
-    padding: 0 12px;
+    height: calc(22px * var(--content-zoom, 1));
+    padding: 0 calc(12px * var(--content-zoom, 1));
     white-space: pre;
     vertical-align: middle;
   }
@@ -429,22 +429,22 @@
   }
 
   .annotation-cell :global(.annotation-editor) {
-    margin-left: 8px;
+    margin-left: calc(8px * var(--content-zoom, 1));
   }
 
   /* Add button */
   .add-btn {
     position: absolute;
     top: 50%;
-    right: -9px;
+    right: calc(-9px * var(--content-zoom, 1));
     transform: translateY(-50%);
-    width: 18px;
-    height: 18px;
+    width: calc(18px * var(--content-zoom, 1));
+    height: calc(18px * var(--content-zoom, 1));
     background: var(--selection-border);
     color: white;
     border: none;
-    border-radius: 4px;
-    font-size: 16px;
+    border-radius: calc(4px * var(--content-zoom, 1));
+    font-size: var(--fs-16);
     font-weight: 400;
     cursor: pointer;
     display: none;
@@ -474,17 +474,17 @@
     position: absolute;
     top: 0;
     right: 4px;
-    height: 22px;
+    height: calc(22px * var(--content-zoom, 1));
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 2px;
+    padding: calc(2px * var(--content-zoom, 1));
     background: transparent;
     border: none;
     color: var(--text-muted);
     cursor: pointer;
-    border-radius: 4px;
-    font-size: 16px;
+    border-radius: calc(4px * var(--content-zoom, 1));
+    font-size: var(--fs-16);
     z-index: 10;
     transition: color 0.15s ease, background 0.15s ease;
   }

@@ -90,7 +90,7 @@
     </div>
 
     <button
-      class="close-btn"
+      class="search-close-btn"
       onclick={() => search.close()}
       title="Close (Escape)"
       aria-label="Close search"

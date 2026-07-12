@@ -17,18 +17,18 @@
 	.heading-ref-chip {
 		display: inline-flex;
 		align-items: baseline;
-		gap: 4px;
+		gap: calc(4px * var(--content-zoom, 1));
 	}
 
 	.heading-level {
-		font-size: 10px;
+		font-size: var(--fs-10);
 		font-weight: 600;
 		opacity: 0.7;
 		text-transform: uppercase;
 	}
 
 	.heading-title {
-		font-size: 12px;
+		font-size: var(--fs-12);
 		font-weight: 500;
 	}
 </style>

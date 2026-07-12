@@ -29,16 +29,18 @@
     onJump: (displayIndex: number) => void;
     isDirExpanded: (path: string) => boolean;
     toggleDir: (path: string) => void;
-    zoom: number;
   }
 
-  let { docs, currentIndex, onJump, isDirExpanded, toggleDir, zoom }: Props = $props();
+  let { docs, currentIndex, onJump, isDirExpanded, toggleDir }: Props = $props();
 
   // Matches .tree-row-icon width (16px) + .tree-row gap (4px) — each depth's
-  // icon lands directly under the previous depth's label start.
+  // icon lands directly under the previous depth's label start. Scaled by
+  // --content-zoom (set on document.documentElement, +page.svelte) like the
+  // rest of the tree's dimensions.
   const INDENT_BASE = 4;
   const INDENT_STEP = 20;
-  const indent = (depth: number) => `padding-left: ${INDENT_BASE + depth * INDENT_STEP}px`;
+  const indent = (depth: number) =>
+    `padding-left: calc(${INDENT_BASE + depth * INDENT_STEP}px * var(--content-zoom, 1))`;
 
   let rows = $derived(flattenFileTree(buildFileTree(docs), isDirExpanded));
 
@@ -55,7 +57,7 @@
 </script>
 
 <aside class="file-tree" aria-label="Changed files">
-  <div class="file-tree-inner" style:zoom={zoom}>
+  <div class="file-tree-inner">
     <ul class="file-tree-list">
       {#each rows as row (row.kind === 'dir' ? `dir:${row.path}` : `file:${row.dv.index}`)}
         <li>

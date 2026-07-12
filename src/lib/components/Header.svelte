@@ -134,7 +134,7 @@
   <div class="header-right">
     {#if docs.length > 0}
       <span class="diff-header-summary" data-tauri-drag-region="false">
-        <span class="file-tree-counts">
+        <span class="diff-summary-counts">
           <span class="added">+{totals.added}</span>
           <span class="deleted">−{totals.deleted}</span>
         </span>
@@ -184,8 +184,28 @@
     margin-right: 6px;
   }
 
+  /* Own class, deliberately not shared with file-tree.css's .file-tree-counts
+     (per-file counts in the sidebar, which do scale with --content-zoom) —
+     this is titlebar chrome, fixed size like the rest of the titlebar
+     (.file-name, .zoom-indicator, .diff-header-info). */
+  .diff-summary-counts {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 11px; /* unscaled: chrome */
+  }
+
+  .diff-summary-counts .added {
+    color: rgb(34, 197, 94);
+  }
+
+  .diff-summary-counts .deleted {
+    color: rgb(239, 68, 68);
+  }
+
   .close-btn {
-    font-size: 16px;
+    font-size: 16px; /* unscaled: chrome */
     line-height: 1;
   }
 

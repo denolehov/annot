@@ -83,6 +83,15 @@
   // The DisplayRow spine: single source of display truth for diff mode.
   let diffDisplay = $derived(diffDocs ? deriveDisplay(diffDocs) : null);
 
+  // content-visibility: auto only pays for itself on big documents (its win
+  // is skipping re-wrap of off-screen lines during resize, which scales with
+  // line count). Below this, lines render fully live — no scroll-in pop, no
+  // skipped-layout invalidation edge cases (see code-viewer.css).
+  const VIRTUALIZE_LINE_THRESHOLD = 2000;
+  let virtualizeLines = $derived(
+    (diffDisplay ? diffDisplay.rows.length : lines.length) > VIRTUALIZE_LINE_THRESHOLD
+  );
+
   // Diff view projection (unified default). Session-scoped by design —
   // persistence is parked (see .specs.local/diff-redesign/s4-split-view.md).
   let diffView = $state<DiffViewMode>('unified');
@@ -472,8 +481,22 @@
   let contentZoom = $state(1.0);
 
   // Sync zoom to CSS variable for portal elements (tooltips, etc.)
+  let appliedZoom = 1.0;
   $effect(() => {
     document.documentElement.style.setProperty('--content-zoom', String(contentZoom));
+    if (contentZoom !== appliedZoom) {
+      appliedZoom = contentZoom;
+      // WebKit keeps stale cached layout inside content-visibility:auto
+      // skipped lines when an inherited font-size changes: scrolled into
+      // view later, their token boxes still sit at the old zoom's advance
+      // widths while glyphs paint at the new size. Disable skipping for one
+      // forced synchronous reflow so every line re-lays-out at the new
+      // zoom, then restore it (all pre-paint, so nothing flashes).
+      const root = document.documentElement;
+      root.classList.add('zoom-relayout');
+      void document.body.offsetHeight;
+      root.classList.remove('zoom-relayout');
+    }
   });
 
   async function updateAnnotation(id: string, content: JSONContent | null) {
@@ -962,19 +985,17 @@
       onOpenSaveModal={openSaveModal}
       zoomLevel={contentZoom}
     />
-    <div style:zoom={contentZoom}>
-      <SessionEditor
-        content={sessionComment}
-        isOpen={interaction.isSessionEditorOpen()}
-        pendingTagInsertion={pendingTagInsertion?.editorKey === 'session' ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
-        onUpdate={updateSessionComment}
-        onOpen={openSessionEditor}
-        onClose={closeSessionEditor}
-        onRequestCreateTag={(text, from, to) => handleRequestCreateTag('session', text, from, to)}
-        onImagePasteBlocked={handleImagePasteBlocked}
-        onFileRefCopied={handleFileRefCopied}
-      />
-    </div>
+    <SessionEditor
+      content={sessionComment}
+      isOpen={interaction.isSessionEditorOpen()}
+      pendingTagInsertion={pendingTagInsertion?.editorKey === 'session' ? { from: pendingTagInsertion.from, to: pendingTagInsertion.to, tag: pendingTagInsertion.tag } : null}
+      onUpdate={updateSessionComment}
+      onOpen={openSessionEditor}
+      onClose={closeSessionEditor}
+      onRequestCreateTag={(text, from, to) => handleRequestCreateTag('session', text, from, to)}
+      onImagePasteBlocked={handleImagePasteBlocked}
+      onFileRefCopied={handleFileRefCopied}
+    />
   </div>
 
   <PaneGroup direction="horizontal" class="viewer-body">
@@ -986,7 +1007,6 @@
           onJump={jumpToFile}
           isDirExpanded={fileTree.isDirExpanded}
           toggleDir={fileTree.toggleDir}
-          zoom={contentZoom}
         />
       </Pane>
       <PaneResizer class="file-tree-resizer" />
@@ -995,6 +1015,7 @@
     <Pane order={2} class="content-pane">
     <div
       class="content"
+      class:virtualized={virtualizeLines}
       class:resizing={resizing}
       class:shift-held={interaction.isShiftHeld}
       class:phase-idle={interaction.phase === 'idle'}
@@ -1010,10 +1031,7 @@
       onmouseleave={interaction.handleContentLeave}
       role="presentation"
     >
-      <div
-        class="content-inner"
-        style:zoom={contentZoom}
-      >
+      <div class="content-inner">
       {#if diffDisplay}
         <!-- Diff mode: RegularLines renders the walk; there are no flat lines. -->
         <RegularLines {annotationSlotProps} />
@@ -1077,16 +1095,12 @@
   </PaneGroup>
 
   <!-- Footer / Status Bar -->
-  <div style:zoom={contentZoom}>
-    <StatusBar />
-  </div>
+  <StatusBar />
   </AnnotProvider>
   {/if}
 </main>
 
-<div style:zoom={contentZoom}>
-  <SearchBar {search} />
-</div>
+<SearchBar {search} />
 
 {#if overlay.isCommandPaletteOpen()}
   <CommandPalette
@@ -1094,7 +1108,6 @@
     exitModes={exitModeState.modes}
     files={diffDisplay?.docs ?? []}
     diffView={diffDisplay ? diffView : null}
-    zoomLevel={contentZoom}
     onClose={handleCommandPaletteClose}
     onSetExitMode={handleSetExitModeFromPalette}
     onTagsChange={handleTagsChange}
@@ -1141,7 +1154,7 @@
     border-radius: 6px;
     color: var(--text-secondary);
     cursor: pointer;
-    font-size: 18px;
+    font-size: 18px; /* unscaled: chrome */
   }
 
   :global(.header-btn:hover) {
@@ -1176,7 +1189,7 @@
     color: white;
     padding: 8px 16px;
     border-radius: 6px;
-    font-size: 13px;
+    font-size: 13px; /* unscaled: chrome */
     font-family: var(--font-ui);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     z-index: 9999;

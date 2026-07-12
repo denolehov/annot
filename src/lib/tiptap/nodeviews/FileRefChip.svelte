@@ -39,7 +39,7 @@
 	.file-ref-chip {
 		display: inline-flex;
 		align-items: baseline;
-		gap: 2px;
+		gap: calc(2px * var(--content-zoom, 1));
 		cursor: pointer;
 	}
 
@@ -52,7 +52,7 @@
 	}
 
 	.file-name {
-		font-size: 12px;
+		font-size: var(--fs-12);
 		font-weight: 500;
 	}
 

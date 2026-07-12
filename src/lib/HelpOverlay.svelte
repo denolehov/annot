@@ -123,12 +123,12 @@
   }
 
   .help-modal {
-    width: 780px;
+    width: calc(780px * var(--content-zoom, 1));
     max-width: 90vw;
     max-height: 80vh;
     background: var(--bg-panel);
-    border-radius: var(--radius-xl);
-    padding: 20px;
+    border-radius: calc(var(--radius-xl) * var(--content-zoom, 1));
+    padding: calc(20px * var(--content-zoom, 1));
     position: relative;
     box-shadow: var(--shadow-lg);
     display: flex;
@@ -137,17 +137,24 @@
 
   .help-close {
     position: absolute;
-    top: 12px;
-    right: 12px;
+    top: calc(12px * var(--content-zoom, 1));
+    right: calc(12px * var(--content-zoom, 1));
     background: transparent;
     border: none;
-    padding: 4px;
+    padding: calc(4px * var(--content-zoom, 1));
     cursor: pointer;
     color: var(--text-secondary);
-    border-radius: var(--radius-sm);
+    border-radius: calc(var(--radius-sm) * var(--content-zoom, 1));
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  /* Overrides the inline width/height="16" attrs on the SVG (CSS beats
+     presentational HTML attributes) so the icon tracks --content-zoom. */
+  .help-close svg {
+    width: calc(16px * var(--content-zoom, 1));
+    height: calc(16px * var(--content-zoom, 1));
   }
 
   .help-close:hover {
@@ -157,33 +164,33 @@
 
   .help-title {
     font-family: var(--font-ui);
-    font-size: 16px;
+    font-size: var(--fs-16);
     font-weight: 600;
     color: var(--text-primary);
-    margin: 0 0 16px 0;
+    margin: 0 0 calc(16px * var(--content-zoom, 1)) 0;
   }
 
   .help-content {
     column-count: 2;
-    column-gap: 24px;
+    column-gap: calc(24px * var(--content-zoom, 1));
     overflow-y: auto;
     flex: 1;
-    padding-right: 8px;
+    padding-right: calc(8px * var(--content-zoom, 1));
   }
 
   .shortcut-section {
     break-inside: avoid;
-    margin-bottom: 16px;
+    margin-bottom: calc(16px * var(--content-zoom, 1));
   }
 
   .section-title {
     font-family: var(--font-ui);
-    font-size: 11px;
+    font-size: var(--fs-11);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-tertiary);
-    margin: 0 0 8px 0;
+    margin: 0 0 calc(8px * var(--content-zoom, 1)) 0;
   }
 
   .shortcut-list {
@@ -196,9 +203,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 4px 0;
-    font-size: 13px;
+    gap: calc(12px * var(--content-zoom, 1));
+    padding: calc(4px * var(--content-zoom, 1)) 0;
+    font-size: var(--fs-13);
   }
 
   .shortcut-desc {
@@ -213,7 +220,7 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 2px;
+    gap: calc(2px * var(--content-zoom, 1));
     flex-shrink: 0;
   }
 
@@ -221,31 +228,31 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 20px;
-    height: 20px;
-    padding: 0 5px;
+    min-width: calc(20px * var(--content-zoom, 1));
+    height: calc(20px * var(--content-zoom, 1));
+    padding: 0 calc(5px * var(--content-zoom, 1));
     font-family: var(--font-ui);
-    font-size: 11px;
+    font-size: var(--fs-11);
     font-weight: 500;
     background: var(--bg-main);
     border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
+    border-radius: calc(var(--radius-sm) * var(--content-zoom, 1));
     color: var(--text-secondary);
   }
 
   .key-separator {
-    font-size: 10px;
+    font-size: var(--fs-10);
     color: var(--text-tertiary);
     margin: 0 1px;
   }
 
   .help-footer {
-    margin-top: 16px;
-    padding-top: 12px;
+    margin-top: calc(16px * var(--content-zoom, 1));
+    padding-top: calc(12px * var(--content-zoom, 1));
     border-top: 1px solid var(--border-subtle);
     text-align: center;
     font-family: var(--font-ui);
-    font-size: 12px;
+    font-size: var(--fs-12);
     color: var(--text-tertiary);
   }
 
@@ -253,15 +260,15 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 4px;
+    min-width: calc(18px * var(--content-zoom, 1));
+    height: calc(18px * var(--content-zoom, 1));
+    padding: 0 calc(4px * var(--content-zoom, 1));
     font-family: var(--font-ui);
-    font-size: 10px;
+    font-size: var(--fs-10);
     font-weight: 500;
     background: var(--bg-main);
     border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
+    border-radius: calc(var(--radius-sm) * var(--content-zoom, 1));
     color: var(--text-secondary);
     margin: 0 2px;
   }

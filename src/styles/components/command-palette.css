@@ -27,7 +27,7 @@
 	flex-direction: column;
 	background: var(--bg-portal);
 	border: 1px solid var(--border-strong);
-	border-radius: 12px;
+	border-radius: calc(12px * var(--content-zoom, 1));
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 	font-family: var(--font-ui);
 	overflow: hidden;
@@ -69,17 +69,17 @@
 	display: flex;
 	align-items: center;
 	gap: 0;
-	padding: 14px 16px;
+	padding: calc(14px * var(--content-zoom, 1)) calc(16px * var(--content-zoom, 1));
 	border-bottom: 1px solid var(--border-subtle);
 	background: transparent;
-	font-size: 14px;
+	font-size: var(--fs-14);
 	flex-shrink: 0;
 }
 
 .search-icon {
 	color: var(--text-muted);
-	margin-right: 8px;
-	font-size: 14px;
+	margin-right: calc(8px * var(--content-zoom, 1));
+	font-size: var(--fs-14);
 	flex-shrink: 0;
 }
 
@@ -91,14 +91,14 @@
 }
 
 .separator {
-	font-size: 12px;
+	font-size: var(--fs-12);
 	flex-shrink: 0;
 }
 
 .input-row .separator {
 	display: flex;
 	align-items: center;
-	padding: 0 6px;
+	padding: 0 calc(6px * var(--content-zoom, 1));
 }
 
 .mode-prefix {
@@ -111,7 +111,7 @@
 	background: transparent;
 	border: none;
 	outline: none;
-	font-size: 14px;
+	font-size: var(--fs-14);
 	color: var(--text-primary);
 	font-family: var(--font-ui);
 	min-width: 0;
@@ -131,10 +131,10 @@
 .item-list {
 	list-style: none;
 	margin: 0;
-	padding: 8px;
-	max-height: 280px;
+	padding: calc(8px * var(--content-zoom, 1));
+	max-height: calc(280px * var(--content-zoom, 1));
 	overflow-y: auto;
-	scroll-padding-block: 80px;
+	scroll-padding-block: calc(80px * var(--content-zoom, 1));
 }
 
 .item-list:empty {
@@ -145,10 +145,10 @@
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 10px 12px;
-	border-radius: 6px;
+	padding: calc(10px * var(--content-zoom, 1)) calc(12px * var(--content-zoom, 1));
+	border-radius: calc(6px * var(--content-zoom, 1));
 	cursor: pointer;
-	font-size: 13px;
+	font-size: var(--fs-13);
 	color: var(--text-primary);
 	transition: background 80ms ease;
 }
@@ -182,13 +182,13 @@
 }
 
 .icon {
-	width: 18px;
+	width: calc(18px * var(--content-zoom, 1));
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	font-size: 13px;
+	font-size: var(--fs-13);
 	color: var(--text-muted);
-	margin-right: 8px;
+	margin-right: calc(8px * var(--content-zoom, 1));
 }
 
 .label,
@@ -199,8 +199,8 @@
 }
 
 .ephemeral-badge {
-	font-size: 10px;
-	padding: 2px 4px;
+	font-size: var(--fs-10);
+	padding: calc(2px * var(--content-zoom, 1)) calc(4px * var(--content-zoom, 1));
 	color: var(--text-muted);
 }
 
@@ -222,7 +222,7 @@
 }
 
 .drag-handle {
-	width: 20px;
+	width: calc(20px * var(--content-zoom, 1));
 	flex-shrink: 0;
 	color: var(--text-muted);
 	text-align: center;
@@ -230,17 +230,17 @@
 
 /* Form styles - invisible but there */
 .form-view form {
-	padding: 16px;
+	padding: calc(16px * var(--content-zoom, 1));
 	display: flex;
 	flex-direction: column;
-	gap: 16px;
+	gap: calc(16px * var(--content-zoom, 1));
 	background: transparent;
 }
 
 .field {
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
+	gap: calc(6px * var(--content-zoom, 1));
 }
 
 .field.focused label {
@@ -248,7 +248,7 @@
 }
 
 .field label {
-	font-size: 11px;
+	font-size: var(--fs-11);
 	font-weight: 600;
 	color: var(--text-muted);
 	text-transform: uppercase;
@@ -263,8 +263,8 @@
 	border: none;
 	border-bottom: 1px solid transparent;
 	border-radius: 0;
-	padding: 8px 0;
-	font-size: 14px;
+	padding: calc(8px * var(--content-zoom, 1)) 0;
+	font-size: var(--fs-14);
 	color: var(--text-primary);
 	font-family: var(--font-ui);
 	outline: none;
@@ -285,19 +285,19 @@
 
 .field textarea {
 	resize: vertical;
-	min-height: 60px;
+	min-height: calc(60px * var(--content-zoom, 1));
 }
 
 /* Footer - transparent, simple text hints */
 .footer {
-	padding: 10px 16px;
+	padding: calc(10px * var(--content-zoom, 1)) calc(16px * var(--content-zoom, 1));
 	background: transparent;
 	border-top: 1px solid var(--border-subtle);
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	gap: 12px;
-	font-size: 11px;
+	gap: calc(12px * var(--content-zoom, 1));
+	font-size: var(--fs-11);
 	color: var(--text-muted);
 	flex-shrink: 0;
 }

@@ -135,7 +135,7 @@
 
   .save-title {
     font-family: var(--font-ui);
-    font-size: 16px;
+    font-size: 16px; /* unscaled: chrome */
     font-weight: 600;
     color: var(--text-primary);
     margin: 0 0 16px 0;
@@ -145,7 +145,7 @@
     width: 100%;
     padding: 10px 12px;
     font-family: var(--font-mono);
-    font-size: 14px;
+    font-size: 14px; /* unscaled: chrome */
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
     background: var(--bg-input);
@@ -167,7 +167,7 @@
   .save-error {
     margin-top: 8px;
     font-family: var(--font-ui);
-    font-size: 13px;
+    font-size: 13px; /* unscaled: chrome */
     color: var(--error-text);
   }
 
@@ -183,7 +183,7 @@
     padding: 8px 16px;
     border-radius: var(--radius-md);
     font-family: var(--font-ui);
-    font-size: 14px;
+    font-size: 14px; /* unscaled: chrome */
     font-weight: 500;
     cursor: pointer;
     border: none;

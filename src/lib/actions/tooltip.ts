@@ -30,10 +30,11 @@ export function tooltip(node: HTMLElement, options: TooltipOptions) {
 		// Create tooltip container (uses existing chip-tooltip styling)
 		tooltipEl = document.createElement('div');
 		tooltipEl.className = options.variant ? `chip-tooltip ${options.variant}` : 'chip-tooltip';
-		// Override hidden visibility since we're managing show/hide manually
-		// Apply zoom from CSS variable to match content zoom level
-		const zoom = getComputedStyle(document.documentElement).getPropertyValue('--content-zoom') || '1';
-		tooltipEl.style.cssText = `position: fixed; z-index: 9999; pointer-events: none; opacity: 1; visibility: visible; zoom: ${zoom};`;
+		// Override hidden visibility since we're managing show/hide manually.
+		// No zoom here: the tooltip portals to <body>, which inherits
+		// --content-zoom from documentElement, and chip-tooltip's CSS already
+		// scales via calc(… * var(--content-zoom)).
+		tooltipEl.style.cssText = 'position: fixed; z-index: 9999; pointer-events: none; opacity: 1; visibility: visible;';
 
 		// Create content
 		const contentEl = document.createElement('div');
@@ -75,10 +76,13 @@ export function tooltip(node: HTMLElement, options: TooltipOptions) {
 		if (middlewareData.arrow) {
 			const { x: arrowX } = middlewareData.arrow;
 			const staticSide = placement.includes('top') ? 'bottom' : 'top';
+			// Half-embed the arrow: it's an 8px square scaled by --content-zoom
+			// (chips.css), so the overhang scales with it.
+			const zoom = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--content-zoom')) || 1;
 
 			Object.assign(arrowEl.style, {
 				left: arrowX != null ? `${arrowX}px` : '',
-				[staticSide]: '-4px',
+				[staticSide]: `${-4 * zoom}px`,
 			});
 		}
 	}

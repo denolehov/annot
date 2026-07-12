@@ -112,13 +112,13 @@
     /* Fill the gutter (a flex row in diff mode) with a GitHub-style cell:
        ▼ over ▲, each button a full-width band one row tall — hovering one
        highlights its whole half of the cell. The negative margin bleeds the
-       bands under .gutter's 12px right padding, up to the gutter border. */
+       bands under .gutter's right padding, up to the gutter border. */
     flex: 1;
     display: flex;
     flex-direction: column;
     align-items: stretch;
     justify-content: center;
-    margin-right: -12px;
+    margin-right: calc(-12px * var(--content-zoom, 1));
   }
 
   .unfold-controls.loading {
@@ -138,7 +138,7 @@
     justify-content: center;
     /* One "row" per button: with both arrows the host row is two rows tall
        (the @@ text centers via div.line.diff-header's align-items). */
-    min-height: 22px;
+    min-height: calc(22px * var(--content-zoom, 1));
     padding: 0;
     background: transparent;
     border: none;
@@ -146,9 +146,9 @@
     color: var(--accent-blue-hover);
     /* <button> doesn't inherit font-size from ancestors (browser default
        stylesheet gives form controls their own font) — set explicitly to
-       match .gutter/.code's 12px, since icons size themselves in `em`
+       match .gutter/.code's font-size, since icons size themselves in `em`
        (tokens.css .cp-icon). */
-    font-size: 12px;
+    font-size: var(--fs-12);
     cursor: pointer;
     user-select: none;
   }

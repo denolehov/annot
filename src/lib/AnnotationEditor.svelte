@@ -533,7 +533,6 @@
     use:portal
     use:floating={{ getRect: () => ann.tagSuggestion.clientRect?.() ?? null }}
     class="tag-suggestions"
-    style:zoom={ctx.contentZoom}
   >
     {#each ann.tagSuggestion.items as tag, i}
       <button
@@ -559,7 +558,6 @@
     use:portal
     use:floating={{ getRect: () => ann.slashSuggestion.clientRect?.() ?? null }}
     class="slash-suggestions"
-    style:zoom={ctx.contentZoom}
   >
     {#each ann.slashSuggestion.items as cmd, i}
       <button
@@ -588,7 +586,6 @@
     use:portal
     use:floating={{ getRect: () => ann.refSuggestion.clientRect?.() ?? null }}
     class="ref-suggestions"
-    style:zoom={ctx.contentZoom}
   >
     {#each ann.refSuggestion.items as item, idx}
       {#if item.type === 'annotation'}
@@ -649,7 +646,6 @@
     use:portal
     use:floating={{ getRect: () => selectionPopover?.rect ?? null }}
     class="selection-popover"
-    style:zoom={ctx.contentZoom}
   >
     <button
       type="button"

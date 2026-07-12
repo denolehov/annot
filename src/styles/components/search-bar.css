@@ -5,19 +5,19 @@
 
 .search-bar {
   position: fixed;
-  top: 52px; /* Below header */
+  top: 52px; /* Below header (fixed 40px, unscaled chrome — do not scale this offset) */
   right: var(--space-4, 16px);
   z-index: 100;
-  width: 400px;
+  width: calc(400px * var(--content-zoom, 1));
 
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--content-zoom, 1));
 
-  padding: 6px 12px;
+  padding: calc(6px * var(--content-zoom, 1)) calc(12px * var(--content-zoom, 1));
   background: var(--bg-portal);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  border-radius: calc(var(--radius-md) * var(--content-zoom, 1));
   box-shadow: var(--shadow-md);
 
   animation: search-bar-in 150ms ease;
@@ -36,8 +36,8 @@
 
 /* Search icon */
 .search-bar :global(.search-icon) {
-  width: 16px;
-  height: 16px;
+  width: calc(16px * var(--content-zoom, 1));
+  height: calc(16px * var(--content-zoom, 1));
   color: var(--text-muted);
   flex-shrink: 0;
 }
@@ -46,12 +46,12 @@
 .search-input {
   flex: 1;
   min-width: 0;
-  padding: 6px 10px;
+  padding: calc(6px * var(--content-zoom, 1)) calc(10px * var(--content-zoom, 1));
   background: var(--bg-input);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  border-radius: calc(var(--radius-sm) * var(--content-zoom, 1));
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--fs-13);
   color: var(--text-primary);
   outline: none;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
@@ -69,10 +69,10 @@
 /* Match count */
 .match-count {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--text-secondary);
   white-space: nowrap;
-  width: 45px;
+  width: calc(45px * var(--content-zoom, 1));
   flex-shrink: 0;
   text-align: right;
 }
@@ -80,34 +80,34 @@
 /* Navigation buttons container */
 .nav-buttons {
   display: flex;
-  gap: 2px;
+  gap: calc(2px * var(--content-zoom, 1));
 }
 
 /* Navigation and close buttons */
 .nav-btn,
-.close-btn {
+.search-close-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: calc(26px * var(--content-zoom, 1));
+  height: calc(26px * var(--content-zoom, 1));
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: calc(var(--radius-sm) * var(--content-zoom, 1));
   color: var(--text-secondary);
   cursor: pointer;
   transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
 .nav-btn :global(svg),
-.close-btn :global(svg) {
-  width: 16px;
-  height: 16px;
+.search-close-btn :global(svg) {
+  width: calc(16px * var(--content-zoom, 1));
+  height: calc(16px * var(--content-zoom, 1));
 }
 
 .nav-btn:hover:not(:disabled),
-.close-btn:hover {
+.search-close-btn:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
@@ -117,8 +117,8 @@
   cursor: not-allowed;
 }
 
-.close-btn {
-  margin-left: 4px;
+.search-close-btn {
+  margin-left: calc(4px * var(--content-zoom, 1));
 }
 
 /* ===========================================
@@ -129,7 +129,7 @@
 :global(mark.search-match) {
   background: #fef08a; /* amber-200 - soft yellow */
   color: inherit;
-  border-radius: 2px;
+  border-radius: calc(2px * var(--content-zoom, 1));
   padding: 0 1px;
   box-decoration-break: clone;
 }
@@ -137,7 +137,7 @@
 :global(mark.search-current) {
   background: #fbbf24; /* amber-400 - bright yellow/orange */
   color: #1a1a1a;
-  border-radius: 2px;
+  border-radius: calc(2px * var(--content-zoom, 1));
   padding: 0 1px;
   box-decoration-break: clone;
 }
