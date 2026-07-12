@@ -42,6 +42,7 @@ use jj_lib::conflicts::{
 };
 use jj_lib::copies::{CopyOperation, CopyRecords};
 use jj_lib::fileset;
+use jj_lib::id_prefix::IdPrefixContext;
 use jj_lib::matchers::{EverythingMatcher, Matcher, NothingMatcher};
 use jj_lib::merged_tree::MergedTree;
 use jj_lib::object_id::ObjectId as _;
@@ -49,8 +50,7 @@ use jj_lib::repo::{ReadonlyRepo, Repo as _, StoreFactories};
 use jj_lib::repo_path::{RepoPath, RepoPathUiConverter};
 use jj_lib::revset::{
     self, RevsetAliasesMap, RevsetDiagnostics, RevsetExtensions, RevsetParseContext,
-    RevsetStreamExt as _, RevsetWorkspaceContext, SymbolResolver, SymbolResolverExtension,
-    UserRevsetExpression,
+    RevsetStreamExt as _, RevsetWorkspaceContext, SymbolResolver, UserRevsetExpression,
 };
 use jj_lib::settings::{HumanByteSize, UserSettings};
 use jj_lib::working_copy::{SnapshotOptions, WorkingCopyFreshness};
@@ -84,6 +84,9 @@ pub struct JjRepo {
     repo: Arc<ReadonlyRepo>,
     settings: UserSettings,
     aliases: RevsetAliasesMap,
+    extensions: Arc<RevsetExtensions>,
+    /// Resolves short change-id prefixes the way `jj log` displays them.
+    prefixes: IdPrefixContext,
     root: PathBuf,
 }
 
@@ -109,13 +112,41 @@ impl JjRepo {
             .block_on()
             .map_err(|e| jj_err("failed to load jj repo", e))?;
         let aliases = config::revset_aliases(&settings);
-        Ok(Self {
+        let extensions = Arc::new(RevsetExtensions::default());
+        let mut this = Self {
             workspace,
             repo,
             settings,
             aliases,
+            extensions: extensions.clone(),
+            prefixes: IdPrefixContext::new(extensions),
             root: root.to_path_buf(),
-        })
+        };
+        this.prefixes = this.build_prefix_context()?;
+        Ok(this)
+    }
+
+    /// The prefix-disambiguation context, built exactly as jj-cli builds it.
+    ///
+    /// A change id like `k` is ambiguous against the whole repo but unique
+    /// within the commits you can *see* — which is why `jj log` highlights it
+    /// as a one-letter prefix. jj resolves prefixes against the
+    /// `revsets.short-prefixes` revset (defaulting to `revsets.log`), and so do
+    /// we. Without this, a prefix that `jj log` just told the user to use would
+    /// bounce out of `annot diff` as ambiguous.
+    fn build_prefix_context(&self) -> Result<IdPrefixContext, AnnotError> {
+        let context = IdPrefixContext::new(self.extensions.clone());
+        let revset_str = self
+            .settings
+            .get_string("revsets.short-prefixes")
+            .or_else(|_| self.settings.get_string("revsets.log"))
+            .unwrap_or_default();
+        if revset_str.is_empty() {
+            // Explicitly disabled: fall back to whole-repo uniqueness, which is
+            // jj's behavior too.
+            return Ok(context);
+        }
+        Ok(context.disambiguate_within(self.parse(&revset_str)?))
     }
 
     // -- revsets ------------------------------------------------------------
@@ -128,7 +159,6 @@ impl JjRepo {
             cwd: self.root.clone(),
             base: self.root.clone(),
         };
-        let extensions = RevsetExtensions::default();
         let fileset_aliases = Default::default();
         let context = RevsetParseContext {
             aliases_map: &self.aliases,
@@ -139,7 +169,7 @@ impl JjRepo {
             // git repo; jj hides it from bare bookmark names, and so must we.
             default_ignored_remote: Some(jj_lib::git::REMOTE_NAME_FOR_LOCAL_GIT_REPO),
             fileset_aliases_map: &fileset_aliases,
-            extensions: &extensions,
+            extensions: &self.extensions,
             workspace: Some(RevsetWorkspaceContext {
                 path_converter: &path_converter,
                 workspace_name: self.workspace.workspace_name(),
@@ -170,8 +200,8 @@ impl JjRepo {
         limit: usize,
     ) -> Result<Vec<Commit>, AnnotError> {
         let repo = self.repo.as_ref();
-        let symbol_resolver =
-            SymbolResolver::new(repo, &([] as [&Box<dyn SymbolResolverExtension>; 0]));
+        let symbol_resolver = SymbolResolver::new(repo, self.extensions.symbol_resolvers())
+            .with_id_prefix_context(&self.prefixes);
         let resolved = expression
             .resolve_user_expression(repo, &symbol_resolver)
             .map_err(|e| jj_err(&format!("failed to resolve '{revset_str}'"), e))?;
@@ -1165,6 +1195,85 @@ mod tests {
             .map(|e| e.new_path.as_deref().unwrap())
             .collect();
         assert_eq!(paths, vec!["a.txt", "b.txt", "c.txt"]);
+    }
+
+    /// A short change-id prefix that `jj log` highlights must resolve in
+    /// `annot diff` too.
+    ///
+    /// `jj log` shows the shortest prefix unique among the commits you can
+    /// *see* — often a single letter — not the shortest unique in the whole
+    /// repo. Resolving against the whole repo would reject the very prefix jj
+    /// just told the user to type. jj disambiguates within
+    /// `revsets.short-prefixes` (defaulting to `revsets.log`), and so do we via
+    /// `IdPrefixContext`.
+    ///
+    /// The fixture has to earn that distinction, or it proves nothing: in a
+    /// small repo every short prefix is repo-unique anyway and the test passes
+    /// even with the feature ripped out. So it forces a genuine repo-wide
+    /// collision — change ids are reverse-hex, so there are only 16 possible
+    /// first characters (`k`-`z`), and 17+ commits guarantee a clash by
+    /// pigeonhole (no seeding, no flake) — and then narrows `short-prefixes` to
+    /// just one of the clashing commits, exactly as a real repo's `revsets.log`
+    /// narrows to your recent stack. Without `IdPrefixContext` this fails with
+    /// "ambiguous", which is precisely the reported bug.
+    #[test]
+    fn short_prefixes_resolve_within_the_visible_revset() {
+        const COMMITS: usize = 20; // > 16 reverse-hex first chars
+
+        let dir = jj_repo();
+        let p = dir.path();
+        fs::write(p.join("base.txt"), "base\n").unwrap();
+        jj(p, &["describe", "-m", "base"]);
+
+        let mut ids = Vec::new();
+        for i in 0..COMMITS {
+            jj(p, &["new"]);
+            fs::write(p.join(format!("f{i}.txt")), format!("{i}\n")).unwrap();
+            jj(p, &["describe", "-m", &format!("c{i}")]);
+            let id = jj(p, &["log", "--no-graph", "-r", "@", "-T", "change_id"]);
+            ids.push((id, format!("f{i}.txt")));
+        }
+
+        // Pigeonhole: some two ids share a first character.
+        let (id, file) = ids
+            .iter()
+            .find(|(id, _)| {
+                ids.iter()
+                    .filter(|(other, _)| other.starts_with(&id[..1]))
+                    .count()
+                    >= 2
+            })
+            .expect("20 reverse-hex ids must collide on their first character");
+        let prefix = id[..1].to_string();
+
+        // `prefix` is ambiguous repo-wide. Make the visible revset contain only
+        // one of the colliding commits — the situation `jj log` is always in.
+        fs::write(
+            p.join(".jj/repo/config.toml"),
+            format!("[revsets]\nshort-prefixes = \"{id}\"\n"),
+        )
+        .unwrap();
+
+        let prepared = open(p)
+            .enumerate(
+                &DiffTarget::Revision {
+                    rev: prefix.clone(),
+                },
+                &[],
+            )
+            .unwrap_or_else(|e| {
+                panic!("prefix '{prefix}' should resolve within short-prefixes: {e}")
+            });
+
+        assert_eq!(
+            prepared
+                .entries
+                .iter()
+                .map(|e| e.new_path.as_deref().unwrap())
+                .collect::<Vec<_>>(),
+            vec![file.as_str()],
+            "prefix '{prefix}' resolved to the wrong commit"
+        );
     }
 
     /// The label leads with the change id: it survives rewrites, so an agent

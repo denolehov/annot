@@ -21,6 +21,27 @@
 auto-track = "all()"
 max-new-file-size = "1MiB"
 
+# `revsets.log` is what jj disambiguates short change-id prefixes against when
+# `revsets.short-prefixes` is unset — it's why `jj log` can highlight a one-letter
+# prefix like `k` and still resolve it. annot resolves prefixes the same way, so
+# a prefix you can see in `jj log` is a prefix you can type into `annot diff`.
+[revsets]
+arrange = "reachable(@, mutable())"
+fix = "reachable(@, mutable())"
+run = "reachable(@, mutable())"
+simplify-parents = "reachable(@, mutable())"
+# log revset is also used as the default short-prefixes. If it failed to
+# evaluate, lengthy warning messages would be printed. Use present(expr) if
+# symbols in expr might not always exist.
+log = "present(@) | ancestors(immutable_heads().., 2) | trunk()"
+# Emit the working-copy branch first, which is usually most interesting.
+# This also helps stabilize output order.
+log-graph-prioritize = "present(@)"
+op-diff-changes-in = "mutable() | immutable_heads()"
+sign = "reachable(@, mutable())"
+bookmark-advance-to = "@"
+bookmark-advance-from = "heads(::to & bookmarks())"
+
 [revset-aliases]
 # trunk() can be overridden as '<bookmark>@<remote>'.
 'trunk()' = '''

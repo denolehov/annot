@@ -220,6 +220,30 @@ mod tests {
             "vendored [revset-aliases] drifted from jj-cli's defaults"
         );
 
+        // The [revsets] table too — `revsets.log` is what short change-id
+        // prefixes disambiguate against, so drift there would silently change
+        // which prefixes annot accepts.
+        let table = ConfigNamePathBuf::from_iter(["revsets"]);
+        let revsets_of = |config: &StackedConfig| -> BTreeMap<String, String> {
+            let mut out = BTreeMap::new();
+            for layer in config.layers() {
+                let Ok(Some(t)) = layer.look_up_table(&table) else {
+                    continue;
+                };
+                for (k, v) in t.iter() {
+                    if let Some(v) = v.as_str() {
+                        out.insert(k.to_string(), v.to_string());
+                    }
+                }
+            }
+            out
+        };
+        assert_eq!(
+            revsets_of(&ours),
+            revsets_of(&theirs),
+            "vendored [revsets] drifted from jj-cli's defaults"
+        );
+
         for key in ["snapshot.auto-track", "snapshot.max-new-file-size"] {
             assert_eq!(
                 ours.get::<String>(ConfigNamePathBuf::from_iter(key.split('.')))
