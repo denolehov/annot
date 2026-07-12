@@ -168,8 +168,9 @@ div.line {
 }
 
 /* Left accent bar on hover — only for plain lines; annotated/selected
-   keep their own ::before border. */
-.content.phase-idle div.line:not(.selected):not(.annotated):hover::before {
+   keep their own ::before border, and diff-header (@@) rows are
+   non-selectable so they get no hover treatment at all. */
+.content.phase-idle div.line:not(.selected):not(.annotated):not(.diff-header):hover::before {
 	content: "";
 	position: absolute;
 	left: 0;
@@ -311,8 +312,9 @@ div.line.annotated .gutter {
 	pointer-events: auto;
 }
 
-/* Gutter styling on hover (mirrors .gutter.selected) */
-.content.phase-idle div.line:hover .gutter {
+/* Gutter styling on hover (mirrors .gutter.selected) — diff-header (@@) is
+   non-selectable, no amber hover treatment there either. */
+.content.phase-idle div.line:not(.diff-header):hover .gutter {
 	background-color: var(--selection-bg);
 	color: var(--text-secondary);
 	border-right-color: var(--selection-border);
@@ -440,14 +442,19 @@ div.line.diff-deleted .diff-gutter-old {
 	color: rgb(220, 38, 38);
 }
 
-/* Header lines (dimmed, non-selectable) */
+/* Header lines (dimmed, non-selectable) — blue tint distinguishes hunk
+   metadata from both the code area and added/deleted runs. */
 div.line.diff-header {
-	background-color: var(--bg-panel);
+	background-color: var(--diff-header-bg);
 	color: var(--text-muted);
 }
 
-div.line.diff-header:hover {
-	/* No hover highlight for non-selectable lines */
+/* Specificity must match-or-beat .content.phase-idle div.line:hover
+   (line 166) — otherwise its amber background-color wins over this. */
+.content.phase-idle div.line.diff-header:hover {
+	/* Non-selectable — keep the header's own blue tint instead of the
+	   amber hover highlight every other line gets. */
+	background-color: var(--diff-header-bg);
 	background-image: none;
 }
 
