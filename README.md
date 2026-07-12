@@ -65,7 +65,7 @@ sudo apt-get install -y \
   libgstreamer-plugins-bad1.0-dev
 ```
 
-Install Rust, Node.js 22, and pnpm, then build:
+Install Rust, Node.js 24, and pnpm, then build:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -127,26 +127,28 @@ add the `src-tauri\target\release\` directory to your `PATH`, or reference the `
 
 ### With Claude Code
 
-Run the following command on **macOS**, **Linux**, or **Windows**:
+Same command on macOS, Linux, and Windows:
 
 ```bash
 claude mcp add --scope user annot annot mcp
 ```
 
-Make sure `annot.exe` is on your `PATH` first (see build instructions above), or pass
-the full path: `claude mcp add --scope user annot "C:\path\to\annot.exe" mcp`.
-
 Claude now has review tools (`review_file`, `review_diff`, `review_content`). Ask it to review something and a window opens for your feedback.
+
+> **Windows note**: `annot.exe` must be on your `PATH` (see build instructions above),
+> or pass the full path: `claude mcp add --scope user annot "C:\path\to\annot.exe" mcp`.
 
 ### Standalone
 
 ```bash
-annot file.rs           # Open a file for annotation
-annot --json file.rs    # Output as JSON (for agent consumption)
-annot diff              # Review uncommitted changes
-annot diff 4f7d4491     # Review one revision against its parent
-annot diff main..HEAD   # Review a revision range (main...HEAD for merge base)
-annot diff --staged     # Review staged changes (git only — jj has no index)
+annot file.rs                 # Open a file for annotation
+cat file.go | annot -l main.go  # Pipe from stdin (label sets highlighting)
+annot --json file.rs          # Output as JSON (for agent consumption)
+annot diff                    # Review uncommitted changes
+annot diff 4f7d4491           # Review one revision against its parent
+annot diff main..HEAD         # Review a revision range (main...HEAD for merge base)
+annot diff --staged           # Review staged changes (git only — jj has no index)
+annot diff -- src/ '*.rs'     # Limit the diff (pathspecs; jj filesets in a jj repo)
 ```
 
 ## How it works
@@ -163,7 +165,7 @@ No data leaves your machine. No accounts. No cloud.
 
 ### Tags
 
-Composable mini-prompts you build over time. Type `/` in the annotation editor to insert one:
+Composable mini-prompts you build over time. Type `#` in the annotation editor to insert one:
 
 ```
 [# VERIFY] this with a dedicated test
@@ -243,7 +245,10 @@ Press `Shift+C` to add comments that apply to the entire review — framing cont
 | Alt+Tab | Exit mode picker |
 | : | Command palette |
 | Cmd+F / Ctrl+F | Search |
+| Cmd+B / Ctrl+B | Toggle file tree (diffs) |
+| Cmd+= / Cmd+- / Cmd+0 | Zoom in / out / reset |
 | Cmd+S / Ctrl+S | Save to file |
+| Cmd+W / Ctrl+W | Save and close |
 | ? | Help overlay |
 
 **In annotation editor:**
