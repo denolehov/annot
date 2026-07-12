@@ -45,6 +45,14 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # jj tier tests build fixtures with the jj CLI; version must match the
+      # jj-lib pin in src-tauri/Cargo.toml.
+      - name: Install jj
+        run: |
+          curl -fsSL https://github.com/jj-vcs/jj/releases/download/v0.43.0/jj-v0.43.0-x86_64-unknown-linux-musl.tar.gz \
+            | sudo tar -xz -C /usr/local/bin ./jj
+          jj --version
+
       - name: Install Node dependencies
         run: pnpm install
 
@@ -78,6 +86,14 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # jj tier tests build fixtures with the jj CLI; version must match the
+      # jj-lib pin in src-tauri/Cargo.toml.
+      - name: Install jj
+        run: |
+          curl -fsSL https://github.com/jj-vcs/jj/releases/download/v0.43.0/jj-v0.43.0-aarch64-apple-darwin.tar.gz \
+            | sudo tar -xz -C /usr/local/bin ./jj
+          jj --version
+
       - name: Install Node dependencies
         run: pnpm install
 
@@ -110,6 +126,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+
+      # jj tier tests build fixtures with the jj CLI; version must match the
+      # jj-lib pin in src-tauri/Cargo.toml.
+      - name: Install jj
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://github.com/jj-vcs/jj/releases/download/v0.43.0/jj-v0.43.0-x86_64-pc-windows-msvc.zip -OutFile "$env:RUNNER_TEMP\jj.zip"
+          Expand-Archive "$env:RUNNER_TEMP\jj.zip" -DestinationPath "$env:RUNNER_TEMP\jj"
+          Add-Content $env:GITHUB_PATH "$env:RUNNER_TEMP\jj"
+          & "$env:RUNNER_TEMP\jj\jj.exe" --version
 
       - name: Install Node dependencies
         run: pnpm install
