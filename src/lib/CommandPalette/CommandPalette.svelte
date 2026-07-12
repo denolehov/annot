@@ -251,11 +251,10 @@
   // Persist obsidian vaults to config file
   async function persistObsidianConfig() {
     try {
-      const config: Config = {
-        obsidian: {
-          vaults: getVaultNames(),
-        },
-      };
+      // Read-modify-write: save_config overwrites the whole file, so a
+      // partial object would reset theme/zoom to their defaults.
+      const config = await invoke<Config>('get_config');
+      config.obsidian = { vaults: getVaultNames() };
       await invoke('save_config', { config });
     } catch (e) {
       console.error('Failed to save config:', e);

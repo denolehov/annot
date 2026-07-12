@@ -598,6 +598,29 @@ pub fn set_theme(theme: Theme) -> Result<(), String> {
     config::save_config(&cfg).map_err(|e| e.to_string())
 }
 
+// --- Zoom commands ---
+
+#[tauri::command]
+pub fn get_content_zoom() -> f64 {
+    let zoom = config::load_config().content_zoom;
+    if zoom.is_finite() {
+        zoom.clamp(0.5, 3.0)
+    } else {
+        1.0
+    }
+}
+
+#[tauri::command]
+pub fn set_content_zoom(zoom: f64) -> Result<(), String> {
+    let mut cfg = config::load_config();
+    cfg.content_zoom = if zoom.is_finite() {
+        zoom.clamp(0.5, 3.0)
+    } else {
+        1.0
+    };
+    config::save_config(&cfg).map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

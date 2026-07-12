@@ -274,6 +274,7 @@ Persisted in the OS config directory (`~/.config/annot/` on Linux, `~/Library/Ap
 - Tags and exit modes
 - Usage statistics
 - Theme preference
+- Content zoom level
 - Obsidian vault paths
 
 Atomic writes with file locking for concurrent safety.

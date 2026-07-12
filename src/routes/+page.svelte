@@ -477,8 +477,20 @@
     history.push(captureSessionData(), label);
   }
 
-  // Content zoom state
+  // Content zoom state (loaded from config on mount, persisted on change)
   let contentZoom = $state(1.0);
+  let zoomLoaded = false;
+  let zoomSaveTimer: ReturnType<typeof setTimeout> | undefined;
+
+  $effect(() => {
+    const zoom = contentZoom;
+    if (!zoomLoaded) return;
+    clearTimeout(zoomSaveTimer);
+    zoomSaveTimer = setTimeout(() => {
+      zoomSaveTimer = undefined;
+      invoke('set_content_zoom', { zoom }).catch((e) => console.error('Failed to save zoom:', e));
+    }, 500);
+  });
 
   // Sync zoom to CSS variable for portal elements (tooltips, etc.)
   let appliedZoom = 1.0;
@@ -843,6 +855,17 @@
     // Apply theme before any content renders (prevents flash)
     await initTheme();
 
+    // Restore persisted zoom before content renders
+    try {
+      const zoom = await invoke<number>('get_content_zoom');
+      if (Number.isFinite(zoom)) {
+        contentZoom = Math.min(Math.max(zoom, 0.5), 3.0);
+      }
+    } catch (e) {
+      console.error('Failed to load zoom:', e);
+    }
+    zoomLoaded = true;
+
     try {
       const res = await invoke<ContentResponse>("get_content");
       label = res.label;
@@ -879,6 +902,11 @@
           // Flush any debounced annotation writes before the backend reads its
           // in-memory state — otherwise the last keystrokes never reach it.
           await annotationState.flush();
+          // Flush a pending zoom save the same way.
+          if (zoomSaveTimer !== undefined) {
+            clearTimeout(zoomSaveTimer);
+            await invoke('set_content_zoom', { zoom: contentZoom }).catch(() => {});
+          }
           await invoke('finish_review');
         } catch (e) {
           console.error('Failed to finish review:', e);

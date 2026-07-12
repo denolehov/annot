@@ -48,6 +48,9 @@ pub struct Config {
     pub version: u32,
     #[serde(default)]
     pub theme: Theme,
+    /// Content zoom factor (1.0 = 100%). Clamped to [0.5, 3.0] on write.
+    #[serde(default = "default_content_zoom")]
+    pub content_zoom: f64,
     #[serde(default)]
     pub obsidian: ObsidianConfig,
 }
@@ -56,11 +59,16 @@ fn default_version() -> u32 {
     CONFIG_VERSION
 }
 
+fn default_content_zoom() -> f64 {
+    1.0
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
             version: CONFIG_VERSION,
             theme: Theme::default(),
+            content_zoom: default_content_zoom(),
             obsidian: ObsidianConfig::default(),
         }
     }
@@ -608,6 +616,7 @@ mod tests {
         let config = Config {
             version: CONFIG_VERSION,
             theme: Theme::Dark,
+            content_zoom: 1.5,
             obsidian: ObsidianConfig {
                 vaults: vec!["Work Notes".into(), "Personal".into()],
             },
@@ -618,6 +627,7 @@ mod tests {
 
         assert_eq!(loaded.version, CONFIG_VERSION);
         assert_eq!(loaded.theme, Theme::Dark);
+        assert_eq!(loaded.content_zoom, 1.5);
         assert_eq!(loaded.obsidian.vaults.len(), 2);
         assert_eq!(loaded.obsidian.vaults[0], "Work Notes");
         assert_eq!(loaded.obsidian.vaults[1], "Personal");
@@ -655,6 +665,14 @@ mod tests {
         let json = r#"{"version": 1, "obsidian": {}}"#;
         let config: Config = serde_json::from_str(json).unwrap();
         assert_eq!(config.theme, Theme::System);
+    }
+
+    #[test]
+    fn config_deserializes_without_content_zoom() {
+        // Old configs without content_zoom should default to 1.0
+        let json = r#"{"version": 1, "obsidian": {}}"#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(config.content_zoom, 1.0);
     }
 
     #[test]
