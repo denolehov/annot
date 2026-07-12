@@ -254,6 +254,8 @@ fn build_row(
         new_line: new,
         content: code.to_string(),
         html: html.map(LineHtml::Full),
+        // Raw-patch mode never runs the diff engine — no word ranges.
+        word_ranges: Vec::new(),
     }
 }
 

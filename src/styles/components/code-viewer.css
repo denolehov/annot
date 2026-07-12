@@ -439,6 +439,11 @@ div.line.diff-deleted .diff-gutter-old {
 	color: rgb(220, 38, 38);
 }
 
+/* Word-level diff (stronger token wash over the row tint) is painted via
+   the CSS Custom Highlight API; its ::highlight() rules are injected at
+   runtime by word-diff-highlight.ts — lightningcss doesn't parse the
+   pseudo-element yet and would warn on every build if they lived here. */
+
 /* Header lines (dimmed, non-selectable) — blue tint distinguishes hunk
    metadata from both the code area and added/deleted runs. */
 div.line.diff-header {

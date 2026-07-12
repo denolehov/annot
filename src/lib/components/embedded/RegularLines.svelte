@@ -8,6 +8,7 @@
   import type { SectionInfo } from '$lib/types';
   import { getLineNumber } from '$lib/line-utils';
   import { highlightMatches, clearHighlights } from '$lib/search-highlight';
+  import { paintWordDiff } from '$lib/word-diff-highlight';
   import { injectColorSwatches, clearColorSwatches } from '$lib/color-preview';
   import { invoke } from '@tauri-apps/api/core';
   import CopyButton from '$lib/components/CopyButton.svelte';
@@ -256,7 +257,14 @@
       {/snippet}
 
       {#snippet codeWrapper(innerContent)}
-        <span class="code" use:setCodeRef={entry.displayIndex}>
+        <span
+          class="code"
+          use:setCodeRef={entry.displayIndex}
+          use:paintWordDiff={{
+            ranges: entry.row.word_ranges,
+            side: entry.rowKind === 'added' ? 'add' : 'del',
+          }}
+        >
           {@render innerContent()}
         </span>
       {/snippet}
@@ -292,7 +300,14 @@
         {/snippet}
 
         {#snippet codeWrapper(innerContent)}
-          <span class="code" use:setCodeRef={cell.displayIndex}>
+          <span
+            class="code"
+            use:setCodeRef={cell.displayIndex}
+            use:paintWordDiff={{
+              ranges: cell.row.word_ranges,
+              side: cell.rowKind === 'added' ? 'add' : 'del',
+            }}
+          >
             {@render innerContent()}
           </span>
         {/snippet}

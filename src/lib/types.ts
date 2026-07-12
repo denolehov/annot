@@ -111,6 +111,12 @@ export interface Row {
   /** Raw source line — no +/-/space prefix; the sign is presentation. */
   content: string;
   html: LineHtml | null;
+  /**
+   * Changed-token ranges within `content`, half-open UTF-16 code-unit
+   * offsets. Absent except on added/deleted rows in word-diff-gated hunks
+   * (serde skips the empty vec).
+   */
+  word_ranges?: { start: number; end: number }[];
 }
 
 export interface HunkV2 {

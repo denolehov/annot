@@ -158,14 +158,31 @@ fn render_row(
     fake_path: &str,
     highlighter: &Highlighter,
 ) -> Row {
-    // `word_ranges` deliberately dropped: no wire field exists yet;
-    // word-level highlights recompute from the session's retained FileSource.
-    let (text, old_line, new_line) = match *row {
-        DiffRow::Context { old_line, new_line } => {
-            (line_at(old_lines, old_line), Some(old_line), Some(new_line))
-        }
-        DiffRow::Deleted { old_line, .. } => (line_at(old_lines, old_line), Some(old_line), None),
-        DiffRow::Added { new_line, .. } => (line_at(new_lines, new_line), None, Some(new_line)),
+    let (text, old_line, new_line, word_ranges) = match row {
+        DiffRow::Context { old_line, new_line } => (
+            line_at(old_lines, *old_line),
+            Some(*old_line),
+            Some(*new_line),
+            &[][..],
+        ),
+        DiffRow::Deleted {
+            old_line,
+            word_ranges,
+        } => (
+            line_at(old_lines, *old_line),
+            Some(*old_line),
+            None,
+            word_ranges.as_slice(),
+        ),
+        DiffRow::Added {
+            new_line,
+            word_ranges,
+        } => (
+            line_at(new_lines, *new_line),
+            None,
+            Some(*new_line),
+            word_ranges.as_slice(),
+        ),
     };
 
     let html = (!language.is_empty())
@@ -177,7 +194,18 @@ fn render_row(
         new_line,
         content: text.to_string(),
         html: html.map(LineHtml::Full),
+        word_ranges: utf16_ranges(text, word_ranges),
     }
+}
+
+/// Engine byte offsets → UTF-16 code-unit offsets (what the webview's DOM
+/// APIs address). Engine ranges are always on char boundaries.
+fn utf16_ranges(text: &str, byte_ranges: &[Range<usize>]) -> Vec<Range<u32>> {
+    let utf16_at = |byte: usize| text[..byte].encode_utf16().count() as u32;
+    byte_ranges
+        .iter()
+        .map(|r| utf16_at(r.start)..utf16_at(r.end))
+        .collect()
 }
 
 /// 1-indexed line from a pre-split side, empty for out-of-range (defensive:
@@ -304,6 +332,7 @@ pub fn expand_context(
                 new_line: Some(n),
                 content: content.to_string(),
                 html: html.map(LineHtml::Full),
+                word_ranges: Vec::new(),
             }
         })
         .collect();
@@ -506,6 +535,33 @@ mod tests {
         let docs = render_repo(dir.path(), &head_range());
         insta::assert_snapshot!(dump(&docs));
         assert_rows_within_ranges(&docs);
+    }
+
+    #[test]
+    fn utf16_ranges_convert_byte_offsets() {
+        // "aé😀b" — é: 2 bytes / 1 code unit; 😀: 4 bytes / 2 code units
+        // (non-BMP, where byte, char, and UTF-16 offsets all differ).
+        let text = "aé😀b";
+        assert_eq!(
+            utf16_ranges(text, &[0..1, 1..3, 3..7, 7..8, 0..8]),
+            vec![0..1, 1..2, 2..4, 4..5, 0..5]
+        );
+    }
+
+    /// The fixture's `let d = 4;` → `let d = 40;` pair sits in a gated hunk:
+    /// both sides of the pair must reach the wire with word ranges.
+    #[test]
+    fn gated_rows_carry_word_ranges() {
+        let dir = range_fixture(Fixture::LegacySafe);
+        let docs = render_repo(dir.path(), &head_range());
+        let main = docs.iter().find(|d| d.path == "main.rs").unwrap();
+        let with_ranges = main
+            .hunks
+            .iter()
+            .flat_map(|h| &h.rows)
+            .filter(|r| !r.word_ranges.is_empty())
+            .count();
+        assert_eq!(with_ranges, 2);
     }
 
     /// The strangler bar: the new pipeline's changed rows must be exactly the

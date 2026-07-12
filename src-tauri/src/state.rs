@@ -420,6 +420,11 @@ pub struct Row {
     /// Raw source line — no `+`/`-`/` ` prefix; the sign is presentation.
     pub content: String,
     pub html: Option<LineHtml>,
+    /// Changed-token ranges within `content`, UTF-16 code-unit offsets
+    /// (webview-native). Non-empty only on added/deleted rows in
+    /// word-diff-gated hunks.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub word_ranges: Vec<Range<u32>>,
 }
 
 /// Per-file metadata for annotation targets.
