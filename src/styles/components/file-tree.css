@@ -69,11 +69,10 @@
 	padding: 4px 0;
 }
 
-.file-row {
+.tree-row {
 	display: flex;
-	align-items: baseline;
-	justify-content: space-between;
-	gap: 8px;
+	align-items: center;
+	gap: 4px;
 	width: 100%;
 	padding: 4px 12px;
 	background: transparent;
@@ -85,11 +84,11 @@
 	cursor: pointer;
 }
 
-.file-row:hover {
+.tree-row:hover {
 	background: var(--bg-hover);
 }
 
-.file-row:focus-visible {
+.tree-row:focus-visible {
 	outline: none;
 	border-left-color: var(--focus-ring);
 }
@@ -99,22 +98,41 @@
 	border-left-color: var(--accent);
 }
 
-/* The directory prefix absorbs truncation so the basename stays readable. */
-.file-row-path {
-	display: flex;
-	min-width: 0;
-	white-space: nowrap;
-}
-
-.file-row-dir {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
+/* Fixed-width slot so directory chevrons and file names align to the same
+   column at a given depth. Empty (no chevron) on file rows. */
+.tree-row-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	flex-shrink: 0;
 	color: var(--text-muted);
 }
 
+.tree-row-icon.collapsed {
+	transform: rotate(-90deg);
+}
+
+.tree-row-icon svg {
+	width: 12px;
+	height: 12px;
+}
+
+.dir-row-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-secondary);
+}
+
 .file-row-name {
-	flex-shrink: 0;
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	font-weight: 600;
 }
 

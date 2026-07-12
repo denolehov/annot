@@ -944,6 +944,8 @@
           docs={diffDisplay?.docs ?? []}
           currentIndex={contentTracking.currentFileIndex}
           onJump={jumpToFile}
+          isDirExpanded={fileTree.isDirExpanded}
+          toggleDir={fileTree.toggleDir}
         />
       </Pane>
       <PaneResizer class="file-tree-resizer" />
