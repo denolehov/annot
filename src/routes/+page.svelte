@@ -163,26 +163,29 @@
     // Find the line at the top of the visible area by hit-testing. Robust to code
     // blocks / portals whose lines have a different offsetParent — offsetTop is not
     // globally monotonic, so reading/searching it picks the wrong line. This is one
-    // O(1) hit test instead of reading offsetTop on all ~10k lines every frame.
+    // O(1)-per-header hit test instead of reading offsetTop on all ~10k lines every frame.
     const rect = contentEl.getBoundingClientRect();
     const x = rect.left + 12;
     let lineEl: HTMLElement | null = null;
     let headerEl: HTMLElement | null = null;
-    // Probe a few rows down to clear separators / inter-segment gaps at the top edge.
-    for (let dy = 1; dy <= 48 && !lineEl; dy += 8) {
-      // Pierce the whole stack: a stuck sticky file header is the topmost element
-      // for its entire file's scroll extent — reading it would freeze tracking on
-      // the file's first hunk. Prefer the covered line row underneath; fall back
-      // to the header only when no row is beneath (i.e. we're at the file start).
-      for (const el of document.elementsFromPoint(x, rect.top + dy)) {
-        const row = el.closest('[data-display-idx]') as HTMLElement | null;
-        if (!row) continue;
-        if (row.classList.contains('file-header-line')) {
-          headerEl ??= row;
-        } else {
-          lineEl = row;
-          break;
-        }
+    // Pierce the whole stack: a run of collapsed (header-only) files sticks its
+    // headers one after another at the top edge. Hop past each by its own
+    // rendered height — rather than a fixed probe depth, which runs out before
+    // reaching real content when several collapsed files stack up — landing on
+    // the covered line row underneath. Keep the last (bottommost) header as the
+    // fallback when we never reach one (i.e. we're at the very start of a file).
+    let y = rect.top + 1;
+    let guard = 0;
+    while (y < rect.bottom && !lineEl && guard++ < 64) {
+      const row = document
+        .elementsFromPoint(x, y)
+        .reduce<HTMLElement | null>((found, el) => found ?? (el.closest('[data-display-idx]') as HTMLElement | null), null);
+      if (!row) break;
+      if (row.classList.contains('file-header-line')) {
+        headerEl = row;
+        y = row.getBoundingClientRect().bottom + 1;
+      } else {
+        lineEl = row;
       }
     }
     lineEl ??= headerEl;
