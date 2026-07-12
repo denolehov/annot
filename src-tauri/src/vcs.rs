@@ -115,7 +115,7 @@ pub fn enumerate_in(
     target: &DiffTarget,
     pathspecs: &[String],
 ) -> Result<Vec<FileEntry>, AnnotError> {
-    let mut entries = match target {
+    let entries = match target {
         DiffTarget::Range {
             from,
             to,
@@ -124,10 +124,15 @@ pub fn enumerate_in(
         DiffTarget::Staged => staged_entries(repo, pathspecs)?,
         DiffTarget::WorkingTree => working_tree_entries(repo, pathspecs)?,
     };
-    // Status items arrive interleaved from two producer threads — the sort is
-    // mandatory for deterministic output, not cosmetic.
-    entries.sort_by(|a, b| entry_path(a).cmp(entry_path(b)));
-    Ok(entries)
+    // Status items arrive interleaved from two producer threads, and the
+    // frontend's annotation identity keys off array position (`FileKey::
+    // diff_file(index)`) — the sort is mandatory for determinism, not
+    // cosmetic. Ordering matches the sidebar file tree (directories before
+    // files, alphabetical within each level) rather than flat full-path
+    // order, which the two disagree on: e.g. "foo.txt" sorts before
+    // "foo/bar.txt" byte-wise ('.' < '/') but must render after it once
+    // "foo" is recognized as a directory.
+    Ok(tree_sort(entries))
 }
 
 fn entry_path(e: &FileEntry) -> &str {
@@ -135,6 +140,50 @@ fn entry_path(e: &FileEntry) -> &str {
         .as_deref()
         .or(e.old_path.as_deref())
         .unwrap_or("")
+}
+
+/// Reorders `entries` into directories-first, alphabetical-within-level
+/// order — the same shape the sidebar file tree renders (mirrors `file-
+/// tree.ts`'s `flatten()`). Builds a path tree keyed by segment, then walks
+/// it depth-first: a node's subdirectories (each fully recursed, sorted by
+/// name) come before its own direct files (sorted by name).
+fn tree_sort(mut entries: Vec<FileEntry>) -> Vec<FileEntry> {
+    #[derive(Default)]
+    struct Node<'a> {
+        dirs: BTreeMap<&'a str, Node<'a>>,
+        files: Vec<(&'a str, usize)>,
+    }
+
+    let mut root = Node::default();
+    for (i, e) in entries.iter().enumerate() {
+        let mut node = &mut root;
+        let mut segments = entry_path(e).split('/').peekable();
+        while let Some(seg) = segments.next() {
+            if segments.peek().is_none() {
+                node.files.push((seg, i));
+            } else {
+                node = node.dirs.entry(seg).or_default();
+            }
+        }
+    }
+
+    fn flatten(node: &Node, order: &mut Vec<usize>) {
+        for child in node.dirs.values() {
+            flatten(child, order);
+        }
+        let mut files = node.files.clone();
+        files.sort_by_key(|(name, _)| *name);
+        order.extend(files.into_iter().map(|(_, i)| i));
+    }
+
+    let mut order = Vec::with_capacity(entries.len());
+    flatten(&root, &mut order);
+
+    let mut slots: Vec<Option<FileEntry>> = entries.drain(..).map(Some).collect();
+    order
+        .into_iter()
+        .map(|i| slots[i].take().unwrap())
+        .collect()
 }
 
 fn diff_err(e: impl std::fmt::Display) -> AnnotError {
@@ -1231,6 +1280,23 @@ mod tests {
         );
         assert_eq!(moved.old_path.as_deref(), Some("old.txt"));
         assert_eq!(moved.new_oid, Some(BlobRef::WorkingTree));
+    }
+
+    #[test]
+    fn directories_sort_before_prefix_colliding_files() {
+        let dir = repo();
+        let p = dir.path();
+        fs::create_dir(p.join("foo")).unwrap();
+        fs::write(p.join("foo/bar.txt"), "nested\n").unwrap();
+        fs::write(p.join("foo.txt"), "sibling\n").unwrap();
+        let entries = enumerate(p, &WT, &[]).unwrap();
+        let paths: Vec<&str> = entries
+            .iter()
+            .map(|e| e.new_path.as_deref().unwrap())
+            .collect();
+        // "foo.txt" < "foo/bar.txt" under flat byte order ('.' < '/'), but
+        // the directory must render first under tree order.
+        assert_eq!(paths, vec!["foo/bar.txt", "foo.txt"]);
     }
 
     #[test]
