@@ -115,6 +115,11 @@ header.header {
 	height: 100%;
 	overflow: auto;
 	padding-bottom: 1rem;
+	/* Collapsing a file removes a chunk of content above the viewport; native
+	   scroll anchoring then "corrects" scrollTop to compensate, fighting our
+	   explicit jumpToFile scroll (src/routes/+page.svelte) and landing mid-file
+	   instead of on the next file's header. We own scroll positioning here. */
+	overflow-anchor: none;
 }
 
 /* Inner wrapper for zoom scaling - uses CSS zoom for crisp rendering */

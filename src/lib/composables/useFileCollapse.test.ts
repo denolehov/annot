@@ -54,11 +54,11 @@ describe('useFileCollapse', () => {
     collapse.collapse(0);
     collapse.collapse(0); // already collapsed — no event
     expect(onCollapse).toHaveBeenCalledTimes(1);
-    expect(onCollapse).toHaveBeenCalledWith(entries[0]);
+    expect(onCollapse).toHaveBeenCalledWith(entries[0], undefined);
 
     collapse.collapseAll(); // 0 already collapsed, only 1 transitions
     expect(onCollapse).toHaveBeenCalledTimes(2);
-    expect(onCollapse).toHaveBeenLastCalledWith(entries[1]);
+    expect(onCollapse).toHaveBeenLastCalledWith(entries[1], { bulk: true });
 
     collapse.expand(1);
     collapse.toggle(1); // toggle into collapsed fires too

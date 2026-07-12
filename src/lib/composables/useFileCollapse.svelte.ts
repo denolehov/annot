@@ -5,8 +5,13 @@ import type { DocView } from '$lib/display-rows';
 export const AUTO_COLLAPSE_THRESHOLD = 500;
 
 export interface FileCollapseOptions {
-  /** Fired for each file transitioning expanded → collapsed (selection/hover cleanup). */
-  onCollapse?: (dv: DocView) => void;
+  /**
+   * Fired for each file transitioning expanded → collapsed (selection/hover cleanup).
+   * `bulk` is true when the transition came from `collapseAll` — callers that only
+   * want to react to a single interactive collapse (e.g. snap-to-next-file) should
+   * skip bulk transitions.
+   */
+  onCollapse?: (dv: DocView, opts?: { bulk?: boolean }) => void;
 }
 
 /**
@@ -19,11 +24,11 @@ export interface FileCollapseOptions {
 export function useFileCollapse(getDocs: () => DocView[], options: FileCollapseOptions = {}) {
   const collapsed = new SvelteSet<number>();
 
-  function collapse(index: number) {
+  function collapse(index: number, opts?: { bulk?: boolean }) {
     if (collapsed.has(index)) return;
     collapsed.add(index);
     const dv = getDocs().find((d) => d.index === index);
-    if (dv) options.onCollapse?.(dv);
+    if (dv) options.onCollapse?.(dv, opts);
   }
 
   return {
@@ -45,7 +50,7 @@ export function useFileCollapse(getDocs: () => DocView[], options: FileCollapseO
       }
     },
     collapseAll() {
-      for (const dv of getDocs()) collapse(dv.index);
+      for (const dv of getDocs()) collapse(dv.index, { bulk: true });
     },
     expandAll() {
       collapsed.clear();

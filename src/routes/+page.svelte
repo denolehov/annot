@@ -298,7 +298,7 @@
   const fileCollapse = useFileCollapse(() => diffDisplay?.docs ?? [], {
     // Spec says "move selection to the header row", but header rows are not
     // selectable — clear instead (GitHub behavior).
-    onCollapse: (dv) => {
+    onCollapse: async (dv, opts) => {
       const r = interaction.range;
       if (r && r.end >= dv.headerDisplayIndex && r.start <= dv.endDisplayIndex) {
         if (interaction.phase === 'editing') interaction.closeEditor();
@@ -307,6 +307,22 @@
       const h = interaction.hoverLine;
       if (h !== null && h > dv.headerDisplayIndex && h <= dv.endDisplayIndex) {
         interaction.handleLineLeave();
+      }
+
+      // Collapsing the file you're currently reading advances to the next one,
+      // same as picking it from the file tree — collapsing means "done with this
+      // file". Never fires for collapseAll (opts.bulk) or for a file collapsed
+      // while positioned elsewhere, and never wraps past the last file.
+      if (!opts?.bulk && contentTracking.currentFileIndex === dv.index) {
+        const next = diffDisplay?.docs[dv.index + 1];
+        if (next) {
+          // Collapsing shrinks the current file's DOM extent; wait for that reflow
+          // before measuring the next header's position, or scrollToDisplayIndex
+          // computes its scroll delta against the stale (pre-collapse) layout and
+          // overshoots into the next file's body instead of landing on its header.
+          await tick();
+          jumpToFile(next.headerDisplayIndex);
+        }
       }
     },
   });
