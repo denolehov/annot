@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.16.0](https://github.com/denolehov/annot/compare/v0.15.0...v0.16.0) (2026-07-12)
+
+
+### Features
+
+* color-code hunk headers and fold chevrons blue ([04df84c](https://github.com/denolehov/annot/commit/04df84c5b51d91d60f704154a38f2b832d0e868a))
+* per-file status icons in the diff tree ([4dcc219](https://github.com/denolehov/annot/commit/4dcc219217fa07a63a35fb56979e83102627860d))
+* replace diff gutter +/- signs with colored borders ([0130e5c](https://github.com/denolehov/annot/commit/0130e5cd01bd3873839199582ebbe48c81969d89))
+* restyle diff file headers as edge-to-edge bars ([f6909fe](https://github.com/denolehov/annot/commit/f6909fec37d33816d25f6149a4bf3682b828913f))
+* show diff sidebar as a collapsible directory tree ([86119bc](https://github.com/denolehov/annot/commit/86119bc70ba6ae7c92cdb6ddadfc79800f3d356b))
+* side-by-side diff view behind a toggle ([278b1fa](https://github.com/denolehov/annot/commit/278b1fabb67de3bb5687cfe57779185b9f68c4e5))
+* unfold context between hunks in git diffs ([7c5e7ce](https://github.com/denolehov/annot/commit/7c5e7cef6908782422b7baaa94d35dc310fb01e2))
+
+
+### Bug Fixes
+
+* git diff file order matches the sidebar tree ([be38195](https://github.com/denolehov/annot/commit/be3819513dbceedc73c3b5243f4a17fb79873225))
+
 ## [0.15.0](https://github.com/denolehov/annot/compare/v0.14.0...v0.15.0) (2026-07-12)
 
 
