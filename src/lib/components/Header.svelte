@@ -75,7 +75,7 @@
           onclick={onOpenSessionEditor}
           data-tauri-drag-region="false"
         >
-          {fileName}
+          <span class="diff-header-path">{fileName}</span>
           {#if fileCount > 1}
             <span class="diff-header-counter">({currentFileIndex + 1}/{fileCount})</span>
           {/if}

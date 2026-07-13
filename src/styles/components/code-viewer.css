@@ -653,12 +653,36 @@ div.line.diff-filler {
 	font-family: var(--font-mono);
 	font-size: 12px; /* unscaled: chrome */
 	-webkit-app-region: no-drag;
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
 }
 
+/* Long paths trim from the start, keeping the filename (the end of the
+   string) visible — direction: rtl anchors the ellipsis to the left while
+   text-align: left keeps the visible tail flush against the icon/counter
+   that follows. unicode-bidi: plaintext stops rtl from reordering the LTR
+   path segments themselves, just where the ellipsis appears. */
 .diff-header-file {
 	color: var(--text-primary);
 	font-weight: 600;
 	cursor: pointer;
+	min-width: 0;
+	flex-shrink: 1;
+	display: flex;
+	align-items: center;
+	overflow: hidden;
+}
+
+.diff-header-path {
+	min-width: 0;
+	flex-shrink: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	direction: rtl;
+	text-align: left;
+	unicode-bidi: plaintext;
 }
 
 .diff-header-file.has-comment {
@@ -670,15 +694,18 @@ div.line.diff-filler {
 .diff-header-counter {
 	color: var(--text-muted);
 	font-weight: 400;
+	flex-shrink: 0;
 }
 
 .diff-header-sep {
 	color: var(--text-muted);
+	flex-shrink: 0;
 }
 
 .diff-header-range {
 	display: flex;
 	gap: 0.5rem;
+	flex-shrink: 0;
 }
 
 .diff-header-old {
@@ -695,6 +722,8 @@ div.line.diff-filler {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	min-width: 0;
+	flex-shrink: 1;
 }
 
 /* ===========================================
