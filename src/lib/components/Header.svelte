@@ -212,4 +212,14 @@
   .close-btn:hover {
     color: #ef4444;
   }
+
+  /* Third stage of titlebar decluttering (see .diff-header-fn and
+     .diff-header-range in code-viewer.css): once function context and the
+     hunk LoC range are gone, drop the changeset +/- summary too so the
+     filename keeps the space. */
+  @media (max-width: 640px) {
+    .diff-header-summary {
+      display: none;
+    }
+  }
 </style>

@@ -671,6 +671,7 @@ div.line.diff-filler {
 	flex-shrink: 1;
 	display: flex;
 	align-items: center;
+	gap: 0.3em;
 	overflow: hidden;
 }
 
@@ -724,6 +725,24 @@ div.line.diff-filler {
 	white-space: nowrap;
 	min-width: 0;
 	flex-shrink: 1;
+}
+
+/* Progressive disclosure as the window narrows: the function context is the
+   most disposable titlebar detail, so it's the first to go. The changeset
+   summary (+/- totals, .diff-header-summary in Header.svelte) drops at a
+   tighter width — filename and line-range stay longest. */
+@media (max-width: 900px) {
+	.diff-header-fn {
+		display: none;
+	}
+}
+
+/* Second stage: the hunk's LoC line-range (and its leading separator). */
+@media (max-width: 760px) {
+	.diff-header-sep,
+	.diff-header-range {
+		display: none;
+	}
 }
 
 /* ===========================================
