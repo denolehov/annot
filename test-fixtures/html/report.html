@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Q2 Latency Report</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <p class="css-warning">
+    ⚠ styles.css did not load — relative asset resolution is broken.
+  </p>
+
+  <header>
+    <img src="logo.svg" alt="" width="48" height="48" />
+    <div>
+      <h1>Q2 Latency Report</h1>
+      <p class="subtitle">p99 across the ingest pipeline, April–June</p>
+    </div>
+  </header>
+
+  <main>
+    <p>
+      Ingest p99 dropped <strong class="good">38%</strong> after the queue
+      rework landed in May. The regression spike on June 12 traces to the
+      schema-validation rollout and was reverted within the hour.
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>Month</th><th>p50</th><th>p99</th><th>Δ p99</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>April</td><td>41 ms</td><td>310 ms</td><td>—</td></tr>
+        <tr><td>May</td><td>39 ms</td><td>221 ms</td><td class="good">−29%</td></tr>
+        <tr><td>June</td><td>38 ms</td><td>192 ms</td><td class="good">−13%</td></tr>
+      </tbody>
+    </table>
+
+    <p class="footnote">
+      If this page renders with a styled header, a shaded table, and a logo,
+      relative asset resolution through <code>annot-content://</code> works.
+    </p>
+  </main>
+</body>
+</html>

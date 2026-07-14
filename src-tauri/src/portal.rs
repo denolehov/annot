@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use crate::highlight::Highlighter;
 use crate::markdown::PortalInfo;
+use crate::sensitive::sensitive_match;
 use crate::state::{Line, LineHtml, LineOrigin, LineSemantics, PortalSemantics};
 
 // =============================================================================
@@ -23,22 +24,6 @@ pub const MAX_LINES_PER_PORTAL: usize = 500;
 
 /// Maximum characters per line before truncation.
 pub const MAX_LINE_LENGTH: usize = 2000;
-
-/// Sensitive path patterns that should be blocked.
-const SENSITIVE_PATTERNS: &[&str] = &[
-    "id_rsa",
-    "id_dsa",
-    "id_ecdsa",
-    "id_ed25519",
-    ".env",
-    "credentials",
-    "secrets",
-    ".ssh/",
-    ".aws/",
-    ".gcp/",
-    ".pem",
-    ".key",
-];
 
 // =============================================================================
 // Error types
@@ -138,11 +123,8 @@ pub fn validate_portal(raw_path: &str, base_dir: &Path) -> Result<PathBuf, Porta
     }
 
     // Check for sensitive paths
-    let path_str = resolved.to_string_lossy().to_lowercase();
-    for pattern in SENSITIVE_PATTERNS {
-        if path_str.contains(pattern) {
-            return Err(PortalError::Sensitive(pattern.to_string()));
-        }
+    if let Some(pattern) = sensitive_match(&resolved) {
+        return Err(PortalError::Sensitive(pattern.to_string()));
     }
 
     // Check for binary content (read first 8KB)
