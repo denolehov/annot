@@ -13,6 +13,7 @@
     "demo": "tauri dev -- -- ../test-fixtures/sample.md",
     "demo:diff": "tauri dev -- -- ../test-fixtures/sample.diff",
     "demo:large": "tauri dev -- -- ../test-fixtures/large.md",
+    "demo:html": "tauri dev -- -- ../test-fixtures/html/report.html",
     "demo:portals": "tauri dev -- -- ../test-fixtures/portals.md",
     "demo:mermaid": "tauri dev -- -- ../test-fixtures/mermaid-varieties.md",
     "test": "vitest run",

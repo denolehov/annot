@@ -1,0 +1,62 @@
+/* Loading this file hides the unstyled-page warning — the fixture's
+   pass/fail signal for relative asset resolution. */
+.css-warning {
+  display: none;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+  max-width: 640px;
+  margin: 3rem auto;
+  padding: 0 1.5rem;
+  line-height: 1.6;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border-bottom: 3px solid #4f46e5;
+  padding-bottom: 1rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.subtitle {
+  margin: 0;
+  opacity: 0.7;
+  font-size: 0.9rem;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.5rem 0;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+}
+
+thead th {
+  background: color-mix(in srgb, #4f46e5 12%, transparent);
+}
+
+.good {
+  color: #059669;
+}
+
+.footnote {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}

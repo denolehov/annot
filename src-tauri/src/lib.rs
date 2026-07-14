@@ -8,6 +8,7 @@ use tauri::WebviewWindowBuilder;
 pub mod anchor;
 pub mod commands;
 pub mod config;
+pub mod content_protocol;
 pub mod diff;
 pub mod engine;
 pub mod error;
@@ -24,6 +25,7 @@ pub mod output;
 pub mod pipeline;
 pub mod portal;
 pub mod review;
+pub mod sensitive;
 pub mod source;
 pub mod state;
 #[cfg(test)]
@@ -121,7 +123,7 @@ pub fn run(state: AppState, context: tauri::Context, json_output: bool) {
     // Convert AppState to Review (auto-detects file vs diff mode)
     let review = Review::cli(state.content, state.config, "main".to_string());
 
-    tauri::Builder::default()
+    content_protocol::register(tauri::Builder::default())
         .plugin(tauri_plugin_opener::init())
         .manage::<ActiveReview>(Mutex::new(Some(review)))
         .manage::<ShouldExit>(Arc::new(AtomicBool::new(true))) // CLI mode: allow exit
@@ -188,7 +190,7 @@ pub fn run_mcp(context: tauri::Context) {
     let should_exit = Arc::new(AtomicBool::new(false));
     let should_exit_clone = should_exit.clone();
 
-    tauri::Builder::default()
+    content_protocol::register(tauri::Builder::default())
         .plugin(tauri_plugin_opener::init())
         .manage::<ActiveReview>(Mutex::new(None))
         .manage::<ShouldExit>(should_exit)
