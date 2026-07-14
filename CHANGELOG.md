@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.18.1](https://github.com/denolehov/annot/compare/v0.18.0...v0.18.1) (2026-07-14)
+
+
+### Bug Fixes
+
+* **diff-header:** progressively hide hunk metadata as the window narrows ([fff879c](https://github.com/denolehov/annot/commit/fff879cc6e4b9ea458b20a1d30d9f07540fc3cd0))
+* **diff-header:** trim long file paths from the start in titlebar ([921e9f6](https://github.com/denolehov/annot/commit/921e9f6cb357616f8315237ba1e57ce4a265c00d))
+* **windows:** pin LF line endings so vendored jj defaults survive Windows checkout ([951e34e](https://github.com/denolehov/annot/commit/951e34e6d497aa67304d98abab4cec87135897ef))
+
 ## [0.18.0](https://github.com/denolehov/annot/compare/v0.17.0...v0.18.0) (2026-07-12)
 
 
