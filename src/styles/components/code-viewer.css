@@ -431,11 +431,11 @@ div.line.diff-added::before {
 }
 
 div.line.diff-added.diff-run-start {
-	border-top: 1px solid rgb(34, 197, 94);
+	border-top: 1px solid rgba(34, 197, 94, 0.5);
 }
 
 div.line.diff-added.diff-run-end {
-	border-bottom: 1px solid rgb(34, 197, 94);
+	border-bottom: 1px solid rgba(34, 197, 94, 0.5);
 }
 
 div.line.diff-added .diff-gutter-new {
@@ -457,11 +457,11 @@ div.line.diff-deleted::before {
 }
 
 div.line.diff-deleted.diff-run-start {
-	border-top: 1px solid rgb(239, 68, 68);
+	border-top: 1px solid rgba(239, 68, 68, 0.5);
 }
 
 div.line.diff-deleted.diff-run-end {
-	border-bottom: 1px solid rgb(239, 68, 68);
+	border-bottom: 1px solid rgba(239, 68, 68, 0.5);
 }
 
 div.line.diff-deleted .diff-gutter-old {
