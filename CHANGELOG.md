@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.2](https://github.com/denolehov/annot/compare/v0.18.1...v0.18.2) (2026-07-16)
+
+
+### Bug Fixes
+
+* **diff:** soften hunk-run borders on added/deleted lines ([45a5f46](https://github.com/denolehov/annot/commit/45a5f4623092fba5c830c8b82a5745e2f1b36d17))
+
 ## [0.18.1](https://github.com/denolehov/annot/compare/v0.18.0...v0.18.1) (2026-07-14)
 
 
