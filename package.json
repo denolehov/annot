@@ -1,6 +1,6 @@
 {
   "name": "annot",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "description": "Human-in-the-loop annotation tool for AI workflows",
   "type": "module",
   "scripts": {
