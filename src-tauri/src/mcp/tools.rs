@@ -28,6 +28,11 @@ pub struct ReviewContentInput {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ReviewDiffInput {
     #[schemars(
+        description = "the repository you are working in — any directory inside it works, annot searches upward for the repo root. IMPORTANT: annot cannot see where you are. It defaults to its own process directory, which is wherever it happened to be launched and is frequently a DIFFERENT repository than the one you are editing — that produces a confident, silent, completely unrelated diff. Your own shell's cwd is not a reliable answer either: if you have been editing files by absolute path without cd-ing, it is stale too. Name the repository whose changes you actually want reviewed."
+    )]
+    pub working_dir: Option<String>,
+
+    #[schemars(
         description = "what to diff: working_copy (default; uncommitted work vs its base), revision {rev} (one revision vs its parent), range {from, to, merge_base}, or staged (git only; index vs HEAD). Revision strings are the repo's own dialect — git revspecs (HEAD~2, abc1234) in a git repo, jj revsets (@-, main@origin) in a jj repo."
     )]
     pub target: Option<crate::vcs::DiffTarget>,

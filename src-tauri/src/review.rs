@@ -95,6 +95,14 @@ pub struct Review {
     pub windows: HashMap<String, WindowView>,
 
     //--- Session-level state ---
+    /// Directory this review is rooted at.
+    ///
+    /// Everything scoped to *the thing under review* resolves from here: the
+    /// diff's repository, the file picker's tree, `:save`'s relative paths.
+    /// Deliberately not the root for `.claude/commands` — those exit modes are
+    /// handed back to the *calling agent*, whose project is its own launch
+    /// directory, not whatever repo we happen to be showing.
+    pub root: PathBuf,
     /// Session-level comment (not tied to specific lines/files).
     pub session_comment: Option<Vec<ContentNode>>,
     /// Currently selected exit mode ID.
@@ -209,24 +217,38 @@ impl View {
 
 impl Review {
     /// Create a CLI review (auto-detects file vs diff mode).
+    ///
+    /// Takes no root: a human standing in a directory *is* the assertion of
+    /// where the review lives, so the process cwd is the honest answer.
     pub fn cli(content: ContentModel, config: UserConfig, root_window: String) -> Self {
-        Self::new(content, config, root_window, None)
+        Self::new(
+            content,
+            config,
+            crate::state::process_cwd(),
+            root_window,
+            None,
+        )
     }
 
     /// Create an MCP review (auto-detects file vs diff mode).
+    ///
+    /// Takes a root explicitly: the sidecar's cwd is a spawn artifact, so the
+    /// only party who knows where the review belongs is the caller.
     pub fn mcp(
         content: ContentModel,
         config: UserConfig,
+        root: PathBuf,
         root_window: String,
         tx: Sender<FormatResult>,
     ) -> Self {
-        Self::new(content, config, root_window, Some(tx))
+        Self::new(content, config, root, root_window, Some(tx))
     }
 
     /// Internal constructor that auto-detects content type.
     fn new(
         content: ContentModel,
         config: UserConfig,
+        root: PathBuf,
         root_window: String,
         result_channel: Option<Sender<FormatResult>>,
     ) -> Self {
@@ -245,6 +267,7 @@ impl Review {
             files,
             root_window,
             windows,
+            root,
             session_comment: None,
             selected_exit_mode_id: None,
             config,

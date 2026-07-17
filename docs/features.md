@@ -29,6 +29,8 @@ Targets work from the CLI (`annot diff`, `annot diff 4f7d4491`, `annot diff main
 
 Revision strings are the repository's own dialect: git revspecs (`HEAD~2`, `abc1234`) in a git repo, **jj revsets** (`@-`, `trunk()`, your own aliases) in a jj one — resolved by jj's own engine against your own config, so a revset means here what it means in `jj`.
 
+**Which repository** — the CLI reviews the repo enclosing your cwd; a human standing in a directory means "here". The MCP server can't rely on that: it's a sidecar of the calling agent and inherits the directory that agent was *launched* from, which stays fixed while the agent moves between repos. `review_diff` takes `working_dir` to name the repo explicitly (any directory inside it works), and it roots the session — the file picker and `:save` follow it. Without it, annot falls back to its own process directory and reviews whatever repo lives there.
+
 Short change-id prefixes work exactly as `jj log` displays them: jj highlights the shortest prefix that is unique *among the commits you can see* (often one letter), and annot resolves prefixes against the same revset (`revsets.short-prefixes`, defaulting to `revsets.log`) — so a prefix jj shows you is a prefix you can type.
 
 In jj a revset may name several commits. If they form one **contiguous stack** — one root, one head, no gaps — annot reviews them as a *single changeset*: the base the stack sits on versus its tip. So `annot diff 'trunk()..@'` reviews your whole branch as one diff, and a revset alias for it (`'ready()' = 'trunk()..@'`) works the same way — `annot diff 'ready()'`. Anything else is an error naming the candidates, never a silent pick: `mutable() & mine()` names several unrelated stacks, and there is no single diff of that.
