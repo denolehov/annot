@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{CallToolResult, Content, ServerCapabilities, ServerInfo};
+use rmcp::model::{CallToolResult, ContentBlock, ServerCapabilities, ServerInfo};
 use rmcp::{tool, tool_handler, tool_router, ErrorData as McpError, ServerHandler, ServiceExt};
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 
@@ -423,11 +423,11 @@ fn build_mcp_response(output: SessionOutput) -> CallToolResult {
         )
     };
 
-    let mut contents = vec![Content::text(text)];
+    let mut contents = vec![ContentBlock::text(text)];
 
     // Add images as separate content items (data is already base64-encoded)
     for img in output.images {
-        contents.push(Content::image(img.data, img.mime_type));
+        contents.push(ContentBlock::image(img.data, img.mime_type));
     }
 
     CallToolResult::success(contents)
