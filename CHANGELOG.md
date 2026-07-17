@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.0](https://github.com/denolehov/annot/compare/v0.18.2...v0.19.0) (2026-07-17)
+
+
+### Features
+
+* **mcp:** review_diff takes a working_dir naming the repository to review ([8c86cdd](https://github.com/denolehov/annot/commit/8c86cdd4b27cc9d1f4e71e05dfec46c31fc5234e))
+
 ## [0.18.2](https://github.com/denolehov/annot/compare/v0.18.1...v0.18.2) (2026-07-16)
 
 
