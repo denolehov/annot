@@ -175,6 +175,14 @@ fn run_diff_session(
         return Err("Provide either target/pathspecs or diff_content, not both".to_string());
     }
 
+    // The review's root. `working_dir` is the caller's answer to a question
+    // this process cannot answer for itself: the sidecar's cwd is wherever the
+    // agent's session happened to start, which is routinely a different repo
+    // than the one being edited. Falling back to it keeps the old behaviour for
+    // callers who don't know better — silently, which is exactly why the schema
+    // description leans on them.
+    let root = resolve_root(params.working_dir.as_deref())?;
+
     // Build the content model per input mode: raw patch text goes through
     // the legacy parser (no full texts exist); a structured target renders
     // in-process via the git pipeline.
@@ -198,11 +206,7 @@ fn run_diff_session(
             let pathspecs = params.pathspecs.clone().unwrap_or_default();
             let label = params.label.clone().unwrap_or_else(|| target.label());
             let content_source = mcp_diff(label, DiffSource::Target(target.clone()));
-            // Same cwd semantics as the git CLI this replaced: the server
-            // process's working directory.
-            let cwd = std::env::current_dir()
-                .map_err(|e| format!("Failed to resolve working directory: {}", e))?;
-            crate::state::ContentModel::from_vcs(&cwd, &target, &pathspecs, content_source)
+            crate::state::ContentModel::from_vcs(&root, &target, &pathspecs, content_source)
                 .map_err(|e| e.to_string())?
         }
     };
@@ -220,8 +224,25 @@ fn run_diff_session(
         config.prepend_transient_modes(transient);
     }
 
-    let state = AppState::new(content, config);
+    let state = AppState::with_root(content, config, root);
     run_session_with_state(app_handle, state)
+}
+
+/// Resolve a caller-supplied `working_dir` into the review's root.
+///
+/// Canonicalizing is the validation: a path that doesn't exist fails here with
+/// the caller's own string in the message, rather than surfacing later as a
+/// baffling "no repository found".
+fn resolve_root(working_dir: Option<&str>) -> Result<PathBuf, String> {
+    let Some(dir) = working_dir else {
+        return Ok(crate::state::process_cwd());
+    };
+    let path = std::fs::canonicalize(dir)
+        .map_err(|e| format!("working_dir '{}' cannot be resolved: {}", dir, e))?;
+    if !path.is_dir() {
+        return Err(format!("working_dir '{}' is not a directory", dir));
+    }
+    Ok(path)
 }
 
 /// Run a review session with the given content (for file/content modes).
@@ -288,7 +309,13 @@ fn run_session_with_state(
 
     // Create Review and store it (auto-detects file vs diff mode)
     {
-        let review = Review::mcp(state.content, state.config, window_label.clone(), tx);
+        let review = Review::mcp(
+            state.content,
+            state.config,
+            state.root,
+            window_label.clone(),
+            tx,
+        );
         let slot = app_handle.state::<ActiveReview>();
         *slot.lock() = Some(review);
     }
@@ -436,4 +463,50 @@ pub fn spawn_mcp_thread(app_handle: AppHandle) {
             std::process::exit(1);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_root_defaults_to_process_cwd() {
+        assert_eq!(resolve_root(None).unwrap(), crate::state::process_cwd());
+    }
+
+    #[test]
+    fn resolve_root_accepts_a_supplied_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let resolved = resolve_root(Some(dir.path().to_str().unwrap())).unwrap();
+        assert_eq!(resolved, std::fs::canonicalize(dir.path()).unwrap());
+    }
+
+    #[test]
+    fn resolve_root_accepts_a_subdirectory_of_a_repo() {
+        // Discovery walks upward in both tiers, so pointing at a nested
+        // directory is legal — the docstring promises it.
+        let dir = tempfile::tempdir().unwrap();
+        let nested = dir.path().join("src").join("deep");
+        std::fs::create_dir_all(&nested).unwrap();
+        let resolved = resolve_root(Some(nested.to_str().unwrap())).unwrap();
+        assert_eq!(resolved, std::fs::canonicalize(&nested).unwrap());
+    }
+
+    #[test]
+    fn resolve_root_rejects_a_missing_directory_naming_it() {
+        let err = resolve_root(Some("/definitely/not/a/real/repo")).unwrap_err();
+        assert!(
+            err.contains("/definitely/not/a/real/repo"),
+            "error must quote the caller's own path, got: {err}"
+        );
+    }
+
+    #[test]
+    fn resolve_root_rejects_a_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("notes.md");
+        std::fs::write(&file, "hi").unwrap();
+        let err = resolve_root(Some(file.to_str().unwrap())).unwrap_err();
+        assert!(err.contains("not a directory"), "got: {err}");
+    }
 }

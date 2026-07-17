@@ -228,6 +228,7 @@ Press `Shift+C` to add comments that apply to the entire review — framing cont
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
+| `working_dir` | string | no | The repository to review — any directory inside it works. Defaults to annot's own process directory (see below) |
 | `target` | object | no* | What to diff: `{"kind": "working_copy"}` (default), `{"kind": "revision", "rev": "@-"}`, `{"kind": "range", "from": "main", "to": "HEAD", "merge_base": true}`, or `{"kind": "staged"}` (git only) |
 | `pathspecs` | array | no | Pathspecs limiting the diff (e.g., `["src/", "*.rs"]`); jj filesets in a jj repo |
 | `diff_content` | string | no* | Raw unified diff content (mutually exclusive with `target`/`pathspecs`) |
@@ -235,6 +236,8 @@ Press `Shift+C` to add comments that apply to the entire review — framing cont
 | `exit_modes` | array | no | Ephemeral exit modes for this session |
 
 *`target` defaults to `working_copy` — in git, worktree vs HEAD (staged + unstaged, untracked included); in jj, `@` vs its parents after snapshotting the working copy. `range` with `merge_base: true` diffs from `merge_base(from, to)` to `to`, like `from...to`.
+
+**Agents working across repositories should pass `working_dir`.** annot's MCP server runs as a sidecar of your agent and inherits the directory the agent was *launched* from — which is frequently not the repository being edited. Left to default, it finds whatever repo encloses that launch directory and reviews it: a real diff, confidently rendered, from somewhere else entirely. `working_dir` names the repo explicitly; it also roots the file picker and `:save` for the session. It accepts any directory inside the repo (annot searches upward for the root), and errors if the path doesn't exist.
 
 **Works with git and [jj](https://jj-vcs.github.io/jj/) alike**, colocated or not. `rev` strings are the repository's own dialect — git revspecs, or jj revsets (`@-`, `trunk()`) in a jj repo. In a jj repo annot snapshots the working copy the way every `jj` command does (one `snapshot working copy` op — annot's only write), and conflicted files render as jj's marker text instead of erroring.
 

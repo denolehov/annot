@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
@@ -664,11 +664,22 @@ impl UserConfig {
 // APP STATE — composition of content, session, and config
 // ════════════════════════════════════════════════════════════════════════════
 
+/// The process's working directory — the review root when no caller names one.
+///
+/// Honest for the CLI: a human standing in a directory *is* asserting "here".
+/// Weak for the MCP sidecar, where it is a spawn artifact from whenever the
+/// agent's session started — hence `working_dir` on `review_diff`.
+pub fn process_cwd() -> PathBuf {
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
 /// Application state initialized at startup, before the window opens.
 pub struct AppState {
     pub content: ContentModel,
     pub session: SessionState,
     pub config: UserConfig,
+    /// Directory this review is rooted at — see [`Review::root`].
+    pub root: PathBuf,
 }
 
 /// Response sent to the frontend via the get_content command.
@@ -1007,12 +1018,18 @@ impl ContentModel {
 }
 
 impl AppState {
-    /// Create a new AppState from content model and config.
+    /// Create a new AppState rooted at the process working directory.
     pub fn new(content: ContentModel, config: UserConfig) -> Self {
+        Self::with_root(content, config, process_cwd())
+    }
+
+    /// Create a new AppState rooted at a caller-supplied directory.
+    pub fn with_root(content: ContentModel, config: UserConfig, root: PathBuf) -> Self {
         Self {
             content,
             session: SessionState::default(),
             config,
+            root,
         }
     }
 
@@ -1032,6 +1049,7 @@ impl AppState {
             },
             session: SessionState::default(),
             config: UserConfig::empty(),
+            root: process_cwd(),
         }
     }
 

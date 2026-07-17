@@ -427,14 +427,12 @@ pub fn save_content(
     let content = review.root_view.content();
     let raw_content = export_content(content);
 
-    // Resolve path (relative to cwd if not absolute)
+    // Resolve path (relative to the review's root if not absolute)
     let path = PathBuf::from(&path);
     let path = if path.is_absolute() {
         path
     } else {
-        std::env::current_dir()
-            .map_err(|e| format!("Failed to get working directory: {}", e))?
-            .join(path)
+        review.root.join(path)
     };
 
     // Create parent directories if needed

@@ -166,16 +166,22 @@ pub type FileCacheState = Mutex<FileCache>;
 ///
 /// Uses the `ignore` crate to respect .gitignore and `sublime_fuzzy` for
 /// filename-first fuzzy matching.
+///
+/// Roots at the review's directory, not the process cwd: a human browsing for
+/// a file while reading repo B's diff means B's tree, whatever directory this
+/// process was launched from.
 #[tauri::command]
 pub fn list_project_files(
     state: State<FileCacheState>,
+    review_state: State<crate::review::ActiveReview>,
     query: String,
     limit: usize,
 ) -> Vec<String> {
-    // Get current working directory as project root
-    let root = std::env::current_dir()
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|_| ".".to_string());
+    let root = review_state
+        .lock()
+        .as_ref()
+        .map(|review| review.root.to_string_lossy().into_owned())
+        .unwrap_or_else(|| ".".to_string());
 
     let mut cache = state.lock();
     let files = cache.get_files(&root);
