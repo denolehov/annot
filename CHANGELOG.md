@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.1](https://github.com/denolehov/annot/compare/v0.19.0...v0.19.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* **vcs:** update jj-lib 0.44 API usage and vendored config defaults ([312452d](https://github.com/denolehov/annot/commit/312452d5cc4b0a09a28f3dfccc7af5382b9ef0b6))
+
 ## [0.19.0](https://github.com/denolehov/annot/compare/v0.18.2...v0.19.0) (2026-07-17)
 
 
