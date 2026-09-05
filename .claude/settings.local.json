@@ -1,5 +1,8 @@
 {
   "enabledMcpjsonServers": [
     "annot-dev"
+  ],
+  "disabledMcpjsonServers": [
+    "annot-dev"
   ]
 }
