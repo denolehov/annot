@@ -1,4 +1,4 @@
-# jj's own defaults — copied verbatim from jj-cli 0.43
+# jj's own defaults — copied verbatim from jj-cli 0.44
 # (`cli/src/config/misc.toml` and `cli/src/config/revsets.toml`).
 #
 # These live in jj-cli, not jj-lib, and annot links only jj-lib (jj-cli writes to
@@ -33,7 +33,7 @@ simplify-parents = "reachable(@, mutable())"
 # log revset is also used as the default short-prefixes. If it failed to
 # evaluate, lengthy warning messages would be printed. Use present(expr) if
 # symbols in expr might not always exist.
-log = "present(@) | ancestors(immutable_heads().., 2) | trunk()"
+log = "builtin_log()"
 # Emit the working-copy branch first, which is usually most interesting.
 # This also helps stabilize output order.
 log-graph-prioritize = "present(@)"
@@ -55,6 +55,10 @@ latest(
   root()
 )
 '''
+
+# The default set of revisions shown by `jj log` if no revisions or paths are
+# specified.
+'builtin_log()' = 'present(@) | ancestors(immutable_heads().., 2) | trunk()'
 
 # If immutable_heads() failed to evaluate, many jj commands wouldn't work. Use
 # present(expr) if symbols in expr might not always exist.

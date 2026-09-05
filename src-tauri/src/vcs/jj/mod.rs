@@ -41,12 +41,15 @@ use jj_lib::conflicts::{
     MaterializedTreeValue,
 };
 use jj_lib::copies::{CopyOperation, CopyRecords};
+use jj_lib::default_backend_factories::{
+    default_backend_factories, default_working_copy_factories,
+};
 use jj_lib::fileset;
 use jj_lib::id_prefix::IdPrefixContext;
 use jj_lib::matchers::{EverythingMatcher, Matcher, NothingMatcher};
 use jj_lib::merged_tree::MergedTree;
 use jj_lib::object_id::ObjectId as _;
-use jj_lib::repo::{ReadonlyRepo, Repo as _, StoreFactories};
+use jj_lib::repo::{ReadonlyRepo, Repo as _};
 use jj_lib::repo_path::{RepoPath, RepoPathUiConverter};
 use jj_lib::revset::{
     self, RevsetAliasesMap, RevsetDiagnostics, RevsetExtensions, RevsetParseContext,
@@ -54,7 +57,7 @@ use jj_lib::revset::{
 };
 use jj_lib::settings::{HumanByteSize, UserSettings};
 use jj_lib::working_copy::{SnapshotOptions, WorkingCopyFreshness};
-use jj_lib::workspace::{default_working_copy_factories, Workspace};
+use jj_lib::workspace::Workspace;
 use pollster::FutureExt as _;
 
 use super::{tree_sort, BlobRef, DiffTarget, FileEntry, FileStatus, Prepared};
@@ -102,7 +105,7 @@ impl JjRepo {
         let workspace = Workspace::load(
             &settings,
             root,
-            &StoreFactories::default(),
+            &default_backend_factories(),
             &default_working_copy_factories(),
         )
         .map_err(|e| jj_err("failed to load jj workspace", e))?;
